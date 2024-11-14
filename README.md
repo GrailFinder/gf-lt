@@ -1,0 +1,11 @@
+### TODO:
+- scrolling chat history; (somewhat works out of box);
+- log errors to file;
+- regen last message;
+- delete last message
+- edit message? (including from bot);
+- use chatml template (but do not show it to the user);
+- use mistral template;
+- ability to copy message;
+- aility to copy selected text;
+- menu with old chats (chat files);
