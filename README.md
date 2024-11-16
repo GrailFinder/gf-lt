@@ -1,12 +1,12 @@
 ### TODO:
-- scrolling chat history; (somewhat works out of box);
-- log errors to file;
-- give serial id to each msg in chat to track it;
-- regen last message;
-- delete last message
+- scrolling chat history; (somewhat works out of box); +
+- log errors to file; +
+- give serial id to each msg in chat to track it; (use slice index) +
+- show msg id next to the msg; +
+- regen last message; +
+- delete last message; +
 - edit message? (including from bot);
 - use chatml template (but do not show it to the user);
-- use mistral template;
 - ability to copy message;
 - aility to copy selected text;
-- menu with old chats (chat files);
+- menu with old chats (chat files); +

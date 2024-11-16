@@ -162,6 +162,7 @@ func chatRound(userMsg, role string, tv *tview.TextView) {
 	botRespMode = true
 	reader := formMsg(chatBody, userMsg, role)
 	go sendMsgToLLM(reader)
+	fmt.Fprintf(tv, fmt.Sprintf("(%d) ", len(chatBody.Messages)))
 	fmt.Fprintf(tv, assistantIcon)
 	respText := strings.Builder{}
 out:
@@ -171,6 +172,7 @@ out:
 			// fmt.Printf(chunk)
 			fmt.Fprintf(tv, chunk)
 			respText.WriteString(chunk)
+			tv.ScrollToEnd()
 		case <-streamDone:
 			break out
 		}
@@ -179,7 +181,6 @@ out:
 	chatBody.Messages = append(chatBody.Messages, models.MessagesStory{
 		Role: assistantRole, Content: respText.String(),
 	})
-	// TODO:
 	// bot msg is done;
 	// now check it for func call
 	logChat(chatFileLoaded, chatBody.Messages)
@@ -299,7 +300,7 @@ func chatToTextSlice(showSys bool) []string {
 		if !showSys && (msg.Role != assistantRole && msg.Role != userRole) {
 			continue
 		}
-		resp[i] = msg.ToText()
+		resp[i] = msg.ToText(i)
 	}
 	return resp
 }

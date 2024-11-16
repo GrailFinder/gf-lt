@@ -61,17 +61,17 @@ type MessagesStory struct {
 	Content string `json:"content"`
 }
 
-func (m MessagesStory) ToText() string {
+func (m MessagesStory) ToText(i int) string {
 	icon := ""
 	switch m.Role {
 	case "assistant":
-		icon = "<🤖>: "
+		icon = fmt.Sprintf("(%d) <🤖>: ", i)
 	case "user":
-		icon = "<user>: "
+		icon = fmt.Sprintf("(%d) <user>: ", i)
 	case "system":
-		icon = "<system>: "
+		icon = fmt.Sprintf("(%d) <system>: ", i)
 	case "tool":
-		icon = "<tool>: "
+		icon = fmt.Sprintf("(%d) <tool>: ", i)
 	}
 	textMsg := fmt.Sprintf("%s%s\n", icon, m.Content)
 	return strings.ReplaceAll(textMsg, "\n\n", "\n")

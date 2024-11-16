@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"path"
+	"strconv"
 	"time"
 	"unicode"
 
@@ -11,10 +12,11 @@ import (
 )
 
 var (
-	normalMode  = false
-	botRespMode = false
-	botMsg      = "no"
-	indexLine   = "Row: [yellow]%d[white], Column: [yellow]%d; normal mode: %v"
+	normalMode    = false
+	botRespMode   = false
+	botMsg        = "no"
+	selectedIndex = int(-1)
+	indexLine     = "manage chats: F1; regen last: F2; delete msg menu: F3; Row: [yellow]%d[white], Column: [yellow]%d; normal mode: %v"
 )
 
 func isASCII(s string) bool {
@@ -51,7 +53,7 @@ func main() {
 		if fromRow == toRow && fromColumn == toColumn {
 			position.SetText(fmt.Sprintf(indexLine, fromRow, fromColumn, normalMode))
 		} else {
-			position.SetText(fmt.Sprintf("[red]From[white] Row: [yellow]%d[white], Column: [yellow]%d[white] - [red]To[white] Row: [yellow]%d[white], To Column: [yellow]%d; normal mode: %v", fromRow, fromColumn, toRow, toColumn, normalMode))
+			position.SetText(fmt.Sprintf("manage chats: F1; regen last: F2; delete msg menu: F3; [red]From[white] Row: [yellow]%d[white], Column: [yellow]%d[white] - [red]To[white] Row: [yellow]%d[white], To Column: [yellow]%d; normal mode: %v", fromRow, fromColumn, toRow, toColumn, normalMode))
 		}
 	}
 	chatOpts := []string{"cancel", "new"}
@@ -60,7 +62,7 @@ func main() {
 		panic(err)
 	}
 	chatOpts = append(chatOpts, fList...)
-	modal := tview.NewModal().
+	chatActModal := tview.NewModal().
 		SetText("Chat actions:").
 		AddButtons(chatOpts).
 		SetDoneFunc(func(buttonIndex int, buttonLabel string) {
@@ -93,9 +95,29 @@ func main() {
 				return
 			}
 		})
+	indexPickWindow := tview.NewInputField().
+		SetLabel("Enter a msg index: ").
+		SetFieldWidth(4).
+		SetAcceptanceFunc(tview.InputFieldInteger).
+		SetDoneFunc(func(key tcell.Key) {
+			pages.RemovePage("getIndex")
+			return
+		})
+	indexPickWindow.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		if event.Key() == tcell.KeyEnter {
+			si := indexPickWindow.GetText()
+			selectedIndex, err = strconv.Atoi(si)
+			if err != nil {
+				logger.Error("failed to convert provided index", "error", err, "si", si)
+			}
+		}
+		return event
+	})
+	//
 	textArea.SetMovedFunc(updateStatusLine)
 	updateStatusLine()
 	textView.SetText(chatToText(showSystemMsgs))
+	textView.ScrollToEnd()
 	app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		if botRespMode {
 			// do nothing while bot typing
@@ -107,8 +129,26 @@ func main() {
 				panic(err)
 			}
 			chatOpts = append(chatOpts, fList...)
-			pages.AddPage("history", modal, true, true)
+			pages.AddPage("history", chatActModal, true, true)
 			return nil
+		}
+		if event.Key() == tcell.KeyF2 {
+			// regen last msg
+			chatBody.Messages = chatBody.Messages[:len(chatBody.Messages)-1]
+			textView.SetText(chatToText(showSystemMsgs))
+			go chatRound("", userRole, textView)
+			return nil
+		}
+		if event.Key() == tcell.KeyF3 {
+			// TODO: delete last n messages
+			// modal window with input field
+			chatBody.Messages = chatBody.Messages[:len(chatBody.Messages)-1]
+			textView.SetText(chatToText(showSystemMsgs))
+			return nil
+		}
+		if event.Key() == tcell.KeyF4 {
+			// edit msg
+			pages.AddPage("getIndex", indexPickWindow, true, true)
 		}
 		if event.Key() == tcell.KeyEscape {
 			fromRow, fromColumn, _, _ := textArea.GetCursor()
@@ -116,8 +156,9 @@ func main() {
 			// read all text into buffer
 			msgText := textArea.GetText()
 			if msgText != "" {
-				fmt.Fprintf(textView, "\n<user>: %s\n", msgText)
+				fmt.Fprintf(textView, "\n(%d) <user>: %s\n", len(chatBody.Messages), msgText)
 				textArea.SetText("", true)
+				textView.ScrollToEnd()
 			}
 			// update statue line
 			go chatRound(msgText, userRole, textView)
