@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"path"
 	"strings"
 	"time"
 
@@ -21,14 +22,18 @@ var httpClient = http.Client{
 }
 
 var (
-	logger          *slog.Logger
-	APIURL          = "http://localhost:8080/v1/chat/completions"
-	DB              = map[string]map[string]any{}
-	userRole        = "user"
-	assistantRole   = "assistant"
-	toolRole        = "tool"
-	assistantIcon   = "<🤖>: "
-	userIcon        = "<user>: "
+	logger        *slog.Logger
+	APIURL        = "http://localhost:8080/v1/chat/completions"
+	DB            = map[string]map[string]any{}
+	userRole      = "user"
+	assistantRole = "assistant"
+	toolRole      = "tool"
+	assistantIcon = "<🤖>: "
+	userIcon      = "<user>: "
+	historyDir    = "./history/"
+	// TODO: pass as an cli arg
+	showSystemMsgs  bool
+	chatFileLoaded  string
 	chunkChan       = make(chan string, 10)
 	streamDone      = make(chan bool, 1)
 	chatBody        *models.ChatBody
@@ -177,7 +182,7 @@ out:
 	// TODO:
 	// bot msg is done;
 	// now check it for func call
-	logChat("testlog", chatBody.Messages)
+	logChat(chatFileLoaded, chatBody.Messages)
 	findCall(respText.String(), tv)
 }
 
@@ -220,11 +225,22 @@ func findCall(msg string, tv *tview.TextView) {
 	// return func result to the llm
 }
 
-func findLatestChat() string {
-	dir := "./history/"
+func listHistoryFiles(dir string) ([]string, error) {
 	files, err := os.ReadDir(dir)
 	if err != nil {
 		logger.Error("failed to readdir", "error", err)
+		return nil, err
+	}
+	resp := make([]string, len(files))
+	for i, f := range files {
+		resp[i] = path.Join(dir, f.Name())
+	}
+	return resp, nil
+}
+
+func findLatestChat(dir string) string {
+	files, err := listHistoryFiles(dir)
+	if err != nil {
 		panic(err)
 	}
 	var (
@@ -232,16 +248,16 @@ func findLatestChat() string {
 		newestTime int64
 	)
 	logger.Info("filelist", "list", files)
-	for _, f := range files {
-		fi, err := os.Stat(dir + f.Name())
+	for _, fn := range files {
+		fi, err := os.Stat(fn)
 		if err != nil {
-			logger.Error("failed to get stat", "error", err, "name", f.Name())
+			logger.Error("failed to get stat", "error", err, "name", fn)
 			panic(err)
 		}
 		currTime := fi.ModTime().Unix()
 		if currTime > newestTime {
 			newestTime = currTime
-			latestF = f.Name()
+			latestF = fn
 		}
 	}
 	return latestF
@@ -258,12 +274,13 @@ func readHistoryChat(fn string) ([]models.MessagesStory, error) {
 		logger.Error("failed to unmarshal", "error", err, "name", fn)
 		return nil, err
 	}
+	chatFileLoaded = fn
 	return resp, nil
 }
 
 func loadOldChatOrGetNew(fns ...string) []models.MessagesStory {
 	// find last chat
-	fn := findLatestChat()
+	fn := findLatestChat(historyDir)
 	if len(fns) > 0 {
 		fn = fns[0]
 	}
@@ -276,12 +293,20 @@ func loadOldChatOrGetNew(fns ...string) []models.MessagesStory {
 	return history
 }
 
-func chatToText() []string {
+func chatToTextSlice(showSys bool) []string {
 	resp := make([]string, len(chatBody.Messages))
 	for i, msg := range chatBody.Messages {
+		if !showSys && (msg.Role != assistantRole && msg.Role != userRole) {
+			continue
+		}
 		resp[i] = msg.ToText()
 	}
 	return resp
+}
+
+func chatToText(showSys bool) string {
+	s := chatToTextSlice(showSys)
+	return strings.Join(s, "")
 }
 
 func textToChat(chat []string) []models.MessagesStory {

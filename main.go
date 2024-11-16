@@ -2,7 +2,8 @@ package main
 
 import (
 	"fmt"
-	"strings"
+	"path"
+	"time"
 	"unicode"
 
 	"github.com/gdamore/tcell/v2"
@@ -27,6 +28,7 @@ func isASCII(s string) bool {
 
 func main() {
 	app := tview.NewApplication()
+	pages := tview.NewPages()
 	textArea := tview.NewTextArea().
 		SetPlaceholder("Type your prompt...")
 	textArea.SetBorder(true).SetTitle("input")
@@ -52,19 +54,60 @@ func main() {
 			position.SetText(fmt.Sprintf("[red]From[white] Row: [yellow]%d[white], Column: [yellow]%d[white] - [red]To[white] Row: [yellow]%d[white], To Column: [yellow]%d; normal mode: %v", fromRow, fromColumn, toRow, toColumn, normalMode))
 		}
 	}
+	chatOpts := []string{"cancel", "new"}
+	fList, err := listHistoryFiles(historyDir)
+	if err != nil {
+		panic(err)
+	}
+	chatOpts = append(chatOpts, fList...)
+	modal := tview.NewModal().
+		SetText("Chat actions:").
+		AddButtons(chatOpts).
+		SetDoneFunc(func(buttonIndex int, buttonLabel string) {
+			switch buttonLabel {
+			case "new":
+				// set chat body
+				chatBody.Messages = defaultStarter
+				textView.SetText(chatToText(showSystemMsgs))
+				chatFileLoaded = path.Join(historyDir, fmt.Sprintf("%d_chat.json", time.Now().Unix()))
+				pages.RemovePage("history")
+				return
+			// set text
+			case "cancel":
+				pages.RemovePage("history")
+				// pages.ShowPage("main")
+				return
+			default:
+				// fn := path.Join(historyDir, buttonLabel)
+				fn := buttonLabel
+				history, err := readHistoryChat(fn)
+				if err != nil {
+					logger.Error("failed to read history file", "filename", fn)
+					pages.RemovePage("history")
+					return
+				}
+				chatBody.Messages = history
+				textView.SetText(chatToText(showSystemMsgs))
+				chatFileLoaded = fn
+				pages.RemovePage("history")
+				return
+			}
+		})
 	textArea.SetMovedFunc(updateStatusLine)
 	updateStatusLine()
-	history := chatToText()
-	chatHistory := strings.Builder{}
-	for _, m := range history {
-		chatHistory.WriteString(m)
-		// textView.SetText(m)
-	}
-	textView.SetText(chatHistory.String())
-	// textView.SetText("<🤖>: Hello! What can I do for you?")
+	textView.SetText(chatToText(showSystemMsgs))
 	app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		if botRespMode {
 			// do nothing while bot typing
+			return nil
+		}
+		if event.Key() == tcell.KeyF1 {
+			fList, err := listHistoryFiles(historyDir)
+			if err != nil {
+				panic(err)
+			}
+			chatOpts = append(chatOpts, fList...)
+			pages.AddPage("history", modal, true, true)
 			return nil
 		}
 		if event.Key() == tcell.KeyEscape {
@@ -88,7 +131,8 @@ func main() {
 		}
 		return event
 	})
-	if err := app.SetRoot(flex,
+	pages.AddPage("main", flex, true, true)
+	if err := app.SetRoot(pages,
 		true).EnableMouse(true).Run(); err != nil {
 		panic(err)
 	}
