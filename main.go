@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"strings"
 	"unicode"
 
 	"github.com/gdamore/tcell/v2"
@@ -53,7 +54,14 @@ func main() {
 	}
 	textArea.SetMovedFunc(updateStatusLine)
 	updateStatusLine()
-	textView.SetText("<🤖>: Hello! What can I do for you?")
+	history := chatToText()
+	chatHistory := strings.Builder{}
+	for _, m := range history {
+		chatHistory.WriteString(m)
+		// textView.SetText(m)
+	}
+	textView.SetText(chatHistory.String())
+	// textView.SetText("<🤖>: Hello! What can I do for you?")
 	app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		if botRespMode {
 			// do nothing while bot typing

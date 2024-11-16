@@ -1,6 +1,7 @@
 ### TODO:
 - scrolling chat history; (somewhat works out of box);
 - log errors to file;
+- give serial id to each msg in chat to track it;
 - regen last message;
 - delete last message
 - edit message? (including from bot);

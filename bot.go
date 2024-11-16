@@ -21,17 +21,23 @@ var httpClient = http.Client{
 }
 
 var (
-	logger        *slog.Logger
-	APIURL        = "http://localhost:8080/v1/chat/completions"
-	DB            = map[string]map[string]any{}
-	userRole      = "user"
-	assistantRole = "assistant"
-	toolRole      = "tool"
-	assistantIcon = "<🤖>: "
-	chunkChan     = make(chan string, 10)
-	streamDone    = make(chan bool, 1)
-	chatBody      *models.ChatBody
-	systemMsg     = `You're a helpful assistant.
+	logger          *slog.Logger
+	APIURL          = "http://localhost:8080/v1/chat/completions"
+	DB              = map[string]map[string]any{}
+	userRole        = "user"
+	assistantRole   = "assistant"
+	toolRole        = "tool"
+	assistantIcon   = "<🤖>: "
+	userIcon        = "<user>: "
+	chunkChan       = make(chan string, 10)
+	streamDone      = make(chan bool, 1)
+	chatBody        *models.ChatBody
+	defaultFirstMsg = "Hello! What can I do for you?"
+	defaultStarter  = []models.MessagesStory{
+		{Role: "system", Content: systemMsg},
+		{Role: assistantRole, Content: defaultFirstMsg},
+	}
+	systemMsg = `You're a helpful assistant.
 # Tools
 You can do functions call if needed.
 Your current tools:
@@ -213,30 +219,111 @@ func findCall(msg string, tv *tview.TextView) {
 	chatRound(toolMsg, toolRole, tv)
 	// return func result to the llm
 }
+
+func findLatestChat() string {
+	dir := "./history/"
+	files, err := os.ReadDir(dir)
+	if err != nil {
+		logger.Error("failed to readdir", "error", err)
+		panic(err)
+	}
+	var (
+		latestF    string
+		newestTime int64
+	)
+	logger.Info("filelist", "list", files)
+	for _, f := range files {
+		fi, err := os.Stat(dir + f.Name())
+		if err != nil {
+			logger.Error("failed to get stat", "error", err, "name", f.Name())
+			panic(err)
+		}
+		currTime := fi.ModTime().Unix()
+		if currTime > newestTime {
+			newestTime = currTime
+			latestF = f.Name()
+		}
+	}
+	return latestF
+}
+
+func readHistoryChat(fn string) ([]models.MessagesStory, error) {
+	content, err := os.ReadFile(fn)
+	if err != nil {
+		logger.Error("failed to read file", "error", err, "name", fn)
+		return nil, err
+	}
+	resp := []models.MessagesStory{}
+	if err := json.Unmarshal(content, &resp); err != nil {
+		logger.Error("failed to unmarshal", "error", err, "name", fn)
+		return nil, err
+	}
+	return resp, nil
+}
+
+func loadOldChatOrGetNew(fns ...string) []models.MessagesStory {
+	// find last chat
+	fn := findLatestChat()
+	if len(fns) > 0 {
+		fn = fns[0]
+	}
+	logger.Info("reading history from file", "filename", fn)
+	history, err := readHistoryChat(fn)
+	if err != nil {
+		logger.Warn("faield to load history chat", "error", err)
+		return defaultStarter
+	}
+	return history
+}
+
+func chatToText() []string {
+	resp := make([]string, len(chatBody.Messages))
+	for i, msg := range chatBody.Messages {
+		resp[i] = msg.ToText()
+	}
+	return resp
+}
+
+func textToChat(chat []string) []models.MessagesStory {
+	resp := make([]models.MessagesStory, len(chat))
+	for i, rawMsg := range chat {
+		// trim icon
+		var (
+			role string
+			msg  string
+		)
+		// system and tool?
+		if strings.HasPrefix(rawMsg, assistantIcon) {
+			role = assistantRole
+			msg = strings.TrimPrefix(rawMsg, assistantIcon)
+			goto messagebuild
+		}
+		if strings.HasPrefix(rawMsg, userIcon) {
+			role = assistantRole
+			msg = strings.TrimPrefix(rawMsg, userIcon)
+			goto messagebuild
+		}
+	messagebuild:
+		resp[i].Role = role
+		resp[i].Content = msg
+	}
+	return resp
+}
+
 func init() {
 	file, err := os.OpenFile("log.txt", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		panic(err)
 	}
-	defer file.Close()
-	logger = slog.New(slog.NewTextHandler(file, &slog.HandlerOptions{}))
+	// defer file.Close()
+	logger = slog.New(slog.NewTextHandler(file, nil))
 	logger.Info("test msg")
-	firstMsg := "Hello! What can I do for you?"
-	// fm, err := fillTempl("chatml", chatml)
-	// if err != nil {
-	// 	panic(err)
-	// }
 	// https://github.com/coreydaley/ggerganov-llama.cpp/blob/master/examples/server/README.md
+	lastChat := loadOldChatOrGetNew()
+	logger.Info("loaded history", "chat", lastChat)
 	chatBody = &models.ChatBody{
-		Model:  "modl_name",
-		Stream: true,
-		Messages: []models.MessagesStory{
-			{Role: "system", Content: systemMsg},
-			{Role: assistantRole, Content: firstMsg},
-		},
+		Model:    "modl_name",
+		Stream:   true,
+		Messages: lastChat,
 	}
-	// fmt.Printf("<🤖>: Hello! How can I help?")
-	// for {
-	// 	chatLoop()
-	// }
 }

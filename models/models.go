@@ -1,5 +1,10 @@
 package models
 
+import (
+	"fmt"
+	"strings"
+)
+
 // type FuncCall struct {
 // 	XMLName xml.Name `xml:"tool_call"`
 // 	Name    string   `xml:"name"`
@@ -54,6 +59,22 @@ type LLMRespChunk struct {
 type MessagesStory struct {
 	Role    string `json:"role"`
 	Content string `json:"content"`
+}
+
+func (m MessagesStory) ToText() string {
+	icon := ""
+	switch m.Role {
+	case "assistant":
+		icon = "<🤖>: "
+	case "user":
+		icon = "<user>: "
+	case "system":
+		icon = "<system>: "
+	case "tool":
+		icon = "<tool>: "
+	}
+	textMsg := fmt.Sprintf("%s%s\n", icon, m.Content)
+	return strings.ReplaceAll(textMsg, "\n\n", "\n")
 }
 
 type ChatBody struct {
