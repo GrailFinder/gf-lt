@@ -14,9 +14,11 @@ import (
 var (
 	normalMode    = false
 	botRespMode   = false
+	editMode      = false
 	botMsg        = "no"
 	selectedIndex = int(-1)
-	indexLine     = "manage chats: F1; regen last: F2; delete msg menu: F3; Row: [yellow]%d[white], Column: [yellow]%d; normal mode: %v"
+	indexLine     = "Esc: send msg; Tab: switch focus; F1: manage chats; F2: regen last; F3:delete msg menu; F4: edit msg; F5: toggle system; Row: [yellow]%d[white], Column: [yellow]%d; normal mode: %v"
+	focusSwitcher = map[tview.Primitive]tview.Primitive{}
 )
 
 func isASCII(s string) bool {
@@ -41,6 +43,8 @@ func main() {
 			app.Draw()
 		})
 	textView.SetBorder(true).SetTitle("chat")
+	focusSwitcher[textArea] = textView
+	focusSwitcher[textView] = textArea
 	position := tview.NewTextView().
 		SetDynamicColors(true).
 		SetTextAlign(tview.AlignCenter)
@@ -53,7 +57,7 @@ func main() {
 		if fromRow == toRow && fromColumn == toColumn {
 			position.SetText(fmt.Sprintf(indexLine, fromRow, fromColumn, normalMode))
 		} else {
-			position.SetText(fmt.Sprintf("manage chats: F1; regen last: F2; delete msg menu: F3; [red]From[white] Row: [yellow]%d[white], Column: [yellow]%d[white] - [red]To[white] Row: [yellow]%d[white], To Column: [yellow]%d; normal mode: %v", fromRow, fromColumn, toRow, toColumn, normalMode))
+			position.SetText(fmt.Sprintf("Esc: send msg; Tab: switch focus; F1: manage chats; F2: regen last; F3:delete msg menu; F4: edit msg; F5: toggle system; Row: [yellow]%d[white], Column: [yellow]%d[white] - [red]To[white] Row: [yellow]%d[white], To Column: [yellow]%d; normal mode: %v", fromRow, fromColumn, toRow, toColumn, normalMode))
 		}
 	}
 	chatOpts := []string{"cancel", "new"}
@@ -95,6 +99,24 @@ func main() {
 				return
 			}
 		})
+	editArea := tview.NewTextArea().
+		SetPlaceholder("Replace msg...")
+	editArea.SetBorder(true).SetTitle("input")
+	editArea.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		if event.Key() == tcell.KeyEscape && editMode {
+			editedMsg := editArea.GetText()
+			// TODO: trim msg number and icon
+			chatBody.Messages[selectedIndex].Content = editedMsg
+			// change textarea
+			textView.SetText(chatToText(showSystemMsgs))
+			pages.RemovePage("editArea")
+			editMode = false
+			// panic("do we get here?")
+			// pages.ShowPage("main")
+			return nil
+		}
+		return event
+	})
 	indexPickWindow := tview.NewInputField().
 		SetLabel("Enter a msg index: ").
 		SetFieldWidth(4).
@@ -110,6 +132,16 @@ func main() {
 			if err != nil {
 				logger.Error("failed to convert provided index", "error", err, "si", si)
 			}
+			if len(chatBody.Messages) <= selectedIndex && selectedIndex < 0 {
+				logger.Warn("chosen index is out of bounds", "index", selectedIndex)
+				return nil
+			}
+			pages.AddPage("editArea", editArea, true, true)
+			m := chatBody.Messages[selectedIndex]
+			// editArea.SetText(m.ToText(selectedIndex), true)
+			editArea.SetText(m.Content, true)
+			editMode = true
+			// editArea.SetText(si, true)
 		}
 		return event
 	})
@@ -119,10 +151,6 @@ func main() {
 	textView.SetText(chatToText(showSystemMsgs))
 	textView.ScrollToEnd()
 	app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		if botRespMode {
-			// do nothing while bot typing
-			return nil
-		}
 		if event.Key() == tcell.KeyF1 {
 			fList, err := listHistoryFiles(historyDir)
 			if err != nil {
@@ -144,13 +172,22 @@ func main() {
 			// modal window with input field
 			chatBody.Messages = chatBody.Messages[:len(chatBody.Messages)-1]
 			textView.SetText(chatToText(showSystemMsgs))
+			botRespMode = false // hmmm; is that correct?
 			return nil
 		}
 		if event.Key() == tcell.KeyF4 {
 			// edit msg
 			pages.AddPage("getIndex", indexPickWindow, true, true)
+			editMode = true
+			return nil
 		}
-		if event.Key() == tcell.KeyEscape {
+		if event.Key() == tcell.KeyF5 {
+			// switch showSystemMsgs
+			showSystemMsgs = !showSystemMsgs
+			textView.SetText(chatToText(showSystemMsgs))
+		}
+		// cannot send msg in editMode or botRespMode
+		if event.Key() == tcell.KeyEscape && !editMode && !botRespMode {
 			fromRow, fromColumn, _, _ := textArea.GetCursor()
 			position.SetText(fmt.Sprintf(indexLine, fromRow, fromColumn, normalMode))
 			// read all text into buffer
@@ -164,7 +201,11 @@ func main() {
 			go chatRound(msgText, userRole, textView)
 			return nil
 		}
-		if isASCII(string(event.Rune())) {
+		if event.Key() == tcell.KeyTab {
+			currentF := app.GetFocus()
+			app.SetFocus(focusSwitcher[currentF])
+		}
+		if isASCII(string(event.Rune())) && !botRespMode {
 			// normalMode = false
 			// fromRow, fromColumn, _, _ := textArea.GetCursor()
 			// position.SetText(fmt.Sprintf(indexLine, fromRow, fromColumn, normalMode))

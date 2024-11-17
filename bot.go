@@ -310,28 +310,27 @@ func chatToText(showSys bool) string {
 	return strings.Join(s, "")
 }
 
-func textToChat(chat []string) []models.MessagesStory {
+func textToMsg(rawMsg string) models.MessagesStory {
+	msg := models.MessagesStory{}
+	// system and tool?
+	if strings.HasPrefix(rawMsg, assistantIcon) {
+		msg.Role = assistantRole
+		msg.Content = strings.TrimPrefix(rawMsg, assistantIcon)
+		return msg
+	}
+	if strings.HasPrefix(rawMsg, userIcon) {
+		msg.Role = userRole
+		msg.Content = strings.TrimPrefix(rawMsg, userIcon)
+		return msg
+	}
+	return msg
+}
+
+func textSliceToChat(chat []string) []models.MessagesStory {
 	resp := make([]models.MessagesStory, len(chat))
 	for i, rawMsg := range chat {
-		// trim icon
-		var (
-			role string
-			msg  string
-		)
-		// system and tool?
-		if strings.HasPrefix(rawMsg, assistantIcon) {
-			role = assistantRole
-			msg = strings.TrimPrefix(rawMsg, assistantIcon)
-			goto messagebuild
-		}
-		if strings.HasPrefix(rawMsg, userIcon) {
-			role = assistantRole
-			msg = strings.TrimPrefix(rawMsg, userIcon)
-			goto messagebuild
-		}
-	messagebuild:
-		resp[i].Role = role
-		resp[i].Content = msg
+		msg := textToMsg(rawMsg)
+		resp[i] = msg
 	}
 	return resp
 }
