@@ -12,8 +12,10 @@
 - fullscreen textarea option (for long prompt);
 - tab to switch selection between textview and textarea (input and chat); +
 - basic tools: memorize and recall;
-- stop stream from the bot;
+- stop stream from the bot; +
+- sqlitedb instead of chatfiles;
+- sqlite for the bot memory;
 
 ### FIX:
 - bot responding (or haninging) blocks everything; +
-- programm requires history folder, but it is .gitignore;
+- programm requires history folder, but it is .gitignore; +

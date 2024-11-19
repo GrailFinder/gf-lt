@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"elefant/models"
+	"elefant/storage"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -37,12 +38,14 @@ var (
 	chunkChan       = make(chan string, 10)
 	streamDone      = make(chan bool, 1)
 	chatBody        *models.ChatBody
+	store           storage.ChatHistory
 	defaultFirstMsg = "Hello! What can I do for you?"
 	defaultStarter  = []models.MessagesStory{
 		{Role: "system", Content: systemMsg},
 		{Role: assistantRole, Content: defaultFirstMsg},
 	}
-	systemMsg = `You're a helpful assistant.
+	interruptResp = false
+	systemMsg     = `You're a helpful assistant.
 # Tools
 You can do functions call if needed.
 Your current tools:
@@ -116,11 +119,17 @@ func sendMsgToLLM(body io.Reader) (any, error) {
 		logger.Error("llamacpp api", "error", err)
 		return nil, err
 	}
+	defer resp.Body.Close()
 	llmResp := []models.LLMRespChunk{}
 	// chunkChan <- assistantIcon
 	reader := bufio.NewReader(resp.Body)
 	counter := 0
 	for {
+		if interruptResp {
+			interruptResp = false
+			logger.Info("interrupted bot response")
+			break
+		}
 		llmchunk := models.LLMRespChunk{}
 		if counter > 2000 {
 			streamDone <- true
@@ -340,6 +349,10 @@ func init() {
 	if err != nil {
 		panic(err)
 	}
+	// create dir if does not exist
+	if err := os.MkdirAll(historyDir, os.ModePerm); err != nil {
+		panic(err)
+	}
 	// defer file.Close()
 	logger = slog.New(slog.NewTextHandler(file, nil))
 	logger.Info("test msg")
@@ -351,4 +364,5 @@ func init() {
 		Stream:   true,
 		Messages: lastChat,
 	}
+	store = storage.NewProviderSQL("test.db")
 }

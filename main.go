@@ -12,12 +12,11 @@ import (
 )
 
 var (
-	normalMode    = false
 	botRespMode   = false
 	editMode      = false
 	botMsg        = "no"
 	selectedIndex = int(-1)
-	indexLine     = "Esc: send msg; Tab: switch focus; F1: manage chats; F2: regen last; F3:delete msg menu; F4: edit msg; F5: toggle system; Row: [yellow]%d[white], Column: [yellow]%d; normal mode: %v"
+	indexLine     = "Esc: send msg; Tab: switch focus; F1: manage chats; F2: regen last; F3:delete last msg; F4: edit msg; F5: toggle system; F6: interrupt bot resp; Row: [yellow]%d[white], Column: [yellow]%d; bot resp mode: %v"
 	focusSwitcher = map[tview.Primitive]tview.Primitive{}
 )
 
@@ -55,9 +54,9 @@ func main() {
 	updateStatusLine := func() {
 		fromRow, fromColumn, toRow, toColumn := textArea.GetCursor()
 		if fromRow == toRow && fromColumn == toColumn {
-			position.SetText(fmt.Sprintf(indexLine, fromRow, fromColumn, normalMode))
+			position.SetText(fmt.Sprintf(indexLine, fromRow, fromColumn, botRespMode))
 		} else {
-			position.SetText(fmt.Sprintf("Esc: send msg; Tab: switch focus; F1: manage chats; F2: regen last; F3:delete msg menu; F4: edit msg; F5: toggle system; Row: [yellow]%d[white], Column: [yellow]%d[white] - [red]To[white] Row: [yellow]%d[white], To Column: [yellow]%d; normal mode: %v", fromRow, fromColumn, toRow, toColumn, normalMode))
+			position.SetText(fmt.Sprintf("Esc: send msg; Tab: switch focus; F1: manage chats; F2: regen last; F3:delete last msg; F4: edit msg; F5: toggle system; F6: interrupt bot resp; Row: [yellow]%d[white], Column: [yellow]%d[white] - [red]To[white] Row: [yellow]%d[white], To Column: [yellow]%d; bot resp mode: %v", fromRow, fromColumn, toRow, toColumn, botRespMode))
 		}
 	}
 	chatOpts := []string{"cancel", "new"}
@@ -186,10 +185,15 @@ func main() {
 			showSystemMsgs = !showSystemMsgs
 			textView.SetText(chatToText(showSystemMsgs))
 		}
+		if event.Key() == tcell.KeyF6 {
+			interruptResp = true
+			botRespMode = false
+			return nil
+		}
 		// cannot send msg in editMode or botRespMode
 		if event.Key() == tcell.KeyEscape && !editMode && !botRespMode {
 			fromRow, fromColumn, _, _ := textArea.GetCursor()
-			position.SetText(fmt.Sprintf(indexLine, fromRow, fromColumn, normalMode))
+			position.SetText(fmt.Sprintf(indexLine, fromRow, fromColumn, botRespMode))
 			// read all text into buffer
 			msgText := textArea.GetText()
 			if msgText != "" {
@@ -206,9 +210,9 @@ func main() {
 			app.SetFocus(focusSwitcher[currentF])
 		}
 		if isASCII(string(event.Rune())) && !botRespMode {
-			// normalMode = false
+			// botRespMode = false
 			// fromRow, fromColumn, _, _ := textArea.GetCursor()
-			// position.SetText(fmt.Sprintf(indexLine, fromRow, fromColumn, normalMode))
+			// position.SetText(fmt.Sprintf(indexLine, fromRow, fromColumn, botRespMode))
 			return event
 		}
 		return event
