@@ -102,6 +102,12 @@ func main() {
 	editArea.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		if event.Key() == tcell.KeyEscape && editMode {
 			editedMsg := editArea.GetText()
+			if editedMsg == "" {
+				notifyUser("edit", "no edit provided")
+				pages.RemovePage("editArea")
+				editMode = false
+				return nil
+			}
 			chatBody.Messages[selectedIndex].Content = editedMsg
 			// change textarea
 			textView.SetText(chatToText(showSystemMsgs))
@@ -120,22 +126,25 @@ func main() {
 			return
 		})
 	indexPickWindow.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		if event.Key() == tcell.KeyEnter {
-			si := indexPickWindow.GetText()
-			selectedIndex, err = strconv.Atoi(si)
-			if err != nil {
-				logger.Error("failed to convert provided index", "error", err, "si", si)
-			}
-			if len(chatBody.Messages) <= selectedIndex && selectedIndex < 0 {
-				logger.Warn("chosen index is out of bounds", "index", selectedIndex)
-				return nil
-			}
+		si := indexPickWindow.GetText()
+		selectedIndex, err = strconv.Atoi(si)
+		if err != nil {
+			logger.Error("failed to convert provided index", "error", err, "si", si)
+		}
+		if len(chatBody.Messages) <= selectedIndex && selectedIndex < 0 {
+			logger.Warn("chosen index is out of bounds", "index", selectedIndex)
+			return nil
+		}
+		m := chatBody.Messages[selectedIndex]
+		if editMode && event.Key() == tcell.KeyEnter {
 			pages.AddPage("editArea", editArea, true, true)
-			m := chatBody.Messages[selectedIndex]
-			// editArea.SetText(m.ToText(selectedIndex), true)
 			editArea.SetText(m.Content, true)
-			editMode = true
-			// editArea.SetText(si, true)
+		}
+		if !editMode && event.Key() == tcell.KeyEnter {
+			// TODO: add notification that text was copied
+			copyToClipboard(m.Content)
+			notification := fmt.Sprintf("msg '%s' was copied to the clipboard", m.Content[:30])
+			notifyUser("copied", notification)
 		}
 		return event
 	})
@@ -172,8 +181,8 @@ func main() {
 		}
 		if event.Key() == tcell.KeyF4 {
 			// edit msg
-			pages.AddPage("getIndex", indexPickWindow, true, true)
 			editMode = true
+			pages.AddPage("getIndex", indexPickWindow, true, true)
 			return nil
 		}
 		if event.Key() == tcell.KeyF5 {
@@ -184,6 +193,12 @@ func main() {
 		if event.Key() == tcell.KeyF6 {
 			interruptResp = true
 			botRespMode = false
+			return nil
+		}
+		if event.Key() == tcell.KeyF7 {
+			// copy msg to clipboard
+			editMode = false
+			pages.AddPage("getIndex", indexPickWindow, true, true)
 			return nil
 		}
 		// cannot send msg in editMode or botRespMode

@@ -4,6 +4,8 @@ import (
 	"elefant/models"
 	"encoding/json"
 	"fmt"
+	"os/exec"
+	"strings"
 	"time"
 )
 
@@ -89,4 +91,18 @@ func loadOldChatOrGetNew() []models.MessagesStory {
 		return defaultStarter
 	}
 	return history
+}
+
+func copyToClipboard(text string) error {
+	cmd := exec.Command("xclip", "-selection", "clipboard")
+	cmd.Stdin = nil
+	cmd.Stdout = nil
+	cmd.Stderr = nil
+	cmd.Stdin = strings.NewReader(text)
+	return cmd.Run()
+}
+
+func notifyUser(topic, message string) error {
+	cmd := exec.Command("notify-send", topic, message)
+	return cmd.Run()
 }
