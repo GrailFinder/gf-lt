@@ -2,7 +2,7 @@ package storage
 
 import (
 	"elefant/models"
-	"fmt"
+	"log/slog"
 
 	_ "github.com/glebarez/go-sqlite"
 	"github.com/jmoiron/sqlx"
@@ -17,7 +17,8 @@ type ChatHistory interface {
 }
 
 type ProviderSQL struct {
-	db *sqlx.DB
+	db     *sqlx.DB
+	logger *slog.Logger
 }
 
 func (p ProviderSQL) ListChats() ([]models.Chat, error) {
@@ -60,13 +61,13 @@ func (p ProviderSQL) RemoveChat(id uint32) error {
 	return err
 }
 
-func NewProviderSQL(dbPath string) ChatHistory {
+func NewProviderSQL(dbPath string, logger *slog.Logger) ChatHistory {
 	db, err := sqlx.Open("sqlite", dbPath)
 	if err != nil {
 		panic(err)
 	}
 	// get SQLite version
-	res := db.QueryRow("select sqlite_version()")
-	fmt.Println(res)
-	return ProviderSQL{db: db}
+	p := ProviderSQL{db: db, logger: logger}
+	p.Migrate()
+	return p
 }

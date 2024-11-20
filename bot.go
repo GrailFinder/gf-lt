@@ -276,10 +276,9 @@ func init() {
 	if err := os.MkdirAll(historyDir, os.ModePerm); err != nil {
 		panic(err)
 	}
-	store = storage.NewProviderSQL("test.db")
-	// defer file.Close()
 	logger = slog.New(slog.NewTextHandler(file, nil))
 	logger.Info("test msg")
+	store = storage.NewProviderSQL("test.db", logger)
 	// https://github.com/coreydaley/ggerganov-llama.cpp/blob/master/examples/server/README.md
 	// load all chats in memory
 	loadHistoryChats()

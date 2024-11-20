@@ -1,4 +1,4 @@
-CREATE TABLE chat (
+CREATE TABLE IF NOT EXISTS chat (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
     msgs TEXT NOT NULL,  -- Store messages as a comma-separated string

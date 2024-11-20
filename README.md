@@ -19,3 +19,4 @@
 ### FIX:
 - bot responding (or haninging) blocks everything; +
 - programm requires history folder, but it is .gitignore; +
+- at first run chat table does not exist; run migrations sql on startup; +
