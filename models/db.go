@@ -20,3 +20,8 @@ func (c Chat) ToHistory() ([]MessagesStory, error) {
 	}
 	return resp, nil
 }
+
+type Memory struct {
+	Topic string `db:"topic" json:"topic"`
+	Data  string `db:"data" json:"data"`
+}

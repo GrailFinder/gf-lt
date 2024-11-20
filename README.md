@@ -6,7 +6,7 @@
 - regen last message; +
 - delete last message; +
 - edit message? (including from bot); +
-- ability to copy message;
+- ability to copy message; +
 - aility to copy selected text; (I can do it though vim mode of the terminal, so +)
 - menu with old chats (chat files); +
 - fullscreen textarea option (for long prompt);

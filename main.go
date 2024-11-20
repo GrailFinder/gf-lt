@@ -172,7 +172,6 @@ func main() {
 			return nil
 		}
 		if event.Key() == tcell.KeyF3 {
-			// TODO: delete last n messages
 			// modal window with input field
 			chatBody.Messages = chatBody.Messages[:len(chatBody.Messages)-1]
 			textView.SetText(chatToText(showSystemMsgs))
