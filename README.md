@@ -7,7 +7,6 @@
 - delete last message; +
 - edit message? (including from bot); +
 - ability to copy message; +
-- aility to copy selected text; (I can do it though vim mode of the terminal, so +)
 - menu with old chats (chat files); +
 - fullscreen textarea option (for long prompt);
 - tab to switch selection between textview and textarea (input and chat); +
@@ -20,3 +19,7 @@
 - bot responding (or haninging) blocks everything; +
 - programm requires history folder, but it is .gitignore; +
 - at first run chat table does not exist; run migrations sql on startup; +
+- Tab is needed to copy paste text into textarea box, use shift+tab to switch focus; (changed tp pgup) +
+- delete last msg: can have unexpected behavior (deletes what appears to be two messages);
+- EOF from llama, possibly broken json in request;
+- chat upsert does not work;

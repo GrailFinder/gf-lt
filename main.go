@@ -16,7 +16,7 @@ var (
 	editMode      = false
 	botMsg        = "no"
 	selectedIndex = int(-1)
-	indexLine     = "Esc: send msg; Tab: switch focus; F1: manage chats; F2: regen last; F3:delete last msg; F4: edit msg; F5: toggle system; F6: interrupt bot resp; Row: [yellow]%d[white], Column: [yellow]%d; bot resp mode: %v"
+	indexLine     = "Esc: send msg; PgUp/Down: switch focus; F1: manage chats; F2: regen last; F3:delete last msg; F4: edit msg; F5: toggle system; F6: interrupt bot resp; Row: [yellow]%d[white], Column: [yellow]%d; bot resp mode: %v"
 	focusSwitcher = map[tview.Primitive]tview.Primitive{}
 )
 
@@ -56,7 +56,7 @@ func main() {
 		if fromRow == toRow && fromColumn == toColumn {
 			position.SetText(fmt.Sprintf(indexLine, fromRow, fromColumn, botRespMode))
 		} else {
-			position.SetText(fmt.Sprintf("Esc: send msg; Tab: switch focus; F1: manage chats; F2: regen last; F3:delete last msg; F4: edit msg; F5: toggle system; F6: interrupt bot resp; Row: [yellow]%d[white], Column: [yellow]%d[white] - [red]To[white] Row: [yellow]%d[white], To Column: [yellow]%d; bot resp mode: %v", fromRow, fromColumn, toRow, toColumn, botRespMode))
+			position.SetText(fmt.Sprintf("Esc: send msg; PgUp/Down: switch focus; F1: manage chats; F2: regen last; F3:delete last msg; F4: edit msg; F5: toggle system; F6: interrupt bot resp; Row: [yellow]%d[white], Column: [yellow]%d[white] - [red]To[white] Row: [yellow]%d[white], To Column: [yellow]%d; bot resp mode: %v", fromRow, fromColumn, toRow, toColumn, botRespMode))
 		}
 	}
 	chatOpts := []string{"cancel", "new"}
@@ -172,7 +172,7 @@ func main() {
 			return nil
 		}
 		if event.Key() == tcell.KeyF3 {
-			// modal window with input field
+			// delete last msg
 			chatBody.Messages = chatBody.Messages[:len(chatBody.Messages)-1]
 			textView.SetText(chatToText(showSystemMsgs))
 			botRespMode = false // hmmm; is that correct?
@@ -197,6 +197,15 @@ func main() {
 		if event.Key() == tcell.KeyF7 {
 			// copy msg to clipboard
 			editMode = false
+			m := chatBody.Messages[len(chatBody.Messages)-1]
+			copyToClipboard(m.Content)
+			notification := fmt.Sprintf("msg '%s' was copied to the clipboard", m.Content[:30])
+			notifyUser("copied", notification)
+			return nil
+		}
+		if event.Key() == tcell.KeyF8 {
+			// copy msg to clipboard
+			editMode = false
 			pages.AddPage("getIndex", indexPickWindow, true, true)
 			return nil
 		}
@@ -215,9 +224,10 @@ func main() {
 			go chatRound(msgText, userRole, textView)
 			return nil
 		}
-		if event.Key() == tcell.KeyTab {
+		if event.Key() == tcell.KeyPgUp || event.Key() == tcell.KeyPgDn {
 			currentF := app.GetFocus()
 			app.SetFocus(focusSwitcher[currentF])
+			return nil
 		}
 		if isASCII(string(event.Rune())) && !botRespMode {
 			// botRespMode = false

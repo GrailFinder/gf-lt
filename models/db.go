@@ -21,7 +21,16 @@ func (c Chat) ToHistory() ([]MessagesStory, error) {
 	return resp, nil
 }
 
+/*
+memories should have two key system
+to be able to store different perspectives
+agent -> topic -> data
+agent is somewhat similar to a char
+*/
 type Memory struct {
-	Topic string `db:"topic" json:"topic"`
-	Data  string `db:"data" json:"data"`
+	Agent     string    `db:"agent" json:"agent"`
+	Topic     string    `db:"topic" json:"topic"`
+	Mind      string    `db:"mind" json:"mind"`
+	CreatedAt time.Time `db:"created_at" json:"created_at"`
+	UpdatedAt time.Time `db:"updated_at" json:"updated_at"`
 }

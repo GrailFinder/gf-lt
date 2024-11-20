@@ -69,14 +69,14 @@ func loadHistoryChat(chatName string) ([]models.MessagesStory, error) {
 }
 
 func loadOldChatOrGetNew() []models.MessagesStory {
-	// find last chat
-	chat, err := store.GetLastChat()
 	newChat := &models.Chat{
 		ID:        0,
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
 	}
-	newChat.Name = fmt.Sprintf("%d_%v", chat.ID, chat.CreatedAt.Unix())
+	newChat.Name = fmt.Sprintf("%d_%v", newChat.ID, newChat.CreatedAt.Unix())
+	// find last chat
+	chat, err := store.GetLastChat()
 	if err != nil {
 		logger.Warn("failed to load history chat", "error", err)
 		activeChatName = newChat.Name

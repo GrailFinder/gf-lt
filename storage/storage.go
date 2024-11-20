@@ -23,26 +23,26 @@ type ProviderSQL struct {
 
 func (p ProviderSQL) ListChats() ([]models.Chat, error) {
 	resp := []models.Chat{}
-	err := p.db.Select(&resp, "SELECT * FROM chat;")
+	err := p.db.Select(&resp, "SELECT * FROM chats;")
 	return resp, err
 }
 
 func (p ProviderSQL) GetChatByID(id uint32) (*models.Chat, error) {
 	resp := models.Chat{}
-	err := p.db.Get(&resp, "SELECT * FROM chat WHERE id=$1;", id)
+	err := p.db.Get(&resp, "SELECT * FROM chats WHERE id=$1;", id)
 	return &resp, err
 }
 
 func (p ProviderSQL) GetLastChat() (*models.Chat, error) {
 	resp := models.Chat{}
-	err := p.db.Get(&resp, "SELECT * FROM chat ORDER BY updated_at DESC LIMIT 1")
+	err := p.db.Get(&resp, "SELECT * FROM chats ORDER BY updated_at DESC LIMIT 1")
 	return &resp, err
 }
 
 func (p ProviderSQL) UpsertChat(chat *models.Chat) (*models.Chat, error) {
 	// Prepare the SQL statement
 	query := `
-        INSERT OR REPLACE INTO chat (id, name, msgs, created_at, updated_at)
+        INSERT OR REPLACE INTO chats (id, name, msgs, created_at, updated_at)
         VALUES (:id, :name, :msgs, :created_at, :updated_at)
         RETURNING *;`
 	stmt, err := p.db.PrepareNamed(query)
@@ -56,7 +56,7 @@ func (p ProviderSQL) UpsertChat(chat *models.Chat) (*models.Chat, error) {
 }
 
 func (p ProviderSQL) RemoveChat(id uint32) error {
-	query := "DELETE FROM chat WHERE ID = $1;"
+	query := "DELETE FROM chats WHERE ID = $1;"
 	_, err := p.db.Exec(query, id)
 	return err
 }
