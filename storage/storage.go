@@ -11,6 +11,7 @@ import (
 type ChatHistory interface {
 	ListChats() ([]models.Chat, error)
 	GetChatByID(id uint32) (*models.Chat, error)
+	GetLastChat() (*models.Chat, error)
 	UpsertChat(chat *models.Chat) (*models.Chat, error)
 	RemoveChat(id uint32) error
 }
@@ -28,6 +29,12 @@ func (p ProviderSQL) ListChats() ([]models.Chat, error) {
 func (p ProviderSQL) GetChatByID(id uint32) (*models.Chat, error) {
 	resp := models.Chat{}
 	err := p.db.Get(&resp, "SELECT * FROM chat WHERE id=$1;", id)
+	return &resp, err
+}
+
+func (p ProviderSQL) GetLastChat() (*models.Chat, error) {
+	resp := models.Chat{}
+	err := p.db.Get(&resp, "SELECT * FROM chat ORDER BY updated_at DESC LIMIT 1")
 	return &resp, err
 }
 

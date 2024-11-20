@@ -1,6 +1,9 @@
 package models
 
-import "time"
+import (
+	"encoding/json"
+	"time"
+)
 
 type Chat struct {
 	ID        uint32    `db:"id" json:"id"`
@@ -8,4 +11,12 @@ type Chat struct {
 	Msgs      string    `db:"msgs" json:"msgs"` // []MessagesStory to string json
 	CreatedAt time.Time `db:"created_at" json:"created_at"`
 	UpdatedAt time.Time `db:"updated_at" json:"updated_at"`
+}
+
+func (c Chat) ToHistory() ([]MessagesStory, error) {
+	resp := []MessagesStory{}
+	if err := json.Unmarshal([]byte(c.Msgs), &resp); err != nil {
+		return nil, err
+	}
+	return resp, nil
 }

@@ -11,7 +11,6 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
-	"path"
 	"strings"
 	"time"
 
@@ -34,7 +33,7 @@ var (
 	historyDir    = "./history/"
 	// TODO: pass as an cli arg
 	showSystemMsgs  bool
-	chatFileLoaded  string
+	activeChatName  string
 	chunkChan       = make(chan string, 10)
 	streamDone      = make(chan bool, 1)
 	chatBody        *models.ChatBody
@@ -89,14 +88,12 @@ var fnMap = map[string]fnSig{
 // ====
 
 func getUserInput(userPrompt string) string {
-	// fmt.Printf("<🤖>: %s\n<user>:", botMsg)
 	fmt.Printf(userPrompt)
 	reader := bufio.NewReader(os.Stdin)
 	line, err := reader.ReadString('\n')
 	if err != nil {
 		panic(err) // think about it
 	}
-	// fmt.Printf("read line: %s-\n", line)
 	return line
 }
 
@@ -152,7 +149,7 @@ func sendMsgToLLM(body io.Reader) (any, error) {
 			return nil, err
 		}
 		llmResp = append(llmResp, llmchunk)
-		logger.Info("streamview", "chunk", llmchunk)
+		// logger.Info("streamview", "chunk", llmchunk)
 		// if llmchunk.Choices[len(llmchunk.Choices)-1].FinishReason != "chat.completion.chunk" {
 		if llmchunk.Choices[len(llmchunk.Choices)-1].FinishReason == "stop" {
 			streamDone <- true
@@ -192,18 +189,12 @@ out:
 	})
 	// bot msg is done;
 	// now check it for func call
-	logChat(chatFileLoaded, chatBody.Messages)
-	findCall(respText.String(), tv)
-}
-
-func logChat(fname string, msgs []models.MessagesStory) {
-	data, err := json.MarshalIndent(msgs, "", "  ")
+	// logChat(activeChatName, chatBody.Messages)
+	err := updateStorageChat(activeChatName, chatBody.Messages)
 	if err != nil {
-		logger.Error("failed to marshal", "error", err)
+		logger.Warn("failed to update storage", "error", err, "name", activeChatName)
 	}
-	if err := os.WriteFile(fname, data, 0666); err != nil {
-		logger.Error("failed to write log", "error", err)
-	}
+	findCall(respText.String(), tv)
 }
 
 func findCall(msg string, tv *tview.TextView) {
@@ -233,74 +224,6 @@ func findCall(msg string, tv *tview.TextView) {
 	// sendMsgToLLM()
 	chatRound(toolMsg, toolRole, tv)
 	// return func result to the llm
-}
-
-func listHistoryFiles(dir string) ([]string, error) {
-	files, err := os.ReadDir(dir)
-	if err != nil {
-		logger.Error("failed to readdir", "error", err)
-		return nil, err
-	}
-	resp := make([]string, len(files))
-	for i, f := range files {
-		resp[i] = path.Join(dir, f.Name())
-	}
-	return resp, nil
-}
-
-func findLatestChat(dir string) string {
-	files, err := listHistoryFiles(dir)
-	if err != nil {
-		panic(err)
-	}
-	var (
-		latestF    string
-		newestTime int64
-	)
-	logger.Info("filelist", "list", files)
-	for _, fn := range files {
-		fi, err := os.Stat(fn)
-		if err != nil {
-			logger.Error("failed to get stat", "error", err, "name", fn)
-			panic(err)
-		}
-		currTime := fi.ModTime().Unix()
-		if currTime > newestTime {
-			newestTime = currTime
-			latestF = fn
-		}
-	}
-	return latestF
-}
-
-func readHistoryChat(fn string) ([]models.MessagesStory, error) {
-	content, err := os.ReadFile(fn)
-	if err != nil {
-		logger.Error("failed to read file", "error", err, "name", fn)
-		return nil, err
-	}
-	resp := []models.MessagesStory{}
-	if err := json.Unmarshal(content, &resp); err != nil {
-		logger.Error("failed to unmarshal", "error", err, "name", fn)
-		return nil, err
-	}
-	chatFileLoaded = fn
-	return resp, nil
-}
-
-func loadOldChatOrGetNew(fns ...string) []models.MessagesStory {
-	// find last chat
-	fn := findLatestChat(historyDir)
-	if len(fns) > 0 {
-		fn = fns[0]
-	}
-	logger.Info("reading history from file", "filename", fn)
-	history, err := readHistoryChat(fn)
-	if err != nil {
-		logger.Warn("faield to load history chat", "error", err)
-		return defaultStarter
-	}
-	return history
 }
 
 func chatToTextSlice(showSys bool) []string {
@@ -353,10 +276,13 @@ func init() {
 	if err := os.MkdirAll(historyDir, os.ModePerm); err != nil {
 		panic(err)
 	}
+	store = storage.NewProviderSQL("test.db")
 	// defer file.Close()
 	logger = slog.New(slog.NewTextHandler(file, nil))
 	logger.Info("test msg")
 	// https://github.com/coreydaley/ggerganov-llama.cpp/blob/master/examples/server/README.md
+	// load all chats in memory
+	loadHistoryChats()
 	lastChat := loadOldChatOrGetNew()
 	logger.Info("loaded history", "chat", lastChat)
 	chatBody = &models.ChatBody{
@@ -364,5 +290,4 @@ func init() {
 		Stream:   true,
 		Messages: lastChat,
 	}
-	store = storage.NewProviderSQL("test.db")
 }

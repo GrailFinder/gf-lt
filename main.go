@@ -60,7 +60,7 @@ func main() {
 		}
 	}
 	chatOpts := []string{"cancel", "new"}
-	fList, err := listHistoryFiles(historyDir)
+	fList, err := loadHistoryChats()
 	if err != nil {
 		panic(err)
 	}
@@ -74,18 +74,16 @@ func main() {
 				// set chat body
 				chatBody.Messages = defaultStarter
 				textView.SetText(chatToText(showSystemMsgs))
-				chatFileLoaded = path.Join(historyDir, fmt.Sprintf("%d_chat.json", time.Now().Unix()))
+				activeChatName = path.Join(historyDir, fmt.Sprintf("%d_chat.json", time.Now().Unix()))
 				pages.RemovePage("history")
 				return
 			// set text
 			case "cancel":
 				pages.RemovePage("history")
-				// pages.ShowPage("main")
 				return
 			default:
-				// fn := path.Join(historyDir, buttonLabel)
 				fn := buttonLabel
-				history, err := readHistoryChat(fn)
+				history, err := loadHistoryChat(fn)
 				if err != nil {
 					logger.Error("failed to read history file", "filename", fn)
 					pages.RemovePage("history")
@@ -93,7 +91,7 @@ func main() {
 				}
 				chatBody.Messages = history
 				textView.SetText(chatToText(showSystemMsgs))
-				chatFileLoaded = fn
+				activeChatName = fn
 				pages.RemovePage("history")
 				return
 			}
@@ -104,14 +102,11 @@ func main() {
 	editArea.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		if event.Key() == tcell.KeyEscape && editMode {
 			editedMsg := editArea.GetText()
-			// TODO: trim msg number and icon
 			chatBody.Messages[selectedIndex].Content = editedMsg
 			// change textarea
 			textView.SetText(chatToText(showSystemMsgs))
 			pages.RemovePage("editArea")
 			editMode = false
-			// panic("do we get here?")
-			// pages.ShowPage("main")
 			return nil
 		}
 		return event
@@ -151,7 +146,8 @@ func main() {
 	textView.ScrollToEnd()
 	app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		if event.Key() == tcell.KeyF1 {
-			fList, err := listHistoryFiles(historyDir)
+			// fList, err := listHistoryFiles(historyDir)
+			fList, err := loadHistoryChats()
 			if err != nil {
 				panic(err)
 			}
