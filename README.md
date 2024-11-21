@@ -12,10 +12,13 @@
 - basic tools: memorize and recall;
 - stop stream from the bot; +
 - sqlitedb instead of chatfiles; +
-- define tools and sys prompt for them to be used;
+- define tools and sys prompt for them to be used; +
 - sqlite for the bot memory;
 - fullscreen textarea option (bothersome to implement);
+- add system prompt without tools (for mistral);
 - option to switch between predefined sys prompts;
+- consider adding use /completion of llamacpp, since openai endpoint clearly has template|format issues;
+- change temp, min-p and other params from tui;
 
 ### FIX:
 - bot responding (or haninging) blocks everything; +
@@ -24,6 +27,6 @@
 - Tab is needed to copy paste text into textarea box, use shift+tab to switch focus; (changed tp pgup) +
 - delete last msg: can have unexpected behavior (deletes what appears to be two messages if last bot msg was not generated (should only delete icon in that case));
 - empty input to continue bot msg gens new msg index and bot icon;
-- sometimes bots put additional info around the tool call, have a regexp to match tool call;
-- remove all panics from code;
+- sometimes bots put additional info around the tool call, have a regexp to match tool call; +
+- remove all panics from code; +
 - new chat is not saved in db;

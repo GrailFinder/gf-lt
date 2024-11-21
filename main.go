@@ -2,7 +2,6 @@ package main
 
 import (
 	"elefant/models"
-	"encoding/json"
 	"fmt"
 	"strconv"
 	"time"
@@ -63,7 +62,7 @@ func main() {
 	chatOpts := []string{"cancel", "new"}
 	fList, err := loadHistoryChats()
 	if err != nil {
-		panic(err)
+		logger.Error("failed to load chat history", "error", err)
 	}
 	chatOpts = append(chatOpts, fList...)
 	chatActModal := tview.NewModal().
@@ -74,15 +73,10 @@ func main() {
 			case "new":
 				// set chat body
 				chatBody.Messages = defaultStarter
-				// TODO: use predefined var since it is the same each time
-				msgsBytes, err := json.Marshal(chatBody.Messages)
-				if err != nil {
-					logger.Error(err.Error())
-				}
 				textView.SetText(chatToText(showSystemMsgs))
 				newChat := &models.Chat{
 					Name: fmt.Sprintf("%v_%v", "new", time.Now().Unix()),
-					Msgs: string(msgsBytes),
+					Msgs: string(defaultStarterBytes),
 				}
 				// activeChatName = path.Join(historyDir, fmt.Sprintf("%d_chat.json", time.Now().Unix()))
 				activeChatName = newChat.Name
@@ -166,10 +160,10 @@ func main() {
 	textView.ScrollToEnd()
 	app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		if event.Key() == tcell.KeyF1 {
-			// fList, err := listHistoryFiles(historyDir)
 			fList, err := loadHistoryChats()
 			if err != nil {
-				panic(err)
+				logger.Error("failed to load chat history", "error", err)
+				return nil
 			}
 			chatOpts = append(chatOpts, fList...)
 			pages.AddPage("history", chatActModal, true, true)
@@ -220,6 +214,10 @@ func main() {
 			pages.AddPage("getIndex", indexPickWindow, true, true)
 			return nil
 		}
+		if event.Key() == tcell.KeyCtrlE {
+			textArea.SetText("pressed ctrl+e", true)
+			return nil
+		}
 		// cannot send msg in editMode or botRespMode
 		if event.Key() == tcell.KeyEscape && !editMode && !botRespMode {
 			fromRow, fromColumn, _, _ := textArea.GetCursor()
@@ -251,6 +249,7 @@ func main() {
 	pages.AddPage("main", flex, true, true)
 	if err := app.SetRoot(pages,
 		true).EnableMouse(true).Run(); err != nil {
-		panic(err)
+		logger.Error("failed to start tview app", "error", err)
+		return
 	}
 }

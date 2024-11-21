@@ -3,6 +3,7 @@ package main
 import (
 	"elefant/models"
 	"encoding/json"
+	"regexp"
 	"time"
 )
 
@@ -29,7 +30,8 @@ var (
 	// When making function call avoid typing anything else. 'tool' user will respond with the results of the call.
 	// After that you are free to respond to the user.
 	// `
-	systemMsg = `You're a helpful assistant.
+	toolCallRE = regexp.MustCompile(`__tool_call__\s*([\s\S]*?)__tool_call__`)
+	systemMsg  = `You're a helpful assistant.
 # Tools
 You can do functions call if needed.
 Your current tools:
@@ -75,8 +77,8 @@ also:
 */
 func memorise(args ...string) []byte {
 	agent := assistantRole
-	if len(args) < 1 {
-		// TODO: log
+	if len(args) < 2 {
+		logger.Warn("not enough args to call memorise tool")
 		return nil
 	}
 	memory := &models.Memory{
@@ -92,12 +94,13 @@ func memorise(args ...string) []byte {
 func recall(args ...string) []byte {
 	agent := assistantRole
 	if len(args) < 1 {
-		// TODO: log
+		logger.Warn("not enough args to call recall tool")
 		return nil
 	}
 	mind, err := store.Recall(agent, args[0])
 	if err != nil {
-		panic(err)
+		logger.Error("failed to use tool", "error", err, "args", args)
+		return nil
 	}
 	return []byte(mind)
 }
@@ -106,11 +109,13 @@ func recallTopics(args ...string) []byte {
 	agent := assistantRole
 	topics, err := store.RecallTopics(agent)
 	if err != nil {
-		panic(err)
+		logger.Error("failed to use tool", "error", err, "args", args)
+		return nil
 	}
 	data, err := json.Marshal(topics)
 	if err != nil {
-		panic(err)
+		logger.Error("failed to use tool", "error", err, "args", args)
+		return nil
 	}
 	return data
 }
@@ -118,7 +123,7 @@ func recallTopics(args ...string) []byte {
 func fullMemoryLoad() {}
 
 // predifine funcs
-func getUserDetails(id ...string) []byte {
+func getUserDetails(args ...string) []byte {
 	// db query
 	// return DB[id[0]]
 	m := map[string]any{
@@ -129,7 +134,8 @@ func getUserDetails(id ...string) []byte {
 	}
 	data, err := json.Marshal(m)
 	if err != nil {
-		panic(err)
+		logger.Error("failed to use tool", "error", err, "args", args)
+		return nil
 	}
 	return data
 }

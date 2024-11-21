@@ -69,9 +69,9 @@ func (p ProviderSQL) RemoveChat(id uint32) error {
 func NewProviderSQL(dbPath string, logger *slog.Logger) FullRepo {
 	db, err := sqlx.Open("sqlite", dbPath)
 	if err != nil {
-		panic(err)
+		logger.Error("failed to open db connection", "error", err)
+		return nil
 	}
-	// get SQLite version
 	p := ProviderSQL{db: db, logger: logger}
 	p.Migrate()
 	return p

@@ -24,14 +24,13 @@ var httpClient = http.Client{
 var (
 	logger        *slog.Logger
 	APIURL        = "http://localhost:8080/v1/chat/completions"
-	DB            = map[string]map[string]any{}
 	userRole      = "user"
 	assistantRole = "assistant"
 	toolRole      = "tool"
 	assistantIcon = "<🤖>: "
 	userIcon      = "<user>: "
-	historyDir    = "./history/"
-	// TODO: pass as an cli arg
+	// TODO: pass as an cli arg or have config
+	logFileName     = "log.txt"
 	showSystemMsgs  bool
 	chunkLimit      = 1000
 	activeChatName  string
@@ -44,20 +43,11 @@ var (
 		{Role: "system", Content: systemMsg},
 		{Role: assistantRole, Content: defaultFirstMsg},
 	}
-	interruptResp = false
+	defaultStarterBytes, _ = json.Marshal(chatBody.Messages)
+	interruptResp          = false
 )
 
 // ====
-
-func getUserInput(userPrompt string) string {
-	fmt.Printf(userPrompt)
-	reader := bufio.NewReader(os.Stdin)
-	line, err := reader.ReadString('\n')
-	if err != nil {
-		panic(err) // think about it
-	}
-	return line
-}
 
 func formMsg(chatBody *models.ChatBody, newMsg, role string) io.Reader {
 	if newMsg != "" { // otherwise let the bot continue
@@ -66,7 +56,8 @@ func formMsg(chatBody *models.ChatBody, newMsg, role string) io.Reader {
 	}
 	data, err := json.Marshal(chatBody)
 	if err != nil {
-		panic(err)
+		logger.Error("failed to form a msg", "error", err)
+		return nil
 	}
 	return bytes.NewReader(data)
 }
@@ -130,6 +121,9 @@ func sendMsgToLLM(body io.Reader) (any, error) {
 func chatRound(userMsg, role string, tv *tview.TextView) {
 	botRespMode = true
 	reader := formMsg(chatBody, userMsg, role)
+	if reader == nil {
+		return // any notification in that case?
+	}
 	go sendMsgToLLM(reader)
 	fmt.Fprintf(tv, fmt.Sprintf("(%d) ", len(chatBody.Messages)))
 	fmt.Fprintf(tv, assistantIcon)
@@ -161,18 +155,22 @@ out:
 }
 
 func findCall(msg string, tv *tview.TextView) {
-	prefix := "__tool_call__\n"
-	suffix := "\n__tool_call__"
+	// prefix := "__tool_call__\n"
+	// suffix := "\n__tool_call__"
+	// if !strings.HasPrefix(msg, prefix) ||
+	// 	!strings.HasSuffix(msg, suffix) {
+	// 	return
+	// }
+	// jsStr := strings.TrimSuffix(strings.TrimPrefix(msg, prefix), suffix)
 	fc := models.FuncCall{}
-	if !strings.HasPrefix(msg, prefix) ||
-		!strings.HasSuffix(msg, suffix) {
+	jsStr := toolCallRE.FindString(msg)
+	if jsStr == "" {
+		// tool call not found
 		return
 	}
-	jsStr := strings.TrimSuffix(strings.TrimPrefix(msg, prefix), suffix)
 	if err := json.Unmarshal([]byte(jsStr), &fc); err != nil {
 		logger.Error("failed to unmarshal tool call", "error", err)
 		return
-		// panic(err)
 	}
 	// call a func
 	f, ok := fnMap[fc.Name]
@@ -231,13 +229,10 @@ func textSliceToChat(chat []string) []models.MessagesStory {
 }
 
 func init() {
-	file, err := os.OpenFile("log.txt", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	file, err := os.OpenFile(logFileName, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
-		panic(err)
-	}
-	// create dir if does not exist
-	if err := os.MkdirAll(historyDir, os.ModePerm); err != nil {
-		panic(err)
+		logger.Error("failed to open log file", "error", err, "filename", logFileName)
+		return
 	}
 	logger = slog.New(slog.NewTextHandler(file, nil))
 	store = storage.NewProviderSQL("test.db", logger)
