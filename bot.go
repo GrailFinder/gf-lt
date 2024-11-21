@@ -43,8 +43,8 @@ var (
 		{Role: "system", Content: systemMsg},
 		{Role: assistantRole, Content: defaultFirstMsg},
 	}
-	defaultStarterBytes, _ = json.Marshal(chatBody.Messages)
-	interruptResp          = false
+	defaultStarterBytes = []byte{}
+	interruptResp       = false
 )
 
 // ====
@@ -232,6 +232,11 @@ func init() {
 	file, err := os.OpenFile(logFileName, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		logger.Error("failed to open log file", "error", err, "filename", logFileName)
+		return
+	}
+	defaultStarterBytes, err = json.Marshal(defaultStarter)
+	if err != nil {
+		logger.Error("failed to marshal defaultStarter", "error", err)
 		return
 	}
 	logger = slog.New(slog.NewTextHandler(file, nil))
