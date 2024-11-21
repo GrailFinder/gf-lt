@@ -90,6 +90,12 @@ func loadOldChatOrGetNew() []models.MessagesStory {
 		chatMap[newChat.Name] = newChat
 		return defaultStarter
 	}
+	if chat.Name == "" {
+		logger.Warn("empty chat name", "id", chat.ID)
+		chat.Name = fmt.Sprintf("%d_%v", chat.ID, chat.CreatedAt.Unix())
+	}
+	chatMap[chat.Name] = chat
+	activeChatName = chat.Name
 	return history
 }
 
