@@ -8,6 +8,11 @@ import (
 	"github.com/jmoiron/sqlx"
 )
 
+type FullRepo interface {
+	ChatHistory
+	Memories
+}
+
 type ChatHistory interface {
 	ListChats() ([]models.Chat, error)
 	GetChatByID(id uint32) (*models.Chat, error)
@@ -61,7 +66,7 @@ func (p ProviderSQL) RemoveChat(id uint32) error {
 	return err
 }
 
-func NewProviderSQL(dbPath string, logger *slog.Logger) ChatHistory {
+func NewProviderSQL(dbPath string, logger *slog.Logger) FullRepo {
 	db, err := sqlx.Open("sqlite", dbPath)
 	if err != nil {
 		panic(err)

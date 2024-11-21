@@ -1,59 +1,144 @@
 package main
 
+import (
+	"elefant/models"
+	"encoding/json"
+	"time"
+)
+
 var (
 	// TODO: form that message based on existing funcs
+	// systemMsg = `You're a helpful assistant.
+	// # Tools
+	// You can do functions call if needed.
+	// Your current tools:
+	// <tools>
+	// {
+	// "name":"get_id",
+	// "args": "username"
+	// }
+	// </tools>
+	// To make a function call return a json object within __tool_call__ tags;
+	// Example:
+	// __tool_call__
+	// {
+	// "name":"get_id",
+	// "args": "Adam"
+	// }
+	// __tool_call__
+	// When making function call avoid typing anything else. 'tool' user will respond with the results of the call.
+	// After that you are free to respond to the user.
+	// `
 	systemMsg = `You're a helpful assistant.
 # Tools
 You can do functions call if needed.
 Your current tools:
 <tools>
+[
 {
-"name":"get_id",
-"args": "username"
+"name":"recall",
+"args": "topic",
+"when_to_use": "when asked about topic that user previously asked to memorise"
+},
+{
+"name":"memorise",
+"args": ["topic", "info"],
+"when_to_use": "when asked to memorise something"
+},
+{
+"name":"recall_topics",
+"args": null,
+"when_to_use": "once in a while"
 }
+]
 </tools>
 To make a function call return a json object within __tool_call__ tags;
 Example:
 __tool_call__
 {
-"name":"get_id",
+"name":"recall",
 "args": "Adam"
 }
 __tool_call__
-When making function call avoid typing anything else. 'tool' user will respond with the results of the call.
+When done right, tool call will be delivered to the 'tool' agent. 'tool' agent will respond with the results of the call.
 After that you are free to respond to the user.
 `
 )
 
-func memorize(topic, info string) {
-	//
+/*
+consider cases:
+- append mode (treat it like a journal appendix)
+- replace mode (new info/mind invalidates old ones)
+also:
+- some writing can be done without consideration of previous data;
+- others do;
+*/
+func memorise(args ...string) []byte {
+	agent := assistantRole
+	if len(args) < 1 {
+		// TODO: log
+		return nil
+	}
+	memory := &models.Memory{
+		Agent:     agent,
+		Topic:     args[0],
+		Mind:      args[1],
+		UpdatedAt: time.Now(),
+	}
+	store.Memorise(memory)
+	return nil
 }
 
-func recall(topic string) string {
-	//
-	return ""
+func recall(args ...string) []byte {
+	agent := assistantRole
+	if len(args) < 1 {
+		// TODO: log
+		return nil
+	}
+	mind, err := store.Recall(agent, args[0])
+	if err != nil {
+		panic(err)
+	}
+	return []byte(mind)
 }
 
-func recallTopics() []string {
-	return []string{}
+func recallTopics(args ...string) []byte {
+	agent := assistantRole
+	topics, err := store.RecallTopics(agent)
+	if err != nil {
+		panic(err)
+	}
+	data, err := json.Marshal(topics)
+	if err != nil {
+		panic(err)
+	}
+	return data
 }
 
 func fullMemoryLoad() {}
 
 // predifine funcs
-func getUserDetails(id ...string) map[string]any {
+func getUserDetails(id ...string) []byte {
 	// db query
 	// return DB[id[0]]
-	return map[string]any{
+	m := map[string]any{
 		"username":   "fm11",
 		"id":         24983,
 		"reputation": 911,
 		"balance":    214.73,
 	}
+	data, err := json.Marshal(m)
+	if err != nil {
+		panic(err)
+	}
+	return data
 }
 
-type fnSig func(...string) map[string]any
+type fnSig func(...string) []byte
 
 var fnMap = map[string]fnSig{
-	"get_id": getUserDetails,
+	"get_id":        getUserDetails,
+	"recall":        recall,
+	"recall_topics": recallTopics,
+	"memorise":      memorise,
 }

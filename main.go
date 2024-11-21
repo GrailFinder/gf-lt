@@ -1,8 +1,9 @@
 package main
 
 import (
+	"elefant/models"
+	"encoding/json"
 	"fmt"
-	"path"
 	"strconv"
 	"time"
 	"unicode"
@@ -73,8 +74,19 @@ func main() {
 			case "new":
 				// set chat body
 				chatBody.Messages = defaultStarter
+				// TODO: use predefined var since it is the same each time
+				msgsBytes, err := json.Marshal(chatBody.Messages)
+				if err != nil {
+					logger.Error(err.Error())
+				}
 				textView.SetText(chatToText(showSystemMsgs))
-				activeChatName = path.Join(historyDir, fmt.Sprintf("%d_chat.json", time.Now().Unix()))
+				newChat := &models.Chat{
+					Name: fmt.Sprintf("%v_%v", "new", time.Now().Unix()),
+					Msgs: string(msgsBytes),
+				}
+				// activeChatName = path.Join(historyDir, fmt.Sprintf("%d_chat.json", time.Now().Unix()))
+				activeChatName = newChat.Name
+				chatMap[newChat.Name] = newChat
 				pages.RemovePage("history")
 				return
 			// set text
@@ -141,7 +153,6 @@ func main() {
 			editArea.SetText(m.Content, true)
 		}
 		if !editMode && event.Key() == tcell.KeyEnter {
-			// TODO: add notification that text was copied
 			copyToClipboard(m.Content)
 			notification := fmt.Sprintf("msg '%s' was copied to the clipboard", m.Content[:30])
 			notifyUser("copied", notification)

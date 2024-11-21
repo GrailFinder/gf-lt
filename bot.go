@@ -33,11 +33,12 @@ var (
 	historyDir    = "./history/"
 	// TODO: pass as an cli arg
 	showSystemMsgs  bool
+	chunkLimit      = 1000
 	activeChatName  string
 	chunkChan       = make(chan string, 10)
 	streamDone      = make(chan bool, 1)
 	chatBody        *models.ChatBody
-	store           storage.ChatHistory
+	store           storage.FullRepo
 	defaultFirstMsg = "Hello! What can I do for you?"
 	defaultStarter  = []models.MessagesStory{
 		{Role: "system", Content: systemMsg},
@@ -89,14 +90,15 @@ func sendMsgToLLM(body io.Reader) (any, error) {
 			break
 		}
 		llmchunk := models.LLMRespChunk{}
-		if counter > 2000 {
+		if counter > chunkLimit {
+			logger.Warn("response hit chunk limit", "limit", chunkLimit)
 			streamDone <- true
 			break
 		}
 		line, err := reader.ReadBytes('\n')
 		if err != nil {
 			streamDone <- true
-			panic(err)
+			logger.Error("error reading response body", "error", err)
 		}
 		// logger.Info("linecheck", "line", string(line), "len", len(line), "counter", counter)
 		if len(line) <= 1 {
