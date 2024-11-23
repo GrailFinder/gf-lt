@@ -102,6 +102,27 @@ func main() {
 				return
 			}
 		})
+	sysModal := tview.NewModal().
+		SetText("Switch sys msg:").
+		AddButtons(sysLabels).
+		SetDoneFunc(func(buttonIndex int, buttonLabel string) {
+			switch buttonLabel {
+			case "cancel":
+				pages.RemovePage("sys")
+				return
+			default:
+				sysMsg, ok := sysMap[buttonLabel]
+				if !ok {
+					logger.Warn("no such sys msg", "name", buttonLabel)
+					pages.RemovePage("sys")
+					return
+				}
+				chatBody.Messages[0].Content = sysMsg
+				// replace textview
+				textView.SetText(chatToText(showSystemMsgs))
+				pages.RemovePage("sys")
+			}
+		})
 	editArea := tview.NewTextArea().
 		SetPlaceholder("Replace msg...")
 	editArea.SetBorder(true).SetTitle("input")
@@ -216,6 +237,11 @@ func main() {
 		}
 		if event.Key() == tcell.KeyCtrlE {
 			textArea.SetText("pressed ctrl+e", true)
+			return nil
+		}
+		if event.Key() == tcell.KeyCtrlS {
+			// switch sys prompt
+			pages.AddPage("sys", sysModal, true, true)
 			return nil
 		}
 		// cannot send msg in editMode or botRespMode

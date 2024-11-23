@@ -9,29 +9,9 @@ import (
 
 var (
 	// TODO: form that message based on existing funcs
-	// systemMsg = `You're a helpful assistant.
-	// # Tools
-	// You can do functions call if needed.
-	// Your current tools:
-	// <tools>
-	// {
-	// "name":"get_id",
-	// "args": "username"
-	// }
-	// </tools>
-	// To make a function call return a json object within __tool_call__ tags;
-	// Example:
-	// __tool_call__
-	// {
-	// "name":"get_id",
-	// "args": "Adam"
-	// }
-	// __tool_call__
-	// When making function call avoid typing anything else. 'tool' user will respond with the results of the call.
-	// After that you are free to respond to the user.
-	// `
-	toolCallRE = regexp.MustCompile(`__tool_call__\s*([\s\S]*?)__tool_call__`)
-	systemMsg  = `You're a helpful assistant.
+	basicSysMsg = `Large Language Model that helps user with any of his requests.`
+	toolCallRE  = regexp.MustCompile(`__tool_call__\s*([\s\S]*?)__tool_call__`)
+	toolSysMsg  = `You're a helpful assistant.
 # Tools
 You can do functions call if needed.
 Your current tools:
@@ -65,6 +45,9 @@ __tool_call__
 When done right, tool call will be delivered to the 'tool' agent. 'tool' agent will respond with the results of the call.
 After that you are free to respond to the user.
 `
+	systemMsg = toolSysMsg
+	sysMap    = map[string]string{"basic_sys": basicSysMsg, "tool_sys": toolSysMsg}
+	sysLabels = []string{"cancel", "basic_sys", "tool_sys"}
 )
 
 /*

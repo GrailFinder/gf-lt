@@ -23,13 +23,13 @@ var httpClient = http.Client{
 
 var (
 	logger        *slog.Logger
-	APIURL        = "http://localhost:8080/v1/chat/completions"
 	userRole      = "user"
 	assistantRole = "assistant"
 	toolRole      = "tool"
 	assistantIcon = "<🤖>: "
 	userIcon      = "<user>: "
 	// TODO: pass as an cli arg or have config
+	APIURL          = "http://localhost:8080/v1/chat/completions"
 	logFileName     = "log.txt"
 	showSystemMsgs  bool
 	chunkLimit      = 1000

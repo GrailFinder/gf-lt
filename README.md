@@ -13,12 +13,13 @@
 - stop stream from the bot; +
 - sqlitedb instead of chatfiles; +
 - define tools and sys prompt for them to be used; +
+- add system prompt without tools (for mistral); +
+- option to switch between predefined sys prompts; +
 - sqlite for the bot memory;
 - fullscreen textarea option (bothersome to implement);
-- add system prompt without tools (for mistral);
-- option to switch between predefined sys prompts;
 - consider adding use /completion of llamacpp, since openai endpoint clearly has template|format issues;
 - change temp, min-p and other params from tui;
+- help page with all key bindings;
 
 ### FIX:
 - bot responding (or haninging) blocks everything; +
