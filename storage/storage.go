@@ -19,6 +19,7 @@ type ChatHistory interface {
 	GetLastChat() (*models.Chat, error)
 	UpsertChat(chat *models.Chat) (*models.Chat, error)
 	RemoveChat(id uint32) error
+	ChatGetMaxID() (uint32, error)
 }
 
 type ProviderSQL struct {
@@ -64,6 +65,13 @@ func (p ProviderSQL) RemoveChat(id uint32) error {
 	query := "DELETE FROM chats WHERE ID = $1;"
 	_, err := p.db.Exec(query, id)
 	return err
+}
+
+func (p ProviderSQL) ChatGetMaxID() (uint32, error) {
+	query := "SELECT MAX(id) FROM chats;"
+	var id uint32
+	err := p.db.Get(&id, query)
+	return id, err
 }
 
 func NewProviderSQL(dbPath string, logger *slog.Logger) FullRepo {

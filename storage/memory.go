@@ -12,12 +12,14 @@ func (p ProviderSQL) Memorise(m *models.Memory) (*models.Memory, error) {
 	query := "INSERT INTO memories (agent, topic, mind) VALUES (:agent, :topic, :mind) RETURNING *;"
 	stmt, err := p.db.PrepareNamed(query)
 	if err != nil {
+		p.logger.Error("failed to prepare stmt", "query", query, "error", err)
 		return nil, err
 	}
 	defer stmt.Close()
 	var memory models.Memory
 	err = stmt.Get(&memory, m)
 	if err != nil {
+		p.logger.Error("failed to insert memory", "query", query, "error", err)
 		return nil, err
 	}
 	return &memory, nil
@@ -28,6 +30,7 @@ func (p ProviderSQL) Recall(agent, topic string) (string, error) {
 	var mind string
 	err := p.db.Get(&mind, query, agent, topic)
 	if err != nil {
+		p.logger.Error("failed to get memory", "query", query, "error", err)
 		return "", err
 	}
 	return mind, nil
@@ -38,6 +41,7 @@ func (p ProviderSQL) RecallTopics(agent string) ([]string, error) {
 	var topics []string
 	err := p.db.Select(&topics, query, agent)
 	if err != nil {
+		p.logger.Error("failed to get topics", "query", query, "error", err)
 		return nil, err
 	}
 	return topics, nil

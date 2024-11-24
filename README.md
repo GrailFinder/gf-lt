@@ -20,6 +20,7 @@
 - consider adding use /completion of llamacpp, since openai endpoint clearly has template|format issues;
 - change temp, min-p and other params from tui;
 - help page with all key bindings;
+- rename current chat;
 
 ### FIX:
 - bot responding (or haninging) blocks everything; +
@@ -30,4 +31,4 @@
 - empty input to continue bot msg gens new msg index and bot icon;
 - sometimes bots put additional info around the tool call, have a regexp to match tool call; +
 - remove all panics from code; +
-- new chat is not saved in db;
+- new chat replaces old ones in db;

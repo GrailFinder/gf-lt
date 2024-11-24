@@ -37,6 +37,7 @@ func updateStorageChat(name string, msgs []models.MessagesStory) error {
 		return err
 	}
 	chat.UpdatedAt = time.Now()
+	// if new chat will create id
 	_, err = store.UpsertChat(chat)
 	return err
 }
