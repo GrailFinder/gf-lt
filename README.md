@@ -15,20 +15,21 @@
 - define tools and sys prompt for them to be used; +
 - add system prompt without tools (for mistral); +
 - option to switch between predefined sys prompts; +
-- sqlite for the bot memory;
+- sqlite for the bot memory; +
+- rename current chat; +
 - fullscreen textarea option (bothersome to implement);
 - consider adding use /completion of llamacpp, since openai endpoint clearly has template|format issues;
 - change temp, min-p and other params from tui;
 - help page with all key bindings;
-- rename current chat;
+- default config file (api url, path to sysprompts, path to log, limits, etc);
 
 ### FIX:
 - bot responding (or haninging) blocks everything; +
 - programm requires history folder, but it is .gitignore; +
 - at first run chat table does not exist; run migrations sql on startup; +
 - Tab is needed to copy paste text into textarea box, use shift+tab to switch focus; (changed tp pgup) +
-- delete last msg: can have unexpected behavior (deletes what appears to be two messages if last bot msg was not generated (should only delete icon in that case));
-- empty input to continue bot msg gens new msg index and bot icon;
 - sometimes bots put additional info around the tool call, have a regexp to match tool call; +
 - remove all panics from code; +
+- delete last msg: can have unexpected behavior (deletes what appears to be two messages if last bot msg was not generated (should only delete icon in that case));
+- empty input to continue bot msg gens new msg index and bot icon;
 - new chat replaces old ones in db;

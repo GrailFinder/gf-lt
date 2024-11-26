@@ -17,11 +17,26 @@ var (
 	editArea        *tview.TextArea
 	textView        *tview.TextView
 	position        *tview.TextView
+	helpView        *tview.TextView
 	flex            *tview.Flex
 	chatActModal    *tview.Modal
 	sysModal        *tview.Modal
 	indexPickWindow *tview.InputField
 	renameWindow    *tview.InputField
+	helpText        = `
+[yellow]Esc[white]: send msg
+[yellow]PgUp/Down[white]: switch focus
+[yellow]F1[white]: manage chats
+[yellow]F2[white]: regen last
+[yellow]F3[white]: delete last msg
+[yellow]F4[white]: edit msg
+[yellow]F5[white]: toggle system
+[yellow]F6[white]: interrupt bot resp
+[yellow]F7[white]: copy msg to clipboard (linux xclip)
+[yellow]Ctrl+s[white]: choose/replace system prompt
+
+Press Enter to go back
+`
 )
 
 func init() {
@@ -74,7 +89,7 @@ func init() {
 				chatBody.Messages = defaultStarter
 				textView.SetText(chatToText(showSystemMsgs))
 				newChat := &models.Chat{
-					ID:   id,
+					ID:   id + 1,
 					Name: fmt.Sprintf("%v_%v", "new", time.Now().Unix()),
 					Msgs: string(defaultStarterBytes),
 				}
@@ -209,6 +224,18 @@ func init() {
 		return event
 	})
 	//
+	helpView = tview.NewTextView().SetDynamicColors(true).SetText(helpText).SetDoneFunc(func(key tcell.Key) {
+		pages.RemovePage("helpView")
+		return
+	})
+	helpView.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		switch event.Key() {
+		case tcell.KeyEsc, tcell.KeyEnter:
+			return event
+		}
+		return nil
+	})
+	//
 	textArea.SetMovedFunc(updateStatusLine)
 	updateStatusLine()
 	textView.SetText(chatToText(showSystemMsgs))
@@ -269,6 +296,11 @@ func init() {
 			// copy msg to clipboard
 			editMode = false
 			pages.AddPage("getIndex", indexPickWindow, true, true)
+			return nil
+		}
+		if event.Key() == tcell.KeyF12 {
+			// help window cheatsheet
+			pages.AddPage("helpView", helpView, true, true)
 			return nil
 		}
 		if event.Key() == tcell.KeyCtrlE {

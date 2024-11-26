@@ -11,7 +11,7 @@ var (
 	editMode      = false
 	botMsg        = "no"
 	selectedIndex = int(-1)
-	indexLine     = "Esc: send msg; PgUp/Down: switch focus; F1: manage chats; F2: regen last; F3:delete last msg; F4: edit msg; F5: toggle system; F6: interrupt bot resp; bot resp mode: %v; current chat: %s"
+	indexLine     = "F12 to show keys help; bot resp mode: %v; current chat: %s"
 	focusSwitcher = map[tview.Primitive]tview.Primitive{}
 )
 
