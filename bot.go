@@ -122,11 +122,14 @@ func chatRound(userMsg, role string, tv *tview.TextView) {
 	botRespMode = true
 	reader := formMsg(chatBody, userMsg, role)
 	if reader == nil {
-		return // any notification in that case?
+		logger.Error("empty reader from msgs", "role", role)
+		return
 	}
 	go sendMsgToLLM(reader)
-	fmt.Fprintf(tv, fmt.Sprintf("(%d) ", len(chatBody.Messages)))
-	fmt.Fprintf(tv, assistantIcon)
+	if userMsg != "" { // no need to write assistant icon since we continue old message
+		fmt.Fprintf(tv, fmt.Sprintf("(%d) ", len(chatBody.Messages)))
+		fmt.Fprintf(tv, assistantIcon)
+	}
 	respText := strings.Builder{}
 out:
 	for {

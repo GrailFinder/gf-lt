@@ -62,12 +62,7 @@ func init() {
 		AddItem(textArea, 0, 10, true).
 		AddItem(position, 0, 1, false)
 	updateStatusLine := func() {
-		fromRow, fromColumn, toRow, toColumn := textArea.GetCursor()
-		if fromRow == toRow && fromColumn == toColumn {
-			position.SetText(fmt.Sprintf(indexLine, botRespMode, activeChatName))
-		} else {
-			position.SetText(fmt.Sprintf("Esc: send msg; PgUp/Down: switch focus; F1: manage chats; F2: regen last; F3:delete last msg; F4: edit msg; F5: toggle system; F6: interrupt bot resp; Row: [yellow]%d[white], Column: [yellow]%d[white] - [red]To[white] Row: [yellow]%d[white], To Column: [yellow]%d; bot resp mode: %v", fromRow, fromColumn, toRow, toColumn, botRespMode))
-		}
+		position.SetText(fmt.Sprintf(indexLine, botRespMode, activeChatName))
 	}
 	chatOpts := []string{"cancel", "new", "rename current"}
 	chatList, err := loadHistoryChats()
@@ -260,11 +255,10 @@ func init() {
 			go chatRound("", userRole, textView)
 			return nil
 		}
-		if event.Key() == tcell.KeyF3 {
+		if event.Key() == tcell.KeyF3 && !botRespMode {
 			// delete last msg
 			chatBody.Messages = chatBody.Messages[:len(chatBody.Messages)-1]
 			textView.SetText(chatToText(showSystemMsgs))
-			botRespMode = false // hmmm; is that correct?
 			return nil
 		}
 		if event.Key() == tcell.KeyF4 {
@@ -314,8 +308,7 @@ func init() {
 		}
 		// cannot send msg in editMode or botRespMode
 		if event.Key() == tcell.KeyEscape && !editMode && !botRespMode {
-			fromRow, fromColumn, _, _ := textArea.GetCursor()
-			position.SetText(fmt.Sprintf(indexLine, fromRow, fromColumn, botRespMode))
+			position.SetText(fmt.Sprintf(indexLine, botRespMode, activeChatName))
 			// read all text into buffer
 			msgText := textArea.GetText()
 			if msgText != "" {
@@ -333,9 +326,6 @@ func init() {
 			return nil
 		}
 		if isASCII(string(event.Rune())) && !botRespMode {
-			// botRespMode = false
-			// fromRow, fromColumn, _, _ := textArea.GetCursor()
-			// position.SetText(fmt.Sprintf(indexLine, fromRow, fromColumn, botRespMode))
 			return event
 		}
 		return event
