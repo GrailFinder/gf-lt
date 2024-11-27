@@ -3,6 +3,7 @@ module elefant
 go 1.23.2
 
 require (
+	github.com/BurntSushi/toml v1.4.0
 	github.com/gdamore/tcell/v2 v2.7.4
 	github.com/glebarez/go-sqlite v1.22.0
 	github.com/jmoiron/sqlx v1.4.0

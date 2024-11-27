@@ -61,7 +61,7 @@ also:
 - others do;
 */
 func memorise(args ...string) []byte {
-	agent := assistantRole
+	agent := cfg.AssistantRole
 	if len(args) < 2 {
 		msg := "not enough args to call memorise tool; need topic and data to remember"
 		logger.Error(msg)
@@ -79,7 +79,7 @@ func memorise(args ...string) []byte {
 }
 
 func recall(args ...string) []byte {
-	agent := assistantRole
+	agent := cfg.AssistantRole
 	if len(args) < 1 {
 		logger.Warn("not enough args to call recall tool")
 		return nil
@@ -94,7 +94,7 @@ func recall(args ...string) []byte {
 }
 
 func recallTopics(args ...string) []byte {
-	agent := assistantRole
+	agent := cfg.AssistantRole
 	topics, err := store.RecallTopics(agent)
 	if err != nil {
 		logger.Error("failed to use tool", "error", err, "args", args)

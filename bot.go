@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"elefant/config"
 	"elefant/models"
 	"elefant/storage"
 	"encoding/json"
@@ -22,27 +23,16 @@ var httpClient = http.Client{
 }
 
 var (
-	logger        *slog.Logger
-	userRole      = "user"
-	assistantRole = "assistant"
-	toolRole      = "tool"
-	assistantIcon = "<🤖>: "
-	userIcon      = "<user>: "
-	// TODO: pass as an cli arg or have config
-	APIURL          = "http://localhost:8080/v1/chat/completions"
-	logFileName     = "log.txt"
-	showSystemMsgs  = true
-	chunkLimit      = 1000
-	activeChatName  string
-	chunkChan       = make(chan string, 10)
-	streamDone      = make(chan bool, 1)
-	chatBody        *models.ChatBody
-	store           storage.FullRepo
-	defaultFirstMsg = "Hello! What can I do for you?"
-	defaultStarter  = []models.MessagesStory{
-		{Role: "system", Content: systemMsg},
-		{Role: assistantRole, Content: defaultFirstMsg},
-	}
+	cfg                 *config.Config
+	logger              *slog.Logger
+	chunkLimit          = 1000
+	activeChatName      string
+	chunkChan           = make(chan string, 10)
+	streamDone          = make(chan bool, 1)
+	chatBody            *models.ChatBody
+	store               storage.FullRepo
+	defaultFirstMsg     = "Hello! What can I do for you?"
+	defaultStarter      = []models.MessagesStory{}
 	defaultStarterBytes = []byte{}
 	interruptResp       = false
 )
@@ -64,14 +54,14 @@ func formMsg(chatBody *models.ChatBody, newMsg, role string) io.Reader {
 
 // func sendMsgToLLM(body io.Reader) (*models.LLMRespChunk, error) {
 func sendMsgToLLM(body io.Reader) (any, error) {
-	resp, err := httpClient.Post(APIURL, "application/json", body)
+	resp, err := httpClient.Post(cfg.APIURL, "application/json", body)
 	if err != nil {
 		logger.Error("llamacpp api", "error", err)
 		return nil, err
 	}
 	defer resp.Body.Close()
 	llmResp := []models.LLMRespChunk{}
-	// chunkChan <- assistantIcon
+	// chunkChan <- cfg.AssistantIcon
 	reader := bufio.NewReader(resp.Body)
 	counter := 0
 	for {
@@ -128,7 +118,7 @@ func chatRound(userMsg, role string, tv *tview.TextView) {
 	go sendMsgToLLM(reader)
 	if userMsg != "" { // no need to write assistant icon since we continue old message
 		fmt.Fprintf(tv, fmt.Sprintf("(%d) ", len(chatBody.Messages)))
-		fmt.Fprintf(tv, assistantIcon)
+		fmt.Fprintf(tv, cfg.AssistantIcon)
 	}
 	respText := strings.Builder{}
 out:
@@ -145,7 +135,7 @@ out:
 	}
 	botRespMode = false
 	chatBody.Messages = append(chatBody.Messages, models.MessagesStory{
-		Role: assistantRole, Content: respText.String(),
+		Role: cfg.AssistantRole, Content: respText.String(),
 	})
 	// bot msg is done;
 	// now check it for func call
@@ -174,18 +164,18 @@ func findCall(msg string, tv *tview.TextView) {
 	f, ok := fnMap[fc.Name]
 	if !ok {
 		m := fmt.Sprintf("%s is not implemented", fc.Name)
-		chatRound(m, toolRole, tv)
+		chatRound(m, cfg.ToolRole, tv)
 		return
 	}
 	resp := f(fc.Args...)
 	toolMsg := fmt.Sprintf("tool response: %+v", string(resp))
-	chatRound(toolMsg, toolRole, tv)
+	chatRound(toolMsg, cfg.ToolRole, tv)
 }
 
 func chatToTextSlice(showSys bool) []string {
 	resp := make([]string, len(chatBody.Messages))
 	for i, msg := range chatBody.Messages {
-		if !showSys && (msg.Role != assistantRole && msg.Role != userRole) {
+		if !showSys && (msg.Role != cfg.AssistantRole && msg.Role != cfg.UserRole) {
 			continue
 		}
 		resp[i] = msg.ToText(i)
@@ -201,14 +191,14 @@ func chatToText(showSys bool) string {
 func textToMsg(rawMsg string) models.MessagesStory {
 	msg := models.MessagesStory{}
 	// system and tool?
-	if strings.HasPrefix(rawMsg, assistantIcon) {
-		msg.Role = assistantRole
-		msg.Content = strings.TrimPrefix(rawMsg, assistantIcon)
+	if strings.HasPrefix(rawMsg, cfg.AssistantIcon) {
+		msg.Role = cfg.AssistantRole
+		msg.Content = strings.TrimPrefix(rawMsg, cfg.AssistantIcon)
 		return msg
 	}
-	if strings.HasPrefix(rawMsg, userIcon) {
-		msg.Role = userRole
-		msg.Content = strings.TrimPrefix(rawMsg, userIcon)
+	if strings.HasPrefix(rawMsg, cfg.UserIcon) {
+		msg.Role = cfg.UserRole
+		msg.Content = strings.TrimPrefix(rawMsg, cfg.UserIcon)
 		return msg
 	}
 	return msg
@@ -224,9 +214,14 @@ func textSliceToChat(chat []string) []models.MessagesStory {
 }
 
 func init() {
-	file, err := os.OpenFile(logFileName, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	cfg = config.LoadConfigOrDefault("config.example.toml")
+	defaultStarter = []models.MessagesStory{
+		{Role: "system", Content: systemMsg},
+		{Role: cfg.AssistantRole, Content: defaultFirstMsg},
+	}
+	file, err := os.OpenFile(cfg.LogFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
-		logger.Error("failed to open log file", "error", err, "filename", logFileName)
+		logger.Error("failed to open log file", "error", err, "filename", cfg.LogFile)
 		return
 	}
 	defaultStarterBytes, err = json.Marshal(defaultStarter)

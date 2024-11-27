@@ -82,7 +82,7 @@ func init() {
 				}
 				// set chat body
 				chatBody.Messages = defaultStarter
-				textView.SetText(chatToText(showSystemMsgs))
+				textView.SetText(chatToText(cfg.ShowSys))
 				newChat := &models.Chat{
 					ID:   id + 1,
 					Name: fmt.Sprintf("%v_%v", "new", time.Now().Unix()),
@@ -111,7 +111,7 @@ func init() {
 					return
 				}
 				chatBody.Messages = history
-				textView.SetText(chatToText(showSystemMsgs))
+				textView.SetText(chatToText(cfg.ShowSys))
 				activeChatName = fn
 				pages.RemovePage("history")
 				return
@@ -134,7 +134,7 @@ func init() {
 				}
 				chatBody.Messages[0].Content = sysMsg
 				// replace textview
-				textView.SetText(chatToText(showSystemMsgs))
+				textView.SetText(chatToText(cfg.ShowSys))
 				pages.RemovePage("sys")
 			}
 		})
@@ -152,7 +152,7 @@ func init() {
 			}
 			chatBody.Messages[selectedIndex].Content = editedMsg
 			// change textarea
-			textView.SetText(chatToText(showSystemMsgs))
+			textView.SetText(chatToText(cfg.ShowSys))
 			pages.RemovePage("editArea")
 			editMode = false
 			return nil
@@ -233,7 +233,7 @@ func init() {
 	//
 	textArea.SetMovedFunc(updateStatusLine)
 	updateStatusLine()
-	textView.SetText(chatToText(showSystemMsgs))
+	textView.SetText(chatToText(cfg.ShowSys))
 	textView.ScrollToEnd()
 	app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		if event.Key() == tcell.KeyF1 {
@@ -251,14 +251,14 @@ func init() {
 		if event.Key() == tcell.KeyF2 {
 			// regen last msg
 			chatBody.Messages = chatBody.Messages[:len(chatBody.Messages)-1]
-			textView.SetText(chatToText(showSystemMsgs))
-			go chatRound("", userRole, textView)
+			textView.SetText(chatToText(cfg.ShowSys))
+			go chatRound("", cfg.UserRole, textView)
 			return nil
 		}
 		if event.Key() == tcell.KeyF3 && !botRespMode {
 			// delete last msg
 			chatBody.Messages = chatBody.Messages[:len(chatBody.Messages)-1]
-			textView.SetText(chatToText(showSystemMsgs))
+			textView.SetText(chatToText(cfg.ShowSys))
 			return nil
 		}
 		if event.Key() == tcell.KeyF4 {
@@ -268,9 +268,9 @@ func init() {
 			return nil
 		}
 		if event.Key() == tcell.KeyF5 {
-			// switch showSystemMsgs
-			showSystemMsgs = !showSystemMsgs
-			textView.SetText(chatToText(showSystemMsgs))
+			// switch cfg.ShowSys
+			cfg.ShowSys = !cfg.ShowSys
+			textView.SetText(chatToText(cfg.ShowSys))
 		}
 		if event.Key() == tcell.KeyF6 {
 			interruptResp = true
@@ -317,7 +317,7 @@ func init() {
 				textView.ScrollToEnd()
 			}
 			// update statue line
-			go chatRound(msgText, userRole, textView)
+			go chatRound(msgText, cfg.UserRole, textView)
 			return nil
 		}
 		if event.Key() == tcell.KeyPgUp || event.Key() == tcell.KeyPgDn {
