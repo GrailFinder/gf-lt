@@ -12,8 +12,8 @@ import (
 // }
 
 type FuncCall struct {
-	Name string `json:"name"`
-	Args string `json:"args"`
+	Name string   `json:"name"`
+	Args []string `json:"args"`
 }
 
 type LLMResp struct {

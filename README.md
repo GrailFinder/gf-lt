@@ -34,3 +34,5 @@
 - new chat replaces old ones in db; +
 - empty input to continue bot msg gens new msg index and bot icon; +
 - delete last msg: can have unexpected behavior (deletes what appears to be two messages if last bot msg was not generated (should only delete icon in that case)) (should use regen instead of delete in that case);
+- lets say we have two (or more) agents with the same name across multiple chats. These agents go and ask db for topics they memoriesed. Now they can access topics that aren't meant for them. (so memory should have an option: shareble; that indicates if that memory can be shared across chats);
+- if option to show sys msg enabled: it show display new tool responses;

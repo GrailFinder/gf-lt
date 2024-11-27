@@ -31,7 +31,7 @@ var (
 	// TODO: pass as an cli arg or have config
 	APIURL          = "http://localhost:8080/v1/chat/completions"
 	logFileName     = "log.txt"
-	showSystemMsgs  bool
+	showSystemMsgs  = true
 	chunkLimit      = 1000
 	activeChatName  string
 	chunkChan       = make(chan string, 10)
@@ -158,21 +158,16 @@ out:
 }
 
 func findCall(msg string, tv *tview.TextView) {
-	// prefix := "__tool_call__\n"
-	// suffix := "\n__tool_call__"
-	// if !strings.HasPrefix(msg, prefix) ||
-	// 	!strings.HasSuffix(msg, suffix) {
-	// 	return
-	// }
-	// jsStr := strings.TrimSuffix(strings.TrimPrefix(msg, prefix), suffix)
 	fc := models.FuncCall{}
 	jsStr := toolCallRE.FindString(msg)
 	if jsStr == "" {
-		// tool call not found
 		return
 	}
+	prefix := "__tool_call__\n"
+	suffix := "\n__tool_call__"
+	jsStr = strings.TrimSuffix(strings.TrimPrefix(jsStr, prefix), suffix)
 	if err := json.Unmarshal([]byte(jsStr), &fc); err != nil {
-		logger.Error("failed to unmarshal tool call", "error", err)
+		logger.Error("failed to unmarshal tool call", "error", err, "json_string", jsStr)
 		return
 	}
 	// call a func
@@ -182,12 +177,9 @@ func findCall(msg string, tv *tview.TextView) {
 		chatRound(m, toolRole, tv)
 		return
 	}
-	resp := f(fc.Args)
-	toolMsg := fmt.Sprintf("tool response: %+v", resp)
-	// reader := formMsg(chatBody, toolMsg, toolRole)
-	// sendMsgToLLM()
+	resp := f(fc.Args...)
+	toolMsg := fmt.Sprintf("tool response: %+v", string(resp))
 	chatRound(toolMsg, toolRole, tv)
-	// return func result to the llm
 }
 
 func chatToTextSlice(showSys bool) []string {
@@ -248,7 +240,7 @@ func init() {
 	// load all chats in memory
 	loadHistoryChats()
 	lastChat := loadOldChatOrGetNew()
-	logger.Info("loaded history", "chat", lastChat)
+	logger.Info("loaded history")
 	chatBody = &models.ChatBody{
 		Model:    "modl_name",
 		Stream:   true,

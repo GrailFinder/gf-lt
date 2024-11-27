@@ -2,8 +2,9 @@ package main
 
 import (
 	"elefant/models"
-	"encoding/json"
+	"fmt"
 	"regexp"
+	"strings"
 	"time"
 )
 
@@ -30,7 +31,7 @@ Your current tools:
 {
 "name":"recall_topics",
 "args": null,
-"when_to_use": "once in a while"
+"when_to_use": "to see what topics are saved in memory"
 }
 ]
 </tools>
@@ -42,7 +43,8 @@ __tool_call__
 "args": "Adam"
 }
 __tool_call__
-When done right, tool call will be delivered to the 'tool' agent. 'tool' agent will respond with the results of the call.
+Tool call is addressed to the tool agent, avoid sending more info than tool call itself, while making a call.
+When done right, tool call will be delivered to the tool agent. tool agent will respond with the results of the call.
 After that you are free to respond to the user.
 `
 	systemMsg = toolSysMsg
@@ -61,8 +63,9 @@ also:
 func memorise(args ...string) []byte {
 	agent := assistantRole
 	if len(args) < 2 {
-		logger.Warn("not enough args to call memorise tool")
-		return nil
+		msg := "not enough args to call memorise tool; need topic and data to remember"
+		logger.Error(msg)
+		return []byte(msg)
 	}
 	memory := &models.Memory{
 		Agent:     agent,
@@ -71,7 +74,8 @@ func memorise(args ...string) []byte {
 		UpdatedAt: time.Now(),
 	}
 	store.Memorise(memory)
-	return nil
+	msg := fmt.Sprintf("info saved under the topic: %s", args[0])
+	return []byte(msg)
 }
 
 func recall(args ...string) []byte {
@@ -82,8 +86,9 @@ func recall(args ...string) []byte {
 	}
 	mind, err := store.Recall(agent, args[0])
 	if err != nil {
-		logger.Error("failed to use tool", "error", err, "args", args)
-		return nil
+		msg := fmt.Sprintf("failed to recall; error: %v; args: %v", err, args)
+		logger.Error(msg)
+		return []byte(msg)
 	}
 	return []byte(mind)
 }
@@ -95,38 +100,15 @@ func recallTopics(args ...string) []byte {
 		logger.Error("failed to use tool", "error", err, "args", args)
 		return nil
 	}
-	data, err := json.Marshal(topics)
-	if err != nil {
-		logger.Error("failed to use tool", "error", err, "args", args)
-		return nil
-	}
-	return data
+	joinedS := strings.Join(topics, ";")
+	return []byte(joinedS)
 }
 
 func fullMemoryLoad() {}
 
-// predifine funcs
-func getUserDetails(args ...string) []byte {
-	// db query
-	// return DB[id[0]]
-	m := map[string]any{
-		"username":   "fm11",
-		"id":         24983,
-		"reputation": 911,
-		"balance":    214.73,
-	}
-	data, err := json.Marshal(m)
-	if err != nil {
-		logger.Error("failed to use tool", "error", err, "args", args)
-		return nil
-	}
-	return data
-}
-
 type fnSig func(...string) []byte
 
 var fnMap = map[string]fnSig{
-	"get_id":        getUserDetails,
 	"recall":        recall,
 	"recall_topics": recallTopics,
 	"memorise":      memorise,
