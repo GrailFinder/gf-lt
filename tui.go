@@ -11,15 +11,15 @@ import (
 )
 
 var (
-	app             *tview.Application
-	pages           *tview.Pages
-	textArea        *tview.TextArea
-	editArea        *tview.TextArea
-	textView        *tview.TextView
-	position        *tview.TextView
-	helpView        *tview.TextView
-	flex            *tview.Flex
-	chatActModal    *tview.Modal
+	app      *tview.Application
+	pages    *tview.Pages
+	textArea *tview.TextArea
+	editArea *tview.TextArea
+	textView *tview.TextView
+	position *tview.TextView
+	helpView *tview.TextView
+	flex     *tview.Flex
+	// chatActModal    *tview.Modal
 	sysModal        *tview.Modal
 	indexPickWindow *tview.InputField
 	renameWindow    *tview.InputField
@@ -145,7 +145,9 @@ func init() {
 		if event.Key() == tcell.KeyEscape && editMode {
 			editedMsg := editArea.GetText()
 			if editedMsg == "" {
-				notifyUser("edit", "no edit provided")
+				if err := notifyUser("edit", "no edit provided"); err != nil {
+					logger.Error("failed to send notification", "error", err)
+				}
 				pages.RemovePage("editArea")
 				editMode = false
 				return nil
@@ -165,7 +167,6 @@ func init() {
 		SetAcceptanceFunc(tview.InputFieldInteger).
 		SetDoneFunc(func(key tcell.Key) {
 			pages.RemovePage("getIndex")
-			return
 		})
 	indexPickWindow.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		si := indexPickWindow.GetText()
@@ -183,9 +184,13 @@ func init() {
 			editArea.SetText(m.Content, true)
 		}
 		if !editMode && event.Key() == tcell.KeyEnter {
-			copyToClipboard(m.Content)
+			if err := copyToClipboard(m.Content); err != nil {
+				logger.Error("failed to copy to clipboard", "error", err)
+			}
 			notification := fmt.Sprintf("msg '%s' was copied to the clipboard", m.Content[:30])
-			notifyUser("copied", notification)
+			if err := notifyUser("copied", notification); err != nil {
+				logger.Error("failed to send notification", "error", err)
+			}
 		}
 		return event
 	})
@@ -196,7 +201,6 @@ func init() {
 		SetAcceptanceFunc(tview.InputFieldMaxLength(100)).
 		SetDoneFunc(func(key tcell.Key) {
 			pages.RemovePage("renameW")
-			return
 		})
 	renameWindow.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		if event.Key() == tcell.KeyEnter {
@@ -214,14 +218,15 @@ func init() {
 				logger.Error("failed to upsert chat", "error", err, "chat", currentChat)
 			}
 			notification := fmt.Sprintf("renamed chat to '%s'", activeChatName)
-			notifyUser("renamed", notification)
+			if err := notifyUser("renamed", notification); err != nil {
+				logger.Error("failed to send notification", "error", err)
+			}
 		}
 		return event
 	})
 	//
 	helpView = tview.NewTextView().SetDynamicColors(true).SetText(helpText).SetDoneFunc(func(key tcell.Key) {
 		pages.RemovePage("helpView")
-		return
 	})
 	helpView.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		switch event.Key() {
@@ -281,9 +286,13 @@ func init() {
 			// copy msg to clipboard
 			editMode = false
 			m := chatBody.Messages[len(chatBody.Messages)-1]
-			copyToClipboard(m.Content)
+			if err := copyToClipboard(m.Content); err != nil {
+				logger.Error("failed to copy to clipboard", "error", err)
+			}
 			notification := fmt.Sprintf("msg '%s' was copied to the clipboard", m.Content[:30])
-			notifyUser("copied", notification)
+			if err := notifyUser("copied", notification); err != nil {
+				logger.Error("failed to send notification", "error", err)
+			}
 			return nil
 		}
 		if event.Key() == tcell.KeyF8 {

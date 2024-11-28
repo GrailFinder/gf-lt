@@ -9,7 +9,6 @@ import (
 var (
 	botRespMode   = false
 	editMode      = false
-	botMsg        = "no"
 	selectedIndex = int(-1)
 	indexLine     = "F12 to show keys help; bot resp mode: %v; current chat: %s"
 	focusSwitcher = map[tview.Primitive]tview.Primitive{}

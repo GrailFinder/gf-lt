@@ -1,0 +1,32 @@
+run:
+  timeout: 1m
+  concurrency: 2
+  tests: false
+
+linters:
+  enable-all: false
+  disable-all: true
+  enable:
+    - errcheck
+    - gosimple
+    - govet
+    - ineffassign
+    - staticcheck
+    - typecheck
+    - unused
+    - prealloc
+  presets:
+    - performance
+
+linters-settings:
+  funlen:
+    lines: 80
+    statements: 50
+  lll:
+    line-length: 80
+
+issues:
+  exclude:
+  # Display all issues
+  max-issues-per-linter: 0
+  max-same-issues: 0

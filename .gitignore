@@ -4,3 +4,4 @@ testlog
 elefant
 history/
 *.db
+config.toml

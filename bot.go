@@ -53,15 +53,15 @@ func formMsg(chatBody *models.ChatBody, newMsg, role string) io.Reader {
 }
 
 // func sendMsgToLLM(body io.Reader) (*models.LLMRespChunk, error) {
-func sendMsgToLLM(body io.Reader) (any, error) {
+func sendMsgToLLM(body io.Reader) {
+	// nolint
 	resp, err := httpClient.Post(cfg.APIURL, "application/json", body)
 	if err != nil {
 		logger.Error("llamacpp api", "error", err)
-		return nil, err
+		return
 	}
 	defer resp.Body.Close()
-	llmResp := []models.LLMRespChunk{}
-	// chunkChan <- cfg.AssistantIcon
+	// llmResp := []models.LLMRespChunk{}
 	reader := bufio.NewReader(resp.Body)
 	counter := 0
 	for {
@@ -90,9 +90,9 @@ func sendMsgToLLM(body io.Reader) (any, error) {
 		if err := json.Unmarshal(line, &llmchunk); err != nil {
 			logger.Error("failed to decode", "error", err, "line", string(line))
 			streamDone <- true
-			return nil, err
+			return
 		}
-		llmResp = append(llmResp, llmchunk)
+		// llmResp = append(llmResp, llmchunk)
 		// logger.Info("streamview", "chunk", llmchunk)
 		// if llmchunk.Choices[len(llmchunk.Choices)-1].FinishReason != "chat.completion.chunk" {
 		if llmchunk.Choices[len(llmchunk.Choices)-1].FinishReason == "stop" {
@@ -105,7 +105,6 @@ func sendMsgToLLM(body io.Reader) (any, error) {
 		answerText := strings.ReplaceAll(llmchunk.Choices[0].Delta.Content, "\n\n", "\n")
 		chunkChan <- answerText
 	}
-	return llmResp, nil
 }
 
 func chatRound(userMsg, role string, tv *tview.TextView) {
@@ -117,8 +116,8 @@ func chatRound(userMsg, role string, tv *tview.TextView) {
 	}
 	go sendMsgToLLM(reader)
 	if userMsg != "" { // no need to write assistant icon since we continue old message
-		fmt.Fprintf(tv, fmt.Sprintf("(%d) ", len(chatBody.Messages)))
-		fmt.Fprintf(tv, cfg.AssistantIcon)
+		fmt.Fprintf(tv, "(%d) ", len(chatBody.Messages))
+		fmt.Fprint(tv, cfg.AssistantIcon)
 	}
 	respText := strings.Builder{}
 out:
@@ -126,7 +125,7 @@ out:
 		select {
 		case chunk := <-chunkChan:
 			// fmt.Printf(chunk)
-			fmt.Fprintf(tv, chunk)
+			fmt.Fprint(tv, chunk)
 			respText.WriteString(chunk)
 			tv.ScrollToEnd()
 		case <-streamDone:
@@ -163,7 +162,7 @@ func findCall(msg string, tv *tview.TextView) {
 	// call a func
 	f, ok := fnMap[fc.Name]
 	if !ok {
-		m := fmt.Sprintf("%s is not implemented", fc.Name)
+		m := fc.Name + "%s is not implemented"
 		chatRound(m, cfg.ToolRole, tv)
 		return
 	}
@@ -188,30 +187,30 @@ func chatToText(showSys bool) string {
 	return strings.Join(s, "")
 }
 
-func textToMsg(rawMsg string) models.MessagesStory {
-	msg := models.MessagesStory{}
-	// system and tool?
-	if strings.HasPrefix(rawMsg, cfg.AssistantIcon) {
-		msg.Role = cfg.AssistantRole
-		msg.Content = strings.TrimPrefix(rawMsg, cfg.AssistantIcon)
-		return msg
-	}
-	if strings.HasPrefix(rawMsg, cfg.UserIcon) {
-		msg.Role = cfg.UserRole
-		msg.Content = strings.TrimPrefix(rawMsg, cfg.UserIcon)
-		return msg
-	}
-	return msg
-}
+// func textToMsg(rawMsg string) models.MessagesStory {
+// 	msg := models.MessagesStory{}
+// 	// system and tool?
+// 	if strings.HasPrefix(rawMsg, cfg.AssistantIcon) {
+// 		msg.Role = cfg.AssistantRole
+// 		msg.Content = strings.TrimPrefix(rawMsg, cfg.AssistantIcon)
+// 		return msg
+// 	}
+// 	if strings.HasPrefix(rawMsg, cfg.UserIcon) {
+// 		msg.Role = cfg.UserRole
+// 		msg.Content = strings.TrimPrefix(rawMsg, cfg.UserIcon)
+// 		return msg
+// 	}
+// 	return msg
+// }
 
-func textSliceToChat(chat []string) []models.MessagesStory {
-	resp := make([]models.MessagesStory, len(chat))
-	for i, rawMsg := range chat {
-		msg := textToMsg(rawMsg)
-		resp[i] = msg
-	}
-	return resp
-}
+// func textSliceToChat(chat []string) []models.MessagesStory {
+// 	resp := make([]models.MessagesStory, len(chat))
+// 	for i, rawMsg := range chat {
+// 		msg := textToMsg(rawMsg)
+// 		resp[i] = msg
+// 	}
+// 	return resp
+// }
 
 func init() {
 	cfg = config.LoadConfigOrDefault("config.example.toml")
@@ -233,7 +232,10 @@ func init() {
 	store = storage.NewProviderSQL("test.db", logger)
 	// https://github.com/coreydaley/ggerganov-llama.cpp/blob/master/examples/server/README.md
 	// load all chats in memory
-	loadHistoryChats()
+	if _, err := loadHistoryChats(); err != nil {
+		logger.Error("failed to load chat", "error", err)
+		return
+	}
 	lastChat := loadOldChatOrGetNew()
 	logger.Info("loaded history")
 	chatBody = &models.ChatBody{

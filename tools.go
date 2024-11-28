@@ -73,8 +73,11 @@ func memorise(args ...string) []byte {
 		Mind:      args[1],
 		UpdatedAt: time.Now(),
 	}
-	store.Memorise(memory)
-	msg := fmt.Sprintf("info saved under the topic: %s", args[0])
+	if _, err := store.Memorise(memory); err != nil {
+		logger.Error("failed to save memory", "err", err, "memoory", memory)
+		return []byte("failed to save info")
+	}
+	msg := "info saved under the topic:" + args[0]
 	return []byte(msg)
 }
 
@@ -104,7 +107,7 @@ func recallTopics(args ...string) []byte {
 	return []byte(joinedS)
 }
 
-func fullMemoryLoad() {}
+// func fullMemoryLoad() {}
 
 type fnSig func(...string) []byte
 

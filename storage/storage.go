@@ -55,6 +55,7 @@ func (p ProviderSQL) UpsertChat(chat *models.Chat) (*models.Chat, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer stmt.Close()
 	// Execute the query and scan the result into a new chat object
 	var resp models.Chat
 	err = stmt.Get(&resp, chat)

@@ -3,6 +3,7 @@ package main
 import (
 	"elefant/models"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os/exec"
 	"strings"
@@ -19,7 +20,7 @@ func historyToSJSON(msgs []models.MessagesStory) (string, error) {
 		return "", err
 	}
 	if data == nil {
-		return "", fmt.Errorf("nil data")
+		return "", errors.New("nil data")
 	}
 	return string(data), nil
 }
@@ -61,7 +62,7 @@ func loadHistoryChats() ([]string, error) {
 func loadHistoryChat(chatName string) ([]models.MessagesStory, error) {
 	chat, ok := chatMap[chatName]
 	if !ok {
-		err := fmt.Errorf("failed to read chat")
+		err := errors.New("failed to read chat")
 		logger.Error("failed to read chat", "name", chatName)
 		return nil, err
 	}
