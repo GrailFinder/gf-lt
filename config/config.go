@@ -16,6 +16,7 @@ type Config struct {
 	AssistantIcon string `toml:"AssistantIcon"`
 	UserIcon      string `toml:"UserIcon"`
 	ToolIcon      string `toml:"ToolIcon"`
+	ChunkLimit    uint32 `toml:"ChunkLimit"`
 }
 
 func LoadConfigOrDefault(fn string) *Config {
@@ -32,6 +33,7 @@ func LoadConfigOrDefault(fn string) *Config {
 		config.UserRole = "user"
 		config.ToolRole = "tool"
 		config.AssistantRole = "assistant"
+		config.ChunkLimit = 8192
 	}
 	return config
 }

@@ -13,19 +13,15 @@ import (
 	"net/http"
 	"os"
 	"strings"
-	"time"
 
 	"github.com/rivo/tview"
 )
 
-var httpClient = http.Client{
-	Timeout: time.Second * 20,
-}
+var httpClient = http.Client{}
 
 var (
 	cfg                 *config.Config
 	logger              *slog.Logger
-	chunkLimit          = 1000
 	activeChatName      string
 	chunkChan           = make(chan string, 10)
 	streamDone          = make(chan bool, 1)
@@ -63,25 +59,25 @@ func sendMsgToLLM(body io.Reader) {
 	defer resp.Body.Close()
 	// llmResp := []models.LLMRespChunk{}
 	reader := bufio.NewReader(resp.Body)
-	counter := 0
+	counter := uint32(0)
 	for {
+		counter++
 		if interruptResp {
 			interruptResp = false
 			logger.Info("interrupted bot response")
 			break
 		}
-		llmchunk := models.LLMRespChunk{}
-		if counter > chunkLimit {
-			logger.Warn("response hit chunk limit", "limit", chunkLimit)
+		if cfg.ChunkLimit > 0 && counter > cfg.ChunkLimit {
+			logger.Warn("response hit chunk limit", "limit", cfg.ChunkLimit)
 			streamDone <- true
 			break
 		}
+		llmchunk := models.LLMRespChunk{}
 		line, err := reader.ReadBytes('\n')
 		if err != nil {
-			streamDone <- true
 			logger.Error("error reading response body", "error", err)
+			continue
 		}
-		// logger.Info("linecheck", "line", string(line), "len", len(line), "counter", counter)
 		if len(line) <= 1 {
 			continue // skip \n
 		}
@@ -100,7 +96,6 @@ func sendMsgToLLM(body io.Reader) {
 			// last chunk
 			break
 		}
-		counter++
 		// bot sends way too many \n
 		answerText := strings.ReplaceAll(llmchunk.Choices[0].Delta.Content, "\n\n", "\n")
 		chunkChan <- answerText
