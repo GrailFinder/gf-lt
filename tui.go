@@ -41,6 +41,20 @@ Press Enter to go back
 )
 
 func init() {
+	theme := tview.Theme{
+		PrimitiveBackgroundColor:    tcell.ColorDefault,
+		ContrastBackgroundColor:     tcell.ColorGray,
+		MoreContrastBackgroundColor: tcell.ColorNavy,
+		BorderColor:                 tcell.ColorGray,
+		TitleColor:                  tcell.ColorRed,
+		GraphicsColor:               tcell.ColorBlue,
+		PrimaryTextColor:            tcell.ColorOlive,
+		SecondaryTextColor:          tcell.ColorYellow,
+		TertiaryTextColor:           tcell.ColorOrange,
+		InverseTextColor:            tcell.ColorPurple,
+		ContrastSecondaryTextColor:  tcell.ColorLime,
+	}
+	tview.Styles = theme
 	app = tview.NewApplication()
 	pages = tview.NewPages()
 	textArea = tview.NewTextArea().
@@ -64,6 +78,10 @@ func init() {
 		AddItem(position, 0, 1, false)
 	updateStatusLine := func() {
 		position.SetText(fmt.Sprintf(indexLine, botRespMode, activeChatName))
+		// INFO: way too ineffective; it should be optional or removed
+		// tv := textView.GetText(false)
+		// cq := quotesRE.ReplaceAllString(tv, `[orange]$1[white]`)
+		// textView.SetText(starRE.ReplaceAllString(cq, `[yellow]$1[white]`))
 	}
 	chatOpts := []string{"cancel", "new", "rename current"}
 	chatList, err := loadHistoryChats()
@@ -142,6 +160,7 @@ func init() {
 				textView.SetText(chatToText(cfg.ShowSys))
 				sysModal.ClearButtons()
 				pages.RemovePage("sys")
+				app.SetFocus(textArea)
 			}
 		})
 	editArea = tview.NewTextArea().
