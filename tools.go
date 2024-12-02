@@ -10,8 +10,8 @@ import (
 
 var (
 	// TODO: form that message based on existing funcs
-	basicSysMsg = `Large Language Model that helps user with any of his requests.`
 	toolCallRE  = regexp.MustCompile(`__tool_call__\s*([\s\S]*?)__tool_call__`)
+	basicSysMsg = `Large Language Model that helps user with any of his requests.`
 	toolSysMsg  = `You're a helpful assistant.
 # Tools
 You can do functions call if needed.
@@ -47,8 +47,20 @@ Tool call is addressed to the tool agent, avoid sending more info than tool call
 When done right, tool call will be delivered to the tool agent. tool agent will respond with the results of the call.
 After that you are free to respond to the user.
 `
-	systemMsg = toolSysMsg
-	sysMap    = map[string]string{"basic_sys": basicSysMsg, "tool_sys": toolSysMsg}
+	basicCard = &models.CharCard{
+		SysPrompt: basicSysMsg,
+		FirstMsg:  defaultFirstMsg,
+		Role:      "",
+		FilePath:  "",
+	}
+	toolCard = &models.CharCard{
+		SysPrompt: toolSysMsg,
+		FirstMsg:  defaultFirstMsg,
+		Role:      "",
+		FilePath:  "",
+	}
+	// sysMap    = map[string]string{"basic_sys": basicSysMsg, "tool_sys": toolSysMsg}
+	sysMap    = map[string]*models.CharCard{"basic_sys": basicCard, "tool_sys": toolCard}
 	sysLabels = []string{"cancel", "basic_sys", "tool_sys"}
 )
 

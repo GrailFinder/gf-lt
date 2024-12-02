@@ -14,7 +14,7 @@ var (
 	chatMap = make(map[string]*models.Chat)
 )
 
-func historyToSJSON(msgs []models.MessagesStory) (string, error) {
+func historyToSJSON(msgs []models.RoleMsg) (string, error) {
 	data, err := json.Marshal(msgs)
 	if err != nil {
 		return "", err
@@ -25,7 +25,7 @@ func historyToSJSON(msgs []models.MessagesStory) (string, error) {
 	return string(data), nil
 }
 
-func updateStorageChat(name string, msgs []models.MessagesStory) error {
+func updateStorageChat(name string, msgs []models.RoleMsg) error {
 	var err error
 	chat, ok := chatMap[name]
 	if !ok {
@@ -59,7 +59,7 @@ func loadHistoryChats() ([]string, error) {
 	return resp, nil
 }
 
-func loadHistoryChat(chatName string) ([]models.MessagesStory, error) {
+func loadHistoryChat(chatName string) ([]models.RoleMsg, error) {
 	chat, ok := chatMap[chatName]
 	if !ok {
 		err := errors.New("failed to read chat")
@@ -70,7 +70,7 @@ func loadHistoryChat(chatName string) ([]models.MessagesStory, error) {
 	return chat.ToHistory()
 }
 
-func loadOldChatOrGetNew() []models.MessagesStory {
+func loadOldChatOrGetNew() []models.RoleMsg {
 	newChat := &models.Chat{
 		ID:        0,
 		CreatedAt: time.Now(),

@@ -5,12 +5,6 @@ import (
 	"strings"
 )
 
-// type FuncCall struct {
-// 	XMLName xml.Name `xml:"tool_call"`
-// 	Name    string   `xml:"name"`
-// 	Args    []string `xml:"args"`
-// }
-
 type FuncCall struct {
 	Name string   `json:"name"`
 	Args []string `json:"args"`
@@ -56,12 +50,12 @@ type LLMRespChunk struct {
 	} `json:"usage"`
 }
 
-type MessagesStory struct {
+type RoleMsg struct {
 	Role    string `json:"role"`
 	Content string `json:"content"`
 }
 
-func (m MessagesStory) ToText(i int) string {
+func (m RoleMsg) ToText(i int) string {
 	icon := ""
 	switch m.Role {
 	case "assistant":
@@ -72,20 +66,22 @@ func (m MessagesStory) ToText(i int) string {
 		icon = fmt.Sprintf("(%d) <system>: ", i)
 	case "tool":
 		icon = fmt.Sprintf("(%d) <tool>: ", i)
+	default:
+		icon = fmt.Sprintf("(%d) <%s>: ", i, m.Role)
 	}
 	textMsg := fmt.Sprintf("%s%s\n", icon, m.Content)
 	return strings.ReplaceAll(textMsg, "\n\n", "\n")
 }
 
 type ChatBody struct {
-	Model    string          `json:"model"`
-	Stream   bool            `json:"stream"`
-	Messages []MessagesStory `json:"messages"`
+	Model    string    `json:"model"`
+	Stream   bool      `json:"stream"`
+	Messages []RoleMsg `json:"messages"`
 }
 
 type ChatToolsBody struct {
-	Model    string          `json:"model"`
-	Messages []MessagesStory `json:"messages"`
+	Model    string    `json:"model"`
+	Messages []RoleMsg `json:"messages"`
 	Tools    []struct {
 		Type     string `json:"type"`
 		Function struct {

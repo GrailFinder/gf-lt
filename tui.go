@@ -2,6 +2,7 @@ package main
 
 import (
 	"elefant/models"
+	"elefant/pngmeta"
 	"fmt"
 	"strconv"
 	"time"
@@ -119,22 +120,27 @@ func init() {
 		})
 	sysModal = tview.NewModal().
 		SetText("Switch sys msg:").
-		AddButtons(sysLabels).
 		SetDoneFunc(func(buttonIndex int, buttonLabel string) {
 			switch buttonLabel {
 			case "cancel":
 				pages.RemovePage("sys")
 				return
 			default:
-				sysMsg, ok := sysMap[buttonLabel]
+				cc, ok := sysMap[buttonLabel]
 				if !ok {
 					logger.Warn("no such sys msg", "name", buttonLabel)
 					pages.RemovePage("sys")
 					return
 				}
-				chatBody.Messages[0].Content = sysMsg
+				// to replace it old role in text
+				// oldRole := chatBody.Messages[0].Role
+				// replace every role with char
+				// chatBody.Messages[0].Content = cc.SysPrompt
+				// chatBody.Messages[1].Content = cc.FirstMsg
+				applyCharCard(cc)
 				// replace textview
 				textView.SetText(chatToText(cfg.ShowSys))
+				sysModal.ClearButtons()
 				pages.RemovePage("sys")
 			}
 		})
@@ -312,6 +318,22 @@ func init() {
 		}
 		if event.Key() == tcell.KeyCtrlS {
 			// switch sys prompt
+			cards, err := pngmeta.ReadDirCards(cfg.SysDir, cfg.UserRole)
+			if err != nil {
+				logger.Error("failed to read sys dir", "error", err)
+				if err := notifyUser("error", "failed to read: "+cfg.SysDir); err != nil {
+					logger.Debug("failed to notify user", "error", err)
+				}
+				return nil
+			}
+			labels := []string{}
+			labels = append(labels, sysLabels...)
+			for _, cc := range cards {
+				labels = append(labels, cc.Role)
+				sysMap[cc.Role] = cc
+			}
+			sysModal.AddButtons(labels)
+			// load all chars
 			pages.AddPage("sys", sysModal, true, true)
 			return nil
 		}

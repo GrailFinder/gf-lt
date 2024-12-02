@@ -8,13 +8,13 @@ import (
 type Chat struct {
 	ID        uint32    `db:"id" json:"id"`
 	Name      string    `db:"name" json:"name"`
-	Msgs      string    `db:"msgs" json:"msgs"` // []MessagesStory to string json
+	Msgs      string    `db:"msgs" json:"msgs"` // []RoleMsg to string json
 	CreatedAt time.Time `db:"created_at" json:"created_at"`
 	UpdatedAt time.Time `db:"updated_at" json:"updated_at"`
 }
 
-func (c Chat) ToHistory() ([]MessagesStory, error) {
-	resp := []MessagesStory{}
+func (c Chat) ToHistory() ([]RoleMsg, error) {
+	resp := []RoleMsg{}
 	if err := json.Unmarshal([]byte(c.Msgs), &resp); err != nil {
 		return nil, err
 	}

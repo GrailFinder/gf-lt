@@ -17,6 +17,7 @@ type Config struct {
 	UserIcon      string `toml:"UserIcon"`
 	ToolIcon      string `toml:"ToolIcon"`
 	ChunkLimit    uint32 `toml:"ChunkLimit"`
+	SysDir        string `toml:"SysDir"`
 }
 
 func LoadConfigOrDefault(fn string) *Config {
@@ -34,6 +35,7 @@ func LoadConfigOrDefault(fn string) *Config {
 		config.ToolRole = "tool"
 		config.AssistantRole = "assistant"
 		config.ChunkLimit = 8192
+		config.SysDir = "sysprompts"
 	}
 	return config
 }

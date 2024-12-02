@@ -28,7 +28,7 @@ var (
 	chatBody            *models.ChatBody
 	store               storage.FullRepo
 	defaultFirstMsg     = "Hello! What can I do for you?"
-	defaultStarter      = []models.MessagesStory{}
+	defaultStarter      = []models.RoleMsg{}
 	defaultStarterBytes = []byte{}
 	interruptResp       = false
 )
@@ -37,7 +37,7 @@ var (
 
 func formMsg(chatBody *models.ChatBody, newMsg, role string) io.Reader {
 	if newMsg != "" { // otherwise let the bot continue
-		newMsg := models.MessagesStory{Role: role, Content: newMsg}
+		newMsg := models.RoleMsg{Role: role, Content: newMsg}
 		chatBody.Messages = append(chatBody.Messages, newMsg)
 	}
 	data, err := json.Marshal(chatBody)
@@ -128,7 +128,7 @@ out:
 		}
 	}
 	botRespMode = false
-	chatBody.Messages = append(chatBody.Messages, models.MessagesStory{
+	chatBody.Messages = append(chatBody.Messages, models.RoleMsg{
 		Role: cfg.AssistantRole, Content: respText.String(),
 	})
 	// bot msg is done;
@@ -182,8 +182,17 @@ func chatToText(showSys bool) string {
 	return strings.Join(s, "")
 }
 
-// func textToMsg(rawMsg string) models.MessagesStory {
-// 	msg := models.MessagesStory{}
+func applyCharCard(cc *models.CharCard) {
+	cfg.AssistantRole = cc.Role
+	newChat := []models.RoleMsg{
+		{Role: "system", Content: cc.SysPrompt},
+		{Role: cfg.AssistantRole, Content: cc.FirstMsg},
+	}
+	chatBody.Messages = newChat
+}
+
+// func textToMsg(rawMsg string) models.RoleMsg {
+// 	msg := models.RoleMsg{}
 // 	// system and tool?
 // 	if strings.HasPrefix(rawMsg, cfg.AssistantIcon) {
 // 		msg.Role = cfg.AssistantRole
@@ -198,8 +207,8 @@ func chatToText(showSys bool) string {
 // 	return msg
 // }
 
-// func textSliceToChat(chat []string) []models.MessagesStory {
-// 	resp := make([]models.MessagesStory, len(chat))
+// func textSliceToChat(chat []string) []models.RoleMsg {
+// 	resp := make([]models.RoleMsg, len(chat))
 // 	for i, rawMsg := range chat {
 // 		msg := textToMsg(rawMsg)
 // 		resp[i] = msg
@@ -209,8 +218,8 @@ func chatToText(showSys bool) string {
 
 func init() {
 	cfg = config.LoadConfigOrDefault("config.example.toml")
-	defaultStarter = []models.MessagesStory{
-		{Role: "system", Content: systemMsg},
+	defaultStarter = []models.RoleMsg{
+		{Role: "system", Content: basicSysMsg},
 		{Role: cfg.AssistantRole, Content: defaultFirstMsg},
 	}
 	file, err := os.OpenFile(cfg.LogFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
@@ -223,6 +232,10 @@ func init() {
 		logger.Error("failed to marshal defaultStarter", "error", err)
 		return
 	}
+	// load cards
+	basicCard.Role = cfg.AssistantRole
+	toolCard.Role = cfg.AssistantRole
+	//
 	logger = slog.New(slog.NewTextHandler(file, nil))
 	store = storage.NewProviderSQL("test.db", logger)
 	// https://github.com/coreydaley/ggerganov-llama.cpp/blob/master/examples/server/README.md

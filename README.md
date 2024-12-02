@@ -18,12 +18,16 @@
 - sqlite for the bot memory; +
 - rename current chat; +
 - help page with all key bindings; +
-- change temp, min-p and other params from tui;
 - default config file (api url, path to sysprompts, path to log, limits, etc); +
+- change temp, min-p and other params from tui;
 - fullscreen textarea option (bothersome to implement);
 - consider adding use /completion of llamacpp, since openai endpoint clearly has template|format issues;
 - export whole chat into a json file;
-- directoty with sys prompts;
+- directoty with sys prompts (charcards png & json);
+- separate messages that are stored and chat and send to the bot, i.e. option to omit tool calls (there might be a point where they are no longer needed in ctx);
+- colourschemes, colours or markdown of quotes and styles;
+- RAG support|implementation;
+- change card-chat pair with one binding;
 
 ### FIX:
 - bot responding (or haninging) blocks everything; +
@@ -38,3 +42,4 @@
 - lets say we have two (or more) agents with the same name across multiple chats. These agents go and ask db for topics they memoriesed. Now they can access topics that aren't meant for them. (so memory should have an option: shareble; that indicates if that memory can be shared across chats);
 - if option to show sys msg enabled: it show display new tool responses;
 - when bot generation ended with err: need a way to switch back to the bot_resp_false mode;
+- no selection focus on modal sys buttons after opening it a second time;
