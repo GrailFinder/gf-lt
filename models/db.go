@@ -9,6 +9,7 @@ type Chat struct {
 	ID        uint32    `db:"id" json:"id"`
 	Name      string    `db:"name" json:"name"`
 	Msgs      string    `db:"msgs" json:"msgs"` // []RoleMsg to string json
+	Agent     string    `db:"agent" json:"agent"`
 	CreatedAt time.Time `db:"created_at" json:"created_at"`
 	UpdatedAt time.Time `db:"updated_at" json:"updated_at"`
 }

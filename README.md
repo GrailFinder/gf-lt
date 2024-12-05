@@ -43,3 +43,6 @@
 - if option to show sys msg enabled: it show display new tool responses;
 - when bot generation ended with err: need a way to switch back to the bot_resp_false mode;
 - no selection focus on modal sys buttons after opening it a second time;
+- chat should contain char in it (one to many: char: []chats);
+- char card is the sys message, but how about giving tools to char that does not have it?
+- it is a bit clumsy to mix chats in db and chars from the external files, maybe load external files in db on startup?

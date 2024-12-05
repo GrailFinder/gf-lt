@@ -102,7 +102,7 @@ func sendMsgToLLM(body io.Reader) {
 	}
 }
 
-func chatRound(userMsg, role string, tv *tview.TextView) {
+func chatRound(userMsg, role string, tv *tview.TextView, regen bool) {
 	botRespMode = true
 	reader := formMsg(chatBody, userMsg, role)
 	if reader == nil {
@@ -110,7 +110,7 @@ func chatRound(userMsg, role string, tv *tview.TextView) {
 		return
 	}
 	go sendMsgToLLM(reader)
-	if userMsg != "" { // no need to write assistant icon since we continue old message
+	if userMsg != "" && !regen { // no need to write assistant icon since we continue old message
 		fmt.Fprintf(tv, "(%d) ", len(chatBody.Messages))
 		fmt.Fprint(tv, cfg.AssistantIcon)
 	}
@@ -158,12 +158,12 @@ func findCall(msg string, tv *tview.TextView) {
 	f, ok := fnMap[fc.Name]
 	if !ok {
 		m := fc.Name + "%s is not implemented"
-		chatRound(m, cfg.ToolRole, tv)
+		chatRound(m, cfg.ToolRole, tv, false)
 		return
 	}
 	resp := f(fc.Args...)
 	toolMsg := fmt.Sprintf("tool response: %+v", string(resp))
-	chatRound(toolMsg, cfg.ToolRole, tv)
+	chatRound(toolMsg, cfg.ToolRole, tv, false)
 }
 
 func chatToTextSlice(showSys bool) []string {

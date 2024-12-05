@@ -33,7 +33,8 @@ var (
 [yellow]F4[white]: edit msg
 [yellow]F5[white]: toggle system
 [yellow]F6[white]: interrupt bot resp
-[yellow]F7[white]: copy msg to clipboard (linux xclip)
+[yellow]F7[white]: copy last msg to clipboard (linux xclip)
+[yellow]F8[white]: copy n msg to clipboard (linux xclip)
 [yellow]Ctrl+s[white]: choose/replace system prompt
 
 Press Enter to go back
@@ -77,7 +78,7 @@ func init() {
 		AddItem(textArea, 0, 10, true).
 		AddItem(position, 0, 1, false)
 	updateStatusLine := func() {
-		position.SetText(fmt.Sprintf(indexLine, botRespMode, activeChatName))
+		position.SetText(fmt.Sprintf(indexLine, botRespMode, cfg.AssistantRole, activeChatName))
 		// INFO: way too ineffective; it should be optional or removed
 		// tv := textView.GetText(false)
 		// cq := quotesRE.ReplaceAllString(tv, `[orange]$1[white]`)
@@ -103,9 +104,10 @@ func init() {
 				chatBody.Messages = defaultStarter
 				textView.SetText(chatToText(cfg.ShowSys))
 				newChat := &models.Chat{
-					ID:   id + 1,
-					Name: fmt.Sprintf("%v_%v", "new", time.Now().Unix()),
-					Msgs: string(defaultStarterBytes),
+					ID:    id + 1,
+					Name:  fmt.Sprintf("%v_%v", "new", time.Now().Unix()),
+					Msgs:  string(defaultStarterBytes),
+					Agent: cfg.AssistantRole,
 				}
 				// activeChatName = path.Join(historyDir, fmt.Sprintf("%d_chat.json", time.Now().Unix()))
 				activeChatName = newChat.Name
@@ -282,7 +284,7 @@ func init() {
 			// regen last msg
 			chatBody.Messages = chatBody.Messages[:len(chatBody.Messages)-1]
 			textView.SetText(chatToText(cfg.ShowSys))
-			go chatRound("", cfg.UserRole, textView)
+			go chatRound("", cfg.UserRole, textView, true)
 			return nil
 		}
 		if event.Key() == tcell.KeyF3 && !botRespMode {
@@ -335,6 +337,11 @@ func init() {
 			textArea.SetText("pressed ctrl+e", true)
 			return nil
 		}
+		if event.Key() == tcell.KeyCtrlA {
+			textArea.SetText("pressed ctrl+a", true)
+			// list all agents
+			return nil
+		}
 		if event.Key() == tcell.KeyCtrlS {
 			// switch sys prompt
 			cards, err := pngmeta.ReadDirCards(cfg.SysDir, cfg.UserRole)
@@ -358,7 +365,7 @@ func init() {
 		}
 		// cannot send msg in editMode or botRespMode
 		if event.Key() == tcell.KeyEscape && !editMode && !botRespMode {
-			position.SetText(fmt.Sprintf(indexLine, botRespMode, activeChatName))
+			position.SetText(fmt.Sprintf(indexLine, botRespMode, cfg.AssistantRole, activeChatName))
 			// read all text into buffer
 			msgText := textArea.GetText()
 			if msgText != "" {
@@ -367,7 +374,7 @@ func init() {
 				textView.ScrollToEnd()
 			}
 			// update statue line
-			go chatRound(msgText, cfg.UserRole, textView)
+			go chatRound(msgText, cfg.UserRole, textView, false)
 			return nil
 		}
 		if event.Key() == tcell.KeyPgUp || event.Key() == tcell.KeyPgDn {
