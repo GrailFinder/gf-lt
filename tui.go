@@ -41,6 +41,13 @@ Press Enter to go back
 `
 )
 
+func colorText() {
+	// INFO: looks way too inefficient; use it with care or make it optional
+	tv := textView.GetText(false)
+	cq := quotesRE.ReplaceAllString(tv, `[orange:-:-]$1[-:-:-]`)
+	textView.SetText(starRE.ReplaceAllString(cq, `[turquoise::i]$1[-:-:-]`))
+}
+
 func init() {
 	theme := tview.Theme{
 		PrimitiveBackgroundColor:    tcell.ColorDefault,
@@ -49,7 +56,7 @@ func init() {
 		BorderColor:                 tcell.ColorGray,
 		TitleColor:                  tcell.ColorRed,
 		GraphicsColor:               tcell.ColorBlue,
-		PrimaryTextColor:            tcell.ColorOlive,
+		PrimaryTextColor:            tcell.ColorLightGray,
 		SecondaryTextColor:          tcell.ColorYellow,
 		TertiaryTextColor:           tcell.ColorOrange,
 		InverseTextColor:            tcell.ColorPurple,
@@ -79,10 +86,6 @@ func init() {
 		AddItem(position, 0, 1, false)
 	updateStatusLine := func() {
 		position.SetText(fmt.Sprintf(indexLine, botRespMode, cfg.AssistantRole, activeChatName))
-		// INFO: way too ineffective; it should be optional or removed
-		// tv := textView.GetText(false)
-		// cq := quotesRE.ReplaceAllString(tv, `[orange]$1[white]`)
-		// textView.SetText(starRE.ReplaceAllString(cq, `[yellow]$1[white]`))
 	}
 	chatOpts := []string{"cancel", "new", "rename current"}
 	chatList, err := loadHistoryChats()
@@ -113,6 +116,7 @@ func init() {
 				activeChatName = newChat.Name
 				chatMap[newChat.Name] = newChat
 				pages.RemovePage("history")
+				colorText()
 				return
 			// set text
 			case "cancel":
@@ -135,6 +139,7 @@ func init() {
 				textView.SetText(chatToText(cfg.ShowSys))
 				activeChatName = fn
 				pages.RemovePage("history")
+				colorText()
 				return
 			}
 		})
@@ -266,6 +271,7 @@ func init() {
 	textArea.SetMovedFunc(updateStatusLine)
 	updateStatusLine()
 	textView.SetText(chatToText(cfg.ShowSys))
+	colorText()
 	textView.ScrollToEnd()
 	app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		if event.Key() == tcell.KeyF1 {
@@ -335,11 +341,11 @@ func init() {
 		}
 		if event.Key() == tcell.KeyCtrlE {
 			textArea.SetText("pressed ctrl+e", true)
+			colorText()
 			return nil
 		}
 		if event.Key() == tcell.KeyCtrlA {
 			textArea.SetText("pressed ctrl+a", true)
-			// list all agents
 			return nil
 		}
 		if event.Key() == tcell.KeyCtrlS {
@@ -369,9 +375,10 @@ func init() {
 			// read all text into buffer
 			msgText := textArea.GetText()
 			if msgText != "" {
-				fmt.Fprintf(textView, "\n(%d) <user>: %s\n", len(chatBody.Messages), msgText)
+				fmt.Fprintf(textView, "\n(%d) <user>: \n%s\n", len(chatBody.Messages), msgText)
 				textArea.SetText("", true)
 				textView.ScrollToEnd()
+				colorText()
 			}
 			// update statue line
 			go chatRound(msgText, cfg.UserRole, textView, false)

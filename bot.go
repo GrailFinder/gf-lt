@@ -113,6 +113,7 @@ func chatRound(userMsg, role string, tv *tview.TextView, regen bool) {
 	if userMsg != "" && !regen { // no need to write assistant icon since we continue old message
 		fmt.Fprintf(tv, "(%d) ", len(chatBody.Messages))
 		fmt.Fprint(tv, cfg.AssistantIcon)
+		fmt.Fprint(tv, "\n")
 	}
 	respText := strings.Builder{}
 out:
@@ -131,6 +132,7 @@ out:
 	chatBody.Messages = append(chatBody.Messages, models.RoleMsg{
 		Role: cfg.AssistantRole, Content: respText.String(),
 	})
+	colorText()
 	// bot msg is done;
 	// now check it for func call
 	// logChat(activeChatName, chatBody.Messages)

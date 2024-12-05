@@ -69,7 +69,7 @@ func (m RoleMsg) ToText(i int) string {
 	default:
 		icon = fmt.Sprintf("(%d) <%s>: ", i, m.Role)
 	}
-	textMsg := fmt.Sprintf("%s%s\n", icon, m.Content)
+	textMsg := fmt.Sprintf("%s\n%s\n", icon, m.Content)
 	return strings.ReplaceAll(textMsg, "\n\n", "\n")
 }
 
