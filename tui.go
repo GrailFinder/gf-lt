@@ -204,30 +204,46 @@ func init() {
 			pages.RemovePage("getIndex")
 		})
 	indexPickWindow.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		si := indexPickWindow.GetText()
-		selectedIndex, err = strconv.Atoi(si)
-		if err != nil {
-			logger.Error("failed to convert provided index", "error", err, "si", si)
-		}
-		if len(chatBody.Messages) <= selectedIndex && selectedIndex < 0 {
-			logger.Warn("chosen index is out of bounds", "index", selectedIndex)
-			return nil
-		}
-		m := chatBody.Messages[selectedIndex]
-		if editMode && event.Key() == tcell.KeyEnter {
-			pages.AddPage("editArea", editArea, true, true)
-			editArea.SetText(m.Content, true)
-		}
-		if !editMode && event.Key() == tcell.KeyEnter {
-			if err := copyToClipboard(m.Content); err != nil {
-				logger.Error("failed to copy to clipboard", "error", err)
+		switch event.Key() {
+		case tcell.KeyBackspace:
+			return event
+		case tcell.KeyEnter:
+			si := indexPickWindow.GetText()
+			selectedIndex, err = strconv.Atoi(si)
+			if err != nil {
+				logger.Error("failed to convert provided index", "error", err, "si", si)
 			}
-			notification := fmt.Sprintf("msg '%s' was copied to the clipboard", m.Content[:30])
-			if err := notifyUser("copied", notification); err != nil {
-				logger.Error("failed to send notification", "error", err)
+			if len(chatBody.Messages)+1 < selectedIndex || selectedIndex < 0 {
+				msg := "chosen index is out of bounds"
+				logger.Warn(msg, "index", selectedIndex)
+				if err := notifyUser("error", msg); err != nil {
+					logger.Error("failed to send notification", "error", err)
+				}
+				pages.RemovePage("getIndex")
+				return event
 			}
+			m := chatBody.Messages[selectedIndex]
+			if editMode && event.Key() == tcell.KeyEnter {
+				pages.AddPage("editArea", editArea, true, true)
+				editArea.SetText(m.Content, true)
+			}
+			if !editMode && event.Key() == tcell.KeyEnter {
+				if err := copyToClipboard(m.Content); err != nil {
+					logger.Error("failed to copy to clipboard", "error", err)
+				}
+				previewLen := 30
+				if len(m.Content) < 30 {
+					previewLen = len(m.Content)
+				}
+				notification := fmt.Sprintf("msg '%s' was copied to the clipboard", m.Content[:previewLen])
+				if err := notifyUser("copied", notification); err != nil {
+					logger.Error("failed to send notification", "error", err)
+				}
+			}
+			return event
+		default:
+			return event
 		}
-		return event
 	})
 	//
 	renameWindow = tview.NewInputField().
@@ -332,7 +348,11 @@ func init() {
 			if err := copyToClipboard(m.Content); err != nil {
 				logger.Error("failed to copy to clipboard", "error", err)
 			}
-			notification := fmt.Sprintf("msg '%s' was copied to the clipboard", m.Content[:30])
+			previewLen := 30
+			if len(m.Content) < 30 {
+				previewLen = len(m.Content)
+			}
+			notification := fmt.Sprintf("msg '%s' was copied to the clipboard", m.Content[:previewLen])
 			if err := notifyUser("copied", notification); err != nil {
 				logger.Error("failed to send notification", "error", err)
 			}
