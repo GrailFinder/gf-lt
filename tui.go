@@ -5,6 +5,7 @@ import (
 	"elefant/pngmeta"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gdamore/tcell/v2"
@@ -48,6 +49,10 @@ func colorText() {
 	textView.SetText(starRE.ReplaceAllString(cq, `[turquoise::i]$1[-:-:-]`))
 }
 
+func updateStatusLine() {
+	position.SetText(fmt.Sprintf(indexLine, botRespMode, cfg.AssistantRole, activeChatName))
+}
+
 func init() {
 	theme := tview.Theme{
 		PrimitiveBackgroundColor:    tcell.ColorDefault,
@@ -84,9 +89,6 @@ func init() {
 		AddItem(textView, 0, 40, false).
 		AddItem(textArea, 0, 10, true).
 		AddItem(position, 0, 1, false)
-	updateStatusLine := func() {
-		position.SetText(fmt.Sprintf(indexLine, botRespMode, cfg.AssistantRole, activeChatName))
-	}
 	chatOpts := []string{"cancel", "new", "rename current"}
 	chatList, err := loadHistoryChats()
 	if err != nil {
@@ -149,6 +151,7 @@ func init() {
 			switch buttonLabel {
 			case "cancel":
 				pages.RemovePage("sys")
+				sysModal.ClearButtons()
 				return
 			default:
 				cc, ok := sysMap[buttonLabel]
@@ -295,6 +298,13 @@ func init() {
 		}
 		if event.Key() == tcell.KeyF3 && !botRespMode {
 			// delete last msg
+			// check textarea text; if it ends with bot icon delete only icon:
+			text := textView.GetText(true)
+			if strings.HasSuffix(text, cfg.AssistantIcon) {
+				logger.Info("deleting assistant icon", "icon", cfg.AssistantIcon)
+				textView.SetText(strings.TrimSuffix(text, cfg.AssistantIcon))
+				return nil
+			}
 			chatBody.Messages = chatBody.Messages[:len(chatBody.Messages)-1]
 			textView.SetText(chatToText(cfg.ShowSys))
 			return nil
@@ -374,6 +384,8 @@ func init() {
 			position.SetText(fmt.Sprintf(indexLine, botRespMode, cfg.AssistantRole, activeChatName))
 			// read all text into buffer
 			msgText := textArea.GetText()
+			// TODO: check whose message was latest (user icon / assistant)
+			// in order to decide if assistant new icon is needed
 			if msgText != "" {
 				fmt.Fprintf(textView, "\n(%d) <user>: \n%s\n", len(chatBody.Messages), msgText)
 				textArea.SetText("", true)

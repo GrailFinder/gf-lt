@@ -54,6 +54,7 @@ func sendMsgToLLM(body io.Reader) {
 	resp, err := httpClient.Post(cfg.APIURL, "application/json", body)
 	if err != nil {
 		logger.Error("llamacpp api", "error", err)
+		streamDone <- true
 		return
 	}
 	defer resp.Body.Close()
@@ -92,6 +93,9 @@ func sendMsgToLLM(body io.Reader) {
 		// logger.Info("streamview", "chunk", llmchunk)
 		// if llmchunk.Choices[len(llmchunk.Choices)-1].FinishReason != "chat.completion.chunk" {
 		if llmchunk.Choices[len(llmchunk.Choices)-1].FinishReason == "stop" {
+			if llmchunk.Choices[len(llmchunk.Choices)-1].Delta.Content != "" {
+				logger.Warn("text inside of finish llmchunk", "chunk", llmchunk, "counter", counter)
+			}
 			streamDone <- true
 			// last chunk
 			break
@@ -125,6 +129,7 @@ out:
 			respText.WriteString(chunk)
 			tv.ScrollToEnd()
 		case <-streamDone:
+			botRespMode = false
 			break out
 		}
 	}
@@ -133,6 +138,7 @@ out:
 		Role: cfg.AssistantRole, Content: respText.String(),
 	})
 	colorText()
+	updateStatusLine()
 	// bot msg is done;
 	// now check it for func call
 	// logChat(activeChatName, chatBody.Messages)

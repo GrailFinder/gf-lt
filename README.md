@@ -1,5 +1,5 @@
 ### TODO:
-- scrolling chat history; (somewhat works out of box); +
+- scrolling chat history; (somewhat works out of the box); +
 - log errors to file; +
 - give serial id to each msg in chat to track it; (use slice index) +
 - show msg id next to the msg; +
@@ -23,26 +23,26 @@
 - fullscreen textarea option (bothersome to implement);
 - consider adding use /completion of llamacpp, since openai endpoint clearly has template|format issues;
 - export whole chat into a json file;
-- directoty with sys prompts (charcards png & json);
+- directory with sys prompts (charcards png & json);
 - separate messages that are stored and chat and send to the bot, i.e. option to omit tool calls (there might be a point where they are no longer needed in ctx);
 - colourschemes, colours or markdown of quotes and styles;
 - RAG support|implementation;
 - change card-chat pair with one binding;
+- char card is the sys message, but how about giving tools to char that does not have it?
+- it is a bit clumsy to mix chats in db and chars from the external files, maybe load external files in db on startup?
+- lets say we have two (or more) agents with the same name across multiple chats. These agents go and ask db for topics they memorised. Now they can access topics that aren't meant for them. (so memory should have an option: shareable; that indicates if that memory can be shared across chats);
 
 ### FIX:
-- bot responding (or haninging) blocks everything; +
-- programm requires history folder, but it is .gitignore; +
+- bot responding (or hanging) blocks everything; +
+- program requires history folder, but it is .gitignore; +
 - at first run chat table does not exist; run migrations sql on startup; +
 - Tab is needed to copy paste text into textarea box, use shift+tab to switch focus; (changed tp pgup) +
 - sometimes bots put additional info around the tool call, have a regexp to match tool call; +
 - remove all panics from code; +
 - new chat replaces old ones in db; +
 - empty input to continue bot msg gens new msg index and bot icon; +
-- delete last msg: can have unexpected behavior (deletes what appears to be two messages if last bot msg was not generated (should only delete icon in that case)) (should use regen instead of delete in that case);
-- lets say we have two (or more) agents with the same name across multiple chats. These agents go and ask db for topics they memoriesed. Now they can access topics that aren't meant for them. (so memory should have an option: shareble; that indicates if that memory can be shared across chats);
-- if option to show sys msg enabled: it show display new tool responses;
-- when bot generation ended with err: need a way to switch back to the bot_resp_false mode;
-- no selection focus on modal sys buttons after opening it a second time;
-- chat should contain char in it (one to many: char: []chats);
-- char card is the sys message, but how about giving tools to char that does not have it?
-- it is a bit clumsy to mix chats in db and chars from the external files, maybe load external files in db on startup?
+- if option to show sys msg enabled: it show display new tool responses; +
+- delete last msg: can have unexpected behavior (deletes what appears to be two messages if last bot msg was not generated (should only delete icon in that case)); +
+- when bot generation ended with err: need a way to switch back to the bot_resp_false mode; +
+- no selection focus on modal sys buttons after opening it a second time; (cannot reproduce) +
+- chat should contain char in it (one to many: char: []chats); +

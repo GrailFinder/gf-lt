@@ -8,3 +8,4 @@ AssistantIcon = "<🤖>: "
 UserIcon = "<user>: "
 ToolIcon = "<>>: "
 SysDir = "sysprompts"
+ChunkLimit = 100000
