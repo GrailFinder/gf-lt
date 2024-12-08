@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 	"time"
@@ -23,6 +24,14 @@ func historyToSJSON(msgs []models.RoleMsg) (string, error) {
 		return "", errors.New("nil data")
 	}
 	return string(data), nil
+}
+
+func exportChat() error {
+	data, err := json.MarshalIndent(chatBody.Messages, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(activeChatName+".json", data, 0666)
 }
 
 func updateStorageChat(name string, msgs []models.RoleMsg) error {

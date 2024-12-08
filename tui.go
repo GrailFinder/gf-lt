@@ -37,6 +37,7 @@ var (
 [yellow]F7[white]: copy last msg to clipboard (linux xclip)
 [yellow]F8[white]: copy n msg to clipboard (linux xclip)
 [yellow]Ctrl+s[white]: choose/replace system prompt
+[yellow]Ctrl+e[white]: export chat to json file
 
 Press Enter to go back
 `
@@ -168,6 +169,7 @@ func init() {
 				applyCharCard(cc)
 				// replace textview
 				textView.SetText(chatToText(cfg.ShowSys))
+				colorText()
 				sysModal.ClearButtons()
 				pages.RemovePage("sys")
 				app.SetFocus(textArea)
@@ -319,10 +321,12 @@ func init() {
 			if strings.HasSuffix(text, cfg.AssistantIcon) {
 				logger.Info("deleting assistant icon", "icon", cfg.AssistantIcon)
 				textView.SetText(strings.TrimSuffix(text, cfg.AssistantIcon))
+				colorText()
 				return nil
 			}
 			chatBody.Messages = chatBody.Messages[:len(chatBody.Messages)-1]
 			textView.SetText(chatToText(cfg.ShowSys))
+			colorText()
 			return nil
 		}
 		if event.Key() == tcell.KeyF4 {
@@ -335,6 +339,7 @@ func init() {
 			// switch cfg.ShowSys
 			cfg.ShowSys = !cfg.ShowSys
 			textView.SetText(chatToText(cfg.ShowSys))
+			colorText()
 		}
 		if event.Key() == tcell.KeyF6 {
 			interruptResp = true
@@ -370,8 +375,12 @@ func init() {
 			return nil
 		}
 		if event.Key() == tcell.KeyCtrlE {
-			textArea.SetText("pressed ctrl+e", true)
-			colorText()
+			// export loaded chat into json file
+			if err := exportChat(); err != nil {
+				logger.Error("failed to export chat;", "error", err, "chat_name", activeChatName)
+				return nil
+			}
+			notifyUser("exported chat", "chat: "+activeChatName+" was exported")
 			return nil
 		}
 		if event.Key() == tcell.KeyCtrlA {
@@ -406,8 +415,16 @@ func init() {
 			msgText := textArea.GetText()
 			// TODO: check whose message was latest (user icon / assistant)
 			// in order to decide if assistant new icon is needed
+			nl := "\n"
+			prevText := textView.GetText(true)
+			// strings.LastIndex()
+			// newline is not needed is prev msg ends with one
+			if strings.HasSuffix(prevText, nl) {
+				nl = ""
+			}
 			if msgText != "" {
-				fmt.Fprintf(textView, "\n(%d) <user>: \n%s\n", len(chatBody.Messages), msgText)
+				fmt.Fprintf(textView, "%s[-:-:u](%d) <%s>: [-:-:-]\n%s\n",
+					nl, len(chatBody.Messages), cfg.UserRole, msgText)
 				textArea.SetText("", true)
 				textView.ScrollToEnd()
 				colorText()
