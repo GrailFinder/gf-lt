@@ -36,15 +36,16 @@ var (
 [yellow]F6[white]: interrupt bot resp
 [yellow]F7[white]: copy last msg to clipboard (linux xclip)
 [yellow]F8[white]: copy n msg to clipboard (linux xclip)
-[yellow]Ctrl+s[white]: choose/replace system prompt
+[yellow]Ctrl+s[white]: load new char/agent
 [yellow]Ctrl+e[white]: export chat to json file
+[yellow]Ctrl+n[white]: start a new chat
 
 Press Enter to go back
 `
 )
 
 func colorText() {
-	// INFO: looks way too inefficient; use it with care or make it optional
+	// INFO: is there a better way to markdown?
 	tv := textView.GetText(false)
 	cq := quotesRE.ReplaceAllString(tv, `[orange:-:-]$1[-:-:-]`)
 	textView.SetText(starRE.ReplaceAllString(cq, `[turquoise::i]$1[-:-:-]`))
@@ -52,6 +53,46 @@ func colorText() {
 
 func updateStatusLine() {
 	position.SetText(fmt.Sprintf(indexLine, botRespMode, cfg.AssistantRole, activeChatName))
+}
+
+func initSysCards() ([]string, error) {
+	labels := []string{}
+	labels = append(labels, sysLabels...)
+	cards, err := pngmeta.ReadDirCards(cfg.SysDir, cfg.UserRole)
+	if err != nil {
+		logger.Error("failed to read sys dir", "error", err)
+		return nil, err
+	}
+	for _, cc := range cards {
+		sysMap[cc.Role] = cc
+		labels = append(labels, cc.Role)
+	}
+	return labels, nil
+}
+
+func startNewChat() {
+	id, err := store.ChatGetMaxID()
+	if err != nil {
+		logger.Error("failed to get chat id", "error", err)
+	}
+	// TODO: get the current agent and it's starter
+	if ok := charToStart(cfg.AssistantRole); !ok {
+		logger.Warn("no such sys msg", "name", cfg.AssistantRole)
+	}
+	// set chat body
+	chatBody.Messages = defaultStarter
+	textView.SetText(chatToText(cfg.ShowSys))
+	newChat := &models.Chat{
+		ID:    id + 1,
+		Name:  fmt.Sprintf("%v_%v", "new", time.Now().Unix()),
+		Msgs:  string(defaultStarterBytes),
+		Agent: cfg.AssistantRole,
+	}
+	activeChatName = newChat.Name
+	chatMap[newChat.Name] = newChat
+	updateStatusLine()
+	colorText()
+	return
 }
 
 func init() {
@@ -102,24 +143,8 @@ func init() {
 		SetDoneFunc(func(buttonIndex int, buttonLabel string) {
 			switch buttonLabel {
 			case "new":
-				id, err := store.ChatGetMaxID()
-				if err != nil {
-					logger.Error("failed to get chat id", "error", err)
-				}
-				// set chat body
-				chatBody.Messages = defaultStarter
-				textView.SetText(chatToText(cfg.ShowSys))
-				newChat := &models.Chat{
-					ID:    id + 1,
-					Name:  fmt.Sprintf("%v_%v", "new", time.Now().Unix()),
-					Msgs:  string(defaultStarterBytes),
-					Agent: cfg.AssistantRole,
-				}
-				// activeChatName = path.Join(historyDir, fmt.Sprintf("%d_chat.json", time.Now().Unix()))
-				activeChatName = newChat.Name
-				chatMap[newChat.Name] = newChat
+				startNewChat()
 				pages.RemovePage("history")
-				colorText()
 				return
 			// set text
 			case "cancel":
@@ -155,21 +180,15 @@ func init() {
 				sysModal.ClearButtons()
 				return
 			default:
-				cc, ok := sysMap[buttonLabel]
-				if !ok {
+				if ok := charToStart(buttonLabel); !ok {
 					logger.Warn("no such sys msg", "name", buttonLabel)
 					pages.RemovePage("sys")
 					return
 				}
-				// to replace it old role in text
-				// oldRole := chatBody.Messages[0].Role
-				// replace every role with char
-				// chatBody.Messages[0].Content = cc.SysPrompt
-				// chatBody.Messages[1].Content = cc.FirstMsg
-				applyCharCard(cc)
 				// replace textview
 				textView.SetText(chatToText(cfg.ShowSys))
 				colorText()
+				updateStatusLine()
 				sysModal.ClearButtons()
 				pages.RemovePage("sys")
 				app.SetFocus(textArea)
@@ -294,6 +313,7 @@ func init() {
 	textView.SetText(chatToText(cfg.ShowSys))
 	colorText()
 	textView.ScrollToEnd()
+	initSysCards()
 	app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		if event.Key() == tcell.KeyF1 {
 			chatList, err := loadHistoryChats()
@@ -387,9 +407,13 @@ func init() {
 			textArea.SetText("pressed ctrl+a", true)
 			return nil
 		}
+		if event.Key() == tcell.KeyCtrlN {
+			startNewChat()
+			return nil
+		}
 		if event.Key() == tcell.KeyCtrlS {
 			// switch sys prompt
-			cards, err := pngmeta.ReadDirCards(cfg.SysDir, cfg.UserRole)
+			labels, err := initSysCards()
 			if err != nil {
 				logger.Error("failed to read sys dir", "error", err)
 				if err := notifyUser("error", "failed to read: "+cfg.SysDir); err != nil {
@@ -397,15 +421,10 @@ func init() {
 				}
 				return nil
 			}
-			labels := []string{}
-			labels = append(labels, sysLabels...)
-			for _, cc := range cards {
-				labels = append(labels, cc.Role)
-				sysMap[cc.Role] = cc
-			}
 			sysModal.AddButtons(labels)
 			// load all chars
 			pages.AddPage("sys", sysModal, true, true)
+			updateStatusLine()
 			return nil
 		}
 		// cannot send msg in editMode or botRespMode

@@ -17,6 +17,7 @@ type ChatHistory interface {
 	ListChats() ([]models.Chat, error)
 	GetChatByID(id uint32) (*models.Chat, error)
 	GetLastChat() (*models.Chat, error)
+	GetLastChatByAgent(agent string) (*models.Chat, error)
 	UpsertChat(chat *models.Chat) (*models.Chat, error)
 	RemoveChat(id uint32) error
 	ChatGetMaxID() (uint32, error)
@@ -42,6 +43,13 @@ func (p ProviderSQL) GetChatByID(id uint32) (*models.Chat, error) {
 func (p ProviderSQL) GetLastChat() (*models.Chat, error) {
 	resp := models.Chat{}
 	err := p.db.Get(&resp, "SELECT * FROM chats ORDER BY updated_at DESC LIMIT 1")
+	return &resp, err
+}
+
+func (p ProviderSQL) GetLastChatByAgent(agent string) (*models.Chat, error) {
+	resp := models.Chat{}
+	query := "SELECT * FROM chats WHERE agent=$1 ORDER BY updated_at DESC LIMIT 1"
+	err := p.db.Get(&resp, query, agent)
 	return &resp, err
 }
 

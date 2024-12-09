@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/rivo/tview"
 )
@@ -192,11 +193,39 @@ func chatToText(showSys bool) string {
 
 func applyCharCard(cc *models.CharCard) {
 	cfg.AssistantRole = cc.Role
-	newChat := []models.RoleMsg{
-		{Role: "system", Content: cc.SysPrompt},
-		{Role: cfg.AssistantRole, Content: cc.FirstMsg},
+	// try to load last active chat
+	history, err := loadAgentsLastChat(cfg.AssistantRole)
+	if err != nil {
+		logger.Warn("failed to load last agent chat;", "agent", cc.Role, "err", err)
+		history = []models.RoleMsg{
+			{Role: "system", Content: cc.SysPrompt},
+			{Role: cfg.AssistantRole, Content: cc.FirstMsg},
+		}
+		id, err := store.ChatGetMaxID()
+		if err != nil {
+			logger.Error("failed to get max chat id from db;", "id:", id)
+			// INFO: will rewrite first chat
+		}
+		chat := &models.Chat{
+			ID:        id + 1,
+			CreatedAt: time.Now(),
+			UpdatedAt: time.Now(),
+			Agent:     cfg.AssistantRole,
+		}
+		chat.Name = fmt.Sprintf("%d_%s", chat.ID, cfg.AssistantRole)
+		chatMap[chat.Name] = chat
+		activeChatName = chat.Name
 	}
-	chatBody.Messages = newChat
+	chatBody.Messages = history
+}
+
+func charToStart(agentName string) bool {
+	cc, ok := sysMap[agentName]
+	if !ok {
+		return false
+	}
+	applyCharCard(cc)
+	return true
 }
 
 // func textToMsg(rawMsg string) models.RoleMsg {

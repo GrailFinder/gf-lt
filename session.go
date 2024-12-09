@@ -79,6 +79,24 @@ func loadHistoryChat(chatName string) ([]models.RoleMsg, error) {
 	return chat.ToHistory()
 }
 
+func loadAgentsLastChat(agent string) ([]models.RoleMsg, error) {
+	chat, err := store.GetLastChatByAgent(agent)
+	if err != nil {
+		return nil, err
+	}
+	history, err := chat.ToHistory()
+	if err != nil {
+		return nil, err
+	}
+	if chat.Name == "" {
+		logger.Warn("empty chat name", "id", chat.ID)
+		chat.Name = fmt.Sprintf("%s_%d", chat.Agent, chat.ID)
+	}
+	chatMap[chat.Name] = chat
+	activeChatName = chat.Name
+	return history, nil
+}
+
 func loadOldChatOrGetNew() []models.RoleMsg {
 	newChat := &models.Chat{
 		ID:        0,

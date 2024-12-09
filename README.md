@@ -19,11 +19,12 @@
 - rename current chat; +
 - help page with all key bindings; +
 - default config file (api url, path to sysprompts, path to log, limits, etc); +
+- ctrl+n to start new chat; +
+- export whole chat into a json file; +
+- directory with sys prompts (charcards png & json); +
 - change temp, min-p and other params from tui;
 - fullscreen textarea option (bothersome to implement);
 - consider adding use /completion of llamacpp, since openai endpoint clearly has template|format issues;
-- export whole chat into a json file;
-- directory with sys prompts (charcards png & json);
 - separate messages that are stored and chat and send to the bot, i.e. option to omit tool calls (there might be a point where they are no longer needed in ctx);
 - colourschemes, colours or markdown of quotes and styles;
 - RAG support|implementation;
@@ -31,6 +32,7 @@
 - char card is the sys message, but how about giving tools to char that does not have it?
 - it is a bit clumsy to mix chats in db and chars from the external files, maybe load external files in db on startup?
 - lets say we have two (or more) agents with the same name across multiple chats. These agents go and ask db for topics they memorised. Now they can access topics that aren't meant for them. (so memory should have an option: shareable; that indicates if that memory can be shared across chats);
+- delete chat option;
 
 ### FIX:
 - bot responding (or hanging) blocks everything; +
@@ -46,3 +48,6 @@
 - when bot generation ended with err: need a way to switch back to the bot_resp_false mode; +
 - no selection focus on modal sys buttons after opening it a second time; (cannot reproduce) +
 - chat should contain char in it (one to many: char: []chats); +
+- all page names should be vars;
+- normal case regen omits assistant icon;
+- user icon (and role?) from config is not used;
