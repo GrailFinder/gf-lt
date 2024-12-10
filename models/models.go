@@ -1,6 +1,7 @@
 package models
 
 import (
+	"elefant/config"
 	"fmt"
 	"strings"
 )
@@ -55,21 +56,21 @@ type RoleMsg struct {
 	Content string `json:"content"`
 }
 
-func (m RoleMsg) ToText(i int) string {
+func (m RoleMsg) ToText(i int, cfg *config.Config) string {
 	icon := ""
 	switch m.Role {
 	case "assistant":
-		icon = fmt.Sprintf("(%d) <🤖>: ", i)
+		icon = fmt.Sprintf("(%d) %s", i, cfg.AssistantIcon)
 	case "user":
-		icon = fmt.Sprintf("(%d) <user>: ", i)
+		icon = fmt.Sprintf("(%d) %s", i, cfg.UserIcon)
 	case "system":
 		icon = fmt.Sprintf("(%d) <system>: ", i)
 	case "tool":
-		icon = fmt.Sprintf("(%d) <tool>: ", i)
+		icon = fmt.Sprintf("(%d) %s", i, cfg.ToolIcon)
 	default:
 		icon = fmt.Sprintf("(%d) <%s>: ", i, m.Role)
 	}
-	textMsg := fmt.Sprintf("[-:-:u]%s[-:-:-]\n%s\n", icon, m.Content)
+	textMsg := fmt.Sprintf("[-:-:b]%s[-:-:-]\n%s\n", icon, m.Content)
 	return strings.ReplaceAll(textMsg, "\n\n", "\n")
 }
 

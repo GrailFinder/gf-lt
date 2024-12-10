@@ -92,7 +92,6 @@ func startNewChat() {
 	chatMap[newChat.Name] = newChat
 	updateStatusLine()
 	colorText()
-	return
 }
 
 func init() {
@@ -313,7 +312,10 @@ func init() {
 	textView.SetText(chatToText(cfg.ShowSys))
 	colorText()
 	textView.ScrollToEnd()
-	initSysCards()
+	_, err = initSysCards()
+	if err != nil {
+		logger.Error("failed to init sys cards", "error", err)
+	}
 	app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		if event.Key() == tcell.KeyF1 {
 			chatList, err := loadHistoryChats()
@@ -400,7 +402,9 @@ func init() {
 				logger.Error("failed to export chat;", "error", err, "chat_name", activeChatName)
 				return nil
 			}
-			notifyUser("exported chat", "chat: "+activeChatName+" was exported")
+			if err := notifyUser("exported chat", "chat: "+activeChatName+" was exported"); err != nil {
+				logger.Error("failed to send notification", "error", err)
+			}
 			return nil
 		}
 		if event.Key() == tcell.KeyCtrlA {
@@ -442,7 +446,7 @@ func init() {
 				nl = ""
 			}
 			if msgText != "" {
-				fmt.Fprintf(textView, "%s[-:-:u](%d) <%s>: [-:-:-]\n%s\n",
+				fmt.Fprintf(textView, "%s[-:-:b](%d) <%s>: [-:-:-]\n%s\n",
 					nl, len(chatBody.Messages), cfg.UserRole, msgText)
 				textArea.SetText("", true)
 				textView.ScrollToEnd()

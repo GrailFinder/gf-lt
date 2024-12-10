@@ -27,7 +27,7 @@ func TestReadMeta(t *testing.T) {
 			if err != nil {
 				t.Errorf("Expected no error, but got %v\n", err)
 			}
-			fmt.Printf("%+v\n", v.Simplify("Adam"))
+			fmt.Printf("%+v\n", v.Simplify("Adam", tc.Filename))
 		})
 	}
 }

@@ -115,7 +115,8 @@ func chatRound(userMsg, role string, tv *tview.TextView, regen bool) {
 		return
 	}
 	go sendMsgToLLM(reader)
-	if userMsg != "" && !regen { // no need to write assistant icon since we continue old message
+	// if userMsg != "" && !regen { // no need to write assistant icon since we continue old message
+	if userMsg != "" || regen {
 		fmt.Fprintf(tv, "(%d) ", len(chatBody.Messages))
 		fmt.Fprint(tv, cfg.AssistantIcon)
 		fmt.Fprint(tv, "\n")
@@ -181,7 +182,7 @@ func chatToTextSlice(showSys bool) []string {
 		if !showSys && (msg.Role != cfg.AssistantRole && msg.Role != cfg.UserRole) {
 			continue
 		}
-		resp[i] = msg.ToText(i)
+		resp[i] = msg.ToText(i, cfg)
 	}
 	return resp
 }
@@ -193,6 +194,8 @@ func chatToText(showSys bool) string {
 
 func applyCharCard(cc *models.CharCard) {
 	cfg.AssistantRole = cc.Role
+	// TODO: need map role->icon
+	cfg.AssistantIcon = "<" + cc.Role + ">: "
 	// try to load last active chat
 	history, err := loadAgentsLastChat(cfg.AssistantRole)
 	if err != nil {
@@ -254,12 +257,12 @@ func charToStart(agentName string) bool {
 // }
 
 func init() {
-	cfg = config.LoadConfigOrDefault("config.example.toml")
+	cfg = config.LoadConfigOrDefault("config.toml")
 	defaultStarter = []models.RoleMsg{
 		{Role: "system", Content: basicSysMsg},
 		{Role: cfg.AssistantRole, Content: defaultFirstMsg},
 	}
-	file, err := os.OpenFile(cfg.LogFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	logfile, err := os.OpenFile(cfg.LogFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		logger.Error("failed to open log file", "error", err, "filename", cfg.LogFile)
 		return
@@ -273,7 +276,7 @@ func init() {
 	basicCard.Role = cfg.AssistantRole
 	toolCard.Role = cfg.AssistantRole
 	//
-	logger = slog.New(slog.NewTextHandler(file, nil))
+	logger = slog.New(slog.NewTextHandler(logfile, nil))
 	store = storage.NewProviderSQL("test.db", logger)
 	// https://github.com/coreydaley/ggerganov-llama.cpp/blob/master/examples/server/README.md
 	// load all chats in memory

@@ -56,8 +56,8 @@ func (p ProviderSQL) GetLastChatByAgent(agent string) (*models.Chat, error) {
 func (p ProviderSQL) UpsertChat(chat *models.Chat) (*models.Chat, error) {
 	// Prepare the SQL statement
 	query := `
-        INSERT OR REPLACE INTO chats (id, name, msgs, created_at, updated_at)
-        VALUES (:id, :name, :msgs, :created_at, :updated_at)
+        INSERT OR REPLACE INTO chats (id, name, msgs, agent, created_at, updated_at)
+	VALUES (:id, :name, :msgs, :agent, :created_at, :updated_at)
         RETURNING *;`
 	stmt, err := p.db.PrepareNamed(query)
 	if err != nil {

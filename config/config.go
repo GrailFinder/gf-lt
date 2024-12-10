@@ -34,8 +34,12 @@ func LoadConfigOrDefault(fn string) *Config {
 		config.UserRole = "user"
 		config.ToolRole = "tool"
 		config.AssistantRole = "assistant"
+		config.AssistantIcon = "<assistant>: "
+		config.UserIcon = "<user>: "
+		config.UserIcon = "<tool>: "
 		config.SysDir = "sysprompts"
 		config.ChunkLimit = 8192
 	}
+	// if any value is empty fill with default
 	return config
 }

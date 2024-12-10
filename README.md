@@ -49,5 +49,5 @@
 - no selection focus on modal sys buttons after opening it a second time; (cannot reproduce) +
 - chat should contain char in it (one to many: char: []chats); +
 - all page names should be vars;
-- normal case regen omits assistant icon;
-- user icon (and role?) from config is not used;
+- normal case regen omits assistant icon; +
+- user icon (and role?) from config is not used; +

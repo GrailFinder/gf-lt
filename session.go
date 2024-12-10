@@ -57,12 +57,12 @@ func loadHistoryChats() ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	resp := []string{}
-	for _, chat := range chats {
+	resp := make([]string, len(chats))
+	for i, chat := range chats {
 		if chat.Name == "" {
-			chat.Name = fmt.Sprintf("%d_%v", chat.ID, chat.CreatedAt.Unix())
+			chat.Name = fmt.Sprintf("%d_%v", chat.ID, chat.Agent)
 		}
-		resp = append(resp, chat.Name)
+		resp[i] = chat.Name
 		chatMap[chat.Name] = &chat
 	}
 	return resp, nil
@@ -98,33 +98,37 @@ func loadAgentsLastChat(agent string) ([]models.RoleMsg, error) {
 }
 
 func loadOldChatOrGetNew() []models.RoleMsg {
-	newChat := &models.Chat{
-		ID:        0,
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
-	}
-	newChat.Name = fmt.Sprintf("%d_%v", newChat.ID, newChat.CreatedAt.Unix())
 	// find last chat
 	chat, err := store.GetLastChat()
 	if err != nil {
 		logger.Warn("failed to load history chat", "error", err)
-		activeChatName = newChat.Name
-		chatMap[newChat.Name] = newChat
+		chat := &models.Chat{
+			ID:        0,
+			CreatedAt: time.Now(),
+			UpdatedAt: time.Now(),
+			Agent:     cfg.AssistantRole,
+		}
+		chat.Name = fmt.Sprintf("%s_%v", chat.Agent, chat.CreatedAt.Unix())
+		activeChatName = chat.Name
+		chatMap[chat.Name] = chat
 		return defaultStarter
 	}
 	history, err := chat.ToHistory()
 	if err != nil {
 		logger.Warn("failed to load history chat", "error", err)
-		activeChatName = newChat.Name
-		chatMap[newChat.Name] = newChat
+		activeChatName = chat.Name
+		chatMap[chat.Name] = chat
 		return defaultStarter
 	}
-	if chat.Name == "" {
-		logger.Warn("empty chat name", "id", chat.ID)
-		chat.Name = fmt.Sprintf("%d_%v", chat.ID, chat.CreatedAt.Unix())
-	}
+	// if chat.Name == "" {
+	// 	logger.Warn("empty chat name", "id", chat.ID)
+	// 	chat.Name = fmt.Sprintf("%s_%v", chat.Agent, chat.CreatedAt.Unix())
+	// }
 	chatMap[chat.Name] = chat
 	activeChatName = chat.Name
+	cfg.AssistantRole = chat.Agent
+	// TODO: update assistant icon
+	cfg.AssistantIcon = "<" + chat.Agent + ">: "
 	return history
 }
 
