@@ -53,11 +53,15 @@ func (p ProviderSQL) GetLastChatByAgent(agent string) (*models.Chat, error) {
 	return &resp, err
 }
 
+// https://sqlite.org/lang_upsert.html
+// on conflict was added
 func (p ProviderSQL) UpsertChat(chat *models.Chat) (*models.Chat, error) {
 	// Prepare the SQL statement
 	query := `
-        INSERT OR REPLACE INTO chats (id, name, msgs, agent, created_at, updated_at)
+        INSERT INTO chats (id, name, msgs, agent, created_at, updated_at)
 	VALUES (:id, :name, :msgs, :agent, :created_at, :updated_at)
+	ON CONFLICT(id) DO UPDATE SET msgs=excluded.msgs,
+	updated_at=excluded.updated_at
         RETURNING *;`
 	stmt, err := p.db.PrepareNamed(query)
 	if err != nil {

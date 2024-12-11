@@ -95,6 +95,7 @@ func TestChatHistory(t *testing.T) {
 	    id INTEGER PRIMARY KEY AUTOINCREMENT,
 	    name TEXT NOT NULL,
 	    msgs TEXT NOT NULL, 
+	    agent TEXT NOT NULL,
 	    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 	    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 		);`)

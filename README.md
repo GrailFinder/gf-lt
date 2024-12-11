@@ -48,6 +48,7 @@
 - when bot generation ended with err: need a way to switch back to the bot_resp_false mode; +
 - no selection focus on modal sys buttons after opening it a second time; (cannot reproduce) +
 - chat should contain char in it (one to many: char: []chats); +
-- all page names should be vars;
+- all page names should be vars; +
 - normal case regen omits assistant icon; +
 - user icon (and role?) from config is not used; +
+- F1 can load any chat, by loading chat of other agent it does not switch agents, if that chat is continued, it will rewrite agent in db; (either allow only chats from current agent OR switch agent on chat loading);

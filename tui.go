@@ -25,7 +25,15 @@ var (
 	sysModal        *tview.Modal
 	indexPickWindow *tview.InputField
 	renameWindow    *tview.InputField
-	helpText        = `
+	// pages
+	historyPage = "historyPage"
+	agentPage   = "agentPage"
+	editMsgPage = "editMsgPage"
+	indexPage   = "indexPage"
+	helpPage    = "helpPage"
+	renamePage  = "renamePage"
+	// help text
+	helpText = `
 [yellow]Esc[white]: send msg
 [yellow]PgUp/Down[white]: switch focus
 [yellow]F1[white]: manage chats
@@ -39,15 +47,31 @@ var (
 [yellow]Ctrl+s[white]: load new char/agent
 [yellow]Ctrl+e[white]: export chat to json file
 [yellow]Ctrl+n[white]: start a new chat
+[yellow]Ctrl+c[white]: close programm
 
 Press Enter to go back
 `
 )
 
+// // code block colors get interrupted by " & *
+// func codeBlockColor(text string) string {
+// 	fi := strings.Index(text, "```")
+// 	if fi < 0 {
+// 		return text
+// 	}
+// 	li := strings.LastIndex(text, "```")
+// 	if li == fi { // only openning backticks
+// 		return text
+// 	}
+// 	return strings.Replace(text, "```", "```[blue:black:i]", 1)
+// }
+
 func colorText() {
 	// INFO: is there a better way to markdown?
 	tv := textView.GetText(false)
 	cq := quotesRE.ReplaceAllString(tv, `[orange:-:-]$1[-:-:-]`)
+	// cb := codeBlockColor(cq)
+	// cb := codeBlockRE.ReplaceAllString(cq, `[blue:black:i]$1[-:-:-]`)
 	textView.SetText(starRE.ReplaceAllString(cq, `[turquoise::i]$1[-:-:-]`))
 }
 
@@ -143,29 +167,29 @@ func init() {
 			switch buttonLabel {
 			case "new":
 				startNewChat()
-				pages.RemovePage("history")
+				pages.RemovePage(historyPage)
 				return
 			// set text
 			case "cancel":
-				pages.RemovePage("history")
+				pages.RemovePage(historyPage)
 				return
 			case "rename current":
 				// add input field
-				pages.RemovePage("history")
-				pages.AddPage("renameW", renameWindow, true, true)
+				pages.RemovePage(historyPage)
+				pages.AddPage(renamePage, renameWindow, true, true)
 				return
 			default:
 				fn := buttonLabel
 				history, err := loadHistoryChat(fn)
 				if err != nil {
 					logger.Error("failed to read history file", "chat", fn)
-					pages.RemovePage("history")
+					pages.RemovePage(historyPage)
 					return
 				}
 				chatBody.Messages = history
 				textView.SetText(chatToText(cfg.ShowSys))
 				activeChatName = fn
-				pages.RemovePage("history")
+				pages.RemovePage(historyPage)
 				colorText()
 				return
 			}
@@ -175,13 +199,13 @@ func init() {
 		SetDoneFunc(func(buttonIndex int, buttonLabel string) {
 			switch buttonLabel {
 			case "cancel":
-				pages.RemovePage("sys")
+				pages.RemovePage(agentPage)
 				sysModal.ClearButtons()
 				return
 			default:
 				if ok := charToStart(buttonLabel); !ok {
 					logger.Warn("no such sys msg", "name", buttonLabel)
-					pages.RemovePage("sys")
+					pages.RemovePage(agentPage)
 					return
 				}
 				// replace textview
@@ -189,7 +213,7 @@ func init() {
 				colorText()
 				updateStatusLine()
 				sysModal.ClearButtons()
-				pages.RemovePage("sys")
+				pages.RemovePage(agentPage)
 				app.SetFocus(textArea)
 			}
 		})
@@ -203,14 +227,14 @@ func init() {
 				if err := notifyUser("edit", "no edit provided"); err != nil {
 					logger.Error("failed to send notification", "error", err)
 				}
-				pages.RemovePage("editArea")
+				pages.RemovePage(editMsgPage)
 				editMode = false
 				return nil
 			}
 			chatBody.Messages[selectedIndex].Content = editedMsg
 			// change textarea
 			textView.SetText(chatToText(cfg.ShowSys))
-			pages.RemovePage("editArea")
+			pages.RemovePage(editMsgPage)
 			editMode = false
 			return nil
 		}
@@ -221,7 +245,7 @@ func init() {
 		SetFieldWidth(4).
 		SetAcceptanceFunc(tview.InputFieldInteger).
 		SetDoneFunc(func(key tcell.Key) {
-			pages.RemovePage("getIndex")
+			pages.RemovePage(indexPage)
 		})
 	indexPickWindow.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		switch event.Key() {
@@ -239,12 +263,12 @@ func init() {
 				if err := notifyUser("error", msg); err != nil {
 					logger.Error("failed to send notification", "error", err)
 				}
-				pages.RemovePage("getIndex")
+				pages.RemovePage(indexPage)
 				return event
 			}
 			m := chatBody.Messages[selectedIndex]
 			if editMode && event.Key() == tcell.KeyEnter {
-				pages.AddPage("editArea", editArea, true, true)
+				pages.AddPage(editMsgPage, editArea, true, true)
 				editArea.SetText(m.Content, true)
 			}
 			if !editMode && event.Key() == tcell.KeyEnter {
@@ -271,7 +295,7 @@ func init() {
 		SetFieldWidth(20).
 		SetAcceptanceFunc(tview.InputFieldMaxLength(100)).
 		SetDoneFunc(func(key tcell.Key) {
-			pages.RemovePage("renameW")
+			pages.RemovePage(renamePage)
 		})
 	renameWindow.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		if event.Key() == tcell.KeyEnter {
@@ -297,7 +321,7 @@ func init() {
 	})
 	//
 	helpView = tview.NewTextView().SetDynamicColors(true).SetText(helpText).SetDoneFunc(func(key tcell.Key) {
-		pages.RemovePage("helpView")
+		pages.RemovePage(helpPage)
 	})
 	helpView.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		switch event.Key() {
@@ -326,7 +350,7 @@ func init() {
 			chatOpts := append(chatOpts, chatList...)
 			chatActModal.ClearButtons()
 			chatActModal.AddButtons(chatOpts)
-			pages.AddPage("history", chatActModal, true, true)
+			pages.AddPage(historyPage, chatActModal, true, true)
 			return nil
 		}
 		if event.Key() == tcell.KeyF2 {
@@ -354,7 +378,7 @@ func init() {
 		if event.Key() == tcell.KeyF4 {
 			// edit msg
 			editMode = true
-			pages.AddPage("getIndex", indexPickWindow, true, true)
+			pages.AddPage(indexPage, indexPickWindow, true, true)
 			return nil
 		}
 		if event.Key() == tcell.KeyF5 {
@@ -388,12 +412,12 @@ func init() {
 		if event.Key() == tcell.KeyF8 {
 			// copy msg to clipboard
 			editMode = false
-			pages.AddPage("getIndex", indexPickWindow, true, true)
+			pages.AddPage(indexPage, indexPickWindow, true, true)
 			return nil
 		}
 		if event.Key() == tcell.KeyF12 {
 			// help window cheatsheet
-			pages.AddPage("helpView", helpView, true, true)
+			pages.AddPage(helpPage, helpView, true, true)
 			return nil
 		}
 		if event.Key() == tcell.KeyCtrlE {
@@ -427,7 +451,7 @@ func init() {
 			}
 			sysModal.AddButtons(labels)
 			// load all chars
-			pages.AddPage("sys", sysModal, true, true)
+			pages.AddPage(agentPage, sysModal, true, true)
 			updateStatusLine()
 			return nil
 		}
