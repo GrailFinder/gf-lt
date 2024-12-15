@@ -53,6 +53,81 @@ Press Enter to go back
 `
 )
 
+func makeChatTable(chatList []string) *tview.Table {
+	actions := []string{"load", "rename", "delete"}
+	rows, cols := len(chatList), len(actions)+1
+	chatActTable := tview.NewTable().
+		SetBorders(true)
+	for r := 0; r < rows; r++ {
+		for c := 0; c < cols; c++ {
+			color := tcell.ColorWhite
+			if c < 1 {
+				chatActTable.SetCell(r, c,
+					tview.NewTableCell(chatList[r]).
+						SetTextColor(color).
+						SetAlign(tview.AlignCenter))
+			} else {
+				chatActTable.SetCell(r, c,
+					tview.NewTableCell(actions[c-1]).
+						SetTextColor(color).
+						SetAlign(tview.AlignCenter))
+			}
+		}
+	}
+	chatActTable.Select(0, 0).SetFixed(1, 1).SetDoneFunc(func(key tcell.Key) {
+		if key == tcell.KeyEsc || key == tcell.KeyF1 {
+			pages.RemovePage(historyPage)
+			return
+		}
+		if key == tcell.KeyEnter {
+			chatActTable.SetSelectable(true, true)
+		}
+	}).SetSelectedFunc(func(row int, column int) {
+		tc := chatActTable.GetCell(row, column)
+		tc.SetTextColor(tcell.ColorRed)
+		chatActTable.SetSelectable(false, false)
+		selectedChat := chatList[row]
+		// notification := fmt.Sprintf("chat: %s; action: %s", selectedChat, tc.Text)
+		switch tc.Text {
+		case "load":
+			history, err := loadHistoryChat(selectedChat)
+			if err != nil {
+				logger.Error("failed to read history file", "chat", selectedChat)
+				pages.RemovePage(historyPage)
+				return
+			}
+			chatBody.Messages = history
+			textView.SetText(chatToText(cfg.ShowSys))
+			activeChatName = selectedChat
+			pages.RemovePage(historyPage)
+			colorText()
+			updateStatusLine()
+			return
+		case "rename":
+			pages.RemovePage(historyPage)
+			pages.AddPage(renamePage, renameWindow, true, true)
+			return
+		case "delete":
+			sc, ok := chatMap[selectedChat]
+			if !ok {
+				// no chat found
+				pages.RemovePage(historyPage)
+				return
+			}
+			if err := store.RemoveChat(sc.ID); err != nil {
+				logger.Error("failed to remove chat from db", "chat_id", sc.ID, "chat_name", sc.Name)
+			}
+			notifyUser("chat deleted", selectedChat+" was deleted")
+			pages.RemovePage(historyPage)
+			return
+		default:
+			pages.RemovePage(historyPage)
+			return
+		}
+	})
+	return chatActTable
+}
+
 // // code block colors get interrupted by " & *
 // func codeBlockColor(text string) string {
 // 	fi := strings.Index(text, "```")
@@ -154,46 +229,6 @@ func init() {
 		AddItem(textView, 0, 40, false).
 		AddItem(textArea, 0, 10, true).
 		AddItem(position, 0, 1, false)
-	chatOpts := []string{"cancel", "new", "rename current"}
-	chatList, err := loadHistoryChats()
-	if err != nil {
-		logger.Error("failed to load chat history", "error", err)
-		chatList = []string{}
-	}
-	chatActModal := tview.NewModal().
-		SetText("Chat actions:").
-		AddButtons(append(chatOpts, chatList...)).
-		SetDoneFunc(func(buttonIndex int, buttonLabel string) {
-			switch buttonLabel {
-			case "new":
-				startNewChat()
-				pages.RemovePage(historyPage)
-				return
-			// set text
-			case "cancel":
-				pages.RemovePage(historyPage)
-				return
-			case "rename current":
-				// add input field
-				pages.RemovePage(historyPage)
-				pages.AddPage(renamePage, renameWindow, true, true)
-				return
-			default:
-				fn := buttonLabel
-				history, err := loadHistoryChat(fn)
-				if err != nil {
-					logger.Error("failed to read history file", "chat", fn)
-					pages.RemovePage(historyPage)
-					return
-				}
-				chatBody.Messages = history
-				textView.SetText(chatToText(cfg.ShowSys))
-				activeChatName = fn
-				pages.RemovePage(historyPage)
-				colorText()
-				return
-			}
-		})
 	sysModal = tview.NewModal().
 		SetText("Switch sys msg:").
 		SetDoneFunc(func(buttonIndex int, buttonLabel string) {
@@ -253,7 +288,7 @@ func init() {
 			return event
 		case tcell.KeyEnter:
 			si := indexPickWindow.GetText()
-			selectedIndex, err = strconv.Atoi(si)
+			selectedIndex, err := strconv.Atoi(si)
 			if err != nil {
 				logger.Error("failed to convert provided index", "error", err, "si", si)
 			}
@@ -336,7 +371,7 @@ func init() {
 	textView.SetText(chatToText(cfg.ShowSys))
 	colorText()
 	textView.ScrollToEnd()
-	_, err = initSysCards()
+	_, err := initSysCards()
 	if err != nil {
 		logger.Error("failed to init sys cards", "error", err)
 	}
@@ -347,10 +382,8 @@ func init() {
 				logger.Error("failed to load chat history", "error", err)
 				return nil
 			}
-			chatOpts := append(chatOpts, chatList...)
-			chatActModal.ClearButtons()
-			chatActModal.AddButtons(chatOpts)
-			pages.AddPage(historyPage, chatActModal, true, true)
+			chatActTable := makeChatTable(chatList)
+			pages.AddPage(historyPage, chatActTable, true, true)
 			return nil
 		}
 		if event.Key() == tcell.KeyF2 {

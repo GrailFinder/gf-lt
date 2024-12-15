@@ -22,11 +22,11 @@
 - ctrl+n to start new chat; +
 - export whole chat into a json file; +
 - directory with sys prompts (charcards png & json); +
+- colourschemes, colours or markdown of quotes and styles; (partially done) +
 - change temp, min-p and other params from tui;
 - fullscreen textarea option (bothersome to implement);
 - consider adding use /completion of llamacpp, since openai endpoint clearly has template|format issues;
 - separate messages that are stored and chat and send to the bot, i.e. option to omit tool calls (there might be a point where they are no longer needed in ctx);
-- colourschemes, colours or markdown of quotes and styles;
 - RAG support|implementation;
 - change card-chat pair with one binding;
 - char card is the sys message, but how about giving tools to char that does not have it?

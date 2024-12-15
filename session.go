@@ -76,6 +76,8 @@ func loadHistoryChat(chatName string) ([]models.RoleMsg, error) {
 		return nil, err
 	}
 	activeChatName = chatName
+	cfg.AssistantRole = chat.Agent
+	cfg.AssistantIcon = "<" + chat.Agent + ">: "
 	return chat.ToHistory()
 }
 
