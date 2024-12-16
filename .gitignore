@@ -5,3 +5,4 @@ elefant
 history/
 *.db
 config.toml
+sysprompts/*.png

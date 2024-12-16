@@ -26,7 +26,7 @@ func isASCII(s string) bool {
 func main() {
 	pages.AddPage("main", flex, true, true)
 	if err := app.SetRoot(pages,
-		true).EnableMouse(true).Run(); err != nil {
+		true).EnableMouse(true).EnablePaste(true).Run(); err != nil {
 		logger.Error("failed to start tview app", "error", err)
 		return
 	}
