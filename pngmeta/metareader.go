@@ -84,6 +84,18 @@ func ReadCard(fname, uname string) (*models.CharCard, error) {
 	return charSpec.Simplify(uname, fname), nil
 }
 
+func readCardJson(fname string) (*models.CharCard, error) {
+	data, err := os.ReadFile(fname)
+	if err != nil {
+		return nil, err
+	}
+	card := models.CharCard{}
+	if err := json.Unmarshal(data, &card); err != nil {
+		return nil, err
+	}
+	return &card, nil
+}
+
 func ReadDirCards(dirname, uname string) ([]*models.CharCard, error) {
 	files, err := os.ReadDir(dirname)
 	if err != nil {
@@ -91,17 +103,22 @@ func ReadDirCards(dirname, uname string) ([]*models.CharCard, error) {
 	}
 	resp := []*models.CharCard{}
 	for _, f := range files {
-		if !strings.HasSuffix(f.Name(), ".png") {
-			continue
+		if strings.HasSuffix(f.Name(), ".png") {
+			fpath := path.Join(dirname, f.Name())
+			cc, err := ReadCard(fpath, uname)
+			if err != nil {
+				return nil, err // better to log and continue
+			}
+			resp = append(resp, cc)
 		}
-		fpath := path.Join(dirname, f.Name())
-		cc, err := ReadCard(fpath, uname)
-		if err != nil {
-			// log err
-			return nil, err
-			// continue
+		if strings.HasSuffix(f.Name(), ".json") {
+			fpath := path.Join(dirname, f.Name())
+			cc, err := readCardJson(fpath)
+			if err != nil {
+				return nil, err // better to log and continue
+			}
+			resp = append(resp, cc)
 		}
-		resp = append(resp, cc)
 	}
 	return resp, nil
 }

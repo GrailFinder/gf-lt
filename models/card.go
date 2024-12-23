@@ -34,8 +34,8 @@ func (c *CharCardSpec) Simplify(userName, fpath string) *CharCard {
 }
 
 type CharCard struct {
-	SysPrompt string
-	FirstMsg  string
-	Role      string
-	FilePath  string
+	SysPrompt string `json:"sys_prompt"`
+	FirstMsg  string `json:"first_msg"`
+	Role      string `json:"role"`
+	FilePath  string `json:"filepath"`
 }

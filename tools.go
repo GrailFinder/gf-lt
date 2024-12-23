@@ -107,7 +107,8 @@ func recall(args ...string) []byte {
 		logger.Error(msg)
 		return []byte(msg)
 	}
-	return []byte(mind)
+	answer := fmt.Sprintf("under the topic: %s is stored:\n%s", args[0], mind)
+	return []byte(answer)
 }
 
 func recallTopics(args ...string) []byte {

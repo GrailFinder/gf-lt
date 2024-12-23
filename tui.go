@@ -117,7 +117,9 @@ func makeChatTable(chatList []string) *tview.Table {
 			if err := store.RemoveChat(sc.ID); err != nil {
 				logger.Error("failed to remove chat from db", "chat_id", sc.ID, "chat_name", sc.Name)
 			}
-			notifyUser("chat deleted", selectedChat+" was deleted")
+			if err := notifyUser("chat deleted", selectedChat+" was deleted"); err != nil {
+				logger.Error("failed to send notification", "error", err)
+			}
 			pages.RemovePage(historyPage)
 			return
 		default:
@@ -288,10 +290,16 @@ func init() {
 			return event
 		case tcell.KeyEnter:
 			si := indexPickWindow.GetText()
-			selectedIndex, err := strconv.Atoi(si)
+			siInt, err := strconv.Atoi(si)
 			if err != nil {
 				logger.Error("failed to convert provided index", "error", err, "si", si)
+				if err := notifyUser("cancel", "no index provided"); err != nil {
+					logger.Error("failed to send notification", "error", err)
+				}
+				pages.RemovePage(indexPage)
+				return event
 			}
+			selectedIndex = siInt
 			if len(chatBody.Messages)+1 < selectedIndex || selectedIndex < 0 {
 				msg := "chosen index is out of bounds"
 				logger.Warn(msg, "index", selectedIndex)

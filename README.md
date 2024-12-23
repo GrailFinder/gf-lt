@@ -28,7 +28,6 @@
 - consider adding use /completion of llamacpp, since openai endpoint clearly has template|format issues;
 - separate messages that are stored and chat and send to the bot, i.e. option to omit tool calls (there might be a point where they are no longer needed in ctx);
 - RAG support|implementation;
-- change card-chat pair with one binding;
 - char card is the sys message, but how about giving tools to char that does not have it?
 - it is a bit clumsy to mix chats in db and chars from the external files, maybe load external files in db on startup?
 - lets say we have two (or more) agents with the same name across multiple chats. These agents go and ask db for topics they memorised. Now they can access topics that aren't meant for them. (so memory should have an option: shareable; that indicates if that memory can be shared across chats);
@@ -51,4 +50,5 @@
 - all page names should be vars; +
 - normal case regen omits assistant icon; +
 - user icon (and role?) from config is not used; +
+- message editing broke ( runtime error: index out of range [-1]); +
 - F1 can load any chat, by loading chat of other agent it does not switch agents, if that chat is continued, it will rewrite agent in db; (either allow only chats from current agent OR switch agent on chat loading);
