@@ -52,3 +52,4 @@
 - user icon (and role?) from config is not used; +
 - message editing broke ( runtime error: index out of range [-1]); +
 - F1 can load any chat, by loading chat of other agent it does not switch agents, if that chat is continued, it will rewrite agent in db; (either allow only chats from current agent OR switch agent on chat loading);
+- after chat is deleted: load undeleted chat;

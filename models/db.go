@@ -35,3 +35,13 @@ type Memory struct {
 	CreatedAt time.Time `db:"created_at" json:"created_at"`
 	UpdatedAt time.Time `db:"updated_at" json:"updated_at"`
 }
+
+// vector models
+
+type VectorRow struct {
+	ID         uint32    `db:"id" json:"id"`
+	Embeddings []float32 `db:"embeddings" json:"embeddings"`
+	Slug       string    `db:"slug" json:"slug"`
+	RawText    string    `db:"raw_text" json:"raw_text"`
+	Distance   float32   `db:"distance" json:"distance"`
+}

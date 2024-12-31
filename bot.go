@@ -278,6 +278,9 @@ func init() {
 	//
 	logger = slog.New(slog.NewTextHandler(logfile, nil))
 	store = storage.NewProviderSQL("test.db", logger)
+	if store == nil {
+		os.Exit(1)
+	}
 	// https://github.com/coreydaley/ggerganov-llama.cpp/blob/master/examples/server/README.md
 	// load all chats in memory
 	if _, err := loadHistoryChats(); err != nil {

@@ -1,0 +1,6 @@
+CREATE VIRTUAL TABLE IF NOT EXISTS embeddings USING vec0(
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    embedding FLOAT[5120],
+    slug TEXT NOT NULL,
+    raw_text TEXT NOT NULL
+);

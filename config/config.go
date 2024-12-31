@@ -8,6 +8,7 @@ import (
 
 type Config struct {
 	APIURL        string `toml:"APIURL"`
+	EmbedURL      string `toml:"EmbedURL"`
 	ShowSys       bool   `toml:"ShowSys"`
 	LogFile       string `toml:"LogFile"`
 	UserRole      string `toml:"UserRole"`
@@ -29,6 +30,7 @@ func LoadConfigOrDefault(fn string) *Config {
 	if err != nil {
 		fmt.Println("failed to read config from file, loading default")
 		config.APIURL = "http://localhost:8080/v1/chat/completions"
+		config.EmbedURL = "http://localhost:8080/v1/embiddings"
 		config.ShowSys = true
 		config.LogFile = "log.txt"
 		config.UserRole = "user"
