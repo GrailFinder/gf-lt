@@ -8,7 +8,6 @@ import (
 
 type Config struct {
 	APIURL        string `toml:"APIURL"`
-	EmbedURL      string `toml:"EmbedURL"`
 	ShowSys       bool   `toml:"ShowSys"`
 	LogFile       string `toml:"LogFile"`
 	UserRole      string `toml:"UserRole"`
@@ -19,6 +18,11 @@ type Config struct {
 	ToolIcon      string `toml:"ToolIcon"`
 	SysDir        string `toml:"SysDir"`
 	ChunkLimit    uint32 `toml:"ChunkLimit"`
+	// embeddings
+	RAGEnabled bool   `toml:"RAGEnabled"`
+	EmbedURL   string `toml:"EmbedURL"`
+	HFToken    string `toml:"HFToken"`
+	RAGDir     string `toml:"RAGDir"`
 }
 
 func LoadConfigOrDefault(fn string) *Config {
@@ -30,6 +34,7 @@ func LoadConfigOrDefault(fn string) *Config {
 	if err != nil {
 		fmt.Println("failed to read config from file, loading default")
 		config.APIURL = "http://localhost:8080/v1/chat/completions"
+		config.RAGEnabled = false
 		config.EmbedURL = "http://localhost:8080/v1/embiddings"
 		config.ShowSys = true
 		config.LogFile = "log.txt"

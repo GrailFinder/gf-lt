@@ -4,6 +4,7 @@ import (
 	"elefant/models"
 	"elefant/pngmeta"
 	"fmt"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -32,6 +33,7 @@ var (
 	indexPage   = "indexPage"
 	helpPage    = "helpPage"
 	renamePage  = "renamePage"
+	RAGPage     = "RAGPage "
 	// help text
 	helpText = `
 [yellow]Esc[white]: send msg
@@ -130,6 +132,79 @@ func makeChatTable(chatList []string) *tview.Table {
 	return chatActTable
 }
 
+func makeRAGTable(fileList []string) *tview.Table {
+	actions := []string{"load", "rename", "delete"}
+	rows, cols := len(fileList), len(actions)+1
+	chatActTable := tview.NewTable().
+		SetBorders(true)
+	for r := 0; r < rows; r++ {
+		for c := 0; c < cols; c++ {
+			color := tcell.ColorWhite
+			if c < 1 {
+				chatActTable.SetCell(r, c,
+					tview.NewTableCell(fileList[r]).
+						SetTextColor(color).
+						SetAlign(tview.AlignCenter))
+			} else {
+				chatActTable.SetCell(r, c,
+					tview.NewTableCell(actions[c-1]).
+						SetTextColor(color).
+						SetAlign(tview.AlignCenter))
+			}
+		}
+	}
+	chatActTable.Select(0, 0).SetFixed(1, 1).SetDoneFunc(func(key tcell.Key) {
+		if key == tcell.KeyEsc || key == tcell.KeyF1 {
+			pages.RemovePage(RAGPage)
+			return
+		}
+		if key == tcell.KeyEnter {
+			chatActTable.SetSelectable(true, true)
+		}
+	}).SetSelectedFunc(func(row int, column int) {
+		tc := chatActTable.GetCell(row, column)
+		tc.SetTextColor(tcell.ColorRed)
+		chatActTable.SetSelectable(false, false)
+		fpath := fileList[row]
+		// notification := fmt.Sprintf("chat: %s; action: %s", fpath, tc.Text)
+		switch tc.Text {
+		case "load":
+			if err := loadRAG(fpath); err != nil {
+				logger.Error("failed to read history file", "chat", fpath)
+				pages.RemovePage(RAGPage)
+				return
+			}
+			pages.RemovePage(RAGPage)
+			colorText()
+			updateStatusLine()
+			return
+		case "rename":
+			pages.RemovePage(RAGPage)
+			pages.AddPage(renamePage, renameWindow, true, true)
+			return
+		case "delete":
+			sc, ok := chatMap[fpath]
+			if !ok {
+				// no chat found
+				pages.RemovePage(RAGPage)
+				return
+			}
+			if err := store.RemoveChat(sc.ID); err != nil {
+				logger.Error("failed to remove chat from db", "chat_id", sc.ID, "chat_name", sc.Name)
+			}
+			if err := notifyUser("chat deleted", fpath+" was deleted"); err != nil {
+				logger.Error("failed to send notification", "error", err)
+			}
+			pages.RemovePage(RAGPage)
+			return
+		default:
+			pages.RemovePage(RAGPage)
+			return
+		}
+	})
+	return chatActTable
+}
+
 // // code block colors get interrupted by " & *
 // func codeBlockColor(text string) string {
 // 	fi := strings.Index(text, "```")
@@ -153,7 +228,7 @@ func colorText() {
 }
 
 func updateStatusLine() {
-	position.SetText(fmt.Sprintf(indexLine, botRespMode, cfg.AssistantRole, activeChatName))
+	position.SetText(fmt.Sprintf(indexLine, botRespMode, cfg.AssistantRole, activeChatName, cfg.RAGEnabled))
 }
 
 func initSysCards() ([]string, error) {
@@ -379,6 +454,7 @@ func init() {
 	textView.SetText(chatToText(cfg.ShowSys))
 	colorText()
 	textView.ScrollToEnd()
+	// init sysmap
 	_, err := initSysCards()
 	if err != nil {
 		logger.Error("failed to init sys cards", "error", err)
@@ -456,6 +532,12 @@ func init() {
 			pages.AddPage(indexPage, indexPickWindow, true, true)
 			return nil
 		}
+		if event.Key() == tcell.KeyF11 {
+			// xor
+			cfg.RAGEnabled = cfg.RAGEnabled != true
+			updateStatusLine()
+			return nil
+		}
 		if event.Key() == tcell.KeyF12 {
 			// help window cheatsheet
 			pages.AddPage(helpPage, helpView, true, true)
@@ -494,6 +576,25 @@ func init() {
 			// load all chars
 			pages.AddPage(agentPage, sysModal, true, true)
 			updateStatusLine()
+			return nil
+		}
+		if event.Key() == tcell.KeyCtrlR && cfg.HFToken != "" {
+			// rag load
+			// menu of the text files from defined rag directory
+			files, err := os.ReadDir(cfg.RAGDir)
+			if err != nil {
+				logger.Error("failed to read dir", "dir", cfg.RAGDir, "error", err)
+				return nil
+			}
+			fileList := []string{}
+			for _, f := range files {
+				if f.IsDir() {
+					continue
+				}
+				fileList = append(fileList, f.Name())
+			}
+			chatRAGTable := makeRAGTable(fileList)
+			pages.AddPage(RAGPage, chatRAGTable, true, true)
 			return nil
 		}
 		// cannot send msg in editMode or botRespMode

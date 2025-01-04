@@ -103,6 +103,9 @@ func ReadDirCards(dirname, uname string) ([]*models.CharCard, error) {
 	}
 	resp := []*models.CharCard{}
 	for _, f := range files {
+		if f.IsDir() {
+			continue
+		}
 		if strings.HasSuffix(f.Name(), ".png") {
 			fpath := path.Join(dirname, f.Name())
 			cc, err := ReadCard(fpath, uname)

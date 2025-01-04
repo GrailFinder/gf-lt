@@ -32,6 +32,7 @@
 - it is a bit clumsy to mix chats in db and chars from the external files, maybe load external files in db on startup?
 - lets say we have two (or more) agents with the same name across multiple chats. These agents go and ask db for topics they memorised. Now they can access topics that aren't meant for them. (so memory should have an option: shareable; that indicates if that memory can be shared across chats);
 - delete chat option;
+- server mode: no tui but api calls with the func calling, rag, other middleware;
 
 ### FIX:
 - bot responding (or hanging) blocks everything; +

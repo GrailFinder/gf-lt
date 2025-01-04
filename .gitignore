@@ -6,3 +6,4 @@ history/
 *.db
 config.toml
 sysprompts/*
+history_bak/

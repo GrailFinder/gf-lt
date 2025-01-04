@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/neurosnap/sentences/english"
 	"github.com/rivo/tview"
 )
 
@@ -40,6 +41,16 @@ func formMsg(chatBody *models.ChatBody, newMsg, role string) io.Reader {
 	if newMsg != "" { // otherwise let the bot continue
 		newMsg := models.RoleMsg{Role: role, Content: newMsg}
 		chatBody.Messages = append(chatBody.Messages, newMsg)
+		// if rag
+		if cfg.RAGEnabled {
+			ragResp, err := chatRagUse(newMsg.Content)
+			if err != nil {
+				logger.Error("failed to form a rag msg", "error", err)
+				return nil
+			}
+			ragMsg := models.RoleMsg{Role: cfg.ToolRole, Content: ragResp}
+			chatBody.Messages = append(chatBody.Messages, ragMsg)
+		}
 	}
 	data, err := json.Marshal(chatBody)
 	if err != nil {
@@ -105,6 +116,40 @@ func sendMsgToLLM(body io.Reader) {
 		answerText := strings.ReplaceAll(llmchunk.Choices[0].Delta.Content, "\n\n", "\n")
 		chunkChan <- answerText
 	}
+}
+
+func chatRagUse(qText string) (string, error) {
+	tokenizer, err := english.NewSentenceTokenizer(nil)
+	if err != nil {
+		return "", err
+	}
+	// TODO: this where llm should find the questions in text and ask them
+	questionsS := tokenizer.Tokenize(qText)
+	questions := make([]string, len(questionsS))
+	for i, q := range questionsS {
+		questions[i] = q.Text
+	}
+	respVecs := []*models.VectorRow{}
+	for i, q := range questions {
+		emb, err := lineToVector(q)
+		if err != nil {
+			logger.Error("failed to get embs", "error", err, "index", i, "question", q)
+			continue
+		}
+		vec, err := searchEmb(emb)
+		if err != nil {
+			logger.Error("failed to get embs", "error", err, "index", i, "question", q)
+			continue
+		}
+		respVecs = append(respVecs, vec)
+		// logger.Info("returned vector from query search", "question", q, "vec", vec)
+	}
+	// get raw text
+	resps := []string{}
+	for _, rv := range respVecs {
+		resps = append(resps, rv.RawText)
+	}
+	return strings.Join(resps, "\n"), nil
 }
 
 func chatRound(userMsg, role string, tv *tview.TextView, regen bool) {
@@ -294,4 +339,5 @@ func init() {
 		Stream:   true,
 		Messages: lastChat,
 	}
+	// tempLoad()
 }

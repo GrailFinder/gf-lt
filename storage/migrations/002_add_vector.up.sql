@@ -4,3 +4,10 @@ CREATE VIRTUAL TABLE IF NOT EXISTS embeddings USING vec0(
     slug TEXT NOT NULL,
     raw_text TEXT NOT NULL
 );
+
+CREATE VIRTUAL TABLE IF NOT EXISTS embeddings_384 USING vec0(
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    embedding FLOAT[384],
+    slug TEXT NOT NULL,
+    raw_text TEXT NOT NULL
+);
