@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"elefant/config"
 	"elefant/models"
+	"elefant/rag"
 	"elefant/storage"
 	"encoding/json"
 	"fmt"
@@ -33,6 +34,7 @@ var (
 	defaultStarter      = []models.RoleMsg{}
 	defaultStarterBytes = []byte{}
 	interruptResp       = false
+	ragger              *rag.RAG
 )
 
 // ====
@@ -129,25 +131,33 @@ func chatRagUse(qText string) (string, error) {
 	for i, q := range questionsS {
 		questions[i] = q.Text
 	}
-	respVecs := []*models.VectorRow{}
+	respVecs := []models.VectorRow{}
 	for i, q := range questions {
-		emb, err := lineToVector(q)
+		emb, err := ragger.LineToVector(q)
 		if err != nil {
 			logger.Error("failed to get embs", "error", err, "index", i, "question", q)
 			continue
 		}
-		vec, err := searchEmb(emb)
+		// e := &models.EmbeddingResp{
+		// 	Embedding: emb,
+		// }
+		// vecs, err := ragger.SearchEmb(e)
+		vecs, err := store.SearchClosest(emb)
 		if err != nil {
-			logger.Error("failed to get embs", "error", err, "index", i, "question", q)
+			logger.Error("failed to query embs", "error", err, "index", i, "question", q)
 			continue
 		}
-		respVecs = append(respVecs, vec)
+		respVecs = append(respVecs, vecs...)
 		// logger.Info("returned vector from query search", "question", q, "vec", vec)
 	}
 	// get raw text
 	resps := []string{}
+	logger.Info("sqlvec resp", "vecs", respVecs)
 	for _, rv := range respVecs {
 		resps = append(resps, rv.RawText)
+	}
+	if len(resps) == 0 {
+		return "No related results from vector storage.", nil
 	}
 	return strings.Join(resps, "\n"), nil
 }
@@ -326,6 +336,7 @@ func init() {
 	if store == nil {
 		os.Exit(1)
 	}
+	ragger = rag.New(logger, store, cfg)
 	// https://github.com/coreydaley/ggerganov-llama.cpp/blob/master/examples/server/README.md
 	// load all chats in memory
 	if _, err := loadHistoryChats(); err != nil {

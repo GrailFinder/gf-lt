@@ -5,6 +5,7 @@ import (
 	"elefant/pngmeta"
 	"fmt"
 	"os"
+	"path"
 	"strconv"
 	"strings"
 	"time"
@@ -169,8 +170,9 @@ func makeRAGTable(fileList []string) *tview.Table {
 		// notification := fmt.Sprintf("chat: %s; action: %s", fpath, tc.Text)
 		switch tc.Text {
 		case "load":
-			if err := loadRAG(fpath); err != nil {
-				logger.Error("failed to read history file", "chat", fpath)
+			fpath = path.Join(cfg.RAGDir, fpath)
+			if err := ragger.LoadRAG(fpath); err != nil {
+				logger.Error("failed to embed file", "chat", fpath, "error", err)
 				pages.RemovePage(RAGPage)
 				return
 			}
@@ -228,7 +230,7 @@ func colorText() {
 }
 
 func updateStatusLine() {
-	position.SetText(fmt.Sprintf(indexLine, botRespMode, cfg.AssistantRole, activeChatName, cfg.RAGEnabled))
+	position.SetText(fmt.Sprintf(indexLine, botRespMode, cfg.AssistantRole, activeChatName, cfg.RAGEnabled, cfg.EmbedURL))
 }
 
 func initSysCards() ([]string, error) {

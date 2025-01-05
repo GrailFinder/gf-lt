@@ -10,7 +10,7 @@ var (
 	botRespMode   = false
 	editMode      = false
 	selectedIndex = int(-1)
-	indexLine     = "F12 to show keys help; bot resp mode: %v; char: %s; chat: %s; RAGEnabled: %v"
+	indexLine     = "F12 to show keys help; bot resp mode: %v; char: %s; chat: %s; RAGEnabled: %v; EmbedURL: %s"
 	focusSwitcher = map[tview.Primitive]tview.Primitive{}
 )
 
