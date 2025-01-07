@@ -88,7 +88,9 @@ func (r *RAG) writeVectors(vectorCh <-chan []models.VectorRow, doneCh <-chan boo
 		case batch := <-vectorCh:
 			for _, vector := range batch {
 				if err := r.store.WriteVector(&vector); err != nil {
-					return err
+					r.logger.Error("failed to write vector", "error", err, "slug", vector.Slug)
+					continue // a duplicate is not critical
+					// return err
 				}
 			}
 			r.logger.Info("wrote batch to db", "size", len(batch))
@@ -226,14 +228,14 @@ func (r *RAG) LineToVector(line string) ([]float32, error) {
 	return emb[0], nil
 }
 
-func (r *RAG) saveLine(topic, line string, emb *models.EmbeddingResp) error {
-	row := &models.VectorRow{
-		Embeddings: emb.Embedding,
-		Slug:       topic,
-		RawText:    line,
-	}
-	return r.store.WriteVector(row)
-}
+// func (r *RAG) saveLine(topic, line string, emb *models.EmbeddingResp) error {
+// 	row := &models.VectorRow{
+// 		Embeddings: emb.Embedding,
+// 		Slug:       topic,
+// 		RawText:    line,
+// 	}
+// 	return r.store.WriteVector(row)
+// }
 
 func (r *RAG) SearchEmb(emb *models.EmbeddingResp) ([]models.VectorRow, error) {
 	return r.store.SearchClosest(emb.Embedding)

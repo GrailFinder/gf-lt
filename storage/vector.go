@@ -68,7 +68,6 @@ func (p ProviderSQL) WriteVector(row *models.VectorRow) error {
 	}
 	err = stmt.Exec()
 	if err != nil {
-		p.logger.Error("failed exec a stmt", "error", err)
 		return err
 	}
 	return nil
@@ -85,7 +84,6 @@ func (p ProviderSQL) SearchClosest(q []float32) ([]models.VectorRow, error) {
 	}
 	stmt, _, err := p.s3Conn.Prepare(
 		fmt.Sprintf(`SELECT
-			id,
 			distance,
 			embedding,
 			slug,
@@ -109,12 +107,11 @@ func (p ProviderSQL) SearchClosest(q []float32) ([]models.VectorRow, error) {
 	resp := []models.VectorRow{}
 	for stmt.Step() {
 		res := models.VectorRow{}
-		res.ID = uint32(stmt.ColumnInt64(0))
-		res.Distance = float32(stmt.ColumnFloat(1))
-		emb := stmt.ColumnRawText(2)
+		res.Distance = float32(stmt.ColumnFloat(0))
+		emb := stmt.ColumnRawText(1)
 		res.Embeddings = decodeUnsafe(emb)
-		res.Slug = stmt.ColumnText(3)
-		res.RawText = stmt.ColumnText(4)
+		res.Slug = stmt.ColumnText(2)
+		res.RawText = stmt.ColumnText(3)
 		resp = append(resp, res)
 	}
 	if err := stmt.Err(); err != nil {

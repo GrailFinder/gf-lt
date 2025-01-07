@@ -33,6 +33,7 @@
 - lets say we have two (or more) agents with the same name across multiple chats. These agents go and ask db for topics they memorised. Now they can access topics that aren't meant for them. (so memory should have an option: shareable; that indicates if that memory can be shared across chats);
 - delete chat option;
 - server mode: no tui but api calls with the func calling, rag, other middleware;
+- boolean flag to use/not use tools. I see it as a msg from a tool to an llm "Hey, it might be good idea to use me!";
 
 ### FIX:
 - bot responding (or hanging) blocks everything; +

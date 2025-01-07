@@ -39,7 +39,6 @@ type Memory struct {
 // vector models
 
 type VectorRow struct {
-	ID         uint32    `db:"id" json:"id"`
 	Embeddings []float32 `db:"embeddings" json:"embeddings"`
 	Slug       string    `db:"slug" json:"slug"`
 	RawText    string    `db:"raw_text" json:"raw_text"`

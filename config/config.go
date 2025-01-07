@@ -12,6 +12,7 @@ type Config struct {
 	LogFile       string `toml:"LogFile"`
 	UserRole      string `toml:"UserRole"`
 	ToolRole      string `toml:"ToolRole"`
+	ToolUse       bool   `toml:"ToolUse"`
 	AssistantRole string `toml:"AssistantRole"`
 	AssistantIcon string `toml:"AssistantIcon"`
 	UserIcon      string `toml:"UserIcon"`
