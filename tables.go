@@ -1,0 +1,206 @@
+package main
+
+import (
+	"os"
+	"path"
+
+	"github.com/gdamore/tcell/v2"
+	"github.com/rivo/tview"
+)
+
+func makeChatTable(chatList []string) *tview.Table {
+	actions := []string{"load", "rename", "delete"}
+	rows, cols := len(chatList), len(actions)+1
+	chatActTable := tview.NewTable().
+		SetBorders(true)
+	for r := 0; r < rows; r++ {
+		for c := 0; c < cols; c++ {
+			color := tcell.ColorWhite
+			if c < 1 {
+				chatActTable.SetCell(r, c,
+					tview.NewTableCell(chatList[r]).
+						SetTextColor(color).
+						SetAlign(tview.AlignCenter))
+			} else {
+				chatActTable.SetCell(r, c,
+					tview.NewTableCell(actions[c-1]).
+						SetTextColor(color).
+						SetAlign(tview.AlignCenter))
+			}
+		}
+	}
+	chatActTable.Select(0, 0).SetFixed(1, 1).SetDoneFunc(func(key tcell.Key) {
+		if key == tcell.KeyEsc || key == tcell.KeyF1 {
+			pages.RemovePage(historyPage)
+			return
+		}
+		if key == tcell.KeyEnter {
+			chatActTable.SetSelectable(true, true)
+		}
+	}).SetSelectedFunc(func(row int, column int) {
+		tc := chatActTable.GetCell(row, column)
+		tc.SetTextColor(tcell.ColorRed)
+		chatActTable.SetSelectable(false, false)
+		selectedChat := chatList[row]
+		// notification := fmt.Sprintf("chat: %s; action: %s", selectedChat, tc.Text)
+		switch tc.Text {
+		case "load":
+			history, err := loadHistoryChat(selectedChat)
+			if err != nil {
+				logger.Error("failed to read history file", "chat", selectedChat)
+				pages.RemovePage(historyPage)
+				return
+			}
+			chatBody.Messages = history
+			textView.SetText(chatToText(cfg.ShowSys))
+			activeChatName = selectedChat
+			pages.RemovePage(historyPage)
+			colorText()
+			updateStatusLine()
+			return
+		case "rename":
+			pages.RemovePage(historyPage)
+			pages.AddPage(renamePage, renameWindow, true, true)
+			return
+		case "delete":
+			sc, ok := chatMap[selectedChat]
+			if !ok {
+				// no chat found
+				pages.RemovePage(historyPage)
+				return
+			}
+			if err := store.RemoveChat(sc.ID); err != nil {
+				logger.Error("failed to remove chat from db", "chat_id", sc.ID, "chat_name", sc.Name)
+			}
+			if err := notifyUser("chat deleted", selectedChat+" was deleted"); err != nil {
+				logger.Error("failed to send notification", "error", err)
+			}
+			pages.RemovePage(historyPage)
+			return
+		default:
+			pages.RemovePage(historyPage)
+			return
+		}
+	})
+	return chatActTable
+}
+
+func makeRAGTable(fileList []string) *tview.Table {
+	actions := []string{"load", "delete"}
+	rows, cols := len(fileList), len(actions)+1
+	fileTable := tview.NewTable().
+		SetBorders(true)
+	for r := 0; r < rows; r++ {
+		for c := 0; c < cols; c++ {
+			color := tcell.ColorWhite
+			if c < 1 {
+				fileTable.SetCell(r, c,
+					tview.NewTableCell(fileList[r]).
+						SetTextColor(color).
+						SetAlign(tview.AlignCenter))
+			} else {
+				fileTable.SetCell(r, c,
+					tview.NewTableCell(actions[c-1]).
+						SetTextColor(color).
+						SetAlign(tview.AlignCenter))
+			}
+		}
+	}
+	fileTable.Select(0, 0).SetFixed(1, 1).SetDoneFunc(func(key tcell.Key) {
+		if key == tcell.KeyEsc || key == tcell.KeyF1 {
+			pages.RemovePage(RAGPage)
+			return
+		}
+		if key == tcell.KeyEnter {
+			fileTable.SetSelectable(true, true)
+		}
+	}).SetSelectedFunc(func(row int, column int) {
+		defer pages.RemovePage(RAGPage)
+		tc := fileTable.GetCell(row, column)
+		tc.SetTextColor(tcell.ColorRed)
+		fileTable.SetSelectable(false, false)
+		fpath := fileList[row]
+		// notification := fmt.Sprintf("chat: %s; action: %s", fpath, tc.Text)
+		switch tc.Text {
+		case "load":
+			fpath = path.Join(cfg.RAGDir, fpath)
+			if err := ragger.LoadRAG(fpath); err != nil {
+				logger.Error("failed to embed file", "chat", fpath, "error", err)
+				// pages.RemovePage(RAGPage)
+				return
+			}
+			pages.RemovePage(RAGPage)
+			colorText()
+			updateStatusLine()
+			return
+		case "delete":
+			fpath = path.Join(cfg.RAGDir, fpath)
+			if err := os.Remove(fpath); err != nil {
+				logger.Error("failed to delete file", "filename", fpath, "error", err)
+				return
+			}
+			if err := notifyUser("chat deleted", fpath+" was deleted"); err != nil {
+				logger.Error("failed to send notification", "error", err)
+			}
+			return
+		default:
+			// pages.RemovePage(RAGPage)
+			return
+		}
+	})
+	return fileTable
+}
+
+func makeLoadedRAGTable(fileList []string) *tview.Table {
+	actions := []string{"delete"}
+	rows, cols := len(fileList), len(actions)+1
+	fileTable := tview.NewTable().
+		SetBorders(true)
+	for r := 0; r < rows; r++ {
+		for c := 0; c < cols; c++ {
+			color := tcell.ColorWhite
+			if c < 1 {
+				fileTable.SetCell(r, c,
+					tview.NewTableCell(fileList[r]).
+						SetTextColor(color).
+						SetAlign(tview.AlignCenter))
+			} else {
+				fileTable.SetCell(r, c,
+					tview.NewTableCell(actions[c-1]).
+						SetTextColor(color).
+						SetAlign(tview.AlignCenter))
+			}
+		}
+	}
+	fileTable.Select(0, 0).SetFixed(1, 1).SetDoneFunc(func(key tcell.Key) {
+		if key == tcell.KeyEsc || key == tcell.KeyF1 {
+			pages.RemovePage(RAGPage)
+			return
+		}
+		if key == tcell.KeyEnter {
+			fileTable.SetSelectable(true, true)
+		}
+	}).SetSelectedFunc(func(row int, column int) {
+		defer pages.RemovePage(RAGPage)
+		tc := fileTable.GetCell(row, column)
+		tc.SetTextColor(tcell.ColorRed)
+		fileTable.SetSelectable(false, false)
+		fpath := fileList[row]
+		// notification := fmt.Sprintf("chat: %s; action: %s", fpath, tc.Text)
+		switch tc.Text {
+		case "delete":
+			if err := ragger.RemoveFile(fpath); err != nil {
+				logger.Error("failed to delete file", "filename", fpath, "error", err)
+				return
+			}
+			if err := notifyUser("chat deleted", fpath+" was deleted"); err != nil {
+				logger.Error("failed to send notification", "error", err)
+			}
+			return
+		default:
+			// pages.RemovePage(RAGPage)
+			return
+		}
+	})
+	return fileTable
+}

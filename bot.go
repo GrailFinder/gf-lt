@@ -138,17 +138,12 @@ func chatRagUse(qText string) (string, error) {
 			logger.Error("failed to get embs", "error", err, "index", i, "question", q)
 			continue
 		}
-		// e := &models.EmbeddingResp{
-		// 	Embedding: emb,
-		// }
-		// vecs, err := ragger.SearchEmb(e)
 		vecs, err := store.SearchClosest(emb)
 		if err != nil {
 			logger.Error("failed to query embs", "error", err, "index", i, "question", q)
 			continue
 		}
 		respVecs = append(respVecs, vecs...)
-		// logger.Info("returned vector from query search", "question", q, "vec", vec)
 	}
 	// get raw text
 	resps := []string{}

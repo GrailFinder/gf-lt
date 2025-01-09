@@ -43,4 +43,5 @@ type VectorRow struct {
 	Slug       string    `db:"slug" json:"slug"`
 	RawText    string    `db:"raw_text" json:"raw_text"`
 	Distance   float32   `db:"distance" json:"distance"`
+	FileName   string    `db:"filename" json:"filename"`
 }

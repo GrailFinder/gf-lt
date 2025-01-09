@@ -23,6 +23,7 @@
 - export whole chat into a json file; +
 - directory with sys prompts (charcards png & json); +
 - colourschemes, colours or markdown of quotes and styles; (partially done) +
+- source file name to group by rag vectors; +
 - change temp, min-p and other params from tui;
 - fullscreen textarea option (bothersome to implement);
 - consider adding use /completion of llamacpp, since openai endpoint clearly has template|format issues;
@@ -34,6 +35,7 @@
 - delete chat option;
 - server mode: no tui but api calls with the func calling, rag, other middleware;
 - boolean flag to use/not use tools. I see it as a msg from a tool to an llm "Hey, it might be good idea to use me!";
+- RAG file loading status/progress;
 
 ### FIX:
 - bot responding (or hanging) blocks everything; +
@@ -53,5 +55,8 @@
 - normal case regen omits assistant icon; +
 - user icon (and role?) from config is not used; +
 - message editing broke ( runtime error: index out of range [-1]); +
+- RAG: encode multiple sentences (~5-10) to embeddings a piece. +
+- number of sentences in a batch should depend on number of words there. +
 - F1 can load any chat, by loading chat of other agent it does not switch agents, if that chat is continued, it will rewrite agent in db; (either allow only chats from current agent OR switch agent on chat loading);
 - after chat is deleted: load undeleted chat;
+- edit mode remove extra \n, but it should not be there in a first place. after edit no styles

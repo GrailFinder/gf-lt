@@ -5,7 +5,6 @@ import (
 	"elefant/pngmeta"
 	"fmt"
 	"os"
-	"path"
 	"strconv"
 	"strings"
 	"time"
@@ -47,6 +46,9 @@ var (
 [yellow]F6[white]: interrupt bot resp
 [yellow]F7[white]: copy last msg to clipboard (linux xclip)
 [yellow]F8[white]: copy n msg to clipboard (linux xclip)
+[yellow]F10[white]: manage loaded rag files
+[yellow]F11[white]: switch RAGEnabled boolean
+[yellow]F12[white]: show this help page
 [yellow]Ctrl+s[white]: load new char/agent
 [yellow]Ctrl+e[white]: export chat to json file
 [yellow]Ctrl+n[white]: start a new chat
@@ -55,157 +57,6 @@ var (
 Press Enter to go back
 `
 )
-
-func makeChatTable(chatList []string) *tview.Table {
-	actions := []string{"load", "rename", "delete"}
-	rows, cols := len(chatList), len(actions)+1
-	chatActTable := tview.NewTable().
-		SetBorders(true)
-	for r := 0; r < rows; r++ {
-		for c := 0; c < cols; c++ {
-			color := tcell.ColorWhite
-			if c < 1 {
-				chatActTable.SetCell(r, c,
-					tview.NewTableCell(chatList[r]).
-						SetTextColor(color).
-						SetAlign(tview.AlignCenter))
-			} else {
-				chatActTable.SetCell(r, c,
-					tview.NewTableCell(actions[c-1]).
-						SetTextColor(color).
-						SetAlign(tview.AlignCenter))
-			}
-		}
-	}
-	chatActTable.Select(0, 0).SetFixed(1, 1).SetDoneFunc(func(key tcell.Key) {
-		if key == tcell.KeyEsc || key == tcell.KeyF1 {
-			pages.RemovePage(historyPage)
-			return
-		}
-		if key == tcell.KeyEnter {
-			chatActTable.SetSelectable(true, true)
-		}
-	}).SetSelectedFunc(func(row int, column int) {
-		tc := chatActTable.GetCell(row, column)
-		tc.SetTextColor(tcell.ColorRed)
-		chatActTable.SetSelectable(false, false)
-		selectedChat := chatList[row]
-		// notification := fmt.Sprintf("chat: %s; action: %s", selectedChat, tc.Text)
-		switch tc.Text {
-		case "load":
-			history, err := loadHistoryChat(selectedChat)
-			if err != nil {
-				logger.Error("failed to read history file", "chat", selectedChat)
-				pages.RemovePage(historyPage)
-				return
-			}
-			chatBody.Messages = history
-			textView.SetText(chatToText(cfg.ShowSys))
-			activeChatName = selectedChat
-			pages.RemovePage(historyPage)
-			colorText()
-			updateStatusLine()
-			return
-		case "rename":
-			pages.RemovePage(historyPage)
-			pages.AddPage(renamePage, renameWindow, true, true)
-			return
-		case "delete":
-			sc, ok := chatMap[selectedChat]
-			if !ok {
-				// no chat found
-				pages.RemovePage(historyPage)
-				return
-			}
-			if err := store.RemoveChat(sc.ID); err != nil {
-				logger.Error("failed to remove chat from db", "chat_id", sc.ID, "chat_name", sc.Name)
-			}
-			if err := notifyUser("chat deleted", selectedChat+" was deleted"); err != nil {
-				logger.Error("failed to send notification", "error", err)
-			}
-			pages.RemovePage(historyPage)
-			return
-		default:
-			pages.RemovePage(historyPage)
-			return
-		}
-	})
-	return chatActTable
-}
-
-func makeRAGTable(fileList []string) *tview.Table {
-	actions := []string{"load", "rename", "delete"}
-	rows, cols := len(fileList), len(actions)+1
-	chatActTable := tview.NewTable().
-		SetBorders(true)
-	for r := 0; r < rows; r++ {
-		for c := 0; c < cols; c++ {
-			color := tcell.ColorWhite
-			if c < 1 {
-				chatActTable.SetCell(r, c,
-					tview.NewTableCell(fileList[r]).
-						SetTextColor(color).
-						SetAlign(tview.AlignCenter))
-			} else {
-				chatActTable.SetCell(r, c,
-					tview.NewTableCell(actions[c-1]).
-						SetTextColor(color).
-						SetAlign(tview.AlignCenter))
-			}
-		}
-	}
-	chatActTable.Select(0, 0).SetFixed(1, 1).SetDoneFunc(func(key tcell.Key) {
-		if key == tcell.KeyEsc || key == tcell.KeyF1 {
-			pages.RemovePage(RAGPage)
-			return
-		}
-		if key == tcell.KeyEnter {
-			chatActTable.SetSelectable(true, true)
-		}
-	}).SetSelectedFunc(func(row int, column int) {
-		tc := chatActTable.GetCell(row, column)
-		tc.SetTextColor(tcell.ColorRed)
-		chatActTable.SetSelectable(false, false)
-		fpath := fileList[row]
-		// notification := fmt.Sprintf("chat: %s; action: %s", fpath, tc.Text)
-		switch tc.Text {
-		case "load":
-			fpath = path.Join(cfg.RAGDir, fpath)
-			if err := ragger.LoadRAG(fpath); err != nil {
-				logger.Error("failed to embed file", "chat", fpath, "error", err)
-				pages.RemovePage(RAGPage)
-				return
-			}
-			pages.RemovePage(RAGPage)
-			colorText()
-			updateStatusLine()
-			return
-		case "rename":
-			pages.RemovePage(RAGPage)
-			pages.AddPage(renamePage, renameWindow, true, true)
-			return
-		case "delete":
-			sc, ok := chatMap[fpath]
-			if !ok {
-				// no chat found
-				pages.RemovePage(RAGPage)
-				return
-			}
-			if err := store.RemoveChat(sc.ID); err != nil {
-				logger.Error("failed to remove chat from db", "chat_id", sc.ID, "chat_name", sc.Name)
-			}
-			if err := notifyUser("chat deleted", fpath+" was deleted"); err != nil {
-				logger.Error("failed to send notification", "error", err)
-			}
-			pages.RemovePage(RAGPage)
-			return
-		default:
-			pages.RemovePage(RAGPage)
-			return
-		}
-	})
-	return chatActTable
-}
 
 // // code block colors get interrupted by " & *
 // func codeBlockColor(text string) string {
@@ -360,8 +211,11 @@ func init() {
 		SetAcceptanceFunc(tview.InputFieldInteger).
 		SetDoneFunc(func(key tcell.Key) {
 			pages.RemovePage(indexPage)
+			colorText()
+			updateStatusLine()
 		})
 	indexPickWindow.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		defer indexPickWindow.SetText("")
 		switch event.Key() {
 		case tcell.KeyBackspace:
 			return event
@@ -534,9 +388,26 @@ func init() {
 			pages.AddPage(indexPage, indexPickWindow, true, true)
 			return nil
 		}
+		if event.Key() == tcell.KeyF10 {
+			// list rag loaded in db
+			loadedFiles, err := ragger.ListLoaded()
+			if err != nil {
+				logger.Error("failed to list regfiles in db", "error", err)
+				return nil
+			}
+			if len(loadedFiles) == 0 {
+				if err := notifyUser("loaded RAG", "no files in db"); err != nil {
+					logger.Error("failed to send notification", "error", err)
+				}
+				return nil
+			}
+			dbRAGTable := makeLoadedRAGTable(loadedFiles)
+			pages.AddPage(RAGPage, dbRAGTable, true, true)
+			return nil
+		}
 		if event.Key() == tcell.KeyF11 {
 			// xor
-			cfg.RAGEnabled = cfg.RAGEnabled != true
+			cfg.RAGEnabled = !cfg.RAGEnabled
 			updateStatusLine()
 			return nil
 		}
@@ -604,8 +475,6 @@ func init() {
 			position.SetText(fmt.Sprintf(indexLine, botRespMode, cfg.AssistantRole, activeChatName))
 			// read all text into buffer
 			msgText := textArea.GetText()
-			// TODO: check whose message was latest (user icon / assistant)
-			// in order to decide if assistant new icon is needed
 			nl := "\n"
 			prevText := textView.GetText(true)
 			// strings.LastIndex()
