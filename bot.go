@@ -147,7 +147,7 @@ func chatRagUse(qText string) (string, error) {
 	}
 	// get raw text
 	resps := []string{}
-	logger.Info("sqlvec resp", "vecs", respVecs)
+	logger.Info("sqlvec resp", "vecs len", len(respVecs))
 	for _, rv := range respVecs {
 		resps = append(resps, rv.RawText)
 	}
