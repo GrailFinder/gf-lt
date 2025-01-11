@@ -1,8 +1,12 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"path"
+	"time"
+
+	"elefant/rag"
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
@@ -85,11 +89,21 @@ func makeChatTable(chatList []string) *tview.Table {
 	return chatActTable
 }
 
-func makeRAGTable(fileList []string) *tview.Table {
+// func makeRAGTable(fileList []string) *tview.Table {
+func makeRAGTable(fileList []string) *tview.Flex {
 	actions := []string{"load", "delete"}
 	rows, cols := len(fileList), len(actions)+1
 	fileTable := tview.NewTable().
 		SetBorders(true)
+	longStatusView := tview.NewTextView()
+	longStatusView.SetText("status text")
+	longStatusView.SetBorder(true).SetTitle("status")
+	longStatusView.SetChangedFunc(func() {
+		app.Draw()
+	})
+	ragflex := tview.NewFlex().SetDirection(tview.FlexRow).
+		AddItem(longStatusView, 0, 10, false).
+		AddItem(fileTable, 0, 60, true)
 	for r := 0; r < rows; r++ {
 		for c := 0; c < cols; c++ {
 			color := tcell.ColorWhite
@@ -106,6 +120,33 @@ func makeRAGTable(fileList []string) *tview.Table {
 			}
 		}
 	}
+	errCh := make(chan error, 1)
+	go func() {
+		defer pages.RemovePage(RAGPage)
+		for {
+			select {
+			case err := <-errCh:
+				if err == nil {
+					logger.Error("somehow got a nil err", "error", err)
+					continue
+				}
+				logger.Error("got an err in rag status", "error", err, "textview", longStatusView)
+				longStatusView.SetText(fmt.Sprintf("%v", err))
+				close(errCh)
+				return
+			case status := <-rag.LongJobStatusCh:
+				logger.Info("reading status channel", "status", status)
+				longStatusView.SetText(status)
+				// fmt.Fprintln(longStatusView, status)
+				// app.Sync()
+				if status == rag.FinishedRAGStatus {
+					close(errCh)
+					time.Sleep(2 * time.Second)
+					return
+				}
+			}
+		}
+	}()
 	fileTable.Select(0, 0).SetFixed(1, 1).SetDoneFunc(func(key tcell.Key) {
 		if key == tcell.KeyEsc || key == tcell.KeyF1 {
 			pages.RemovePage(RAGPage)
@@ -115,7 +156,7 @@ func makeRAGTable(fileList []string) *tview.Table {
 			fileTable.SetSelectable(true, true)
 		}
 	}).SetSelectedFunc(func(row int, column int) {
-		defer pages.RemovePage(RAGPage)
+		// defer pages.RemovePage(RAGPage)
 		tc := fileTable.GetCell(row, column)
 		tc.SetTextColor(tcell.ColorRed)
 		fileTable.SetSelectable(false, false)
@@ -124,14 +165,18 @@ func makeRAGTable(fileList []string) *tview.Table {
 		switch tc.Text {
 		case "load":
 			fpath = path.Join(cfg.RAGDir, fpath)
-			if err := ragger.LoadRAG(fpath); err != nil {
-				logger.Error("failed to embed file", "chat", fpath, "error", err)
-				// pages.RemovePage(RAGPage)
-				return
-			}
-			pages.RemovePage(RAGPage)
-			colorText()
-			updateStatusLine()
+			longStatusView.SetText("clicked load")
+			go func() {
+				if err := ragger.LoadRAG(fpath); err != nil {
+					logger.Error("failed to embed file", "chat", fpath, "error", err)
+					errCh <- err
+					// pages.RemovePage(RAGPage)
+					return
+				}
+			}()
+			// make new page and write status updates to it
+			// colorText()
+			// updateStatusLine()
 			return
 		case "delete":
 			fpath = path.Join(cfg.RAGDir, fpath)
@@ -148,7 +193,7 @@ func makeRAGTable(fileList []string) *tview.Table {
 			return
 		}
 	})
-	return fileTable
+	return ragflex
 }
 
 func makeLoadedRAGTable(fileList []string) *tview.Table {

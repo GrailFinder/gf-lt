@@ -3,6 +3,7 @@ package main
 import (
 	"elefant/models"
 	"elefant/pngmeta"
+	"elefant/rag"
 	"fmt"
 	"os"
 	"strconv"
@@ -26,14 +27,17 @@ var (
 	sysModal        *tview.Modal
 	indexPickWindow *tview.InputField
 	renameWindow    *tview.InputField
+	//
+	longJobStatusCh = make(chan string, 1)
 	// pages
-	historyPage = "historyPage"
-	agentPage   = "agentPage"
-	editMsgPage = "editMsgPage"
-	indexPage   = "indexPage"
-	helpPage    = "helpPage"
-	renamePage  = "renamePage"
-	RAGPage     = "RAGPage "
+	historyPage    = "historyPage"
+	agentPage      = "agentPage"
+	editMsgPage    = "editMsgPage"
+	indexPage      = "indexPage"
+	helpPage       = "helpPage"
+	renamePage     = "renamePage"
+	RAGPage        = "RAGPage "
+	longStatusPage = "longStatusPage"
 	// help text
 	helpText = `
 [yellow]Esc[white]: send msg
@@ -155,6 +159,7 @@ func init() {
 	position = tview.NewTextView().
 		SetDynamicColors(true).
 		SetTextAlign(tview.AlignCenter)
+
 	flex = tview.NewFlex().SetDirection(tview.FlexRow).
 		AddItem(textView, 0, 40, false).
 		AddItem(textArea, 0, 10, true).
@@ -466,6 +471,7 @@ func init() {
 				}
 				fileList = append(fileList, f.Name())
 			}
+			rag.LongJobStatusCh <- "first msg"
 			chatRAGTable := makeRAGTable(fileList)
 			pages.AddPage(RAGPage, chatRAGTable, true, true)
 			return nil
@@ -482,7 +488,7 @@ func init() {
 			if strings.HasSuffix(prevText, nl) {
 				nl = ""
 			}
-			if msgText != "" {
+			if msgText != "" { // continue
 				fmt.Fprintf(textView, "%s[-:-:b](%d) <%s>: [-:-:-]\n%s\n",
 					nl, len(chatBody.Messages), cfg.UserRole, msgText)
 				textArea.SetText("", true)
