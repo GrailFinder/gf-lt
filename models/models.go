@@ -125,3 +125,21 @@ type EmbeddingResp struct {
 // 		Object    string    `json:"object"`
 // 	} `json:"data"`
 // }
+
+type LLMModels struct {
+	Object string `json:"object"`
+	Data   []struct {
+		ID      string `json:"id"`
+		Object  string `json:"object"`
+		Created int    `json:"created"`
+		OwnedBy string `json:"owned_by"`
+		Meta    struct {
+			VocabType int   `json:"vocab_type"`
+			NVocab    int   `json:"n_vocab"`
+			NCtxTrain int   `json:"n_ctx_train"`
+			NEmbd     int   `json:"n_embd"`
+			NParams   int64 `json:"n_params"`
+			Size      int64 `json:"size"`
+		} `json:"meta"`
+	} `json:"data"`
+}

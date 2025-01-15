@@ -13,6 +13,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"path"
 	"strings"
 	"time"
 
@@ -35,6 +36,7 @@ var (
 	defaultStarterBytes = []byte{}
 	interruptResp       = false
 	ragger              *rag.RAG
+	currentModel        = "none"
 )
 
 // ====
@@ -60,6 +62,23 @@ func formMsg(chatBody *models.ChatBody, newMsg, role string) io.Reader {
 		return nil
 	}
 	return bytes.NewReader(data)
+}
+
+func fetchModelName() {
+	api := "http://localhost:8080/v1/models"
+	resp, err := httpClient.Get(api)
+	if err != nil {
+		logger.Warn("failed to get model", "link", api, "error", err)
+		return
+	}
+	defer resp.Body.Close()
+	llmModel := models.LLMModels{}
+	if err := json.NewDecoder(resp.Body).Decode(&llmModel); err != nil {
+		logger.Warn("failed to decode resp", "link", api, "error", err)
+		return
+	}
+	currentModel = path.Base(llmModel.Data[0].ID)
+	updateStatusLine()
 }
 
 // func sendMsgToLLM(body io.Reader) (*models.LLMRespChunk, error) {
@@ -281,30 +300,13 @@ func charToStart(agentName string) bool {
 	return true
 }
 
-// func textToMsg(rawMsg string) models.RoleMsg {
-// 	msg := models.RoleMsg{}
-// 	// system and tool?
-// 	if strings.HasPrefix(rawMsg, cfg.AssistantIcon) {
-// 		msg.Role = cfg.AssistantRole
-// 		msg.Content = strings.TrimPrefix(rawMsg, cfg.AssistantIcon)
-// 		return msg
-// 	}
-// 	if strings.HasPrefix(rawMsg, cfg.UserIcon) {
-// 		msg.Role = cfg.UserRole
-// 		msg.Content = strings.TrimPrefix(rawMsg, cfg.UserIcon)
-// 		return msg
-// 	}
-// 	return msg
-// }
-
-// func textSliceToChat(chat []string) []models.RoleMsg {
-// 	resp := make([]models.RoleMsg, len(chat))
-// 	for i, rawMsg := range chat {
-// 		msg := textToMsg(rawMsg)
-// 		resp[i] = msg
-// 	}
-// 	return resp
-// }
+func runModelNameTicker(n time.Duration) {
+	ticker := time.NewTicker(n)
+	for {
+		<-ticker.C
+		fetchModelName()
+	}
+}
 
 func init() {
 	cfg = config.LoadConfigOrDefault("config.toml")
@@ -345,5 +347,6 @@ func init() {
 		Stream:   true,
 		Messages: lastChat,
 	}
+	go runModelNameTicker(time.Second * 20)
 	// tempLoad()
 }

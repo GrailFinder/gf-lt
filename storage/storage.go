@@ -18,6 +18,7 @@ type FullRepo interface {
 type ChatHistory interface {
 	ListChats() ([]models.Chat, error)
 	GetChatByID(id uint32) (*models.Chat, error)
+	GetChatByChar(char string) ([]models.Chat, error)
 	GetLastChat() (*models.Chat, error)
 	GetLastChatByAgent(agent string) (*models.Chat, error)
 	UpsertChat(chat *models.Chat) (*models.Chat, error)
@@ -34,6 +35,12 @@ type ProviderSQL struct {
 func (p ProviderSQL) ListChats() ([]models.Chat, error) {
 	resp := []models.Chat{}
 	err := p.db.Select(&resp, "SELECT * FROM chats;")
+	return resp, err
+}
+
+func (p ProviderSQL) GetChatByChar(char string) ([]models.Chat, error) {
+	resp := []models.Chat{}
+	err := p.db.Select(&resp, "SELECT * FROM chats WHERE agent=$1;", char)
 	return resp, err
 }
 

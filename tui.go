@@ -8,7 +8,6 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
@@ -85,7 +84,7 @@ func colorText() {
 }
 
 func updateStatusLine() {
-	position.SetText(fmt.Sprintf(indexLine, botRespMode, cfg.AssistantRole, activeChatName, cfg.RAGEnabled, cfg.ToolUse))
+	position.SetText(fmt.Sprintf(indexLine, botRespMode, cfg.AssistantRole, activeChatName, cfg.RAGEnabled, cfg.ToolUse, currentModel))
 }
 
 func initSysCards() ([]string, error) {
@@ -108,7 +107,6 @@ func startNewChat() {
 	if err != nil {
 		logger.Error("failed to get chat id", "error", err)
 	}
-	// TODO: get the current agent and it's starter
 	if ok := charToStart(cfg.AssistantRole); !ok {
 		logger.Warn("no such sys msg", "name", cfg.AssistantRole)
 	}
@@ -117,7 +115,7 @@ func startNewChat() {
 	textView.SetText(chatToText(cfg.ShowSys))
 	newChat := &models.Chat{
 		ID:    id + 1,
-		Name:  fmt.Sprintf("%v_%v", "new", time.Now().Unix()),
+		Name:  fmt.Sprintf("%d_%s", id+1, cfg.AssistantRole),
 		Msgs:  string(defaultStarterBytes),
 		Agent: cfg.AssistantRole,
 	}
@@ -322,12 +320,17 @@ func init() {
 	}
 	app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		if event.Key() == tcell.KeyF1 {
-			chatList, err := loadHistoryChats()
+			// chatList, err := loadHistoryChats()
+			chatList, err := store.GetChatByChar(cfg.AssistantRole)
 			if err != nil {
 				logger.Error("failed to load chat history", "error", err)
 				return nil
 			}
-			chatActTable := makeChatTable(chatList)
+			nameList := make([]string, len(chatList))
+			for i, chat := range chatList {
+				nameList[i] = chat.Name
+			}
+			chatActTable := makeChatTable(nameList)
 			pages.AddPage(historyPage, chatActTable, true, true)
 			return nil
 		}
