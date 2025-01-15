@@ -23,7 +23,7 @@ var (
 	helpView *tview.TextView
 	flex     *tview.Flex
 	// chatActModal    *tview.Modal
-	sysModal        *tview.Modal
+	// sysModal        *tview.Modal
 	indexPickWindow *tview.InputField
 	renameWindow    *tview.InputField
 	//
@@ -96,6 +96,10 @@ func initSysCards() ([]string, error) {
 		return nil, err
 	}
 	for _, cc := range cards {
+		if cc.Role == "" {
+			logger.Warn("empty role", "file", cc.FilePath)
+			continue
+		}
 		sysMap[cc.Role] = cc
 		labels = append(labels, cc.Role)
 	}
@@ -157,34 +161,13 @@ func init() {
 	position = tview.NewTextView().
 		SetDynamicColors(true).
 		SetTextAlign(tview.AlignCenter)
-
+	position.SetChangedFunc(func() {
+		app.Draw()
+	})
 	flex = tview.NewFlex().SetDirection(tview.FlexRow).
 		AddItem(textView, 0, 40, false).
 		AddItem(textArea, 0, 10, true).
 		AddItem(position, 0, 1, false)
-	sysModal = tview.NewModal().
-		SetText("Switch sys msg:").
-		SetDoneFunc(func(buttonIndex int, buttonLabel string) {
-			switch buttonLabel {
-			case "cancel":
-				pages.RemovePage(agentPage)
-				sysModal.ClearButtons()
-				return
-			default:
-				if ok := charToStart(buttonLabel); !ok {
-					logger.Warn("no such sys msg", "name", buttonLabel)
-					pages.RemovePage(agentPage)
-					return
-				}
-				// replace textview
-				textView.SetText(chatToText(cfg.ShowSys))
-				colorText()
-				updateStatusLine()
-				sysModal.ClearButtons()
-				pages.RemovePage(agentPage)
-				app.SetFocus(textArea)
-			}
-		})
 	editArea = tview.NewTextArea().
 		SetPlaceholder("Replace msg...")
 	editArea.SetBorder(true).SetTitle("input")
@@ -332,6 +315,8 @@ func init() {
 			}
 			chatActTable := makeChatTable(nameList)
 			pages.AddPage(historyPage, chatActTable, true, true)
+			colorText()
+			updateStatusLine()
 			return nil
 		}
 		if event.Key() == tcell.KeyF2 {
@@ -453,9 +438,10 @@ func init() {
 				}
 				return nil
 			}
-			sysModal.AddButtons(labels)
+			at := makeAgentTable(labels)
+			// sysModal.AddButtons(labels)
 			// load all chars
-			pages.AddPage(agentPage, sysModal, true, true)
+			pages.AddPage(agentPage, at, true, true)
 			updateStatusLine()
 			return nil
 		}
@@ -481,7 +467,6 @@ func init() {
 		}
 		// cannot send msg in editMode or botRespMode
 		if event.Key() == tcell.KeyEscape && !editMode && !botRespMode {
-			position.SetText(fmt.Sprintf(indexLine, botRespMode, cfg.AssistantRole, activeChatName))
 			// read all text into buffer
 			msgText := textArea.GetText()
 			nl := "\n"

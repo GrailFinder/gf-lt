@@ -63,7 +63,7 @@ After that you are free to respond to the user.
 	}
 	// sysMap    = map[string]string{"basic_sys": basicSysMsg, "tool_sys": toolSysMsg}
 	sysMap    = map[string]*models.CharCard{"basic_sys": basicCard, "tool_sys": toolCard}
-	sysLabels = []string{"cancel", "basic_sys", "tool_sys"}
+	sysLabels = []string{"basic_sys", "tool_sys"}
 )
 
 /*

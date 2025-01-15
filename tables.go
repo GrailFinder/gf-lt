@@ -59,8 +59,6 @@ func makeChatTable(chatList []string) *tview.Table {
 			textView.SetText(chatToText(cfg.ShowSys))
 			activeChatName = selectedChat
 			pages.RemovePage(historyPage)
-			colorText()
-			updateStatusLine()
 			return
 		case "rename":
 			pages.RemovePage(historyPage)
@@ -79,6 +77,9 @@ func makeChatTable(chatList []string) *tview.Table {
 			if err := notifyUser("chat deleted", selectedChat+" was deleted"); err != nil {
 				logger.Error("failed to send notification", "error", err)
 			}
+			// load last chat
+			chatBody.Messages = loadOldChatOrGetNew()
+			textView.SetText(chatToText(cfg.ShowSys))
 			pages.RemovePage(historyPage)
 			return
 		default:
@@ -174,9 +175,6 @@ func makeRAGTable(fileList []string) *tview.Flex {
 					return
 				}
 			}()
-			// make new page and write status updates to it
-			// colorText()
-			// updateStatusLine()
 			return
 		case "delete":
 			fpath = path.Join(cfg.RAGDir, fpath)
@@ -189,7 +187,6 @@ func makeRAGTable(fileList []string) *tview.Flex {
 			}
 			return
 		default:
-			// pages.RemovePage(RAGPage)
 			return
 		}
 	})
@@ -248,4 +245,81 @@ func makeLoadedRAGTable(fileList []string) *tview.Table {
 		}
 	})
 	return fileTable
+}
+
+func makeAgentTable(agentList []string) *tview.Table {
+	actions := []string{"load"}
+	rows, cols := len(agentList), len(actions)+1
+	chatActTable := tview.NewTable().
+		SetBorders(true)
+	for r := 0; r < rows; r++ {
+		for c := 0; c < cols; c++ {
+			color := tcell.ColorWhite
+			if c < 1 {
+				chatActTable.SetCell(r, c,
+					tview.NewTableCell(agentList[r]).
+						SetTextColor(color).
+						SetAlign(tview.AlignCenter))
+			} else {
+				chatActTable.SetCell(r, c,
+					tview.NewTableCell(actions[c-1]).
+						SetTextColor(color).
+						SetAlign(tview.AlignCenter))
+			}
+		}
+	}
+	chatActTable.Select(0, 0).SetFixed(1, 1).SetDoneFunc(func(key tcell.Key) {
+		if key == tcell.KeyEsc || key == tcell.KeyF1 {
+			pages.RemovePage(agentPage)
+			return
+		}
+		if key == tcell.KeyEnter {
+			chatActTable.SetSelectable(true, true)
+		}
+	}).SetSelectedFunc(func(row int, column int) {
+		tc := chatActTable.GetCell(row, column)
+		tc.SetTextColor(tcell.ColorRed)
+		chatActTable.SetSelectable(false, false)
+		selected := agentList[row]
+		// notification := fmt.Sprintf("chat: %s; action: %s", selectedChat, tc.Text)
+		switch tc.Text {
+		case "load":
+			if ok := charToStart(selected); !ok {
+				logger.Warn("no such sys msg", "name", selected)
+				pages.RemovePage(agentPage)
+				return
+			}
+			// replace textview
+			textView.SetText(chatToText(cfg.ShowSys))
+			colorText()
+			updateStatusLine()
+			// sysModal.ClearButtons()
+			pages.RemovePage(agentPage)
+			app.SetFocus(textArea)
+			return
+		case "rename":
+			pages.RemovePage(agentPage)
+			pages.AddPage(renamePage, renameWindow, true, true)
+			return
+		case "delete":
+			sc, ok := chatMap[selected]
+			if !ok {
+				// no chat found
+				pages.RemovePage(agentPage)
+				return
+			}
+			if err := store.RemoveChat(sc.ID); err != nil {
+				logger.Error("failed to remove chat from db", "chat_id", sc.ID, "chat_name", sc.Name)
+			}
+			if err := notifyUser("chat deleted", selected+" was deleted"); err != nil {
+				logger.Error("failed to send notification", "error", err)
+			}
+			pages.RemovePage(agentPage)
+			return
+		default:
+			pages.RemovePage(agentPage)
+			return
+		}
+	})
+	return chatActTable
 }

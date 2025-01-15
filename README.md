@@ -58,5 +58,6 @@
 - message editing broke ( runtime error: index out of range [-1]); +
 - RAG: encode multiple sentences (~5-10) to embeddings a piece. +
 - number of sentences in a batch should depend on number of words there. +
-- F1 can load any chat, by loading chat of other agent it does not switch agents, if that chat is continued, it will rewrite agent in db; (either allow only chats from current agent OR switch agent on chat loading);
-- after chat is deleted: load undeleted chat;
+- F1 can load any chat, by loading chat of other agent it does not switch agents, if that chat is continued, it will rewrite agent in db; (either allow only chats from current agent OR switch agent on chat loading); +
+- after chat is deleted: load undeleted chat; +
+- syscards sometimes store data inside of chub key;
