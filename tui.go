@@ -196,12 +196,12 @@ func init() {
 		SetFieldWidth(4).
 		SetAcceptanceFunc(tview.InputFieldInteger).
 		SetDoneFunc(func(key tcell.Key) {
+			defer indexPickWindow.SetText("")
 			pages.RemovePage(indexPage)
 			colorText()
 			updateStatusLine()
 		})
 	indexPickWindow.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		defer indexPickWindow.SetText("")
 		switch event.Key() {
 		case tcell.KeyBackspace:
 			return event

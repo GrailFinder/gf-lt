@@ -22,6 +22,10 @@ type CharCardSpec struct {
 	Tags           []any  `json:"tags"`
 }
 
+type Spec2Wrapper struct {
+	Data CharCardSpec `json:"data"`
+}
+
 func (c *CharCardSpec) Simplify(userName, fpath string) *CharCard {
 	fm := strings.ReplaceAll(strings.ReplaceAll(c.FirstMes, "{{char}}", c.Name), "{{user}}", userName)
 	sysPr := strings.ReplaceAll(strings.ReplaceAll(c.Description, "{{char}}", c.Name), "{{user}}", userName)

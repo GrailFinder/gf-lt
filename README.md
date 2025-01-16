@@ -27,9 +27,7 @@
 - RAG support|implementation; +
 - delete chat option; +
 - RAG file loading status/progress; +
-- change temp, min-p and other params from tui;
 - fullscreen textarea option (bothersome to implement);
-- consider adding use /completion of llamacpp, since openai endpoint clearly has template|format issues;
 - separate messages that are stored and chat and send to the bot, i.e. option to omit tool calls (there might be a point where they are no longer needed in ctx);
 - char card is the sys message, but how about giving tools to char that does not have it?
 - it is a bit clumsy to mix chats in db and chars from the external files, maybe load external files in db on startup?
@@ -37,6 +35,11 @@
 - server mode: no tui but api calls with the func calling, rag, other middleware;
 - boolean flag to use/not use tools. I see it as a msg from a tool to an llm "Hey, it might be good idea to use me!";
 - connection to a model status;
+- ===== /llamacpp specific (it has a different body -> interface instead of global var)
+- edit syscards / create new ones;
+- consider adding use /completion of llamacpp, since openai endpoint clearly has template|format issues;
+- change temp, min-p and other params from tui;
+- DRY;
 
 ### FIX:
 - bot responding (or hanging) blocks everything; +
@@ -60,4 +63,3 @@
 - number of sentences in a batch should depend on number of words there. +
 - F1 can load any chat, by loading chat of other agent it does not switch agents, if that chat is continued, it will rewrite agent in db; (either allow only chats from current agent OR switch agent on chat loading); +
 - after chat is deleted: load undeleted chat; +
-- syscards sometimes store data inside of chub key;

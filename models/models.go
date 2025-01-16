@@ -75,9 +75,10 @@ func (m RoleMsg) ToText(i int, cfg *config.Config) string {
 }
 
 type ChatBody struct {
-	Model    string    `json:"model"`
-	Stream   bool      `json:"stream"`
-	Messages []RoleMsg `json:"messages"`
+	Model         string    `json:"model"`
+	Stream        bool      `json:"stream"`
+	Messages      []RoleMsg `json:"messages"`
+	DRYMultiplier float32   `json:"frequency_penalty"`
 }
 
 type ChatToolsBody struct {

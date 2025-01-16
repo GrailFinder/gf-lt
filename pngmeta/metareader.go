@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path"
@@ -29,6 +30,13 @@ func (c PngEmbed) GetDecodedValue() (*models.CharCardSpec, error) {
 	card := &models.CharCardSpec{}
 	if err := json.Unmarshal(data, &card); err != nil {
 		return nil, err
+	}
+	specWrap := &models.Spec2Wrapper{}
+	if card.Name == "" {
+		if err := json.Unmarshal(data, &specWrap); err != nil {
+			return nil, err
+		}
+		return &specWrap.Data, nil
 	}
 	return card, nil
 }
@@ -81,6 +89,9 @@ func ReadCard(fname, uname string) (*models.CharCard, error) {
 	if err != nil {
 		return nil, err
 	}
+	if charSpec.Name == "" {
+		return nil, fmt.Errorf("failed to find role; fname %s\n", fname)
+	}
 	return charSpec.Simplify(uname, fname), nil
 }
 
@@ -110,7 +121,9 @@ func ReadDirCards(dirname, uname string) ([]*models.CharCard, error) {
 			fpath := path.Join(dirname, f.Name())
 			cc, err := ReadCard(fpath, uname)
 			if err != nil {
-				return nil, err // better to log and continue
+				// logger.Warn("failed to load card", "error", err)
+				continue
+				// return nil, err // better to log and continue
 			}
 			resp = append(resp, cc)
 		}

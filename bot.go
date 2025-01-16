@@ -77,6 +77,31 @@ func fetchModelName() {
 		logger.Warn("failed to decode resp", "link", api, "error", err)
 		return
 	}
+	if resp.StatusCode != 200 {
+		currentModel = "none"
+		return
+	}
+	currentModel = path.Base(llmModel.Data[0].ID)
+	updateStatusLine()
+}
+
+func fetchProps() {
+	api := "http://localhost:8080/props"
+	resp, err := httpClient.Get(api)
+	if err != nil {
+		logger.Warn("failed to get model", "link", api, "error", err)
+		return
+	}
+	defer resp.Body.Close()
+	llmModel := models.LLMModels{}
+	if err := json.NewDecoder(resp.Body).Decode(&llmModel); err != nil {
+		logger.Warn("failed to decode resp", "link", api, "error", err)
+		return
+	}
+	if resp.StatusCode != 200 {
+		currentModel = "none"
+		return
+	}
 	currentModel = path.Base(llmModel.Data[0].ID)
 	updateStatusLine()
 }
