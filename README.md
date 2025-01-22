@@ -40,6 +40,7 @@
 - consider adding use /completion of llamacpp, since openai endpoint clearly has template|format issues;
 - change temp, min-p and other params from tui;
 - DRY;
+- keybind to switch between openai and llamacpp endpoints;
 
 ### FIX:
 - bot responding (or hanging) blocks everything; +
@@ -63,3 +64,4 @@
 - number of sentences in a batch should depend on number of words there. +
 - F1 can load any chat, by loading chat of other agent it does not switch agents, if that chat is continued, it will rewrite agent in db; (either allow only chats from current agent OR switch agent on chat loading); +
 - after chat is deleted: load undeleted chat; +
+- name split for llamacpp completion. user msg should end with 'bot_name:';

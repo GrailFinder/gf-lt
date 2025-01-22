@@ -37,6 +37,7 @@ var (
 	renamePage     = "renamePage"
 	RAGPage        = "RAGPage "
 	longStatusPage = "longStatusPage"
+	propsPage      = "propsPage"
 	// help text
 	helpText = `
 [yellow]Esc[white]: send msg
@@ -127,6 +128,36 @@ func startNewChat() {
 	chatMap[newChat.Name] = newChat
 	updateStatusLine()
 	colorText()
+}
+
+func makePropsForm(props map[string]float32) *tview.Form {
+	form := tview.NewForm().
+		AddTextView("Notes", "Props for llamacpp completion call", 40, 2, true, false).
+		AddCheckbox("Age 18+", false, nil).
+		AddButton("Quit", func() {
+			pages.RemovePage(propsPage)
+		})
+	form.AddButton("Save", func() {
+		defer pages.RemovePage(propsPage)
+		for pn := range props {
+			propField, ok := form.GetFormItemByLabel(pn).(*tview.InputField)
+			if !ok {
+				logger.Warn("failed to convert to inputfield", "prop_name", pn)
+				continue
+			}
+			val, err := strconv.ParseFloat(propField.GetText(), 32)
+			if err != nil {
+				logger.Warn("failed parse to float", "value", propField.GetText())
+				continue
+			}
+			props[pn] = float32(val)
+		}
+	})
+	for propName, value := range props {
+		form.AddInputField(propName, fmt.Sprintf("%v", value), 20, tview.InputFieldFloat, nil)
+	}
+	form.SetBorder(true).SetTitle("Enter some data").SetTitleAlign(tview.AlignLeft)
+	return form
 }
 
 func init() {
@@ -420,8 +451,9 @@ func init() {
 			}
 			return nil
 		}
-		if event.Key() == tcell.KeyCtrlA {
-			textArea.SetText("pressed ctrl+a", true)
+		if event.Key() == tcell.KeyCtrlP {
+			propsForm := makePropsForm(defaultLCPProps)
+			pages.AddPage(propsPage, propsForm, true, true)
 			return nil
 		}
 		if event.Key() == tcell.KeyCtrlN {

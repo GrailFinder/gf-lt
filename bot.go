@@ -2,7 +2,6 @@ package main
 
 import (
 	"bufio"
-	"bytes"
 	"elefant/config"
 	"elefant/models"
 	"elefant/rag"
@@ -37,32 +36,38 @@ var (
 	interruptResp       = false
 	ragger              *rag.RAG
 	currentModel        = "none"
+	chunkParser         ChunkParser
+	defaultLCPProps     = map[string]float32{
+		"temperature":    0.8,
+		"dry_multiplier": 0.6,
+	}
 )
 
 // ====
 
-func formMsg(chatBody *models.ChatBody, newMsg, role string) io.Reader {
-	if newMsg != "" { // otherwise let the bot continue
-		newMsg := models.RoleMsg{Role: role, Content: newMsg}
-		chatBody.Messages = append(chatBody.Messages, newMsg)
-		// if rag
-		if cfg.RAGEnabled {
-			ragResp, err := chatRagUse(newMsg.Content)
-			if err != nil {
-				logger.Error("failed to form a rag msg", "error", err)
-				return nil
-			}
-			ragMsg := models.RoleMsg{Role: cfg.ToolRole, Content: ragResp}
-			chatBody.Messages = append(chatBody.Messages, ragMsg)
-		}
-	}
-	data, err := json.Marshal(chatBody)
-	if err != nil {
-		logger.Error("failed to form a msg", "error", err)
-		return nil
-	}
-	return bytes.NewReader(data)
-}
+// DEPRECATED
+// func formMsg(chatBody *models.ChatBody, newMsg, role string) io.Reader {
+// 	if newMsg != "" { // otherwise let the bot continue
+// 		newMsg := models.RoleMsg{Role: role, Content: newMsg}
+// 		chatBody.Messages = append(chatBody.Messages, newMsg)
+// 		// if rag
+// 		if cfg.RAGEnabled {
+// 			ragResp, err := chatRagUse(newMsg.Content)
+// 			if err != nil {
+// 				logger.Error("failed to form a rag msg", "error", err)
+// 				return nil
+// 			}
+// 			ragMsg := models.RoleMsg{Role: cfg.ToolRole, Content: ragResp}
+// 			chatBody.Messages = append(chatBody.Messages, ragMsg)
+// 		}
+// 	}
+// 	data, err := json.Marshal(chatBody)
+// 	if err != nil {
+// 		logger.Error("failed to form a msg", "error", err)
+// 		return nil
+// 	}
+// 	return bytes.NewReader(data)
+// }
 
 func fetchModelName() {
 	api := "http://localhost:8080/v1/models"
@@ -85,26 +90,26 @@ func fetchModelName() {
 	updateStatusLine()
 }
 
-func fetchProps() {
-	api := "http://localhost:8080/props"
-	resp, err := httpClient.Get(api)
-	if err != nil {
-		logger.Warn("failed to get model", "link", api, "error", err)
-		return
-	}
-	defer resp.Body.Close()
-	llmModel := models.LLMModels{}
-	if err := json.NewDecoder(resp.Body).Decode(&llmModel); err != nil {
-		logger.Warn("failed to decode resp", "link", api, "error", err)
-		return
-	}
-	if resp.StatusCode != 200 {
-		currentModel = "none"
-		return
-	}
-	currentModel = path.Base(llmModel.Data[0].ID)
-	updateStatusLine()
-}
+// func fetchProps() {
+// 	api := "http://localhost:8080/props"
+// 	resp, err := httpClient.Get(api)
+// 	if err != nil {
+// 		logger.Warn("failed to get model", "link", api, "error", err)
+// 		return
+// 	}
+// 	defer resp.Body.Close()
+// 	llmModel := models.LLMModels{}
+// 	if err := json.NewDecoder(resp.Body).Decode(&llmModel); err != nil {
+// 		logger.Warn("failed to decode resp", "link", api, "error", err)
+// 		return
+// 	}
+// 	if resp.StatusCode != 200 {
+// 		currentModel = "none"
+// 		return
+// 	}
+// 	currentModel = path.Base(llmModel.Data[0].ID)
+// 	updateStatusLine()
+// }
 
 // func sendMsgToLLM(body io.Reader) (*models.LLMRespChunk, error) {
 func sendMsgToLLM(body io.Reader) {
@@ -116,7 +121,6 @@ func sendMsgToLLM(body io.Reader) {
 		return
 	}
 	defer resp.Body.Close()
-	// llmResp := []models.LLMRespChunk{}
 	reader := bufio.NewReader(resp.Body)
 	counter := uint32(0)
 	for {
@@ -131,10 +135,13 @@ func sendMsgToLLM(body io.Reader) {
 			streamDone <- true
 			break
 		}
-		llmchunk := models.LLMRespChunk{}
 		line, err := reader.ReadBytes('\n')
 		if err != nil {
-			logger.Error("error reading response body", "error", err)
+			logger.Error("error reading response body", "error", err, "line", string(line))
+			if err.Error() != "EOF" {
+				streamDone <- true
+				break
+			}
 			continue
 		}
 		if len(line) <= 1 {
@@ -142,24 +149,24 @@ func sendMsgToLLM(body io.Reader) {
 		}
 		// starts with -> data:
 		line = line[6:]
-		if err := json.Unmarshal(line, &llmchunk); err != nil {
-			logger.Error("failed to decode", "error", err, "line", string(line))
+		content, stop, err := chunkParser.ParseChunk(line)
+		if err != nil {
+			logger.Error("error parsing response body", "error", err, "line", string(line), "url", cfg.APIURL)
 			streamDone <- true
-			return
-		}
-		// llmResp = append(llmResp, llmchunk)
-		// logger.Info("streamview", "chunk", llmchunk)
-		// if llmchunk.Choices[len(llmchunk.Choices)-1].FinishReason != "chat.completion.chunk" {
-		if llmchunk.Choices[len(llmchunk.Choices)-1].FinishReason == "stop" {
-			if llmchunk.Choices[len(llmchunk.Choices)-1].Delta.Content != "" {
-				logger.Warn("text inside of finish llmchunk", "chunk", llmchunk, "counter", counter)
-			}
-			streamDone <- true
-			// last chunk
 			break
 		}
+		if stop {
+			if content != "" {
+				logger.Warn("text inside of finish llmchunk", "chunk", content, "counter", counter)
+			}
+			streamDone <- true
+			break
+		}
+		if counter == 0 {
+			content = strings.TrimPrefix(content, " ")
+		}
 		// bot sends way too many \n
-		answerText := strings.ReplaceAll(llmchunk.Choices[0].Delta.Content, "\n\n", "\n")
+		answerText := strings.ReplaceAll(content, "\n\n", "\n")
 		chunkChan <- answerText
 	}
 }
@@ -203,9 +210,10 @@ func chatRagUse(qText string) (string, error) {
 
 func chatRound(userMsg, role string, tv *tview.TextView, regen bool) {
 	botRespMode = true
-	reader := formMsg(chatBody, userMsg, role)
-	if reader == nil {
-		logger.Error("empty reader from msgs", "role", role)
+	// reader := formMsg(chatBody, userMsg, role)
+	reader, err := chunkParser.FormMsg(userMsg, role)
+	if reader == nil || err != nil {
+		logger.Error("empty reader from msgs", "role", role, "error", err)
 		return
 	}
 	go sendMsgToLLM(reader)
@@ -238,8 +246,7 @@ out:
 	// bot msg is done;
 	// now check it for func call
 	// logChat(activeChatName, chatBody.Messages)
-	err := updateStorageChat(activeChatName, chatBody.Messages)
-	if err != nil {
+	if err := updateStorageChat(activeChatName, chatBody.Messages); err != nil {
 		logger.Warn("failed to update storage", "error", err, "name", activeChatName)
 	}
 	findCall(respText.String(), tv)
@@ -328,8 +335,8 @@ func charToStart(agentName string) bool {
 func runModelNameTicker(n time.Duration) {
 	ticker := time.NewTicker(n)
 	for {
-		<-ticker.C
 		fetchModelName()
+		<-ticker.C
 	}
 }
 
@@ -339,7 +346,8 @@ func init() {
 		{Role: "system", Content: basicSysMsg},
 		{Role: cfg.AssistantRole, Content: defaultFirstMsg},
 	}
-	logfile, err := os.OpenFile(cfg.LogFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	logfile, err := os.OpenFile(cfg.LogFile,
+		os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		logger.Error("failed to open log file", "error", err, "filename", cfg.LogFile)
 		return
@@ -372,6 +380,7 @@ func init() {
 		Stream:   true,
 		Messages: lastChat,
 	}
-	go runModelNameTicker(time.Second * 20)
+	initChunkParser()
+	go runModelNameTicker(time.Second * 120)
 	// tempLoad()
 }
