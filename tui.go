@@ -340,11 +340,13 @@ func init() {
 				logger.Error("failed to load chat history", "error", err)
 				return nil
 			}
-			nameList := make([]string, len(chatList))
-			for i, chat := range chatList {
-				nameList[i] = chat.Name
+			chatMap := make(map[string]models.Chat)
+			// nameList := make([]string, len(chatList))
+			for _, chat := range chatList {
+				// nameList[i] = chat.Name
+				chatMap[chat.Name] = chat
 			}
-			chatActTable := makeChatTable(nameList)
+			chatActTable := makeChatTable(chatMap)
 			pages.AddPage(historyPage, chatActTable, true, true)
 			colorText()
 			updateStatusLine()

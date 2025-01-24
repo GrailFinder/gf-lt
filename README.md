@@ -41,6 +41,8 @@
 - change temp, min-p and other params from tui;
 - DRY;
 - keybind to switch between openai and llamacpp endpoints;
+- option to remove <thinking> from chat history;
+- in chat management table add preview of the last message;
 
 ### FIX:
 - bot responding (or hanging) blocks everything; +

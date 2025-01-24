@@ -6,32 +6,48 @@ import (
 	"path"
 	"time"
 
+	"elefant/models"
 	"elefant/rag"
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 )
 
-func makeChatTable(chatList []string) *tview.Table {
+func makeChatTable(chatMap map[string]models.Chat) *tview.Table {
 	actions := []string{"load", "rename", "delete"}
-	rows, cols := len(chatList), len(actions)+1
+	chatList := make([]string, len(chatMap))
+	i := 0
+	for name := range chatMap {
+		chatList[i] = name
+		i++
+	}
+	rows, cols := len(chatMap), len(actions)+2
 	chatActTable := tview.NewTable().
 		SetBorders(true)
+		// for chatName, chat := range chatMap {
 	for r := 0; r < rows; r++ {
+		// r := 0
 		for c := 0; c < cols; c++ {
 			color := tcell.ColorWhite
-			if c < 1 {
+			switch c {
+			case 0:
 				chatActTable.SetCell(r, c,
 					tview.NewTableCell(chatList[r]).
 						SetTextColor(color).
 						SetAlign(tview.AlignCenter))
-			} else {
+			case 1:
 				chatActTable.SetCell(r, c,
-					tview.NewTableCell(actions[c-1]).
+					tview.NewTableCell(chatMap[chatList[r]].Msgs[len(chatMap[chatList[r]].Msgs)-30:]).
+						SetTextColor(color).
+						SetAlign(tview.AlignCenter))
+			default:
+				chatActTable.SetCell(r, c,
+					tview.NewTableCell(actions[c-2]).
 						SetTextColor(color).
 						SetAlign(tview.AlignCenter))
 			}
 		}
+		// r++
 	}
 	chatActTable.Select(0, 0).SetFixed(1, 1).SetDoneFunc(func(key tcell.Key) {
 		if key == tcell.KeyEsc || key == tcell.KeyF1 {
