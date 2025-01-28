@@ -37,12 +37,12 @@
 - connection to a model status;
 - ===== /llamacpp specific (it has a different body -> interface instead of global var)
 - edit syscards / create new ones;
-- consider adding use /completion of llamacpp, since openai endpoint clearly has template|format issues;
+- consider adding use /completion of llamacpp, since openai endpoint clearly has template|format issues; +
 - change temp, min-p and other params from tui;
-- DRY;
+- DRY; +
 - keybind to switch between openai and llamacpp endpoints;
 - option to remove <thinking> from chat history;
-- in chat management table add preview of the last message;
+- in chat management table add preview of the last message; +
 
 ### FIX:
 - bot responding (or hanging) blocks everything; +
@@ -67,3 +67,5 @@
 - F1 can load any chat, by loading chat of other agent it does not switch agents, if that chat is continued, it will rewrite agent in db; (either allow only chats from current agent OR switch agent on chat loading); +
 - after chat is deleted: load undeleted chat; +
 - name split for llamacpp completion. user msg should end with 'bot_name:';
+- add retry on failed call (and EOF);
+- model info shold be an event and show disconnect status when fails;

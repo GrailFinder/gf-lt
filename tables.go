@@ -4,9 +4,11 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"strings"
 	"time"
 
 	"elefant/models"
+	"elefant/pngmeta"
 	"elefant/rag"
 
 	"github.com/gdamore/tcell/v2"
@@ -14,7 +16,7 @@ import (
 )
 
 func makeChatTable(chatMap map[string]models.Chat) *tview.Table {
-	actions := []string{"load", "rename", "delete"}
+	actions := []string{"load", "rename", "delete", "update card"}
 	chatList := make([]string, len(chatMap))
 	i := 0
 	for name := range chatMap {
@@ -62,6 +64,7 @@ func makeChatTable(chatMap map[string]models.Chat) *tview.Table {
 		tc.SetTextColor(tcell.ColorRed)
 		chatActTable.SetSelectable(false, false)
 		selectedChat := chatList[row]
+		defer pages.RemovePage(historyPage)
 		// notification := fmt.Sprintf("chat: %s; action: %s", selectedChat, tc.Text)
 		switch tc.Text {
 		case "load":
@@ -98,8 +101,24 @@ func makeChatTable(chatMap map[string]models.Chat) *tview.Table {
 			textView.SetText(chatToText(cfg.ShowSys))
 			pages.RemovePage(historyPage)
 			return
+		case "update card":
+			// save updated card
+			fi := strings.Index(selectedChat, "_")
+			agentName := selectedChat[fi+1:]
+			cc, ok := sysMap[agentName]
+			if !ok {
+				logger.Warn("no such card", "agent", agentName)
+				//no:lint
+				notifyUser("error", "no such card: "+agentName)
+			}
+			if err := pngmeta.WriteToPng(cc.ToSpec(cfg.UserRole), cc.FilePath, cc.FilePath); err != nil {
+				logger.Error("failed to write charcard",
+					"error", err)
+			}
+			// pages.RemovePage(historyPage)
+			return
 		default:
-			pages.RemovePage(historyPage)
+			// pages.RemovePage(historyPage)
 			return
 		}
 	})

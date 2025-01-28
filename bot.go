@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"os"
 	"path"
+	"regexp"
 	"strings"
 	"time"
 
@@ -42,32 +43,6 @@ var (
 		"dry_multiplier": 0.6,
 	}
 )
-
-// ====
-
-// DEPRECATED
-// func formMsg(chatBody *models.ChatBody, newMsg, role string) io.Reader {
-// 	if newMsg != "" { // otherwise let the bot continue
-// 		newMsg := models.RoleMsg{Role: role, Content: newMsg}
-// 		chatBody.Messages = append(chatBody.Messages, newMsg)
-// 		// if rag
-// 		if cfg.RAGEnabled {
-// 			ragResp, err := chatRagUse(newMsg.Content)
-// 			if err != nil {
-// 				logger.Error("failed to form a rag msg", "error", err)
-// 				return nil
-// 			}
-// 			ragMsg := models.RoleMsg{Role: cfg.ToolRole, Content: ragResp}
-// 			chatBody.Messages = append(chatBody.Messages, ragMsg)
-// 		}
-// 	}
-// 	data, err := json.Marshal(chatBody)
-// 	if err != nil {
-// 		logger.Error("failed to form a msg", "error", err)
-// 		return nil
-// 	}
-// 	return bytes.NewReader(data)
-// }
 
 func fetchModelName() {
 	api := "http://localhost:8080/v1/models"
@@ -293,6 +268,42 @@ func chatToText(showSys bool) string {
 	return strings.Join(s, "")
 }
 
+// func removeThinking() {
+// 	s := chatToTextSlice(false) // will delete tools messages though
+// 	chat := strings.Join(s, "")
+// 	chat = thinkRE.ReplaceAllString(chat, "")
+// 	reS := fmt.Sprintf("[%s:\n,%s:\n]", cfg.AssistantRole, cfg.UserRole)
+// 	// no way to know what agent wrote which msg
+// 	s = regexp.MustCompile(reS).Split(chat, -1)
+// }
+
+func textToMsgs(text string) []models.RoleMsg {
+	lines := strings.Split(text, "\n")
+	roleRE := regexp.MustCompile(`^\(\d+\) <.*>:`)
+	resp := []models.RoleMsg{}
+	oldrole := ""
+	for _, line := range lines {
+		if roleRE.MatchString(line) {
+			// extract role
+			role := ""
+			// if role changes
+			if role != oldrole {
+				oldrole = role
+				// newmsg
+				msg := models.RoleMsg{
+					Role: role,
+				}
+				resp = append(resp, msg)
+			}
+			resp[len(resp)-1].Content += "\n" + line
+		}
+	}
+	if len(resp) != 0 {
+		resp[0].Content = strings.TrimPrefix(resp[0].Content, "\n")
+	}
+	return resp
+}
+
 func applyCharCard(cc *models.CharCard) {
 	cfg.AssistantRole = cc.Role
 	// TODO: need map role->icon
@@ -381,6 +392,6 @@ func init() {
 		Messages: lastChat,
 	}
 	initChunkParser()
-	go runModelNameTicker(time.Second * 120)
+	// go runModelNameTicker(time.Second * 120)
 	// tempLoad()
 }

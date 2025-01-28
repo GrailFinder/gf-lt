@@ -77,11 +77,13 @@ Press Enter to go back
 
 func colorText() {
 	// INFO: is there a better way to markdown?
-	tv := textView.GetText(false)
-	cq := quotesRE.ReplaceAllString(tv, `[orange:-:-]$1[-:-:-]`)
+	text := textView.GetText(false)
+	text = quotesRE.ReplaceAllString(text, `[orange:-:-]$1[-:-:-]`)
+	text = starRE.ReplaceAllString(text, `[turquoise::i]$1[-:-:-]`)
+	text = thinkRE.ReplaceAllString(text, `[turquoise::i]$1[-:-:-]`)
 	// cb := codeBlockColor(cq)
 	// cb := codeBlockRE.ReplaceAllString(cq, `[blue:black:i]$1[-:-:-]`)
-	textView.SetText(starRE.ReplaceAllString(cq, `[turquoise::i]$1[-:-:-]`))
+	textView.SetText(text)
 }
 
 func updateStatusLine() {
@@ -91,7 +93,7 @@ func updateStatusLine() {
 func initSysCards() ([]string, error) {
 	labels := []string{}
 	labels = append(labels, sysLabels...)
-	cards, err := pngmeta.ReadDirCards(cfg.SysDir, cfg.UserRole)
+	cards, err := pngmeta.ReadDirCards(cfg.SysDir, cfg.UserRole, logger)
 	if err != nil {
 		logger.Error("failed to read sys dir", "error", err)
 		return nil, err
@@ -116,7 +118,7 @@ func startNewChat() {
 		logger.Warn("no such sys msg", "name", cfg.AssistantRole)
 	}
 	// set chat body
-	chatBody.Messages = defaultStarter
+	chatBody.Messages = chatBody.Messages[:2]
 	textView.SetText(chatToText(cfg.ShowSys))
 	newChat := &models.Chat{
 		ID:    id + 1,
@@ -186,7 +188,17 @@ func init() {
 		SetChangedFunc(func() {
 			app.Draw()
 		})
-	textView.SetBorder(true).SetTitle("chat")
+	// textView.SetBorder(true).SetTitle("chat")
+	textView.SetDoneFunc(func(key tcell.Key) {
+		currentSelection := textView.GetHighlights()
+		if key == tcell.KeyEnter {
+			if len(currentSelection) > 0 {
+				textView.Highlight()
+			} else {
+				textView.Highlight("0").ScrollToHighlight()
+			}
+		}
+	})
 	focusSwitcher[textArea] = textView
 	focusSwitcher[textView] = textArea
 	position = tview.NewTextView().

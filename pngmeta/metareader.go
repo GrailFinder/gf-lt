@@ -8,14 +8,21 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"path"
 	"strings"
 )
 
 const (
-	embType = "tEXt"
+	embType     = "tEXt"
+	cKey        = "chara"
+	IEND        = "IEND"
+	header      = "\x89PNG\r\n\x1a\n"
+	writeHeader = "\x89\x50\x4E\x47\x0D\x0A\x1A\x0A"
 )
+
+var tEXtChunkDataSpecification = "%s\x00%s"
 
 type PngEmbed struct {
 	Key   string
@@ -107,7 +114,7 @@ func readCardJson(fname string) (*models.CharCard, error) {
 	return &card, nil
 }
 
-func ReadDirCards(dirname, uname string) ([]*models.CharCard, error) {
+func ReadDirCards(dirname, uname string, log *slog.Logger) ([]*models.CharCard, error) {
 	files, err := os.ReadDir(dirname)
 	if err != nil {
 		return nil, err
@@ -121,7 +128,7 @@ func ReadDirCards(dirname, uname string) ([]*models.CharCard, error) {
 			fpath := path.Join(dirname, f.Name())
 			cc, err := ReadCard(fpath, uname)
 			if err != nil {
-				// logger.Warn("failed to load card", "error", err)
+				log.Warn("failed to load card", "error", err)
 				continue
 				// return nil, err // better to log and continue
 			}

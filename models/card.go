@@ -20,6 +20,7 @@ type CharCardSpec struct {
 	Spec           string `json:"spec"`
 	SpecVersion    string `json:"spec_version"`
 	Tags           []any  `json:"tags"`
+	Extentions     []byte `json:"extentions"`
 }
 
 type Spec2Wrapper struct {
@@ -42,4 +43,16 @@ type CharCard struct {
 	FirstMsg  string `json:"first_msg"`
 	Role      string `json:"role"`
 	FilePath  string `json:"filepath"`
+}
+
+func (cc *CharCard) ToSpec(userName string) *CharCardSpec {
+	descr := strings.ReplaceAll(strings.ReplaceAll(cc.SysPrompt, cc.Role, "{{char}}"), userName, "{{user}}")
+	return &CharCardSpec{
+		Name:        cc.Role,
+		Description: descr,
+		FirstMes:    cc.FirstMsg,
+		Spec:        "chara_card_v2",
+		SpecVersion: "2.0",
+		Extentions:  []byte("{}"),
+	}
 }
