@@ -41,6 +41,8 @@ var (
 	defaultLCPProps     = map[string]float32{
 		"temperature":    0.8,
 		"dry_multiplier": 0.6,
+		"min_p":          0.05,
+		"n_predict":      -1.0,
 	}
 )
 

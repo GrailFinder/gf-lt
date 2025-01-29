@@ -135,7 +135,6 @@ func startNewChat() {
 func makePropsForm(props map[string]float32) *tview.Form {
 	form := tview.NewForm().
 		AddTextView("Notes", "Props for llamacpp completion call", 40, 2, true, false).
-		AddCheckbox("Age 18+", false, nil).
 		AddButton("Quit", func() {
 			pages.RemovePage(propsPage)
 		})

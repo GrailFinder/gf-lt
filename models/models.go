@@ -157,6 +157,8 @@ type LlamaCPPReq struct {
 	Temperature   float32  `json:"temperature"`
 	DryMultiplier float32  `json:"dry_multiplier"`
 	Stop          []string `json:"stop"`
+	MinP          float32  `json:"min_p"`
+	NPredict      int32    `json:"n_predict"`
 	// MaxTokens        int     `json:"max_tokens"`
 	// DryBase          float64 `json:"dry_base"`
 	// DryAllowedLength int     `json:"dry_allowed_length"`
@@ -166,7 +168,6 @@ type LlamaCPPReq struct {
 	// DynatempExponent int     `json:"dynatemp_exponent"`
 	// TopK             int     `json:"top_k"`
 	// TopP             float32 `json:"top_p"`
-	// MinP             float32 `json:"min_p"`
 	// TypicalP         int     `json:"typical_p"`
 	// XtcProbability   int     `json:"xtc_probability"`
 	// XtcThreshold     float32 `json:"xtc_threshold"`
@@ -177,12 +178,16 @@ type LlamaCPPReq struct {
 	// Samplers         string  `json:"samplers"`
 }
 
-func NewLCPReq(prompt, role string) LlamaCPPReq {
+func NewLCPReq(prompt, role string, props map[string]float32) LlamaCPPReq {
 	return LlamaCPPReq{
-		Stream:        true,
-		Prompt:        prompt,
-		Temperature:   0.8,
-		DryMultiplier: 0.5,
+		Stream: true,
+		Prompt: prompt,
+		// Temperature:   0.8,
+		// DryMultiplier: 0.5,
+		Temperature:   props["temperature"],
+		DryMultiplier: props["dry_multiplier"],
+		MinP:          props["min_p"],
+		NPredict:      int32(props["n_predict"]),
 		Stop:          []string{role + ":\n", "<|im_end|>"},
 	}
 }

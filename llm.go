@@ -52,7 +52,7 @@ func (lcp LlamaCPPeer) FormMsg(msg, role string) (io.Reader, error) {
 	}
 	prompt := strings.Join(messages, "\n")
 	botMsgStart := "\n" + cfg.AssistantRole + ":\n"
-	payload := models.NewLCPReq(prompt+botMsgStart, role)
+	payload := models.NewLCPReq(prompt+botMsgStart, role, defaultLCPProps)
 	data, err := json.Marshal(payload)
 	if err != nil {
 		logger.Error("failed to form a msg", "error", err)

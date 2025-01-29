@@ -36,11 +36,11 @@
 - boolean flag to use/not use tools. I see it as a msg from a tool to an llm "Hey, it might be good idea to use me!";
 - connection to a model status;
 - ===== /llamacpp specific (it has a different body -> interface instead of global var)
-- edit syscards / create new ones;
+- edit syscards; +
 - consider adding use /completion of llamacpp, since openai endpoint clearly has template|format issues; +
-- change temp, min-p and other params from tui;
+- change temp, min-p and other params from tui; +
 - DRY; +
-- keybind to switch between openai and llamacpp endpoints;
+- keybind to switch between openai and llamacpp endpoints (chat vs completion);
 - option to remove <thinking> from chat history;
 - in chat management table add preview of the last message; +
 
@@ -66,6 +66,6 @@
 - number of sentences in a batch should depend on number of words there. +
 - F1 can load any chat, by loading chat of other agent it does not switch agents, if that chat is continued, it will rewrite agent in db; (either allow only chats from current agent OR switch agent on chat loading); +
 - after chat is deleted: load undeleted chat; +
-- name split for llamacpp completion. user msg should end with 'bot_name:';
+- name split for llamacpp completion. user msg should end with 'bot_name:'; +
 - add retry on failed call (and EOF);
 - model info shold be an event and show disconnect status when fails;
