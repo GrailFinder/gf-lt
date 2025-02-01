@@ -91,7 +91,7 @@ func fetchModelName() {
 // func sendMsgToLLM(body io.Reader) (*models.LLMRespChunk, error) {
 func sendMsgToLLM(body io.Reader) {
 	// nolint
-	resp, err := httpClient.Post(cfg.APIURL, "application/json", body)
+	resp, err := httpClient.Post(cfg.CurrentAPI, "application/json", body)
 	if err != nil {
 		logger.Error("llamacpp api", "error", err)
 		streamDone <- true
@@ -128,7 +128,7 @@ func sendMsgToLLM(body io.Reader) {
 		line = line[6:]
 		content, stop, err := chunkParser.ParseChunk(line)
 		if err != nil {
-			logger.Error("error parsing response body", "error", err, "line", string(line), "url", cfg.APIURL)
+			logger.Error("error parsing response body", "error", err, "line", string(line), "url", cfg.CurrentAPI)
 			streamDone <- true
 			break
 		}

@@ -7,7 +7,11 @@ import (
 )
 
 type Config struct {
-	APIURL        string `toml:"APIURL"`
+	ChatAPI       string `toml:"ChatAPI"`
+	CompletionAPI string `toml:"CompletionAPI"`
+	CurrentAPI    string
+	APIMap        map[string]string
+	//
 	ShowSys       bool   `toml:"ShowSys"`
 	LogFile       string `toml:"LogFile"`
 	UserRole      string `toml:"UserRole"`
@@ -34,7 +38,8 @@ func LoadConfigOrDefault(fn string) *Config {
 	_, err := toml.DecodeFile(fn, &config)
 	if err != nil {
 		fmt.Println("failed to read config from file, loading default")
-		config.APIURL = "http://localhost:8080/v1/chat/completions"
+		config.ChatAPI = "http://localhost:8080/v1/chat/completions"
+		config.CompletionAPI = "http://localhost:8080/completion"
 		config.RAGEnabled = false
 		config.EmbedURL = "http://localhost:8080/v1/embiddings"
 		config.ShowSys = true
@@ -47,6 +52,16 @@ func LoadConfigOrDefault(fn string) *Config {
 		config.UserIcon = "<tool>: "
 		config.SysDir = "sysprompts"
 		config.ChunkLimit = 8192
+	}
+	config.CurrentAPI = config.ChatAPI
+	config.APIMap = map[string]string{
+		config.ChatAPI: config.CompletionAPI,
+	}
+	if config.CompletionAPI != "" {
+		config.CurrentAPI = config.CompletionAPI
+		config.APIMap = map[string]string{
+			config.CompletionAPI: config.ChatAPI,
+		}
 	}
 	// if any value is empty fill with default
 	return config

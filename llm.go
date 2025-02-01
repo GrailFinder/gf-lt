@@ -15,7 +15,7 @@ type ChunkParser interface {
 
 func initChunkParser() {
 	chunkParser = LlamaCPPeer{}
-	if strings.Contains(cfg.APIURL, "v1") {
+	if strings.Contains(cfg.CurrentAPI, "v1") {
 		logger.Info("chosen openai parser")
 		chunkParser = OpenAIer{}
 		return

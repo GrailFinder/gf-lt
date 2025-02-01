@@ -27,22 +27,21 @@
 - RAG support|implementation; +
 - delete chat option; +
 - RAG file loading status/progress; +
-- fullscreen textarea option (bothersome to implement);
-- separate messages that are stored and chat and send to the bot, i.e. option to omit tool calls (there might be a point where they are no longer needed in ctx);
-- char card is the sys message, but how about giving tools to char that does not have it?
-- it is a bit clumsy to mix chats in db and chars from the external files, maybe load external files in db on startup?
-- lets say we have two (or more) agents with the same name across multiple chats. These agents go and ask db for topics they memorised. Now they can access topics that aren't meant for them. (so memory should have an option: shareable; that indicates if that memory can be shared across chats);
-- server mode: no tui but api calls with the func calling, rag, other middleware;
-- boolean flag to use/not use tools. I see it as a msg from a tool to an llm "Hey, it might be good idea to use me!";
-- connection to a model status;
-- ===== /llamacpp specific (it has a different body -> interface instead of global var)
+- in chat management table add preview of the last message; +
+===== /llamacpp specific (it has a different body -> interface instead of global var)
 - edit syscards; +
 - consider adding use /completion of llamacpp, since openai endpoint clearly has template|format issues; +
 - change temp, min-p and other params from tui; +
 - DRY; +
-- keybind to switch between openai and llamacpp endpoints (chat vs completion);
+- keybind to switch between openai and llamacpp endpoints (chat vs completion); +
+=======
+- char card is the sys message, but how about giving tools to char that does not have it?
+- lets say we have two (or more) agents with the same name across multiple chats. These agents go and ask db for topics they memorised. Now they can access topics that aren't meant for them. (so memory should have an option: shareable; that indicates if that memory can be shared across chats);
+- server mode: no tui but api calls with the func calling, rag, other middleware;
+- boolean flag to use/not use tools. I see it as a msg from a tool to an llm "Hey, it might be good idea to use me!";
+- connection to a model status; (need to be tied to some event, perhaps its own shortcut even)
+- separate messages that are stored and chat and send to the bot, i.e. option to omit tool calls and thinking (there might be a point where they are no longer needed in ctx);
 - option to remove <thinking> from chat history;
-- in chat management table add preview of the last message; +
 
 ### FIX:
 - bot responding (or hanging) blocks everything; +
@@ -61,7 +60,6 @@
 - all page names should be vars; +
 - normal case regen omits assistant icon; +
 - user icon (and role?) from config is not used; +
-- message editing broke ( runtime error: index out of range [-1]); +
 - RAG: encode multiple sentences (~5-10) to embeddings a piece. +
 - number of sentences in a batch should depend on number of words there. +
 - F1 can load any chat, by loading chat of other agent it does not switch agents, if that chat is continued, it will rewrite agent in db; (either allow only chats from current agent OR switch agent on chat loading); +
@@ -69,3 +67,5 @@
 - name split for llamacpp completion. user msg should end with 'bot_name:'; +
 - add retry on failed call (and EOF);
 - model info shold be an event and show disconnect status when fails;
+- message editing broke ( runtime error: index out of range [-1]); out of index
+- remove icons for agents/user; use only <role>:

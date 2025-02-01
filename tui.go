@@ -3,7 +3,6 @@ package main
 import (
 	"elefant/models"
 	"elefant/pngmeta"
-	"elefant/rag"
 	"fmt"
 	"os"
 	"strconv"
@@ -41,7 +40,7 @@ var (
 	// help text
 	helpText = `
 [yellow]Esc[white]: send msg
-[yellow]PgUp/Down[white]: switch focus
+[yellow]PgUp/Down[white]: switch focus between input and chat widgets
 [yellow]F1[white]: manage chats
 [yellow]F2[white]: regen last
 [yellow]F3[white]: delete last msg
@@ -50,13 +49,16 @@ var (
 [yellow]F6[white]: interrupt bot resp
 [yellow]F7[white]: copy last msg to clipboard (linux xclip)
 [yellow]F8[white]: copy n msg to clipboard (linux xclip)
-[yellow]F10[white]: manage loaded rag files
+[yellow]F10[white]: manage loaded rag files (that already in vector db)
 [yellow]F11[white]: switch RAGEnabled boolean
 [yellow]F12[white]: show this help page
 [yellow]Ctrl+s[white]: load new char/agent
 [yellow]Ctrl+e[white]: export chat to json file
 [yellow]Ctrl+n[white]: start a new chat
 [yellow]Ctrl+c[white]: close programm
+[yellow]Ctrl+p[white]: props edit form (min-p, dry, etc.)
+[yellow]Ctrl+v[white]: switch between /completion and /chat api (if provided in config)
+[yellow]Ctrl+r[white]: menu of files that can be loaded in vector db (RAG)
 
 Press Enter to go back
 `
@@ -87,7 +89,7 @@ func colorText() {
 }
 
 func updateStatusLine() {
-	position.SetText(fmt.Sprintf(indexLine, botRespMode, cfg.AssistantRole, activeChatName, cfg.RAGEnabled, cfg.ToolUse, currentModel))
+	position.SetText(fmt.Sprintf(indexLine, botRespMode, cfg.AssistantRole, activeChatName, cfg.RAGEnabled, cfg.ToolUse, currentModel, cfg.CurrentAPI))
 }
 
 func initSysCards() ([]string, error) {
@@ -473,6 +475,19 @@ func init() {
 			startNewChat()
 			return nil
 		}
+		if event.Key() == tcell.KeyCtrlV {
+			// switch between /chat and /completion api
+			prevAPI := cfg.CurrentAPI
+			newAPI := cfg.APIMap[cfg.CurrentAPI]
+			if newAPI == "" {
+				// do not switch
+				return nil
+			}
+			cfg.APIMap[newAPI] = prevAPI
+			cfg.CurrentAPI = newAPI
+			updateStatusLine()
+			return nil
+		}
 		if event.Key() == tcell.KeyCtrlS {
 			// switch sys prompt
 			labels, err := initSysCards()
@@ -505,7 +520,6 @@ func init() {
 				}
 				fileList = append(fileList, f.Name())
 			}
-			rag.LongJobStatusCh <- "first msg"
 			chatRAGTable := makeRAGTable(fileList)
 			pages.AddPage(RAGPage, chatRAGTable, true, true)
 			return nil

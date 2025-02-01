@@ -1,4 +1,5 @@
-APIURL = "http://localhost:8080/v1/chat/completions"
+ChatAPI = "http://localhost:8080/v1/chat/completions"
+CompletionAPI = "http://localhost:8080/completion"
 EmbedURL = "http://localhost:8080/v1/embeddings"
 ShowSys = true
 LogFile = "log.txt"
