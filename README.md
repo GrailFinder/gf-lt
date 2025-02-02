@@ -9,7 +9,7 @@
 - ability to copy message; +
 - menu with old chats (chat files); +
 - tab to switch selection between textview and textarea (input and chat); +
-- basic tools: memorize and recall;
+- basic tools: memorize and recall; +
 - stop stream from the bot; +
 - sqlitedb instead of chatfiles; +
 - define tools and sys prompt for them to be used; +
@@ -28,7 +28,7 @@
 - delete chat option; +
 - RAG file loading status/progress; +
 - in chat management table add preview of the last message; +
-===== /llamacpp specific (it has a different body -> interface instead of global var)
+===== /llamacpp specific (it has a different body -> interface instead of global var) +
 - edit syscards; +
 - consider adding use /completion of llamacpp, since openai endpoint clearly has template|format issues; +
 - change temp, min-p and other params from tui; +

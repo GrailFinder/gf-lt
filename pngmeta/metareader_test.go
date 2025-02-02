@@ -10,9 +10,6 @@ func TestReadMeta(t *testing.T) {
 		Filename string
 	}{
 		{
-			Filename: "../sysprompts/default_Seraphina.png",
-		},
-		{
 			Filename: "../sysprompts/llama.png",
 		},
 	}

@@ -59,6 +59,7 @@ var (
 [yellow]Ctrl+p[white]: props edit form (min-p, dry, etc.)
 [yellow]Ctrl+v[white]: switch between /completion and /chat api (if provided in config)
 [yellow]Ctrl+r[white]: menu of files that can be loaded in vector db (RAG)
+[yellow]Ctrl+t[white]: remove thinking (<think>) and tool messages from context (delete from chat)
 
 Press Enter to go back
 `
@@ -473,6 +474,14 @@ func init() {
 		}
 		if event.Key() == tcell.KeyCtrlN {
 			startNewChat()
+			return nil
+		}
+		if event.Key() == tcell.KeyCtrlT {
+			// clear context
+			// remove tools and thinking
+			removeThinking(chatBody)
+			textView.SetText(chatToText(cfg.ShowSys))
+			colorText()
 			return nil
 		}
 		if event.Key() == tcell.KeyCtrlV {

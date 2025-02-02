@@ -257,6 +257,7 @@ func findCall(msg string, tv *tview.TextView) {
 func chatToTextSlice(showSys bool) []string {
 	resp := make([]string, len(chatBody.Messages))
 	for i, msg := range chatBody.Messages {
+		// INFO: skips system msg
 		if !showSys && (msg.Role != cfg.AssistantRole && msg.Role != cfg.UserRole) {
 			continue
 		}
@@ -270,15 +271,23 @@ func chatToText(showSys bool) string {
 	return strings.Join(s, "")
 }
 
-// func removeThinking() {
-// 	s := chatToTextSlice(false) // will delete tools messages though
-// 	chat := strings.Join(s, "")
-// 	chat = thinkRE.ReplaceAllString(chat, "")
-// 	reS := fmt.Sprintf("[%s:\n,%s:\n]", cfg.AssistantRole, cfg.UserRole)
-// 	// no way to know what agent wrote which msg
-// 	s = regexp.MustCompile(reS).Split(chat, -1)
-// }
+func removeThinking(chatBody *models.ChatBody) {
+	msgs := []models.RoleMsg{}
+	for _, msg := range chatBody.Messages {
+		rm := models.RoleMsg{}
+		if msg.Role == cfg.ToolRole {
+			continue
+		}
+		// find thinking and remove it
+		rm.Content = thinkRE.ReplaceAllString(msg.Content, "")
+		rm.Role = msg.Role
+		msgs = append(msgs, rm)
+	}
+	chatBody.Messages = msgs
+}
 
+// what is the purpose of this func?
+// is there a case where using text from widget is more appropriate than chatbody.messages?
 func textToMsgs(text string) []models.RoleMsg {
 	lines := strings.Split(text, "\n")
 	roleRE := regexp.MustCompile(`^\(\d+\) <.*>:`)
