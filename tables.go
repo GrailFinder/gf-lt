@@ -358,3 +358,65 @@ func makeAgentTable(agentList []string) *tview.Table {
 	})
 	return chatActTable
 }
+
+func makeCodeBlockTable(codeBlocks []string) *tview.Table {
+	actions := []string{"copy"}
+	rows, cols := len(codeBlocks), len(actions)+1
+	table := tview.NewTable().
+		SetBorders(true)
+	logger.Info("creating codeblock table", "len#", len(codeBlocks), "data", codeBlocks)
+	for r := 0; r < rows; r++ {
+		for c := 0; c < cols; c++ {
+			color := tcell.ColorWhite
+			previewLen := 30
+			if len(codeBlocks[r]) < 30 {
+				previewLen = len(codeBlocks[r])
+			}
+			if c < 1 {
+				table.SetCell(r, c,
+					tview.NewTableCell(codeBlocks[r][:previewLen]).
+						SetTextColor(color).
+						SetAlign(tview.AlignCenter))
+			} else {
+				table.SetCell(r, c,
+					tview.NewTableCell(actions[c-1]).
+						SetTextColor(color).
+						SetAlign(tview.AlignCenter))
+			}
+		}
+	}
+	logger.Info("filled table", "len#", len(codeBlocks), "data", codeBlocks)
+	table.Select(0, 0).SetFixed(1, 1).SetDoneFunc(func(key tcell.Key) {
+		if key == tcell.KeyEsc || key == tcell.KeyF1 {
+			pages.RemovePage(agentPage)
+			return
+		}
+		if key == tcell.KeyEnter {
+			table.SetSelectable(true, true)
+		}
+	}).SetSelectedFunc(func(row int, column int) {
+		tc := table.GetCell(row, column)
+		tc.SetTextColor(tcell.ColorRed)
+		table.SetSelectable(false, false)
+		selected := codeBlocks[row]
+		// notification := fmt.Sprintf("chat: %s; action: %s", selectedChat, tc.Text)
+		switch tc.Text {
+		case "copy":
+			if err := copyToClipboard(selected); err != nil {
+				if err := notifyUser("error", err.Error()); err != nil {
+					logger.Error("failed to send notification", "error", err)
+				}
+			}
+			if err := notifyUser("copied", selected); err != nil {
+				logger.Error("failed to send notification", "error", err)
+			}
+			pages.RemovePage(codeBlockPage)
+			app.SetFocus(textArea)
+			return
+		default:
+			pages.RemovePage(codeBlockPage)
+			return
+		}
+	})
+	return table
+}

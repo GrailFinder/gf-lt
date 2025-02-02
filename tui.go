@@ -37,6 +37,7 @@ var (
 	RAGPage        = "RAGPage "
 	longStatusPage = "longStatusPage"
 	propsPage      = "propsPage"
+	codeBlockPage  = "codeBlockPage"
 	// help text
 	helpText = `
 [yellow]Esc[white]: send msg
@@ -49,6 +50,7 @@ var (
 [yellow]F6[white]: interrupt bot resp
 [yellow]F7[white]: copy last msg to clipboard (linux xclip)
 [yellow]F8[white]: copy n msg to clipboard (linux xclip)
+[yellow]F9[white]: table to copy from; with all code blocks
 [yellow]F10[white]: manage loaded rag files (that already in vector db)
 [yellow]F11[white]: switch RAGEnabled boolean
 [yellow]F12[white]: show this help page
@@ -65,7 +67,7 @@ Press Enter to go back
 `
 )
 
-// // code block colors get interrupted by " & *
+// code block colors get interrupted by " & *
 // func codeBlockColor(text string) string {
 // 	fi := strings.Index(text, "```")
 // 	if fi < 0 {
@@ -78,14 +80,41 @@ Press Enter to go back
 // 	return strings.Replace(text, "```", "```[blue:black:i]", 1)
 // }
 
+// func colorText() {
+// 	// INFO: is there a better way to markdown?
+// 	text := textView.GetText(false)
+// 	text = quotesRE.ReplaceAllString(text, `[orange::-]$1[-:-:-]`)
+// 	text = starRE.ReplaceAllString(text, `[turquoise::i]$1[-:-:-]`)
+// 	text = thinkRE.ReplaceAllString(text, `[turquoise::i]$1[-:-:-]`)
+// 	text = codeBlockRE.ReplaceAllString(text, "[blue::i]```\n$1\n```\n[-:-:-]")
+// 	// text = codeBlockRE.ReplaceAllString(text, "[blue:black:i]```\n$1\n```\n[-:-:-]")
+// 	textView.SetText(text)
+// }
+
 func colorText() {
-	// INFO: is there a better way to markdown?
 	text := textView.GetText(false)
-	text = quotesRE.ReplaceAllString(text, `[orange:-:-]$1[-:-:-]`)
+	// Step 1: Extract code blocks and replace them with unique placeholders
+	var codeBlocks []string
+	placeholder := "__CODE_BLOCK_%d__"
+	counter := 0
+	// Replace code blocks with placeholders and store their styled versions
+	text = codeBlockRE.ReplaceAllStringFunc(text, func(match string) string {
+		// Style the code block and store it
+		styled := fmt.Sprintf("[brown::i]%s[-:-:-]", match)
+		codeBlocks = append(codeBlocks, styled)
+		// Generate a unique placeholder (e.g., "__CODE_BLOCK_0__")
+		id := fmt.Sprintf(placeholder, counter)
+		counter++
+		return id
+	})
+	// Step 2: Apply other regex styles to the non-code parts
+	text = quotesRE.ReplaceAllString(text, `[orange::-]$1[-:-:-]`)
 	text = starRE.ReplaceAllString(text, `[turquoise::i]$1[-:-:-]`)
 	text = thinkRE.ReplaceAllString(text, `[turquoise::i]$1[-:-:-]`)
-	// cb := codeBlockColor(cq)
-	// cb := codeBlockRE.ReplaceAllString(cq, `[blue:black:i]$1[-:-:-]`)
+	// Step 3: Restore the styled code blocks from placeholders
+	for i, cb := range codeBlocks {
+		text = strings.Replace(text, fmt.Sprintf(placeholder, i), cb, 1)
+	}
 	textView.SetText(text)
 }
 
@@ -428,6 +457,21 @@ func init() {
 			pages.AddPage(indexPage, indexPickWindow, true, true)
 			return nil
 		}
+		if event.Key() == tcell.KeyF9 {
+			// table of codeblocks to copy
+			text := textView.GetText(false)
+			cb := codeBlockRE.FindAllString(text, -1)
+			if len(cb) == 0 {
+				if err := notifyUser("notify", "no code blocks in chat"); err != nil {
+					logger.Error("failed to send notification", "error", err)
+				}
+				return nil
+			}
+			table := makeCodeBlockTable(cb)
+			pages.AddPage(codeBlockPage, table, true, true)
+			// updateStatusLine()
+			return nil
+		}
 		if event.Key() == tcell.KeyF10 {
 			// list rag loaded in db
 			loadedFiles, err := ragger.ListLoaded()
@@ -474,6 +518,11 @@ func init() {
 		}
 		if event.Key() == tcell.KeyCtrlN {
 			startNewChat()
+			return nil
+		}
+		if event.Key() == tcell.KeyCtrlM {
+			fetchModelName()
+			updateStatusLine()
 			return nil
 		}
 		if event.Key() == tcell.KeyCtrlT {
