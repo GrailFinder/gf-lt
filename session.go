@@ -77,7 +77,6 @@ func loadHistoryChat(chatName string) ([]models.RoleMsg, error) {
 	}
 	activeChatName = chatName
 	cfg.AssistantRole = chat.Agent
-	cfg.AssistantIcon = "<" + chat.Agent + ">: "
 	return chat.ToHistory()
 }
 
@@ -129,8 +128,6 @@ func loadOldChatOrGetNew() []models.RoleMsg {
 	chatMap[chat.Name] = chat
 	activeChatName = chat.Name
 	cfg.AssistantRole = chat.Agent
-	// TODO: update assistant icon
-	cfg.AssistantIcon = "<" + chat.Agent + ">: "
 	return history
 }
 

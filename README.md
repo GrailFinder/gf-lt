@@ -64,9 +64,9 @@
 - number of sentences in a batch should depend on number of words there. +
 - F1 can load any chat, by loading chat of other agent it does not switch agents, if that chat is continued, it will rewrite agent in db; (either allow only chats from current agent OR switch agent on chat loading); +
 - after chat is deleted: load undeleted chat; +
+- table selection does not work; (ctrl+m is enter, it breakes all the tables) +
 - name split for llamacpp completion. user msg should end with 'bot_name:'; +
+- remove icons for agents/user; use only <role>: +
 - add retry on failed call (and EOF);
 - model info shold be an event and show disconnect status when fails;
-- message editing broke ( runtime error: index out of range [-1]); out of index
-- remove icons for agents/user; use only <role>:
-- table selection does not work;
+- message editing broke ( runtime error: index out of range [-1]); out of index;

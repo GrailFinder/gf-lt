@@ -62,6 +62,7 @@ var (
 [yellow]Ctrl+v[white]: switch between /completion and /chat api (if provided in config)
 [yellow]Ctrl+r[white]: menu of files that can be loaded in vector db (RAG)
 [yellow]Ctrl+t[white]: remove thinking (<think>) and tool messages from context (delete from chat)
+[yellow]Ctrl+l[white]: update connected model name (llamacpp)
 
 Press Enter to go back
 `
@@ -100,7 +101,7 @@ func colorText() {
 	// Replace code blocks with placeholders and store their styled versions
 	text = codeBlockRE.ReplaceAllStringFunc(text, func(match string) string {
 		// Style the code block and store it
-		styled := fmt.Sprintf("[brown::i]%s[-:-:-]", match)
+		styled := fmt.Sprintf("[brown:yellow:i]%s[-:-:-]", match)
 		codeBlocks = append(codeBlocks, styled)
 		// Generate a unique placeholder (e.g., "__CODE_BLOCK_0__")
 		id := fmt.Sprintf(placeholder, counter)
@@ -406,9 +407,10 @@ func init() {
 			// delete last msg
 			// check textarea text; if it ends with bot icon delete only icon:
 			text := textView.GetText(true)
-			if strings.HasSuffix(text, cfg.AssistantIcon) {
-				logger.Info("deleting assistant icon", "icon", cfg.AssistantIcon)
-				textView.SetText(strings.TrimSuffix(text, cfg.AssistantIcon))
+			assistantIcon := roleToIcon(cfg.AssistantRole)
+			if strings.HasSuffix(text, assistantIcon) {
+				logger.Info("deleting assistant icon", "icon", assistantIcon)
+				textView.SetText(strings.TrimSuffix(text, assistantIcon))
 				colorText()
 				return nil
 			}
@@ -520,8 +522,9 @@ func init() {
 			startNewChat()
 			return nil
 		}
-		if event.Key() == tcell.KeyCtrlM {
+		if event.Key() == tcell.KeyCtrlL {
 			fetchModelName()
+			textArea.SetText("pressed ctrl+l", true)
 			updateStatusLine()
 			return nil
 		}

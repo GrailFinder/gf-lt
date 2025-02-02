@@ -18,9 +18,6 @@ type Config struct {
 	ToolRole      string `toml:"ToolRole"`
 	ToolUse       bool   `toml:"ToolUse"`
 	AssistantRole string `toml:"AssistantRole"`
-	AssistantIcon string `toml:"AssistantIcon"`
-	UserIcon      string `toml:"UserIcon"`
-	ToolIcon      string `toml:"ToolIcon"`
 	SysDir        string `toml:"SysDir"`
 	ChunkLimit    uint32 `toml:"ChunkLimit"`
 	// embeddings
@@ -47,9 +44,6 @@ func LoadConfigOrDefault(fn string) *Config {
 		config.UserRole = "user"
 		config.ToolRole = "tool"
 		config.AssistantRole = "assistant"
-		config.AssistantIcon = "<assistant>: "
-		config.UserIcon = "<user>: "
-		config.UserIcon = "<tool>: "
 		config.SysDir = "sysprompts"
 		config.ChunkLimit = 8192
 	}

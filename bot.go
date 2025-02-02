@@ -185,6 +185,10 @@ func chatRagUse(qText string) (string, error) {
 	return strings.Join(resps, "\n"), nil
 }
 
+func roleToIcon(role string) string {
+	return "<" + role + ">: "
+}
+
 func chatRound(userMsg, role string, tv *tview.TextView, regen bool) {
 	botRespMode = true
 	// reader := formMsg(chatBody, userMsg, role)
@@ -197,7 +201,7 @@ func chatRound(userMsg, role string, tv *tview.TextView, regen bool) {
 	// if userMsg != "" && !regen { // no need to write assistant icon since we continue old message
 	if userMsg != "" || regen {
 		fmt.Fprintf(tv, "(%d) ", len(chatBody.Messages))
-		fmt.Fprint(tv, cfg.AssistantIcon)
+		fmt.Fprint(tv, roleToIcon(cfg.AssistantRole))
 		fmt.Fprint(tv, "\n")
 	}
 	respText := strings.Builder{}
@@ -317,9 +321,6 @@ func textToMsgs(text string) []models.RoleMsg {
 
 func applyCharCard(cc *models.CharCard) {
 	cfg.AssistantRole = cc.Role
-	// TODO: need map role->icon
-	cfg.AssistantIcon = "<" + cc.Role + ">: "
-	// try to load last active chat
 	history, err := loadAgentsLastChat(cfg.AssistantRole)
 	if err != nil {
 		logger.Warn("failed to load last agent chat;", "agent", cc.Role, "err", err)

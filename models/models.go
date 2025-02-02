@@ -61,13 +61,13 @@ func (m RoleMsg) ToText(i int, cfg *config.Config) string {
 	if !strings.HasPrefix(m.Content, cfg.UserRole+":") && !strings.HasPrefix(m.Content, cfg.AssistantRole+":") {
 		switch m.Role {
 		case "assistant":
-			icon = fmt.Sprintf("(%d) %s", i, cfg.AssistantIcon)
+			icon = fmt.Sprintf("(%d) <%s>: ", i, cfg.AssistantRole)
 		case "user":
-			icon = fmt.Sprintf("(%d) %s", i, cfg.UserIcon)
+			icon = fmt.Sprintf("(%d) <%s>: ", i, cfg.UserRole)
 		case "system":
 			icon = fmt.Sprintf("(%d) <system>: ", i)
 		case "tool":
-			icon = fmt.Sprintf("(%d) %s", i, cfg.ToolIcon)
+			icon = fmt.Sprintf("(%d) <%s>: ", i, cfg.ToolRole)
 		default:
 			icon = fmt.Sprintf("(%d) <%s>: ", i, m.Role)
 		}
