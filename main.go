@@ -1,6 +1,9 @@
 package main
 
 import (
+	"flag"
+	"fmt"
+	"net/http"
 	"unicode"
 
 	"github.com/rivo/tview"
@@ -24,6 +27,15 @@ func isASCII(s string) bool {
 }
 
 func main() {
+	apiPort := flag.Int("port", 0, "port to host api")
+	flag.Parse()
+	if apiPort != nil && *apiPort > 3000 {
+		// start api server
+		http.HandleFunc("POST /completion", completion)
+		http.ListenAndServe(fmt.Sprintf(":%d", *apiPort), nil)
+		// no tui
+		return
+	}
 	pages.AddPage("main", flex, true, true)
 	if err := app.SetRoot(pages,
 		true).EnableMouse(true).EnablePaste(true).Run(); err != nil {

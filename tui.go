@@ -68,30 +68,6 @@ Press Enter to go back
 `
 )
 
-// code block colors get interrupted by " & *
-// func codeBlockColor(text string) string {
-// 	fi := strings.Index(text, "```")
-// 	if fi < 0 {
-// 		return text
-// 	}
-// 	li := strings.LastIndex(text, "```")
-// 	if li == fi { // only openning backticks
-// 		return text
-// 	}
-// 	return strings.Replace(text, "```", "```[blue:black:i]", 1)
-// }
-
-// func colorText() {
-// 	// INFO: is there a better way to markdown?
-// 	text := textView.GetText(false)
-// 	text = quotesRE.ReplaceAllString(text, `[orange::-]$1[-:-:-]`)
-// 	text = starRE.ReplaceAllString(text, `[turquoise::i]$1[-:-:-]`)
-// 	text = thinkRE.ReplaceAllString(text, `[turquoise::i]$1[-:-:-]`)
-// 	text = codeBlockRE.ReplaceAllString(text, "[blue::i]```\n$1\n```\n[-:-:-]")
-// 	// text = codeBlockRE.ReplaceAllString(text, "[blue:black:i]```\n$1\n```\n[-:-:-]")
-// 	textView.SetText(text)
-// }
-
 func colorText() {
 	text := textView.GetText(false)
 	// Step 1: Extract code blocks and replace them with unique placeholders
@@ -101,7 +77,7 @@ func colorText() {
 	// Replace code blocks with placeholders and store their styled versions
 	text = codeBlockRE.ReplaceAllStringFunc(text, func(match string) string {
 		// Style the code block and store it
-		styled := fmt.Sprintf("[brown:yellow:i]%s[-:-:-]", match)
+		styled := fmt.Sprintf("[red::i]%s[-:-:-]", match)
 		codeBlocks = append(codeBlocks, styled)
 		// Generate a unique placeholder (e.g., "__CODE_BLOCK_0__")
 		id := fmt.Sprintf(placeholder, counter)
@@ -523,9 +499,10 @@ func init() {
 			return nil
 		}
 		if event.Key() == tcell.KeyCtrlL {
-			fetchModelName()
-			textArea.SetText("pressed ctrl+l", true)
-			updateStatusLine()
+			go func() {
+				fetchModelName() // blocks
+				updateStatusLine()
+			}()
 			return nil
 		}
 		if event.Key() == tcell.KeyCtrlT {

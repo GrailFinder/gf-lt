@@ -140,6 +140,8 @@ func ReadDirCards(dirname, uname string, log *slog.Logger) ([]*models.CharCard, 
 			if err != nil {
 				return nil, err // better to log and continue
 			}
+			cc.FirstMsg = strings.ReplaceAll(strings.ReplaceAll(cc.FirstMsg, "{{char}}", cc.Role), "{{user}}", uname)
+			cc.SysPrompt = strings.ReplaceAll(strings.ReplaceAll(cc.SysPrompt, "{{char}}", cc.Role), "{{user}}", uname)
 			resp = append(resp, cc)
 		}
 	}
