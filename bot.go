@@ -46,25 +46,25 @@ var (
 	}
 )
 
-func fetchModelName() {
+func fetchModelName() *models.LLMModels {
 	api := "http://localhost:8080/v1/models"
 	resp, err := httpClient.Get(api)
 	if err != nil {
 		logger.Warn("failed to get model", "link", api, "error", err)
-		return
+		return nil
 	}
 	defer resp.Body.Close()
 	llmModel := models.LLMModels{}
 	if err := json.NewDecoder(resp.Body).Decode(&llmModel); err != nil {
 		logger.Warn("failed to decode resp", "link", api, "error", err)
-		return
+		return nil
 	}
 	if resp.StatusCode != 200 {
 		currentModel = "none"
-		return
+		return nil
 	}
 	currentModel = path.Base(llmModel.Data[0].ID)
-	updateStatusLine()
+	return &llmModel
 }
 
 // func fetchProps() {
@@ -88,7 +88,7 @@ func fetchModelName() {
 // 	updateStatusLine()
 // }
 
-// func sendMsgToLLM(body io.Reader) (*models.LLMRespChunk, error) {
+// TODO: should be a part of server?
 func sendMsgToLLM(body io.Reader) {
 	// nolint
 	resp, err := httpClient.Post(cfg.CurrentAPI, "application/json", body)

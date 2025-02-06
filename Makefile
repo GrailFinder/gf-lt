@@ -3,6 +3,9 @@
 run: setconfig
 	go build -o elefant && ./elefant
 
+server: setconfig
+	go build -o elefant && ./elefant -port 3333
+
 setconfig:
 	find config.toml &>/dev/null || cp config.example.toml config.toml
 

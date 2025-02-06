@@ -3,7 +3,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"net/http"
 	"unicode"
 
 	"github.com/rivo/tview"
@@ -30,10 +29,8 @@ func main() {
 	apiPort := flag.Int("port", 0, "port to host api")
 	flag.Parse()
 	if apiPort != nil && *apiPort > 3000 {
-		// start api server
-		http.HandleFunc("POST /completion", completion)
-		http.ListenAndServe(fmt.Sprintf(":%d", *apiPort), nil)
-		// no tui
+		srv := Server{}
+		srv.ListenToRequests(fmt.Sprintf("%d", *apiPort))
 		return
 	}
 	pages.AddPage("main", flex, true, true)
