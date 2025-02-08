@@ -51,8 +51,11 @@ func (lcp LlamaCPPeer) FormMsg(msg, role string) (io.Reader, error) {
 		messages[i] = m.ToPrompt()
 	}
 	prompt := strings.Join(messages, "\n")
+	if cfg.ToolUse && msg != "" {
+		prompt += "\n" + cfg.ToolRole + ":\n" + toolSysMsg
+	}
 	botMsgStart := "\n" + cfg.AssistantRole + ":\n"
-	payload := models.NewLCPReq(prompt+botMsgStart, role, defaultLCPProps)
+	payload := models.NewLCPReq(prompt+botMsgStart, cfg, defaultLCPProps)
 	data, err := json.Marshal(payload)
 	if err != nil {
 		logger.Error("failed to form a msg", "error", err)
@@ -105,6 +108,11 @@ func (op OpenAIer) FormMsg(msg, role string) (io.Reader, error) {
 			}
 			ragMsg := models.RoleMsg{Role: cfg.ToolRole, Content: ragResp}
 			chatBody.Messages = append(chatBody.Messages, ragMsg)
+		}
+		if cfg.ToolUse {
+			toolMsg := models.RoleMsg{Role: cfg.ToolRole,
+				Content: toolSysMsg}
+			chatBody.Messages = append(chatBody.Messages, toolMsg)
 		}
 	}
 	data, err := json.Marshal(chatBody)

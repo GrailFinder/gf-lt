@@ -63,6 +63,7 @@ var (
 [yellow]Ctrl+r[white]: menu of files that can be loaded in vector db (RAG)
 [yellow]Ctrl+t[white]: remove thinking (<think>) and tool messages from context (delete from chat)
 [yellow]Ctrl+l[white]: update connected model name (llamacpp)
+[yellow]Ctrl+k[white]: switch tool use (recommend tool use to llm after user msg)
 
 Press Enter to go back
 `
@@ -218,12 +219,13 @@ func init() {
 	flex = tview.NewFlex().SetDirection(tview.FlexRow).
 		AddItem(textView, 0, 40, false).
 		AddItem(textArea, 0, 10, true).
-		AddItem(position, 0, 1, false)
+		AddItem(position, 0, 2, false)
 	editArea = tview.NewTextArea().
 		SetPlaceholder("Replace msg...")
 	editArea.SetBorder(true).SetTitle("input")
 	editArea.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		if event.Key() == tcell.KeyEscape && editMode {
+			defer colorText()
 			editedMsg := editArea.GetText()
 			if editedMsg == "" {
 				if err := notifyUser("edit", "no edit provided"); err != nil {
@@ -540,6 +542,12 @@ func init() {
 			// sysModal.AddButtons(labels)
 			// load all chars
 			pages.AddPage(agentPage, at, true, true)
+			updateStatusLine()
+			return nil
+		}
+		if event.Key() == tcell.KeyCtrlK {
+			// add message from tools
+			cfg.ToolUse = !cfg.ToolUse
 			updateStatusLine()
 			return nil
 		}

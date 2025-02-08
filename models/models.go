@@ -58,19 +58,9 @@ type RoleMsg struct {
 
 func (m RoleMsg) ToText(i int, cfg *config.Config) string {
 	icon := fmt.Sprintf("(%d)", i)
-	if !strings.HasPrefix(m.Content, cfg.UserRole+":") && !strings.HasPrefix(m.Content, cfg.AssistantRole+":") {
-		switch m.Role {
-		case "assistant":
-			icon = fmt.Sprintf("(%d) <%s>: ", i, cfg.AssistantRole)
-		case "user":
-			icon = fmt.Sprintf("(%d) <%s>: ", i, cfg.UserRole)
-		case "system":
-			icon = fmt.Sprintf("(%d) <system>: ", i)
-		case "tool":
-			icon = fmt.Sprintf("(%d) <%s>: ", i, cfg.ToolRole)
-		default:
-			icon = fmt.Sprintf("(%d) <%s>: ", i, m.Role)
-		}
+	// check if already has role annotation (/completion makes them)
+	if !strings.HasPrefix(m.Content, m.Role+":") {
+		icon = fmt.Sprintf("(%d) <%s>: ", i, m.Role)
 	}
 	textMsg := fmt.Sprintf("[-:-:b]%s[-:-:-]\n%s\n", icon, m.Content)
 	return strings.ReplaceAll(textMsg, "\n\n", "\n")
@@ -178,7 +168,7 @@ type LlamaCPPReq struct {
 	// Samplers         string  `json:"samplers"`
 }
 
-func NewLCPReq(prompt, role string, props map[string]float32) LlamaCPPReq {
+func NewLCPReq(prompt string, cfg *config.Config, props map[string]float32) LlamaCPPReq {
 	return LlamaCPPReq{
 		Stream: true,
 		Prompt: prompt,
@@ -188,7 +178,10 @@ func NewLCPReq(prompt, role string, props map[string]float32) LlamaCPPReq {
 		DryMultiplier: props["dry_multiplier"],
 		MinP:          props["min_p"],
 		NPredict:      int32(props["n_predict"]),
-		Stop:          []string{role + ":\n", "<|im_end|>"},
+		Stop: []string{
+			cfg.UserRole + ":\n", "<|im_end|>",
+			cfg.ToolRole + ":\n",
+		},
 	}
 }
 

@@ -13,7 +13,6 @@ import (
 	"net/http"
 	"os"
 	"path"
-	"regexp"
 	"strings"
 	"time"
 
@@ -44,6 +43,7 @@ var (
 		"min_p":          0.05,
 		"n_predict":      -1.0,
 	}
+	toolUseText = "consider making a tool call."
 )
 
 func fetchModelName() *models.LLMModels {
@@ -290,35 +290,6 @@ func removeThinking(chatBody *models.ChatBody) {
 	chatBody.Messages = msgs
 }
 
-// what is the purpose of this func?
-// is there a case where using text from widget is more appropriate than chatbody.messages?
-func textToMsgs(text string) []models.RoleMsg {
-	lines := strings.Split(text, "\n")
-	roleRE := regexp.MustCompile(`^\(\d+\) <.*>:`)
-	resp := []models.RoleMsg{}
-	oldrole := ""
-	for _, line := range lines {
-		if roleRE.MatchString(line) {
-			// extract role
-			role := ""
-			// if role changes
-			if role != oldrole {
-				oldrole = role
-				// newmsg
-				msg := models.RoleMsg{
-					Role: role,
-				}
-				resp = append(resp, msg)
-			}
-			resp[len(resp)-1].Content += "\n" + line
-		}
-	}
-	if len(resp) != 0 {
-		resp[0].Content = strings.TrimPrefix(resp[0].Content, "\n")
-	}
-	return resp
-}
-
 func applyCharCard(cc *models.CharCard) {
 	cfg.AssistantRole = cc.Role
 	history, err := loadAgentsLastChat(cfg.AssistantRole)
@@ -353,14 +324,6 @@ func charToStart(agentName string) bool {
 	}
 	applyCharCard(cc)
 	return true
-}
-
-func runModelNameTicker(n time.Duration) {
-	ticker := time.NewTicker(n)
-	for {
-		fetchModelName()
-		<-ticker.C
-	}
 }
 
 func init() {

@@ -14,12 +14,8 @@ var (
 	starRE      = regexp.MustCompile(`(\*.*?\*)`)
 	thinkRE     = regexp.MustCompile(`(<think>.*?</think>)`)
 	codeBlockRE = regexp.MustCompile(`(?s)\x60{3}(?:.*?)\n(.*?)\n\s*\x60{3}\s*`)
-	// codeBlockRE = regexp.MustCompile("```\s*([\s\S]*?)```")
-	// codeBlockRE = regexp.MustCompile(`(\x60\x60\x60.*?\x60\x60\x60)`)
 	basicSysMsg = `Large Language Model that helps user with any of his requests.`
-	toolSysMsg  = `You're a helpful assistant.
-# Tools
-You can do functions call if needed.
+	toolSysMsg  = `You can do functions call if needed.
 Your current tools:
 <tools>
 [
