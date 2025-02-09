@@ -38,7 +38,7 @@
 - separate messages that are stored and chat and send to the bot, i.e. option to omit tool calls and thinking (there might be a point where they are no longer needed in ctx); +
 - option to remove <thinking> from chat history; +
 - connection to a model status; (need to be tied to some event, perhaps its own shortcut even) +
-- char card is the sys message, but how about giving tools to char that does not have it?
+- char card is the sys message, but how about giving tools to char that does not have it? +
 - lets say we have two (or more) agents with the same name across multiple chats. These agents go and ask db for topics they memorised. Now they can access topics that aren't meant for them. (so memory should have an option: shareable; that indicates if that memory can be shared across chats);
 - server mode: no tui but api calls with the func calling, rag, other middleware;
 - boolean flag to use/not use tools. I see it as a msg from a tool to an llm "Hey, it might be good idea to use me!";

@@ -9,7 +9,13 @@ type Memories interface {
 }
 
 func (p ProviderSQL) Memorise(m *models.Memory) (*models.Memory, error) {
-	query := "INSERT INTO memories (agent, topic, mind) VALUES (:agent, :topic, :mind) RETURNING *;"
+	query := `
+        INSERT INTO memories (agent, topic, mind)
+        VALUES (:agent, :topic, :mind)
+        ON CONFLICT (agent, topic) DO UPDATE
+        SET mind = excluded.mind,
+            updated_at = CURRENT_TIMESTAMP
+        RETURNING *;`
 	stmt, err := p.db.PrepareNamed(query)
 	if err != nil {
 		p.logger.Error("failed to prepare stmt", "query", query, "error", err)
@@ -19,7 +25,7 @@ func (p ProviderSQL) Memorise(m *models.Memory) (*models.Memory, error) {
 	var memory models.Memory
 	err = stmt.Get(&memory, m)
 	if err != nil {
-		p.logger.Error("failed to insert memory", "query", query, "error", err)
+		p.logger.Error("failed to upsert memory", "query", query, "error", err)
 		return nil, err
 	}
 	return &memory, nil

@@ -37,15 +37,21 @@ Your current tools:
 ]
 </tools>
 To make a function call return a json object within __tool_call__ tags;
-Example:
+<example_request>
 __tool_call__
 {
 "name":"recall",
-"args": "Adam"
+"args": "Adam's number"
 }
 __tool_call__
+</example_request>
 Tool call is addressed to the tool agent, avoid sending more info than tool call itself, while making a call.
 When done right, tool call will be delivered to the tool agent. tool agent will respond with the results of the call.
+<example_response>
+tool:
+under the topic: Adam's number is stored:
+559-996
+</example_response>
 After that you are free to respond to the user.
 `
 	basicCard = &models.CharCard{
