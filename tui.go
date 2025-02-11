@@ -4,6 +4,9 @@ import (
 	"elefant/models"
 	"elefant/pngmeta"
 	"fmt"
+	"image"
+	_ "image/jpeg"
+	_ "image/png"
 	"os"
 	"strconv"
 	"strings"
@@ -13,16 +16,16 @@ import (
 )
 
 var (
-	app      *tview.Application
-	pages    *tview.Pages
-	textArea *tview.TextArea
-	editArea *tview.TextArea
-	textView *tview.TextView
-	position *tview.TextView
-	helpView *tview.TextView
-	flex     *tview.Flex
-	// chatActModal    *tview.Modal
-	// sysModal        *tview.Modal
+	app             *tview.Application
+	pages           *tview.Pages
+	textArea        *tview.TextArea
+	editArea        *tview.TextArea
+	textView        *tview.TextView
+	position        *tview.TextView
+	helpView        *tview.TextView
+	flex            *tview.Flex
+	imgView         *tview.Image
+	defaultImage    = "sysprompts/llama.png"
 	indexPickWindow *tview.InputField
 	renameWindow    *tview.InputField
 	// pages
@@ -35,6 +38,7 @@ var (
 	RAGPage       = "RAGPage "
 	propsPage     = "propsPage"
 	codeBlockPage = "codeBlockPage"
+	imgPage       = "imgPage"
 	// help text
 	helpText = `
 [yellow]Esc[white]: send msg
@@ -61,10 +65,31 @@ var (
 [yellow]Ctrl+t[white]: remove thinking (<think>) and tool messages from context (delete from chat)
 [yellow]Ctrl+l[white]: update connected model name (llamacpp)
 [yellow]Ctrl+k[white]: switch tool use (recommend tool use to llm after user msg)
+[yellow]Ctrl+i[white]: if chat agent is char.png will show the image; then any key to return
 
 Press Enter to go back
 `
 )
+
+func loadImage() {
+	filepath := defaultImage
+	cc, ok := sysMap[cfg.AssistantRole]
+	if ok {
+		if strings.HasSuffix(cc.FilePath, ".png") {
+			filepath = cc.FilePath
+		}
+	}
+	file, err := os.Open(filepath)
+	if err != nil {
+		panic(err)
+	}
+	defer file.Close()
+	img, _, err := image.Decode(file)
+	if err != nil {
+		panic(err)
+	}
+	imgView.SetImage(img)
+}
 
 func colorText() {
 	text := textView.GetText(false)
@@ -341,6 +366,20 @@ func init() {
 		return nil
 	})
 	//
+	imgView = tview.NewImage()
+	imgView.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		switch event.Key() {
+		case tcell.KeyEnter:
+			pages.RemovePage(imgPage)
+			return event
+		}
+		if isASCII(string(event.Rune())) {
+			pages.RemovePage(imgPage)
+			return event
+		}
+		return nil
+	})
+	//
 	textArea.SetMovedFunc(updateStatusLine)
 	updateStatusLine()
 	textView.SetText(chatToText(cfg.ShowSys))
@@ -547,6 +586,12 @@ func init() {
 			// add message from tools
 			cfg.ToolUse = !cfg.ToolUse
 			updateStatusLine()
+			return nil
+		}
+		if event.Key() == tcell.KeyCtrlI {
+			// show image
+			loadImage()
+			pages.AddPage(imgPage, imgView, true, true)
 			return nil
 		}
 		if event.Key() == tcell.KeyCtrlR && cfg.HFToken != "" {

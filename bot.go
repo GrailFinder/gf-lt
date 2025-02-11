@@ -67,34 +67,13 @@ func fetchModelName() *models.LLMModels {
 	return &llmModel
 }
 
-// func fetchProps() {
-// 	api := "http://localhost:8080/props"
-// 	resp, err := httpClient.Get(api)
-// 	if err != nil {
-// 		logger.Warn("failed to get model", "link", api, "error", err)
-// 		return
-// 	}
-// 	defer resp.Body.Close()
-// 	llmModel := models.LLMModels{}
-// 	if err := json.NewDecoder(resp.Body).Decode(&llmModel); err != nil {
-// 		logger.Warn("failed to decode resp", "link", api, "error", err)
-// 		return
-// 	}
-// 	if resp.StatusCode != 200 {
-// 		currentModel = "none"
-// 		return
-// 	}
-// 	currentModel = path.Base(llmModel.Data[0].ID)
-// 	updateStatusLine()
-// }
-
 // TODO: should be a part of server?
 func sendMsgToLLM(body io.Reader) {
 	// nolint
 	resp, err := httpClient.Post(cfg.CurrentAPI, "application/json", body)
 	if err != nil {
 		logger.Error("llamacpp api", "error", err)
-		if err := notifyUser("error", "apicall failed"); err != nil {
+		if err := notifyUser("error", "apicall failed:"+err.Error()); err != nil {
 			logger.Error("failed to notify", "error", err)
 		}
 		streamDone <- true
