@@ -2,7 +2,7 @@ package main
 
 import (
 	"flag"
-	"fmt"
+	"strconv"
 	"unicode"
 
 	"github.com/rivo/tview"
@@ -30,7 +30,7 @@ func main() {
 	flag.Parse()
 	if apiPort != nil && *apiPort > 3000 {
 		srv := Server{}
-		srv.ListenToRequests(fmt.Sprintf("%d", *apiPort))
+		srv.ListenToRequests(strconv.Itoa(*apiPort))
 		return
 	}
 	pages.AddPage("main", flex, true, true)

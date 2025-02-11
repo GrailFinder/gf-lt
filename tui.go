@@ -25,19 +25,16 @@ var (
 	// sysModal        *tview.Modal
 	indexPickWindow *tview.InputField
 	renameWindow    *tview.InputField
-	//
-	longJobStatusCh = make(chan string, 1)
 	// pages
-	historyPage    = "historyPage"
-	agentPage      = "agentPage"
-	editMsgPage    = "editMsgPage"
-	indexPage      = "indexPage"
-	helpPage       = "helpPage"
-	renamePage     = "renamePage"
-	RAGPage        = "RAGPage "
-	longStatusPage = "longStatusPage"
-	propsPage      = "propsPage"
-	codeBlockPage  = "codeBlockPage"
+	historyPage   = "historyPage"
+	agentPage     = "agentPage"
+	editMsgPage   = "editMsgPage"
+	indexPage     = "indexPage"
+	helpPage      = "helpPage"
+	renamePage    = "renamePage"
+	RAGPage       = "RAGPage "
+	propsPage     = "propsPage"
+	codeBlockPage = "codeBlockPage"
 	// help text
 	helpText = `
 [yellow]Esc[white]: send msg
@@ -525,6 +522,7 @@ func init() {
 			}
 			cfg.APIMap[newAPI] = prevAPI
 			cfg.CurrentAPI = newAPI
+			initChunkParser()
 			updateStatusLine()
 			return nil
 		}

@@ -109,7 +109,9 @@ func makeChatTable(chatMap map[string]models.Chat) *tview.Table {
 			if !ok {
 				logger.Warn("no such card", "agent", agentName)
 				//no:lint
-				notifyUser("error", "no such card: "+agentName)
+				if err := notifyUser("error", "no such card: "+agentName); err != nil {
+					logger.Warn("failed ot notify", "error", err)
+				}
 			}
 			if err := pngmeta.WriteToPng(cc.ToSpec(cfg.UserRole), cc.FilePath, cc.FilePath); err != nil {
 				logger.Error("failed to write charcard",

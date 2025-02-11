@@ -9,6 +9,7 @@ import (
 )
 
 type Server struct {
+	// nolint
 	config config.Config
 }
 
@@ -25,13 +26,17 @@ func (srv *Server) ListenToRequests(port string) {
 	mux.HandleFunc("GET /model", modelHandler)
 	mux.HandleFunc("POST /completion", completionHandler)
 	fmt.Println("Listening", "addr", server.Addr)
-	server.ListenAndServe()
+	if err := server.ListenAndServe(); err != nil {
+		panic(err)
+	}
 }
 
 // create server
 // listen to the completion endpoint handler
 func pingHandler(w http.ResponseWriter, req *http.Request) {
-	w.Write([]byte("pong"))
+	if _, err := w.Write([]byte("pong")); err != nil {
+		logger.Error("server ping", "error", err)
+	}
 }
 
 func completionHandler(w http.ResponseWriter, req *http.Request) {
@@ -44,20 +49,26 @@ out:
 	for {
 		select {
 		case chunk := <-chunkChan:
-			fmt.Println(chunk)
-			w.Write([]byte(chunk))
+			fmt.Print(chunk)
+			if _, err := w.Write([]byte(chunk)); err != nil {
+				logger.Warn("failed to write chunk", "value", chunk)
+				continue
+			}
 		case <-streamDone:
 			break out
 		}
 	}
-	return
 }
 
 func modelHandler(w http.ResponseWriter, req *http.Request) {
 	llmModel := fetchModelName()
 	payload, err := json.Marshal(llmModel)
 	if err != nil {
+		logger.Error("model handler", "error", err)
 		// return err
+		return
 	}
-	w.Write(payload)
+	if _, err := w.Write(payload); err != nil {
+		logger.Error("model handler", "error", err)
+	}
 }

@@ -43,11 +43,11 @@ var (
 		"min_p":          0.05,
 		"n_predict":      -1.0,
 	}
-	toolUseText = "consider making a tool call."
 )
 
 func fetchModelName() *models.LLMModels {
 	api := "http://localhost:8080/v1/models"
+	//nolint
 	resp, err := httpClient.Get(api)
 	if err != nil {
 		logger.Warn("failed to get model", "link", api, "error", err)
@@ -60,7 +60,7 @@ func fetchModelName() *models.LLMModels {
 		return nil
 	}
 	if resp.StatusCode != 200 {
-		currentModel = "none"
+		currentModel = "disconnected"
 		return nil
 	}
 	currentModel = path.Base(llmModel.Data[0].ID)
@@ -94,6 +94,9 @@ func sendMsgToLLM(body io.Reader) {
 	resp, err := httpClient.Post(cfg.CurrentAPI, "application/json", body)
 	if err != nil {
 		logger.Error("llamacpp api", "error", err)
+		if err := notifyUser("error", "apicall failed"); err != nil {
+			logger.Error("failed to notify", "error", err)
+		}
 		streamDone <- true
 		return
 	}

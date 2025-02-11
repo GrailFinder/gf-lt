@@ -39,9 +39,9 @@
 - option to remove <thinking> from chat history; +
 - connection to a model status; (need to be tied to some event, perhaps its own shortcut even) +
 - char card is the sys message, but how about giving tools to char that does not have it? +
+- boolean flag to use/not use tools. I see it as a msg from a tool to an llm "Hey, it might be good idea to use me!"; +
 - lets say we have two (or more) agents with the same name across multiple chats. These agents go and ask db for topics they memorised. Now they can access topics that aren't meant for them. (so memory should have an option: shareable; that indicates if that memory can be shared across chats);
 - server mode: no tui but api calls with the func calling, rag, other middleware;
-- boolean flag to use/not use tools. I see it as a msg from a tool to an llm "Hey, it might be good idea to use me!";
 - multirole support?
 
 ### FIX:
@@ -68,9 +68,8 @@
 - table selection does not work; (ctrl+m is enter, it breakes all the tables) +
 - name split for llamacpp completion. user msg should end with 'bot_name:'; +
 - remove icons for agents/user; use only <role>: +
+- F4 after edit mode no colors; +
+- sql memory upsert fails with msg="failed to insert memory" query="INSERT INTO memories (agent, topic, mind) VALUES (:agent, :topic, :mind) RETURNING *;" error="constraint failed: UNIQUE constraint failed: memories.agent, memories.topic (1555); +
+- model info shold be an event and show disconnect status when fails; +
 - add retry on failed call (and EOF);
-- model info shold be an event and show disconnect status when fails;
-- message editing broke ( runtime error: index out of range [-1]); out of index;
-- sql memory upsert fails with msg="failed to insert memory" query="INSERT INTO memories (agent, topic, mind) VALUES (:agent, :topic, :mind) RETURNING *;" error="constraint failed: UNIQUE constraint failed: memories.agent, memories.topic (1555);
 - F5 broke formatting and messages somehow;
-- F4 after edit mode no colors;
