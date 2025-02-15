@@ -25,6 +25,7 @@ var httpClient = http.Client{}
 var (
 	cfg                 *config.Config
 	logger              *slog.Logger
+	logLevel            = new(slog.LevelVar)
 	activeChatName      string
 	chunkChan           = make(chan string, 10)
 	streamDone          = make(chan bool, 1)
@@ -67,7 +68,6 @@ func fetchModelName() *models.LLMModels {
 	return &llmModel
 }
 
-// TODO: should be a part of server?
 func sendMsgToLLM(body io.Reader) {
 	// nolint
 	resp, err := httpClient.Post(cfg.CurrentAPI, "application/json", body)
@@ -86,9 +86,10 @@ func sendMsgToLLM(body io.Reader) {
 		counter++
 		if interruptResp {
 			interruptResp = false
-			logger.Info("interrupted bot response")
+			logger.Info("interrupted bot response", "chunk_counter", counter)
 			break
 		}
+		// to stop from spiriling in infinity read of bad bytes that happens with poor connection
 		if cfg.ChunkLimit > 0 && counter > cfg.ChunkLimit {
 			logger.Warn("response hit chunk limit", "limit", cfg.ChunkLimit)
 			streamDone <- true
@@ -108,7 +109,7 @@ func sendMsgToLLM(body io.Reader) {
 		}
 		// starts with -> data:
 		line = line[6:]
-		logger.Info("debugging resp", "line", string(line))
+		logger.Debug("debugging resp", "line", string(line))
 		content, stop, err := chunkParser.ParseChunk(line)
 		if err != nil {
 			logger.Error("error parsing response body", "error", err, "line", string(line), "url", cfg.CurrentAPI)
@@ -158,7 +159,7 @@ func chatRagUse(qText string) (string, error) {
 	}
 	// get raw text
 	resps := []string{}
-	logger.Info("sqlvec resp", "vecs len", len(respVecs))
+	logger.Debug("sqlvec resp", "vecs len", len(respVecs))
 	for _, rv := range respVecs {
 		resps = append(resps, rv.RawText)
 	}
@@ -335,7 +336,8 @@ func init() {
 	basicCard.Role = cfg.AssistantRole
 	toolCard.Role = cfg.AssistantRole
 	//
-	logger = slog.New(slog.NewTextHandler(logfile, nil))
+	logLevel.Set(slog.LevelInfo)
+	logger = slog.New(slog.NewTextHandler(logfile, &slog.HandlerOptions{Level: logLevel}))
 	store = storage.NewProviderSQL("test.db", logger)
 	if store == nil {
 		os.Exit(1)
@@ -348,7 +350,6 @@ func init() {
 		return
 	}
 	lastChat := loadOldChatOrGetNew()
-	logger.Info("loaded history")
 	chatBody = &models.ChatBody{
 		Model:    "modl_name",
 		Stream:   true,

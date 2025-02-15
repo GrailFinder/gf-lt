@@ -12,7 +12,7 @@ var (
 	botRespMode   = false
 	editMode      = false
 	selectedIndex = int(-1)
-	indexLine     = "F12 to show keys help | bot resp mode: %v (F6) | char: %s (ctrl+s) | chat: %s (F1) | RAGEnabled: %v (F11) | toolUseAdviced: %v (ctrl+k) | model: %s (ctrl+l)\nAPI_URL: %s (ctrl+v) | ThinkUse: %v (ctrl+p)"
+	indexLine     = "F12 to show keys help | bot resp mode: %v (F6) | char: %s (ctrl+s) | chat: %s (F1) | RAGEnabled: %v (F11) | toolUseAdviced: %v (ctrl+k) | model: %s (ctrl+l)\nAPI_URL: %s (ctrl+v) | ThinkUse: %v (ctrl+p) | Log Level: %v (ctrl+p)"
 	focusSwitcher = map[tview.Primitive]tview.Primitive{}
 )
 

@@ -16,11 +16,11 @@ type ChunkParser interface {
 func initChunkParser() {
 	chunkParser = LlamaCPPeer{}
 	if strings.Contains(cfg.CurrentAPI, "v1") {
-		logger.Info("chosen openai parser")
+		logger.Debug("chosen /v1/chat parser")
 		chunkParser = OpenAIer{}
 		return
 	}
-	logger.Info("chosen llamacpp parser")
+	logger.Debug("chosen llamacpp /completion parser")
 }
 
 type LlamaCPPeer struct {

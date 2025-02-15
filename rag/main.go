@@ -49,7 +49,7 @@ func (r *RAG) LoadRAG(fpath string) error {
 	if err != nil {
 		return err
 	}
-	r.logger.Info("rag: loaded file", "fp", fpath)
+	r.logger.Debug("rag: loaded file", "fp", fpath)
 	LongJobStatusCh <- LoadedFileRAGStatus
 	fileText := string(data)
 	tokenizer, err := english.NewSentenceTokenizer(nil)
@@ -105,7 +105,7 @@ func (r *RAG) LoadRAG(fpath string) error {
 		ctn++
 	}
 	finishedBatchesMsg := fmt.Sprintf("finished batching batches#: %d; paragraphs: %d; sentences: %d\n", len(batchCh), len(paragraphs), len(sents))
-	r.logger.Info(finishedBatchesMsg)
+	r.logger.Debug(finishedBatchesMsg)
 	LongJobStatusCh <- finishedBatchesMsg
 	for w := 0; w < workers; w++ {
 		go r.batchToVectorHFAsync(lock, w, batchCh, vectorCh, errCh, doneCh, path.Base(fpath))
@@ -127,9 +127,9 @@ func (r *RAG) writeVectors(vectorCh chan []models.VectorRow) error {
 					// return err
 				}
 			}
-			r.logger.Info("wrote batch to db", "size", len(batch), "vector_chan_len", len(vectorCh))
+			r.logger.Debug("wrote batch to db", "size", len(batch), "vector_chan_len", len(vectorCh))
 			if len(vectorCh) == 0 {
-				r.logger.Info("finished writing vectors")
+				r.logger.Debug("finished writing vectors")
 				LongJobStatusCh <- FinishedRAGStatus
 				defer close(vectorCh)
 				return nil
@@ -160,7 +160,7 @@ func (r *RAG) batchToVectorHFAsync(lock *sync.Mutex, id int, inputCh <-chan map[
 			lock.Unlock()
 			return
 		}
-		r.logger.Info("to vector batches", "batches#", len(inputCh), "worker#", id)
+		r.logger.Debug("to vector batches", "batches#", len(inputCh), "worker#", id)
 		LongJobStatusCh <- fmt.Sprintf("converted to vector; batches: %d, worker#: %d", len(inputCh), id)
 	}
 }

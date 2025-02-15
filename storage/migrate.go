@@ -33,7 +33,7 @@ func (p *ProviderSQL) Migrate() {
 			}
 		}
 	}
-	p.logger.Info("All migrations executed successfully!")
+	p.logger.Debug("All migrations executed successfully!")
 }
 
 func (p *ProviderSQL) executeMigration(migrationsDir fs.FS, fileName string) error {

@@ -173,7 +173,6 @@ func makeRAGTable(fileList []string) *tview.Flex {
 				close(errCh)
 				return
 			case status := <-rag.LongJobStatusCh:
-				logger.Info("reading status channel", "status", status)
 				longStatusView.SetText(status)
 				// fmt.Fprintln(longStatusView, status)
 				// app.Sync()
@@ -366,7 +365,6 @@ func makeCodeBlockTable(codeBlocks []string) *tview.Table {
 	rows, cols := len(codeBlocks), len(actions)+1
 	table := tview.NewTable().
 		SetBorders(true)
-	logger.Info("creating codeblock table", "len#", len(codeBlocks), "data", codeBlocks)
 	for r := 0; r < rows; r++ {
 		for c := 0; c < cols; c++ {
 			color := tcell.ColorWhite
@@ -387,7 +385,6 @@ func makeCodeBlockTable(codeBlocks []string) *tview.Table {
 			}
 		}
 	}
-	logger.Info("filled table", "len#", len(codeBlocks), "data", codeBlocks)
 	table.Select(0, 0).SetFixed(1, 1).SetDoneFunc(func(key tcell.Key) {
 		if key == tcell.KeyEsc || key == tcell.KeyF1 {
 			pages.RemovePage(agentPage)

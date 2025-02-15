@@ -135,7 +135,7 @@ func colorText() {
 }
 
 func updateStatusLine() {
-	position.SetText(fmt.Sprintf(indexLine, botRespMode, cfg.AssistantRole, activeChatName, cfg.RAGEnabled, cfg.ToolUse, currentModel, cfg.CurrentAPI, cfg.ThinkUse))
+	position.SetText(fmt.Sprintf(indexLine, botRespMode, cfg.AssistantRole, activeChatName, cfg.RAGEnabled, cfg.ToolUse, currentModel, cfg.CurrentAPI, cfg.ThinkUse, logLevel.Level()))
 }
 
 func initSysCards() ([]string, error) {
@@ -180,16 +180,33 @@ func startNewChat() {
 	colorText()
 }
 
+func setLogLevel(sl string) {
+	switch sl {
+	case "Debug":
+		logLevel.Set(-4)
+	case "Info":
+		logLevel.Set(0)
+	case "Warn":
+		logLevel.Set(4)
+	}
+}
+
 func makePropsForm(props map[string]float32) *tview.Form {
+	// https://github.com/rivo/tview/commit/0a18dea458148770d212d348f656988df75ff341
+	// no way to close a form by a key press; a shame.
 	form := tview.NewForm().
 		AddTextView("Notes", "Props for llamacpp completion call", 40, 2, true, false).
 		AddCheckbox("Insert <think> (/completion only)", cfg.ThinkUse, func(checked bool) {
 			cfg.ThinkUse = checked
+		}).AddDropDown("Set log level (Enter): ", []string{"Debug", "Info", "Warn"}, 1,
+		func(option string, optionIndex int) {
+			setLogLevel(option)
 		}).
 		AddButton("Quit", func() {
 			pages.RemovePage(propsPage)
 		})
 	form.AddButton("Save", func() {
+		defer updateStatusLine()
 		defer pages.RemovePage(propsPage)
 		for pn := range props {
 			propField, ok := form.GetFormItemByLabel(pn).(*tview.InputField)
@@ -442,7 +459,7 @@ func init() {
 			text := textView.GetText(true)
 			assistantIcon := roleToIcon(cfg.AssistantRole)
 			if strings.HasSuffix(text, assistantIcon) {
-				logger.Info("deleting assistant icon", "icon", assistantIcon)
+				logger.Debug("deleting assistant icon", "icon", assistantIcon)
 				textView.SetText(strings.TrimSuffix(text, assistantIcon))
 				colorText()
 				return nil
