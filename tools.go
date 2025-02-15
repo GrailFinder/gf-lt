@@ -12,7 +12,7 @@ var (
 	toolCallRE  = regexp.MustCompile(`__tool_call__\s*([\s\S]*?)__tool_call__`)
 	quotesRE    = regexp.MustCompile(`(".*?")`)
 	starRE      = regexp.MustCompile(`(\*.*?\*)`)
-	thinkRE     = regexp.MustCompile(`(<think>.*?</think>)`)
+	thinkRE     = regexp.MustCompile(`(<think>\s*([\s\S]*?)</think>)`)
 	codeBlockRE = regexp.MustCompile(`(?s)\x60{3}(?:.*?)\n(.*?)\n\s*\x60{3}\s*`)
 	basicSysMsg = `Large Language Model that helps user with any of his requests.`
 	toolSysMsg  = `You can do functions call if needed.

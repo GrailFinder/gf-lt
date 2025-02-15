@@ -30,9 +30,6 @@ type OpenAIer struct {
 
 func (lcp LlamaCPPeer) FormMsg(msg, role string) (io.Reader, error) {
 	if msg != "" { // otherwise let the bot continue
-		// if role == cfg.UserRole {
-		// 	msg = msg + cfg.AssistantRole + ":"
-		// }
 		newMsg := models.RoleMsg{Role: role, Content: msg}
 		chatBody.Messages = append(chatBody.Messages, newMsg)
 		// if rag
@@ -51,11 +48,17 @@ func (lcp LlamaCPPeer) FormMsg(msg, role string) (io.Reader, error) {
 		messages[i] = m.ToPrompt()
 	}
 	prompt := strings.Join(messages, "\n")
+	// strings builder?
 	if cfg.ToolUse && msg != "" {
 		prompt += "\n" + cfg.ToolRole + ":\n" + toolSysMsg
 	}
 	botMsgStart := "\n" + cfg.AssistantRole + ":\n"
-	payload := models.NewLCPReq(prompt+botMsgStart, cfg, defaultLCPProps)
+	prompt += botMsgStart
+	// if cfg.ThinkUse && msg != "" && !cfg.ToolUse {
+	if cfg.ThinkUse && !cfg.ToolUse {
+		prompt += "<think>"
+	}
+	payload := models.NewLCPReq(prompt, cfg, defaultLCPProps)
 	data, err := json.Marshal(payload)
 	if err != nil {
 		logger.Error("failed to form a msg", "error", err)

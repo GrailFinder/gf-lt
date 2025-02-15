@@ -39,7 +39,7 @@ var (
 	chunkParser         ChunkParser
 	defaultLCPProps     = map[string]float32{
 		"temperature":    0.8,
-		"dry_multiplier": 0.6,
+		"dry_multiplier": 0.0,
 		"min_p":          0.05,
 		"n_predict":      -1.0,
 	}
@@ -108,6 +108,7 @@ func sendMsgToLLM(body io.Reader) {
 		}
 		// starts with -> data:
 		line = line[6:]
+		logger.Info("debugging resp", "line", string(line))
 		content, stop, err := chunkParser.ParseChunk(line)
 		if err != nil {
 			logger.Error("error parsing response body", "error", err, "line", string(line), "url", cfg.CurrentAPI)
@@ -185,6 +186,10 @@ func chatRound(userMsg, role string, tv *tview.TextView, regen bool) {
 		fmt.Fprintf(tv, "(%d) ", len(chatBody.Messages))
 		fmt.Fprint(tv, roleToIcon(cfg.AssistantRole))
 		fmt.Fprint(tv, "\n")
+		if cfg.ThinkUse && !strings.Contains(cfg.CurrentAPI, "v1") {
+			// fmt.Fprint(tv, "<think>")
+			chunkChan <- "<think>"
+		}
 	}
 	respText := strings.Builder{}
 out:
@@ -201,6 +206,7 @@ out:
 		}
 	}
 	botRespMode = false
+	// how can previous messages be affected?
 	chatBody.Messages = append(chatBody.Messages, models.RoleMsg{
 		Role: cfg.AssistantRole, Content: respText.String(),
 	})

@@ -65,7 +65,7 @@ var (
 [yellow]Ctrl+t[white]: remove thinking (<think>) and tool messages from context (delete from chat)
 [yellow]Ctrl+l[white]: update connected model name (llamacpp)
 [yellow]Ctrl+k[white]: switch tool use (recommend tool use to llm after user msg)
-[yellow]Ctrl+i[white]: if chat agent is char.png will show the image; then any key to return
+[yellow]Ctrl+j[white]: if chat agent is char.png will show the image; then any key to return
 
 Press Enter to go back
 `
@@ -97,6 +97,10 @@ func colorText() {
 	var codeBlocks []string
 	placeholder := "__CODE_BLOCK_%d__"
 	counter := 0
+	// thinking
+	var thinkBlocks []string
+	placeholderThink := "__THINK_BLOCK_%d__"
+	counterThink := 0
 	// Replace code blocks with placeholders and store their styled versions
 	text = codeBlockRE.ReplaceAllStringFunc(text, func(match string) string {
 		// Style the code block and store it
@@ -107,19 +111,31 @@ func colorText() {
 		counter++
 		return id
 	})
+	text = thinkRE.ReplaceAllStringFunc(text, func(match string) string {
+		// Style the code block and store it
+		styled := fmt.Sprintf("[red::i]%s[-:-:-]", match)
+		thinkBlocks = append(codeBlocks, styled)
+		// Generate a unique placeholder (e.g., "__CODE_BLOCK_0__")
+		id := fmt.Sprintf(placeholderThink, counterThink)
+		counter++
+		return id
+	})
 	// Step 2: Apply other regex styles to the non-code parts
 	text = quotesRE.ReplaceAllString(text, `[orange::-]$1[-:-:-]`)
 	text = starRE.ReplaceAllString(text, `[turquoise::i]$1[-:-:-]`)
-	text = thinkRE.ReplaceAllString(text, `[turquoise::i]$1[-:-:-]`)
+	// text = thinkRE.ReplaceAllString(text, `[yellow::i]$1[-:-:-]`)
 	// Step 3: Restore the styled code blocks from placeholders
 	for i, cb := range codeBlocks {
 		text = strings.Replace(text, fmt.Sprintf(placeholder, i), cb, 1)
+	}
+	for i, tb := range thinkBlocks {
+		text = strings.Replace(text, fmt.Sprintf(placeholderThink, i), tb, 1)
 	}
 	textView.SetText(text)
 }
 
 func updateStatusLine() {
-	position.SetText(fmt.Sprintf(indexLine, botRespMode, cfg.AssistantRole, activeChatName, cfg.RAGEnabled, cfg.ToolUse, currentModel, cfg.CurrentAPI))
+	position.SetText(fmt.Sprintf(indexLine, botRespMode, cfg.AssistantRole, activeChatName, cfg.RAGEnabled, cfg.ToolUse, currentModel, cfg.CurrentAPI, cfg.ThinkUse))
 }
 
 func initSysCards() ([]string, error) {
@@ -167,6 +183,9 @@ func startNewChat() {
 func makePropsForm(props map[string]float32) *tview.Form {
 	form := tview.NewForm().
 		AddTextView("Notes", "Props for llamacpp completion call", 40, 2, true, false).
+		AddCheckbox("Insert <think> (/completion only)", cfg.ThinkUse, func(checked bool) {
+			cfg.ThinkUse = checked
+		}).
 		AddButton("Quit", func() {
 			pages.RemovePage(propsPage)
 		})
@@ -588,7 +607,7 @@ func init() {
 			updateStatusLine()
 			return nil
 		}
-		if event.Key() == tcell.KeyCtrlI {
+		if event.Key() == tcell.KeyCtrlJ {
 			// show image
 			loadImage()
 			pages.AddPage(imgPage, imgView, true, true)
