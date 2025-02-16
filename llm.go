@@ -44,7 +44,6 @@ func (lcp LlamaCPPeer) FormMsg(msg, role string, resume bool) (io.Reader, error)
 		}
 	}
 	if cfg.ToolUse && !resume {
-		// prompt += "\n" + cfg.ToolRole + ":\n" + toolSysMsg
 		// add to chat body
 		chatBody.Messages = append(chatBody.Messages, models.RoleMsg{Role: cfg.ToolRole, Content: toolSysMsg})
 	}
@@ -63,7 +62,8 @@ func (lcp LlamaCPPeer) FormMsg(msg, role string, resume bool) (io.Reader, error)
 	if cfg.ThinkUse && !cfg.ToolUse {
 		prompt += "<think>"
 	}
-	logger.Info("checking prompt for llamacpp", "tool_use", cfg.ToolUse, "msg", msg, "resume", resume, "prompt", prompt)
+	logger.Debug("checking prompt for /completion", "tool_use", cfg.ToolUse,
+		"msg", msg, "resume", resume, "prompt", prompt)
 	payload := models.NewLCPReq(prompt, cfg, defaultLCPProps)
 	data, err := json.Marshal(payload)
 	if err != nil {

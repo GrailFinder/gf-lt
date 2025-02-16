@@ -112,15 +112,23 @@ func makeChatTable(chatMap map[string]models.Chat) *tview.Table {
 				if err := notifyUser("error", "no such card: "+agentName); err != nil {
 					logger.Warn("failed ot notify", "error", err)
 				}
+				return
 			}
+			if chatBody.Messages[0].Role != "system" || chatBody.Messages[1].Role != agentName {
+				if err := notifyUser("error", "unexpected chat structure; card: "+agentName); err != nil {
+					logger.Warn("failed ot notify", "error", err)
+				}
+				return
+			}
+			// change sys_prompt + first msg
+			cc.SysPrompt = chatBody.Messages[0].Content
+			cc.FirstMsg = chatBody.Messages[1].Content
 			if err := pngmeta.WriteToPng(cc.ToSpec(cfg.UserRole), cc.FilePath, cc.FilePath); err != nil {
 				logger.Error("failed to write charcard",
 					"error", err)
 			}
-			// pages.RemovePage(historyPage)
 			return
 		default:
-			// pages.RemovePage(historyPage)
 			return
 		}
 	})
