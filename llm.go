@@ -10,7 +10,7 @@ import (
 
 type ChunkParser interface {
 	ParseChunk([]byte) (string, bool, error)
-	FormMsg(msg, role string) (io.Reader, error)
+	FormMsg(msg, role string, cont bool) (io.Reader, error)
 }
 
 func initChunkParser() {
@@ -28,7 +28,7 @@ type LlamaCPPeer struct {
 type OpenAIer struct {
 }
 
-func (lcp LlamaCPPeer) FormMsg(msg, role string) (io.Reader, error) {
+func (lcp LlamaCPPeer) FormMsg(msg, role string, cont bool) (io.Reader, error) {
 	if msg != "" { // otherwise let the bot continue
 		newMsg := models.RoleMsg{Role: role, Content: msg}
 		chatBody.Messages = append(chatBody.Messages, newMsg)
@@ -49,11 +49,13 @@ func (lcp LlamaCPPeer) FormMsg(msg, role string) (io.Reader, error) {
 	}
 	prompt := strings.Join(messages, "\n")
 	// strings builder?
-	if cfg.ToolUse && msg != "" {
+	if cfg.ToolUse && msg != "" && !cont {
 		prompt += "\n" + cfg.ToolRole + ":\n" + toolSysMsg
 	}
-	botMsgStart := "\n" + cfg.AssistantRole + ":\n"
-	prompt += botMsgStart
+	if !cont {
+		botMsgStart := "\n" + cfg.AssistantRole + ":\n"
+		prompt += botMsgStart
+	}
 	// if cfg.ThinkUse && msg != "" && !cfg.ToolUse {
 	if cfg.ThinkUse && !cfg.ToolUse {
 		prompt += "<think>"
@@ -98,7 +100,7 @@ func (op OpenAIer) ParseChunk(data []byte) (string, bool, error) {
 	return content, false, nil
 }
 
-func (op OpenAIer) FormMsg(msg, role string) (io.Reader, error) {
+func (op OpenAIer) FormMsg(msg, role string, resume bool) (io.Reader, error) {
 	if msg != "" { // otherwise let the bot continue
 		newMsg := models.RoleMsg{Role: role, Content: msg}
 		chatBody.Messages = append(chatBody.Messages, newMsg)

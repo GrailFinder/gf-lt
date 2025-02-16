@@ -181,6 +181,7 @@ func NewLCPReq(prompt string, cfg *config.Config, props map[string]float32) Llam
 		Stop: []string{
 			cfg.UserRole + ":\n", "<|im_end|>",
 			cfg.ToolRole + ":\n",
+			cfg.AssistantRole + ":\n",
 		},
 	}
 }

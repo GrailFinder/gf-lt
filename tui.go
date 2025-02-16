@@ -55,6 +55,7 @@ var (
 [yellow]F10[white]: manage loaded rag files (that already in vector db)
 [yellow]F11[white]: switch RAGEnabled boolean
 [yellow]F12[white]: show this help page
+[yellow]Ctrl+w[white]: resume generation on the last msg
 [yellow]Ctrl+s[white]: load new char/agent
 [yellow]Ctrl+e[white]: export chat to json file
 [yellow]Ctrl+n[white]: start a new chat
@@ -450,7 +451,7 @@ func init() {
 			// regen last msg
 			chatBody.Messages = chatBody.Messages[:len(chatBody.Messages)-1]
 			textView.SetText(chatToText(cfg.ShowSys))
-			go chatRound("", cfg.UserRole, textView, true)
+			go chatRound("", cfg.UserRole, textView, true, false)
 			return nil
 		}
 		if event.Key() == tcell.KeyF3 && !botRespMode {
@@ -649,6 +650,13 @@ func init() {
 			pages.AddPage(RAGPage, chatRAGTable, true, true)
 			return nil
 		}
+		if event.Key() == tcell.KeyCtrlW {
+			// INFO: continue bot/text message
+			// without new role
+			lastRole := chatBody.Messages[len(chatBody.Messages)-1].Role
+			go chatRound("", lastRole, textView, false, true)
+			return nil
+		}
 		// cannot send msg in editMode or botRespMode
 		if event.Key() == tcell.KeyEscape && !editMode && !botRespMode {
 			// read all text into buffer
@@ -660,7 +668,8 @@ func init() {
 			if strings.HasSuffix(prevText, nl) {
 				nl = ""
 			}
-			if msgText != "" { // continue
+			if msgText != "" {
+				// add user icon before user msg
 				fmt.Fprintf(textView, "%s[-:-:b](%d) <%s>: [-:-:-]\n%s\n",
 					nl, len(chatBody.Messages), cfg.UserRole, msgText)
 				textArea.SetText("", true)
@@ -668,7 +677,7 @@ func init() {
 				colorText()
 			}
 			// update statue line
-			go chatRound(msgText, cfg.UserRole, textView, false)
+			go chatRound(msgText, cfg.UserRole, textView, false, false)
 			return nil
 		}
 		if event.Key() == tcell.KeyPgUp || event.Key() == tcell.KeyPgDn {

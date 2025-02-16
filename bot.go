@@ -83,12 +83,12 @@ func sendMsgToLLM(body io.Reader) {
 	reader := bufio.NewReader(resp.Body)
 	counter := uint32(0)
 	for {
+		var (
+			answerText string
+			content    string
+			stop       bool
+		)
 		counter++
-		if interruptResp {
-			interruptResp = false
-			logger.Info("interrupted bot response", "chunk_counter", counter)
-			break
-		}
 		// to stop from spiriling in infinity read of bad bytes that happens with poor connection
 		if cfg.ChunkLimit > 0 && counter > cfg.ChunkLimit {
 			logger.Warn("response hit chunk limit", "limit", cfg.ChunkLimit)
@@ -105,12 +105,15 @@ func sendMsgToLLM(body io.Reader) {
 			continue
 		}
 		if len(line) <= 1 {
+			if interruptResp {
+				goto interrupt // get unstuck from bad connection
+			}
 			continue // skip \n
 		}
 		// starts with -> data:
 		line = line[6:]
 		logger.Debug("debugging resp", "line", string(line))
-		content, stop, err := chunkParser.ParseChunk(line)
+		content, stop, err = chunkParser.ParseChunk(line)
 		if err != nil {
 			logger.Error("error parsing response body", "error", err, "line", string(line), "url", cfg.CurrentAPI)
 			streamDone <- true
@@ -127,8 +130,15 @@ func sendMsgToLLM(body io.Reader) {
 			content = strings.TrimPrefix(content, " ")
 		}
 		// bot sends way too many \n
-		answerText := strings.ReplaceAll(content, "\n\n", "\n")
+		answerText = strings.ReplaceAll(content, "\n\n", "\n")
 		chunkChan <- answerText
+	interrupt:
+		if interruptResp { // read bytes, so it would not get into beginning of the next req
+			interruptResp = false
+			logger.Info("interrupted bot response", "chunk_counter", counter)
+			streamDone <- true
+			break
+		}
 	}
 }
 
@@ -173,20 +183,21 @@ func roleToIcon(role string) string {
 	return "<" + role + ">: "
 }
 
-func chatRound(userMsg, role string, tv *tview.TextView, regen bool) {
+func chatRound(userMsg, role string, tv *tview.TextView, regen, resume bool) {
 	botRespMode = true
 	// reader := formMsg(chatBody, userMsg, role)
-	reader, err := chunkParser.FormMsg(userMsg, role)
+	reader, err := chunkParser.FormMsg(userMsg, role, resume)
 	if reader == nil || err != nil {
 		logger.Error("empty reader from msgs", "role", role, "error", err)
 		return
 	}
 	go sendMsgToLLM(reader)
-	// if userMsg != "" && !regen { // no need to write assistant icon since we continue old message
-	if userMsg != "" || regen {
-		fmt.Fprintf(tv, "(%d) ", len(chatBody.Messages))
+	logger.Debug("looking at vars in chatRound", "msg", userMsg, "regen", regen, "resume", resume)
+	// TODO: consider case where user msg is regened (not assistant one)
+	if !resume {
+		fmt.Fprintf(tv, "[-:-:b](%d) ", len(chatBody.Messages))
 		fmt.Fprint(tv, roleToIcon(cfg.AssistantRole))
-		fmt.Fprint(tv, "\n")
+		fmt.Fprint(tv, "[-:-:-]\n")
 		if cfg.ThinkUse && !strings.Contains(cfg.CurrentAPI, "v1") {
 			// fmt.Fprint(tv, "<think>")
 			chunkChan <- "<think>"
@@ -197,7 +208,6 @@ out:
 	for {
 		select {
 		case chunk := <-chunkChan:
-			// fmt.Printf(chunk)
 			fmt.Fprint(tv, chunk)
 			respText.WriteString(chunk)
 			tv.ScrollToEnd()
@@ -207,10 +217,15 @@ out:
 		}
 	}
 	botRespMode = false
-	// how can previous messages be affected?
-	chatBody.Messages = append(chatBody.Messages, models.RoleMsg{
-		Role: cfg.AssistantRole, Content: respText.String(),
-	})
+	// numbers in chatbody and displayed must be the same
+	if resume {
+		chatBody.Messages[len(chatBody.Messages)-1].Content += respText.String()
+		// lastM.Content = lastM.Content + respText.String()
+	} else {
+		chatBody.Messages = append(chatBody.Messages, models.RoleMsg{
+			Role: cfg.AssistantRole, Content: respText.String(),
+		})
+	}
 	colorText()
 	updateStatusLine()
 	// bot msg is done;
@@ -239,12 +254,12 @@ func findCall(msg string, tv *tview.TextView) {
 	f, ok := fnMap[fc.Name]
 	if !ok {
 		m := fc.Name + "%s is not implemented"
-		chatRound(m, cfg.ToolRole, tv, false)
+		chatRound(m, cfg.ToolRole, tv, false, false)
 		return
 	}
 	resp := f(fc.Args...)
 	toolMsg := fmt.Sprintf("tool response: %+v", string(resp))
-	chatRound(toolMsg, cfg.ToolRole, tv, false)
+	chatRound(toolMsg, cfg.ToolRole, tv, false, false)
 }
 
 func chatToTextSlice(showSys bool) []string {
