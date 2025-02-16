@@ -28,8 +28,8 @@ type LlamaCPPeer struct {
 type OpenAIer struct {
 }
 
-func (lcp LlamaCPPeer) FormMsg(msg, role string, cont bool) (io.Reader, error) {
-	if msg != "" { // otherwise let the bot continue
+func (lcp LlamaCPPeer) FormMsg(msg, role string, resume bool) (io.Reader, error) {
+	if msg != "" { // otherwise let the bot to continue
 		newMsg := models.RoleMsg{Role: role, Content: msg}
 		chatBody.Messages = append(chatBody.Messages, newMsg)
 		// if rag
@@ -43,16 +43,19 @@ func (lcp LlamaCPPeer) FormMsg(msg, role string, cont bool) (io.Reader, error) {
 			chatBody.Messages = append(chatBody.Messages, ragMsg)
 		}
 	}
+	if cfg.ToolUse && !resume {
+		// prompt += "\n" + cfg.ToolRole + ":\n" + toolSysMsg
+		// add to chat body
+		chatBody.Messages = append(chatBody.Messages, models.RoleMsg{Role: cfg.ToolRole, Content: toolSysMsg})
+	}
 	messages := make([]string, len(chatBody.Messages))
 	for i, m := range chatBody.Messages {
 		messages[i] = m.ToPrompt()
 	}
 	prompt := strings.Join(messages, "\n")
 	// strings builder?
-	if cfg.ToolUse && msg != "" && !cont {
-		prompt += "\n" + cfg.ToolRole + ":\n" + toolSysMsg
-	}
-	if !cont {
+	// if cfg.ToolUse && msg != "" && !resume {
+	if !resume {
 		botMsgStart := "\n" + cfg.AssistantRole + ":\n"
 		prompt += botMsgStart
 	}
@@ -60,6 +63,7 @@ func (lcp LlamaCPPeer) FormMsg(msg, role string, cont bool) (io.Reader, error) {
 	if cfg.ThinkUse && !cfg.ToolUse {
 		prompt += "<think>"
 	}
+	logger.Info("checking prompt for llamacpp", "tool_use", cfg.ToolUse, "msg", msg, "resume", resume, "prompt", prompt)
 	payload := models.NewLCPReq(prompt, cfg, defaultLCPProps)
 	data, err := json.Marshal(payload)
 	if err != nil {
@@ -101,6 +105,11 @@ func (op OpenAIer) ParseChunk(data []byte) (string, bool, error) {
 }
 
 func (op OpenAIer) FormMsg(msg, role string, resume bool) (io.Reader, error) {
+	if cfg.ToolUse && !resume {
+		// prompt += "\n" + cfg.ToolRole + ":\n" + toolSysMsg
+		// add to chat body
+		chatBody.Messages = append(chatBody.Messages, models.RoleMsg{Role: cfg.ToolRole, Content: toolSysMsg})
+	}
 	if msg != "" { // otherwise let the bot continue
 		newMsg := models.RoleMsg{Role: role, Content: msg}
 		chatBody.Messages = append(chatBody.Messages, newMsg)
@@ -113,11 +122,6 @@ func (op OpenAIer) FormMsg(msg, role string, resume bool) (io.Reader, error) {
 			}
 			ragMsg := models.RoleMsg{Role: cfg.ToolRole, Content: ragResp}
 			chatBody.Messages = append(chatBody.Messages, ragMsg)
-		}
-		if cfg.ToolUse {
-			toolMsg := models.RoleMsg{Role: cfg.ToolRole,
-				Content: toolSysMsg}
-			chatBody.Messages = append(chatBody.Messages, toolMsg)
 		}
 	}
 	data, err := json.Marshal(chatBody)
