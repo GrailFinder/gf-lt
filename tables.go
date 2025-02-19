@@ -114,12 +114,12 @@ func makeChatTable(chatMap map[string]models.Chat) *tview.Table {
 				}
 				return
 			}
-			if chatBody.Messages[0].Role != "system" || chatBody.Messages[1].Role != agentName {
-				if err := notifyUser("error", "unexpected chat structure; card: "+agentName); err != nil {
-					logger.Warn("failed ot notify", "error", err)
-				}
-				return
-			}
+			// if chatBody.Messages[0].Role != "system" || chatBody.Messages[1].Role != agentName {
+			// 	if err := notifyUser("error", "unexpected chat structure; card: "+agentName); err != nil {
+			// 		logger.Warn("failed ot notify", "error", err)
+			// 	}
+			// 	return
+			// }
 			// change sys_prompt + first msg
 			cc.SysPrompt = chatBody.Messages[0].Content
 			cc.FirstMsg = chatBody.Messages[1].Content

@@ -8,3 +8,7 @@ ToolRole = "tool"
 AssistantRole = "assistant"
 SysDir = "sysprompts"
 ChunkLimit = 100000
+# rag settings
+RAGBatchSize = 100
+RAGWordLimit = 80
+RAGWorkers = 5

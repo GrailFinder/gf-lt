@@ -53,12 +53,10 @@ func (lcp LlamaCPPeer) FormMsg(msg, role string, resume bool) (io.Reader, error)
 	}
 	prompt := strings.Join(messages, "\n")
 	// strings builder?
-	// if cfg.ToolUse && msg != "" && !resume {
 	if !resume {
 		botMsgStart := "\n" + cfg.AssistantRole + ":\n"
 		prompt += botMsgStart
 	}
-	// if cfg.ThinkUse && msg != "" && !cfg.ToolUse {
 	if cfg.ThinkUse && !cfg.ToolUse {
 		prompt += "<think>"
 	}

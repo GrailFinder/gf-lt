@@ -450,6 +450,8 @@ func init() {
 		if event.Key() == tcell.KeyF2 {
 			// regen last msg
 			chatBody.Messages = chatBody.Messages[:len(chatBody.Messages)-1]
+			// there is no case where user msg is regenerated
+			// lastRole := chatBody.Messages[len(chatBody.Messages)-1].Role
 			textView.SetText(chatToText(cfg.ShowSys))
 			go chatRound("", cfg.UserRole, textView, true, false)
 			return nil

@@ -193,7 +193,6 @@ func chatRound(userMsg, role string, tv *tview.TextView, regen, resume bool) {
 	}
 	go sendMsgToLLM(reader)
 	logger.Debug("looking at vars in chatRound", "msg", userMsg, "regen", regen, "resume", resume)
-	// TODO: consider case where user msg is regened (not assistant one)
 	if !resume {
 		fmt.Fprintf(tv, "[-:-:b](%d) ", len(chatBody.Messages))
 		fmt.Fprint(tv, roleToIcon(cfg.AssistantRole))

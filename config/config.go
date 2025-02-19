@@ -26,6 +26,10 @@ type Config struct {
 	EmbedURL   string `toml:"EmbedURL"`
 	HFToken    string `toml:"HFToken"`
 	RAGDir     string `toml:"RAGDir"`
+	// rag settings
+	RAGWorkers   uint32 `toml:"RAGWorkers"`
+	RAGBatchSize int    `toml:"RAGBatchSize"`
+	RAGWordLimit uint32 `toml:"RAGWordLimit"`
 }
 
 func LoadConfigOrDefault(fn string) *Config {
@@ -47,6 +51,10 @@ func LoadConfigOrDefault(fn string) *Config {
 		config.AssistantRole = "assistant"
 		config.SysDir = "sysprompts"
 		config.ChunkLimit = 8192
+		//
+		config.RAGBatchSize = 100
+		config.RAGWordLimit = 80
+		config.RAGWorkers = 5
 	}
 	config.CurrentAPI = config.ChatAPI
 	config.APIMap = map[string]string{

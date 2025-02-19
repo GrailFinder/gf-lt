@@ -61,16 +61,10 @@ func (r *RAG) LoadRAG(fpath string) error {
 	for i, s := range sentences {
 		sents[i] = s.Text
 	}
-	// TODO: maybe better to decide batch size based on sentences len
 	var (
-		// TODO: to config
-		workers   = 5
-		batchSize = 100
 		maxChSize = 1000
-		//
-		wordLimit = 80
 		left      = 0
-		right     = batchSize
+		right     = r.cfg.RAGBatchSize
 		batchCh   = make(chan map[int][]string, maxChSize)
 		vectorCh  = make(chan []models.VectorRow, maxChSize)
 		errCh     = make(chan error, 1)
@@ -85,29 +79,29 @@ func (r *RAG) LoadRAG(fpath string) error {
 	par := strings.Builder{}
 	for i := 0; i < len(sents); i++ {
 		par.WriteString(sents[i])
-		if wordCounter(par.String()) > wordLimit {
+		if wordCounter(par.String()) > int(r.cfg.RAGWordLimit) {
 			paragraphs = append(paragraphs, par.String())
 			par.Reset()
 		}
 	}
-	if len(paragraphs) < batchSize {
-		batchSize = len(paragraphs)
+	if len(paragraphs) < int(r.cfg.RAGBatchSize) {
+		r.cfg.RAGBatchSize = len(paragraphs)
 	}
 	// fill input channel
 	ctn := 0
 	for {
-		if right > len(paragraphs) {
+		if int(right) > len(paragraphs) {
 			batchCh <- map[int][]string{left: paragraphs[left:]}
 			break
 		}
 		batchCh <- map[int][]string{left: paragraphs[left:right]}
-		left, right = right, right+batchSize
+		left, right = right, right+r.cfg.RAGBatchSize
 		ctn++
 	}
 	finishedBatchesMsg := fmt.Sprintf("finished batching batches#: %d; paragraphs: %d; sentences: %d\n", len(batchCh), len(paragraphs), len(sents))
 	r.logger.Debug(finishedBatchesMsg)
 	LongJobStatusCh <- finishedBatchesMsg
-	for w := 0; w < workers; w++ {
+	for w := 0; w < int(r.cfg.RAGWorkers); w++ {
 		go r.batchToVectorHFAsync(lock, w, batchCh, vectorCh, errCh, doneCh, path.Base(fpath))
 	}
 	// wait for emb to be done
