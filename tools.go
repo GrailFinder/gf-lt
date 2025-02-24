@@ -9,11 +9,16 @@ import (
 )
 
 var (
-	toolCallRE  = regexp.MustCompile(`__tool_call__\s*([\s\S]*?)__tool_call__`)
-	quotesRE    = regexp.MustCompile(`(".*?")`)
-	starRE      = regexp.MustCompile(`(\*.*?\*)`)
-	thinkRE     = regexp.MustCompile(`(<think>\s*([\s\S]*?)</think>)`)
-	codeBlockRE = regexp.MustCompile(`(?s)\x60{3}(?:.*?)\n(.*?)\n\s*\x60{3}\s*`)
+	toolCallRE         = regexp.MustCompile(`__tool_call__\s*([\s\S]*?)__tool_call__`)
+	quotesRE           = regexp.MustCompile(`(".*?")`)
+	starRE             = regexp.MustCompile(`(\*.*?\*)`)
+	thinkRE            = regexp.MustCompile(`(<think>\s*([\s\S]*?)</think>)`)
+	codeBlockRE        = regexp.MustCompile(`(?s)\x60{3}(?:.*?)\n(.*?)\n\s*\x60{3}\s*`)
+	rpDefenitionSysMsg = `
+For this roleplay immersion is at most importance.
+Every character thinks and acts based on their personality and setting of the roleplay.
+Meta discussions outside of roleplay is allowed if clearly labeled as out of character, for example: (ooc: {msg}) or <ooc>{msg}</ooc>.
+`
 	basicSysMsg = `Large Language Model that helps user with any of his requests.`
 	toolSysMsg  = `You can do functions call if needed.
 Your current tools:

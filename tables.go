@@ -16,7 +16,7 @@ import (
 )
 
 func makeChatTable(chatMap map[string]models.Chat) *tview.Table {
-	actions := []string{"load", "rename", "delete", "update card"}
+	actions := []string{"load", "rename", "delete", "update card", "move sysprompt onto 1st msg"}
 	chatList := make([]string, len(chatMap))
 	i := 0
 	for name := range chatMap {
@@ -26,9 +26,7 @@ func makeChatTable(chatMap map[string]models.Chat) *tview.Table {
 	rows, cols := len(chatMap), len(actions)+2
 	chatActTable := tview.NewTable().
 		SetBorders(true)
-		// for chatName, chat := range chatMap {
 	for r := 0; r < rows; r++ {
-		// r := 0
 		for c := 0; c < cols; c++ {
 			color := tcell.ColorWhite
 			switch c {
@@ -49,7 +47,6 @@ func makeChatTable(chatMap map[string]models.Chat) *tview.Table {
 						SetAlign(tview.AlignCenter))
 			}
 		}
-		// r++
 	}
 	chatActTable.Select(0, 0).SetFixed(1, 1).SetDoneFunc(func(key tcell.Key) {
 		if key == tcell.KeyEsc || key == tcell.KeyF1 {
@@ -65,7 +62,6 @@ func makeChatTable(chatMap map[string]models.Chat) *tview.Table {
 		chatActTable.SetSelectable(false, false)
 		selectedChat := chatList[row]
 		defer pages.RemovePage(historyPage)
-		// notification := fmt.Sprintf("chat: %s; action: %s", selectedChat, tc.Text)
 		switch tc.Text {
 		case "load":
 			history, err := loadHistoryChat(selectedChat)
@@ -127,6 +123,13 @@ func makeChatTable(chatMap map[string]models.Chat) *tview.Table {
 				logger.Error("failed to write charcard",
 					"error", err)
 			}
+			return
+		case "move sysprompt onto 1st msg":
+			chatBody.Messages[1].Content = chatBody.Messages[0].Content + chatBody.Messages[1].Content
+			chatBody.Messages[0].Content = rpDefenitionSysMsg
+			textView.SetText(chatToText(cfg.ShowSys))
+			activeChatName = selectedChat
+			pages.RemovePage(historyPage)
 			return
 		default:
 			return
