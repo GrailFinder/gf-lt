@@ -13,19 +13,31 @@ type ChunkParser interface {
 	FormMsg(msg, role string, cont bool) (io.Reader, error)
 }
 
-func initChunkParser() {
+func choseChunkParser() {
 	chunkParser = LlamaCPPeer{}
-	if strings.Contains(cfg.CurrentAPI, "v1") {
-		logger.Debug("chosen /v1/chat parser")
+	switch cfg.CurrentAPI {
+	case "http://localhost:8080/completion":
+		chunkParser = LlamaCPPeer{}
+	case "http://localhost:8080/v1/chat/completions":
 		chunkParser = OpenAIer{}
-		return
+	case "https://api.deepseek.com/beta/completions":
+		chunkParser = DeepSeeker{}
+	default:
+		chunkParser = LlamaCPPeer{}
 	}
-	logger.Debug("chosen llamacpp /completion parser")
+	// if strings.Contains(cfg.CurrentAPI, "chat") {
+	// 	logger.Debug("chosen chat parser")
+	// 	chunkParser = OpenAIer{}
+	// 	return
+	// }
+	// logger.Debug("chosen llamacpp /completion parser")
 }
 
 type LlamaCPPeer struct {
 }
 type OpenAIer struct {
+}
+type DeepSeeker struct {
 }
 
 func (lcp LlamaCPPeer) FormMsg(msg, role string, resume bool) (io.Reader, error) {
@@ -62,7 +74,12 @@ func (lcp LlamaCPPeer) FormMsg(msg, role string, resume bool) (io.Reader, error)
 	}
 	logger.Debug("checking prompt for /completion", "tool_use", cfg.ToolUse,
 		"msg", msg, "resume", resume, "prompt", prompt)
-	payload := models.NewLCPReq(prompt, cfg, defaultLCPProps)
+	var payload any
+	payload = models.NewLCPReq(prompt, cfg, defaultLCPProps)
+	if strings.Contains(chatBody.Model, "deepseek") {
+		payload = models.NewDSCompletionReq(prompt, chatBody.Model,
+			defaultLCPProps["temp"], cfg)
+	}
 	data, err := json.Marshal(payload)
 	if err != nil {
 		logger.Error("failed to form a msg", "error", err)
@@ -123,6 +140,67 @@ func (op OpenAIer) FormMsg(msg, role string, resume bool) (io.Reader, error) {
 		}
 	}
 	data, err := json.Marshal(chatBody)
+	if err != nil {
+		logger.Error("failed to form a msg", "error", err)
+		return nil, err
+	}
+	return bytes.NewReader(data), nil
+}
+
+// deepseek
+func (ds DeepSeeker) ParseChunk(data []byte) (string, bool, error) {
+	llmchunk := models.DSCompletionResp{}
+	if err := json.Unmarshal(data, &llmchunk); err != nil {
+		logger.Error("failed to decode", "error", err, "line", string(data))
+		return "", false, err
+	}
+	if llmchunk.Choices[0].FinishReason != "" {
+		if llmchunk.Choices[0].Text != "" {
+			logger.Error("text inside of finish llmchunk", "chunk", llmchunk)
+		}
+		return llmchunk.Choices[0].Text, true, nil
+	}
+	return llmchunk.Choices[0].Text, false, nil
+}
+
+func (ds DeepSeeker) FormMsg(msg, role string, resume bool) (io.Reader, error) {
+	if msg != "" { // otherwise let the bot to continue
+		newMsg := models.RoleMsg{Role: role, Content: msg}
+		chatBody.Messages = append(chatBody.Messages, newMsg)
+		// if rag
+		if cfg.RAGEnabled {
+			ragResp, err := chatRagUse(newMsg.Content)
+			if err != nil {
+				logger.Error("failed to form a rag msg", "error", err)
+				return nil, err
+			}
+			ragMsg := models.RoleMsg{Role: cfg.ToolRole, Content: ragResp}
+			chatBody.Messages = append(chatBody.Messages, ragMsg)
+		}
+	}
+	if cfg.ToolUse && !resume {
+		// add to chat body
+		chatBody.Messages = append(chatBody.Messages, models.RoleMsg{Role: cfg.ToolRole, Content: toolSysMsg})
+	}
+	messages := make([]string, len(chatBody.Messages))
+	for i, m := range chatBody.Messages {
+		messages[i] = m.ToPrompt()
+	}
+	prompt := strings.Join(messages, "\n")
+	// strings builder?
+	if !resume {
+		botMsgStart := "\n" + cfg.AssistantRole + ":\n"
+		prompt += botMsgStart
+	}
+	if cfg.ThinkUse && !cfg.ToolUse {
+		prompt += "<think>"
+	}
+	logger.Debug("checking prompt for /completion", "tool_use", cfg.ToolUse,
+		"msg", msg, "resume", resume, "prompt", prompt)
+	var payload any
+	payload = models.NewDSCompletionReq(prompt, chatBody.Model,
+		defaultLCPProps["temp"], cfg)
+	data, err := json.Marshal(payload)
 	if err != nil {
 		logger.Error("failed to form a msg", "error", err)
 		return nil, err

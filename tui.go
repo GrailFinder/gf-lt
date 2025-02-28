@@ -136,7 +136,7 @@ func colorText() {
 }
 
 func updateStatusLine() {
-	position.SetText(fmt.Sprintf(indexLine, botRespMode, cfg.AssistantRole, activeChatName, cfg.RAGEnabled, cfg.ToolUse, currentModel, cfg.CurrentAPI, cfg.ThinkUse, logLevel.Level()))
+	position.SetText(fmt.Sprintf(indexLine, botRespMode, cfg.AssistantRole, activeChatName, cfg.RAGEnabled, cfg.ToolUse, chatBody.Model, cfg.CurrentAPI, cfg.ThinkUse, logLevel.Level()))
 }
 
 func initSysCards() ([]string, error) {
@@ -202,6 +202,12 @@ func makePropsForm(props map[string]float32) *tview.Form {
 		}).AddDropDown("Set log level (Enter): ", []string{"Debug", "Info", "Warn"}, 1,
 		func(option string, optionIndex int) {
 			setLogLevel(option)
+		}).AddDropDown("Select an api: ", cfg.ApiLinks, 1,
+		func(option string, optionIndex int) {
+			cfg.CurrentAPI = option
+		}).AddDropDown("Select a model: ", []string{chatBody.Model, "deepseek-chat", "deepseek-reasoner"}, 0,
+		func(option string, optionIndex int) {
+			chatBody.Model = option
 		}).
 		AddButton("Quit", func() {
 			pages.RemovePage(propsPage)
@@ -600,7 +606,7 @@ func init() {
 			}
 			cfg.APIMap[newAPI] = prevAPI
 			cfg.CurrentAPI = newAPI
-			initChunkParser()
+			choseChunkParser()
 			updateStatusLine()
 			return nil
 		}

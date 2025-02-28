@@ -7,10 +7,11 @@ import (
 )
 
 type Config struct {
-	ChatAPI       string `toml:"ChatAPI"`
-	CompletionAPI string `toml:"CompletionAPI"`
-	CurrentAPI    string
-	APIMap        map[string]string
+	ChatAPI         string `toml:"ChatAPI"`
+	CompletionAPI   string `toml:"CompletionAPI"`
+	CurrentAPI      string
+	CurrentProvider string
+	APIMap          map[string]string
 	//
 	ShowSys       bool   `toml:"ShowSys"`
 	LogFile       string `toml:"LogFile"`
@@ -30,6 +31,12 @@ type Config struct {
 	RAGWorkers   uint32 `toml:"RAGWorkers"`
 	RAGBatchSize int    `toml:"RAGBatchSize"`
 	RAGWordLimit uint32 `toml:"RAGWordLimit"`
+	// deepseek
+	DeepSeekChatAPI       string `toml:"DeepSeekChatAPI"`
+	DeepSeekCompletionAPI string `toml:"DeepSeekCompletionAPI"`
+	DeepSeekToken         string `toml:"DeepSeekToken"`
+	DeepSeekModel         string `toml:"DeepSeekModel"`
+	ApiLinks              []string
 }
 
 func LoadConfigOrDefault(fn string) *Config {
@@ -39,9 +46,11 @@ func LoadConfigOrDefault(fn string) *Config {
 	config := &Config{}
 	_, err := toml.DecodeFile(fn, &config)
 	if err != nil {
-		fmt.Println("failed to read config from file, loading default")
+		fmt.Println("failed to read config from file, loading default", "error", err)
 		config.ChatAPI = "http://localhost:8080/v1/chat/completions"
 		config.CompletionAPI = "http://localhost:8080/completion"
+		config.DeepSeekCompletionAPI = "https://api.deepseek.com/beta/completions"
+		config.DeepSeekChatAPI = "https://api.deepseek.com/chat/completions"
 		config.RAGEnabled = false
 		config.EmbedURL = "http://localhost:8080/v1/embiddings"
 		config.ShowSys = true
@@ -58,12 +67,16 @@ func LoadConfigOrDefault(fn string) *Config {
 	}
 	config.CurrentAPI = config.ChatAPI
 	config.APIMap = map[string]string{
-		config.ChatAPI: config.CompletionAPI,
+		config.ChatAPI:         config.CompletionAPI,
+		config.DeepSeekChatAPI: config.DeepSeekCompletionAPI,
 	}
 	if config.CompletionAPI != "" {
 		config.CurrentAPI = config.CompletionAPI
-		config.APIMap = map[string]string{
-			config.CompletionAPI: config.ChatAPI,
+		config.APIMap[config.CompletionAPI] = config.ChatAPI
+	}
+	for _, el := range []string{config.ChatAPI, config.CompletionAPI, config.DeepSeekChatAPI, config.DeepSeekCompletionAPI} {
+		if el != "" {
+			config.ApiLinks = append(config.ApiLinks, el)
 		}
 	}
 	// if any value is empty fill with default
