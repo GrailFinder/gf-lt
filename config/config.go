@@ -67,12 +67,10 @@ func LoadConfigOrDefault(fn string) *Config {
 	}
 	config.CurrentAPI = config.ChatAPI
 	config.APIMap = map[string]string{
-		config.ChatAPI:         config.CompletionAPI,
-		config.DeepSeekChatAPI: config.DeepSeekCompletionAPI,
-	}
-	if config.CompletionAPI != "" {
-		config.CurrentAPI = config.CompletionAPI
-		config.APIMap[config.CompletionAPI] = config.ChatAPI
+		config.ChatAPI:               config.CompletionAPI,
+		config.CompletionAPI:         config.DeepSeekChatAPI,
+		config.DeepSeekChatAPI:       config.DeepSeekCompletionAPI,
+		config.DeepSeekCompletionAPI: config.ChatAPI,
 	}
 	for _, el := range []string{config.ChatAPI, config.CompletionAPI, config.DeepSeekChatAPI, config.DeepSeekCompletionAPI} {
 		if el != "" {

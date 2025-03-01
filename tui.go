@@ -8,6 +8,7 @@ import (
 	_ "image/jpeg"
 	_ "image/png"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -202,7 +203,7 @@ func makePropsForm(props map[string]float32) *tview.Form {
 		}).AddDropDown("Set log level (Enter): ", []string{"Debug", "Info", "Warn"}, 1,
 		func(option string, optionIndex int) {
 			setLogLevel(option)
-		}).AddDropDown("Select an api: ", cfg.ApiLinks, 1,
+		}).AddDropDown("Select an api: ", slices.Insert(cfg.ApiLinks, 0, cfg.CurrentAPI), 0,
 		func(option string, optionIndex int) {
 			cfg.CurrentAPI = option
 		}).AddDropDown("Select a model: ", []string{chatBody.Model, "deepseek-chat", "deepseek-reasoner"}, 0,
@@ -598,14 +599,17 @@ func init() {
 		}
 		if event.Key() == tcell.KeyCtrlV {
 			// switch between /chat and /completion api
-			prevAPI := cfg.CurrentAPI
 			newAPI := cfg.APIMap[cfg.CurrentAPI]
 			if newAPI == "" {
 				// do not switch
 				return nil
 			}
-			cfg.APIMap[newAPI] = prevAPI
 			cfg.CurrentAPI = newAPI
+			if strings.Contains(cfg.CurrentAPI, "deepseek") {
+				chatBody.Model = "deepseek-chat"
+			} else {
+				chatBody.Model = "local"
+			}
 			choseChunkParser()
 			updateStatusLine()
 			return nil
