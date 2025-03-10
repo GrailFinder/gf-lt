@@ -123,7 +123,7 @@ type DSChatReq struct {
 	// TopLogprobs   any     `json:"top_logprobs"`
 }
 
-func NewDSCharReq(cb *ChatBody) DSChatReq {
+func NewDSCharReq(cb ChatBody) DSChatReq {
 	return DSChatReq{
 		Messages:         cb.Messages,
 		Model:            cb.Model,
@@ -221,6 +221,23 @@ type DSChatResp struct {
 		PromptTokens     int `json:"prompt_tokens"`
 		TotalTokens      int `json:"total_tokens"`
 	} `json:"usage"`
+}
+
+type DSChatStreamResp struct {
+	ID                string `json:"id"`
+	Object            string `json:"object"`
+	Created           int    `json:"created"`
+	Model             string `json:"model"`
+	SystemFingerprint string `json:"system_fingerprint"`
+	Choices           []struct {
+		Index int `json:"index"`
+		Delta struct {
+			Content          string `json:"content"`
+			ReasoningContent string `json:"reasoning_content"`
+		} `json:"delta"`
+		Logprobs     any    `json:"logprobs"`
+		FinishReason string `json:"finish_reason"`
+	} `json:"choices"`
 }
 
 type EmbeddingResp struct {

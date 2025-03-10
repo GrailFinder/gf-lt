@@ -18,12 +18,20 @@ func choseChunkParser() {
 	switch cfg.CurrentAPI {
 	case "http://localhost:8080/completion":
 		chunkParser = LlamaCPPeer{}
+		logger.Debug("chosen llamacppeer", "link", cfg.CurrentAPI)
+		return
 	case "http://localhost:8080/v1/chat/completions":
 		chunkParser = OpenAIer{}
+		logger.Debug("chosen openair", "link", cfg.CurrentAPI)
+		return
 	case "https://api.deepseek.com/beta/completions":
 		chunkParser = DeepSeekerCompletion{}
+		logger.Debug("chosen deepseekercompletio", "link", cfg.CurrentAPI)
+		return
 	case "https://api.deepseek.com/chat/completions":
 		chunkParser = DeepSeekerChat{}
+		logger.Debug("chosen deepseekerchat", "link", cfg.CurrentAPI)
+		return
 	default:
 		chunkParser = LlamaCPPeer{}
 	}
@@ -45,6 +53,7 @@ type DeepSeekerChat struct {
 }
 
 func (lcp LlamaCPPeer) FormMsg(msg, role string, resume bool) (io.Reader, error) {
+	logger.Debug("formmsg llamacppeer", "link", cfg.CurrentAPI)
 	if msg != "" { // otherwise let the bot to continue
 		newMsg := models.RoleMsg{Role: role, Content: msg}
 		chatBody.Messages = append(chatBody.Messages, newMsg)
@@ -124,6 +133,7 @@ func (op OpenAIer) ParseChunk(data []byte) (string, bool, error) {
 }
 
 func (op OpenAIer) FormMsg(msg, role string, resume bool) (io.Reader, error) {
+	logger.Debug("formmsg openaier", "link", cfg.CurrentAPI)
 	if cfg.ToolUse && !resume {
 		// prompt += "\n" + cfg.ToolRole + ":\n" + toolSysMsg
 		// add to chat body
@@ -168,6 +178,7 @@ func (ds DeepSeekerCompletion) ParseChunk(data []byte) (string, bool, error) {
 }
 
 func (ds DeepSeekerCompletion) FormMsg(msg, role string, resume bool) (io.Reader, error) {
+	logger.Debug("formmsg deepseekercompletion", "link", cfg.CurrentAPI)
 	if msg != "" { // otherwise let the bot to continue
 		newMsg := models.RoleMsg{Role: role, Content: msg}
 		chatBody.Messages = append(chatBody.Messages, newMsg)
@@ -212,21 +223,25 @@ func (ds DeepSeekerCompletion) FormMsg(msg, role string, resume bool) (io.Reader
 }
 
 func (ds DeepSeekerChat) ParseChunk(data []byte) (string, bool, error) {
-	llmchunk := models.DSCompletionResp{}
+	llmchunk := models.DSChatStreamResp{}
 	if err := json.Unmarshal(data, &llmchunk); err != nil {
 		logger.Error("failed to decode", "error", err, "line", string(data))
 		return "", false, err
 	}
 	if llmchunk.Choices[0].FinishReason != "" {
-		if llmchunk.Choices[0].Text != "" {
+		if llmchunk.Choices[0].Delta.Content != "" {
 			logger.Error("text inside of finish llmchunk", "chunk", llmchunk)
 		}
-		return llmchunk.Choices[0].Text, true, nil
+		return llmchunk.Choices[0].Delta.Content, true, nil
 	}
-	return llmchunk.Choices[0].Text, false, nil
+	if llmchunk.Choices[0].Delta.ReasoningContent != "" {
+		return llmchunk.Choices[0].Delta.ReasoningContent, false, nil
+	}
+	return llmchunk.Choices[0].Delta.Content, false, nil
 }
 
 func (ds DeepSeekerChat) FormMsg(msg, role string, resume bool) (io.Reader, error) {
+	logger.Debug("formmsg deepseekerchat", "link", cfg.CurrentAPI)
 	if cfg.ToolUse && !resume {
 		// prompt += "\n" + cfg.ToolRole + ":\n" + toolSysMsg
 		// add to chat body
@@ -247,17 +262,24 @@ func (ds DeepSeekerChat) FormMsg(msg, role string, resume bool) (io.Reader, erro
 		}
 	}
 	// Create copy of chat body with standardized user role
-	modifiedBody := *chatBody
-	modifiedBody.Messages = make([]models.RoleMsg, len(chatBody.Messages))
+	// modifiedBody := *chatBody
+	bodyCopy := &models.ChatBody{
+		Messages: make([]models.RoleMsg, len(chatBody.Messages)),
+		Model:    chatBody.Model,
+		Stream:   chatBody.Stream,
+	}
+	// modifiedBody.Messages = make([]models.RoleMsg, len(chatBody.Messages))
 	for i, msg := range chatBody.Messages {
-		if msg.Role == cfg.UserRole {
-			modifiedBody.Messages[i].Role = "user"
+		logger.Debug("checking roles", "#", i, "role", msg.Role)
+		if msg.Role == cfg.UserRole || i == 1 {
+			bodyCopy.Messages[i].Role = "user"
+			logger.Debug("replaced role in body", "#", i)
 		} else {
-			modifiedBody.Messages[i] = msg
+			bodyCopy.Messages[i] = msg
 		}
 	}
-	models.NewDSCharReq(&modifiedBody)
-	data, err := json.Marshal(chatBody)
+	dsBody := models.NewDSCharReq(*bodyCopy)
+	data, err := json.Marshal(dsBody)
 	if err != nil {
 		logger.Error("failed to form a msg", "error", err)
 		return nil, err

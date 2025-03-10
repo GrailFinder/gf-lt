@@ -16,6 +16,7 @@ import (
 	"net/http"
 	"os"
 	"path"
+	"strconv"
 	"strings"
 	"time"
 
@@ -121,24 +122,30 @@ func fetchDSBalance() *models.DSBalance {
 
 func sendMsgToLLM(body io.Reader) {
 	choseChunkParser()
+	bodyBytes, _ := io.ReadAll(body)
+	ok := json.Valid(bodyBytes)
+	if !ok {
+		panic("invalid json")
+	}
 	// nolint
-	req, err := http.NewRequest("POST", cfg.CurrentAPI, body)
-	req.Header.Add("Accept", "application/json")
-	req.Header.Add("Content-Type", "application/json")
-	req.Header.Add("Authorization", "Bearer "+cfg.DeepSeekToken)
-	// nolint
-	// resp, err := httpClient.Post(cfg.CurrentAPI, "application/json", body)
+	req, err := http.NewRequest("POST", cfg.CurrentAPI, bytes.NewReader(bodyBytes))
 	if err != nil {
-		logger.Error("llamacpp api", "error", err)
+		logger.Error("newreq error", "error", err)
 		if err := notifyUser("error", "apicall failed:"+err.Error()); err != nil {
 			logger.Error("failed to notify", "error", err)
 		}
 		streamDone <- true
 		return
 	}
+	req.Header.Add("Accept", "application/json")
+	req.Header.Add("Content-Type", "application/json")
+	req.Header.Add("Authorization", "Bearer "+cfg.DeepSeekToken)
+	req.Header.Set("Content-Length", strconv.Itoa(len(bodyBytes)))
+	req.Header.Set("Accept-Encoding", "gzip")
+	// nolint
+	// resp, err := httpClient.Post(cfg.CurrentAPI, "application/json", body)
 	resp, err := httpClient.Do(req)
 	if err != nil {
-		bodyBytes, _ := io.ReadAll(body)
 		logger.Error("llamacpp api", "error", err, "body", string(bodyBytes))
 		if err := notifyUser("error", "apicall failed:"+err.Error()); err != nil {
 			logger.Error("failed to notify", "error", err)
@@ -164,12 +171,13 @@ func sendMsgToLLM(body io.Reader) {
 		}
 		line, err := reader.ReadBytes('\n')
 		if err != nil {
-			logger.Error("error reading response body", "error", err, "line", string(line))
-			if err.Error() != "EOF" {
-				streamDone <- true
-				break
-			}
-			continue
+			logger.Error("error reading response body", "error", err, "line", string(line),
+				"reqbody", string(bodyBytes), "user_role", cfg.UserRole, "parser", chunkParser, "link", cfg.CurrentAPI)
+			// if err.Error() != "EOF" {
+			streamDone <- true
+			break
+			// }
+			// continue
 		}
 		if len(line) <= 1 {
 			if interruptResp {
@@ -192,8 +200,8 @@ func sendMsgToLLM(body io.Reader) {
 			break
 		}
 		// Handle error messages in response content
-		if content != "" && strings.Contains(strings.ToLower(content), "error") {
-			logger.Error("API error response detected", "content", content, "url", cfg.CurrentAPI)
+		if string(line) != "" && strings.Contains(strings.ToLower(string(line)), "error") {
+			logger.Error("API error response detected", "line", line, "url", cfg.CurrentAPI)
 			streamDone <- true
 			break
 		}
@@ -274,6 +282,7 @@ func chatRound(userMsg, role string, tv *tview.TextView, regen, resume bool) {
 			return
 		}
 	}
+	choseChunkParser()
 	reader, err := chunkParser.FormMsg(userMsg, role, resume)
 	if reader == nil || err != nil {
 		logger.Error("empty reader from msgs", "role", role, "error", err)
