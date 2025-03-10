@@ -246,8 +246,17 @@ func (ds DeepSeekerChat) FormMsg(msg, role string, resume bool) (io.Reader, erro
 			chatBody.Messages = append(chatBody.Messages, ragMsg)
 		}
 	}
-	// copy chat body and replace config.UserRole with "user"; ai!
-	models.NewDSCharReq(chatBody)
+	// Create copy of chat body with standardized user role
+	modifiedBody := *chatBody
+	modifiedBody.Messages = make([]models.RoleMsg, len(chatBody.Messages))
+	for i, msg := range chatBody.Messages {
+		if msg.Role == cfg.UserRole {
+			modifiedBody.Messages[i].Role = "user"
+		} else {
+			modifiedBody.Messages[i] = msg
+		}
+	}
+	models.NewDSCharReq(&modifiedBody)
 	data, err := json.Marshal(chatBody)
 	if err != nil {
 		logger.Error("failed to form a msg", "error", err)
