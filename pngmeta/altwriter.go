@@ -18,8 +18,6 @@ const (
 	textChunkType = "tEXt"
 )
 
-// there should be no empty lines inside functions; ai!
-
 // WriteToPng embeds the metadata into the specified PNG file and writes the result to outfile.
 func WriteToPng(metadata *models.CharCardSpec, sourcePath, outfile string) error {
 	pngData, err := os.ReadFile(sourcePath)
