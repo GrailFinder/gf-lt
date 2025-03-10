@@ -18,11 +18,7 @@ const (
 	textChunkType = "tEXt"
 )
 
-// // PngEmbed holds the key-value pair to embed into the PNG file.
-// type PngEmbed struct {
-// 	Key   string
-// 	Value string
-// }
+// there should be no empty lines inside functions; ai!
 
 // WriteToPng embeds the metadata into the specified PNG file and writes the result to outfile.
 func WriteToPng(metadata *models.CharCardSpec, sourcePath, outfile string) error {
@@ -56,7 +52,10 @@ func WriteToPng(metadata *models.CharCardSpec, sourcePath, outfile string) error
 		outputBuffer.Write(chunk)
 	}
 
-	newChunk := createTextChunk(embedData)
+	newChunk, err := createTextChunk(embedData)
+	if err != nil {
+		return err
+	}
 	outputBuffer.Write(newChunk)
 	outputBuffer.Write(iend)
 
@@ -124,7 +123,7 @@ func processChunks(data []byte) ([][]byte, []byte, error) {
 }
 
 // createTextChunk generates a valid tEXt chunk with proper CRC
-func createTextChunk(embed PngEmbed) []byte {
+func createTextChunk(embed PngEmbed) ([]byte, error) {
 	content := bytes.NewBuffer(nil)
 	content.WriteString(embed.Key)
 	content.WriteByte(0) // Null separator
@@ -149,5 +148,5 @@ func createTextChunk(embed PngEmbed) []byte {
 		return nil, fmt.Errorf("error writing CRC: %w", err)
 	}
 
-	return chunk.Bytes()
+	return chunk.Bytes(), nil
 }
