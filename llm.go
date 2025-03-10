@@ -197,8 +197,7 @@ func (ds DeepSeeker) FormMsg(msg, role string, resume bool) (io.Reader, error) {
 	}
 	logger.Debug("checking prompt for /completion", "tool_use", cfg.ToolUse,
 		"msg", msg, "resume", resume, "prompt", prompt)
-	var payload any
-	payload = models.NewDSCompletionReq(prompt, chatBody.Model,
+	payload := models.NewDSCompletionReq(prompt, chatBody.Model,
 		defaultLCPProps["temp"], cfg)
 	data, err := json.Marshal(payload)
 	if err != nil {

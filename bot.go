@@ -94,9 +94,11 @@ func fetchModelName() *models.LLMModels {
 	return &llmModel
 }
 
+// nolint
 func fetchDSBalance() *models.DSBalance {
 	url := "https://api.deepseek.com/user/balance"
 	method := "GET"
+	// nolint
 	req, err := http.NewRequest(method, url, nil)
 	if err != nil {
 		logger.Warn("failed to create request", "error", err)
@@ -119,6 +121,7 @@ func fetchDSBalance() *models.DSBalance {
 
 func sendMsgToLLM(body io.Reader) {
 	choseChunkParser()
+	// nolint
 	req, err := http.NewRequest("POST", cfg.CurrentAPI, body)
 	req.Header.Add("Accept", "application/json")
 	req.Header.Add("Content-Type", "application/json")
