@@ -116,10 +116,10 @@ func colorText() {
 	text = thinkRE.ReplaceAllStringFunc(text, func(match string) string {
 		// Style the code block and store it
 		styled := fmt.Sprintf("[red::i]%s[-:-:-]", match)
-		thinkBlocks = append(codeBlocks, styled)
+		thinkBlocks = append(thinkBlocks, styled)
 		// Generate a unique placeholder (e.g., "__CODE_BLOCK_0__")
 		id := fmt.Sprintf(placeholderThink, counterThink)
-		counter++
+		counterThink++
 		return id
 	})
 	// Step 2: Apply other regex styles to the non-code parts
@@ -130,6 +130,7 @@ func colorText() {
 	for i, cb := range codeBlocks {
 		text = strings.Replace(text, fmt.Sprintf(placeholder, i), cb, 1)
 	}
+	logger.Debug("thinking debug", "blocks", thinkBlocks)
 	for i, tb := range thinkBlocks {
 		text = strings.Replace(text, fmt.Sprintf(placeholderThink, i), tb, 1)
 	}
