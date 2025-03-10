@@ -191,7 +191,12 @@ func sendMsgToLLM(body io.Reader) {
 			streamDone <- true
 			break
 		}
-		// here line can contain some error msg; if it does we should log it and break from loop; ai!
+		// Handle error messages in response content
+		if content != "" && strings.Contains(strings.ToLower(content), "error") {
+			logger.Error("API error response detected", "content", content, "url", cfg.CurrentAPI)
+			streamDone <- true
+			break
+		}
 		if stop {
 			if content != "" {
 				logger.Warn("text inside of finish llmchunk", "chunk", content, "counter", counter)
