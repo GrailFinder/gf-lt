@@ -96,10 +96,18 @@ func processChunks(data []byte) ([][]byte, []byte, error) {
 		}
 
 		fullChunk := bytes.NewBuffer(nil)
-		binary.Write(fullChunk, binary.BigEndian, chunkLength)
-		fullChunk.Write(chunkType)
-		fullChunk.Write(chunkData)
-		fullChunk.Write(crc)
+		if err := binary.Write(fullChunk, binary.BigEndian, chunkLength); err != nil {
+			return nil, nil, fmt.Errorf("error writing chunk length: %w", err)
+		}
+		if _, err := fullChunk.Write(chunkType); err != nil {
+			return nil, nil, fmt.Errorf("error writing chunk type: %w", err)
+		}
+		if _, err := fullChunk.Write(chunkData); err != nil {
+			return nil, nil, fmt.Errorf("error writing chunk data: %w", err)
+		}
+		if _, err := fullChunk.Write(crc); err != nil {
+			return nil, nil, fmt.Errorf("error writing CRC: %w", err)
+		}
 
 		switch string(chunkType) {
 		case "IEND":
@@ -128,10 +136,18 @@ func createTextChunk(embed PngEmbed) []byte {
 	crc.Write(data)
 
 	chunk := bytes.NewBuffer(nil)
-	binary.Write(chunk, binary.BigEndian, uint32(len(data)))
-	chunk.Write([]byte(textChunkType))
-	chunk.Write(data)
-	binary.Write(chunk, binary.BigEndian, crc.Sum32())
+	if err := binary.Write(chunk, binary.BigEndian, uint32(len(data))); err != nil {
+		return nil, fmt.Errorf("error writing chunk length: %w", err)
+	}
+	if _, err := chunk.Write([]byte(textChunkType)); err != nil {
+		return nil, fmt.Errorf("error writing chunk type: %w", err)
+	}
+	if _, err := chunk.Write(data); err != nil {
+		return nil, fmt.Errorf("error writing chunk data: %w", err)
+	}
+	if err := binary.Write(chunk, binary.BigEndian, crc.Sum32()); err != nil {
+		return nil, fmt.Errorf("error writing CRC: %w", err)
+	}
 
 	return chunk.Bytes()
 }

@@ -22,7 +22,6 @@ const (
 	writeHeader = "\x89\x50\x4E\x47\x0D\x0A\x1A\x0A"
 )
 
-var tEXtChunkDataSpecification = "%s\x00%s"
 
 type PngEmbed struct {
 	Key   string
