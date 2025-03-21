@@ -285,6 +285,24 @@ func chatRound(userMsg, role string, tv *tview.TextView, regen, resume bool) {
 			return
 		}
 	}
+	// Handle Cluedo game flow
+	// should go before form msg, since formmsg takes chatBody and makes ioreader out of it
+	// role is almost always user, unless it's regen or resume
+	// cannot get in this block, since cluedoState is nil;
+	// check if cfg.EnableCluedo is true and init the cluedo state; ai!
+	if cfg.EnableCluedo && cluedoState != nil && !resume {
+		notifyUser("got in cluedo", "yay")
+		currentPlayer := playerOrder[0]
+		playerOrder = append(playerOrder[1:], currentPlayer) // Rotate turns
+		if role == cfg.UserRole {
+			fmt.Fprintf(tv, "Your (%s) cards: %s\n", currentPlayer, cluedoState.GetPlayerCards(currentPlayer))
+		} else {
+			chatBody.Messages = append(chatBody.Messages, models.RoleMsg{
+				Role:    cfg.ToolRole,
+				Content: cluedoState.GetPlayerCards(currentPlayer),
+			})
+		}
+	}
 	choseChunkParser()
 	reader, err := chunkParser.FormMsg(userMsg, role, resume)
 	if reader == nil || err != nil {
@@ -293,22 +311,6 @@ func chatRound(userMsg, role string, tv *tview.TextView, regen, resume bool) {
 	}
 	go sendMsgToLLM(reader)
 	logger.Debug("looking at vars in chatRound", "msg", userMsg, "regen", regen, "resume", resume)
-
-	// Handle Cluedo game flow
-	if cfg.EnableCluedo && cluedoState != nil && !resume {
-		currentPlayer := playerOrder[0]
-		playerOrder = append(playerOrder[1:], currentPlayer) // Rotate turns
-		if role == cfg.UserRole {
-			userMsg = fmt.Sprintf("Your cards: %s\n%s",
-				cluedoState.GetPlayerCards(currentPlayer), userMsg)
-		} else {
-			chatBody.Messages = append(chatBody.Messages, models.RoleMsg{
-				Role:    cfg.ToolRole,
-				Content: cluedoState.GetPlayerCards(currentPlayer),
-			})
-		}
-	}
-
 	if !resume {
 		fmt.Fprintf(tv, "[-:-:b](%d) ", len(chatBody.Messages))
 		fmt.Fprint(tv, roleToIcon(cfg.AssistantRole))
