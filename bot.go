@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"elefant/config"
+	"elefant/extra"
 	"elefant/models"
 	"elefant/rag"
 	"elefant/storage"
@@ -50,8 +51,8 @@ func createClient(connectTimeout time.Duration) *http.Client {
 }
 
 var (
-	cluedoState     *extra.CluedoRoundInfo // Current game state
-	playerOrder     []string               // Turn order tracking
+	cluedoState         *extra.CluedoRoundInfo // Current game state
+	playerOrder         []string               // Turn order tracking
 	cfg                 *config.Config
 	logger              *slog.Logger
 	logLevel            = new(slog.LevelVar)
@@ -292,7 +293,7 @@ func chatRound(userMsg, role string, tv *tview.TextView, regen, resume bool) {
 	}
 	go sendMsgToLLM(reader)
 	logger.Debug("looking at vars in chatRound", "msg", userMsg, "regen", regen, "resume", resume)
-	
+
 	// Handle Cluedo game flow
 	if cfg.EnableCluedo && cluedoState != nil && !resume {
 		currentPlayer := playerOrder[0]
