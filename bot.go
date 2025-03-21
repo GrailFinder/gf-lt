@@ -494,6 +494,11 @@ func init() {
 		Stream:   true,
 		Messages: lastChat,
 	}
+	// Initialize Cluedo if enabled and matching role
+	if cfg.EnableCluedo && cfg.AssistantRole == "CluedoPlayer" {
+		playerOrder = []string{cfg.UserRole, cfg.AssistantRole, cfg.CluedoRole2}
+		cluedoState = extra.CluedoPrepCards(playerOrder)
+	}
 	choseChunkParser()
 	httpClient = createClient(time.Second * 15)
 	// go runModelNameTicker(time.Second * 120)
