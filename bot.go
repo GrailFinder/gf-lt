@@ -402,8 +402,10 @@ func removeThinking(chatBody *models.ChatBody) {
 			continue
 		}
 		// find thinking and remove it
-		rm.Content = thinkRE.ReplaceAllString(msg.Content, "")
-		rm.Role = msg.Role
+		rm := models.RoleMsg{
+			Role:    msg.Role,
+			Content: thinkRE.ReplaceAllString(msg.Content, ""),
+		}
 		msgs = append(msgs, rm)
 	}
 	chatBody.Messages = msgs
