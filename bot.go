@@ -415,6 +415,11 @@ func removeThinking(chatBody *models.ChatBody) {
 
 func applyCharCard(cc *models.CharCard) {
 	cfg.AssistantRole = cc.Role
+	// Initialize Cluedo if enabled and matching role
+	if cfg.EnableCluedo && cc.Role == "CluedoPlayer" {
+		playerOrder = []string{cfg.UserRole, cfg.AssistantRole, cfg.CluedoRole2}
+		cluedoState = extra.CluedoPrepCards(playerOrder)
+	}
 	history, err := loadAgentsLastChat(cfg.AssistantRole)
 	if err != nil {
 		logger.Warn("failed to load last agent chat;", "agent", cc.Role, "err", err)
