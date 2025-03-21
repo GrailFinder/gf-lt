@@ -50,6 +50,8 @@ func createClient(connectTimeout time.Duration) *http.Client {
 }
 
 var (
+	cluedoState     *extra.CluedoRoundInfo // Current game state
+	playerOrder     []string               // Turn order tracking
 	cfg                 *config.Config
 	logger              *slog.Logger
 	logLevel            = new(slog.LevelVar)
@@ -290,6 +292,22 @@ func chatRound(userMsg, role string, tv *tview.TextView, regen, resume bool) {
 	}
 	go sendMsgToLLM(reader)
 	logger.Debug("looking at vars in chatRound", "msg", userMsg, "regen", regen, "resume", resume)
+	
+	// Handle Cluedo game flow
+	if cfg.EnableCluedo && cluedoState != nil && !resume {
+		currentPlayer := playerOrder[0]
+		playerOrder = append(playerOrder[1:], currentPlayer) // Rotate turns
+		if role == cfg.UserRole {
+			userMsg = fmt.Sprintf("Your cards: %s\n%s",
+				cluedoState.GetPlayerCards(currentPlayer), userMsg)
+		} else {
+			chatBody.Messages = append(chatBody.Messages, models.RoleMsg{
+				Role:    cfg.ToolRole,
+				Content: cluedoState.GetPlayerCards(currentPlayer),
+			})
+		}
+	}
+
 	if !resume {
 		fmt.Fprintf(tv, "[-:-:b](%d) ", len(chatBody.Messages))
 		fmt.Fprint(tv, roleToIcon(cfg.AssistantRole))
@@ -378,7 +396,7 @@ func chatToText(showSys bool) string {
 func removeThinking(chatBody *models.ChatBody) {
 	msgs := []models.RoleMsg{}
 	for _, msg := range chatBody.Messages {
-		rm := models.RoleMsg{}
+		// Filter out tool messages and thinking markers
 		if msg.Role == cfg.ToolRole {
 			continue
 		}

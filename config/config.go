@@ -7,6 +7,8 @@ import (
 )
 
 type Config struct {
+	EnableCluedo    bool   `toml:"EnableCluedo"`      // Cluedo game mode toggle
+	CluedoRole2     string `toml:"CluedoRole2"`       // Secondary AI role name
 	ChatAPI         string `toml:"ChatAPI"`
 	CompletionAPI   string `toml:"CompletionAPI"`
 	CurrentAPI      string
