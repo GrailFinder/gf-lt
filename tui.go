@@ -291,6 +291,9 @@ func init() {
 		SetPlaceholder("Replace msg...")
 	editArea.SetBorder(true).SetTitle("input")
 	editArea.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		defer func() {
+			editMode = false
+		}()
 		if event.Key() == tcell.KeyEscape && editMode {
 			defer colorText()
 			editedMsg := editArea.GetText()
@@ -299,14 +302,12 @@ func init() {
 					logger.Error("failed to send notification", "error", err)
 				}
 				pages.RemovePage(editMsgPage)
-				editMode = false
 				return nil
 			}
 			chatBody.Messages[selectedIndex].Content = editedMsg
 			// change textarea
 			textView.SetText(chatToText(cfg.ShowSys))
 			pages.RemovePage(editMsgPage)
-			editMode = false
 			return nil
 		}
 		return event

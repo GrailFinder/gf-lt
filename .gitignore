@@ -6,5 +6,6 @@ history/
 *.db
 config.toml
 sysprompts/*
+!sysprompts/cluedo.json
 history_bak/
 .aider*
