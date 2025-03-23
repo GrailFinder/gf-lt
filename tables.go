@@ -16,7 +16,7 @@ import (
 )
 
 func makeChatTable(chatMap map[string]models.Chat) *tview.Table {
-	actions := []string{"load", "rename", "delete", "update card", "move sysprompt onto 1st msg"}
+	actions := []string{"load", "rename", "delete", "update card", "move sysprompt onto 1st msg", "new_chat_from_card"}
 	chatList := make([]string, len(chatMap))
 	i := 0
 	for name := range chatMap {
@@ -129,6 +129,33 @@ func makeChatTable(chatMap map[string]models.Chat) *tview.Table {
 			chatBody.Messages[0].Content = rpDefenitionSysMsg
 			textView.SetText(chatToText(cfg.ShowSys))
 			activeChatName = selectedChat
+			pages.RemovePage(historyPage)
+			return
+		case "new_chat_from_card":
+			// Reread card from file and start fresh chat
+			fi := strings.Index(selectedChat, "_")
+			agentName := selectedChat[fi+1:]
+			cc, ok := sysMap[agentName]
+			if !ok {
+				logger.Warn("no such card", "agent", agentName)
+				if err := notifyUser("error", "no such card: "+agentName); err != nil {
+					logger.Warn("failed to notify", "error", err)
+				}
+				return
+			}
+			// Reload card from disk
+			newCard, err := pngmeta.ReadCardFromFile(cc.FilePath, cfg.UserRole)
+			if err != nil {
+				logger.Error("failed to reload charcard", "path", cc.FilePath, "error", err)
+				if err := notifyUser("error", "failed to reload card: "+cc.FilePath); err != nil {
+					logger.Warn("failed to notify", "error", err)
+				}
+				return
+			}
+			// Update sysMap with fresh card data
+			sysMap[agentName] = newCard
+			applyCharCard(newCard)
+			startNewChat()
 			pages.RemovePage(historyPage)
 			return
 		default:
