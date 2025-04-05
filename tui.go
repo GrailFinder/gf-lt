@@ -294,7 +294,8 @@ func init() {
 		defer func() {
 			editMode = false
 		}()
-		if event.Key() == tcell.KeyEscape && editMode {
+		// if event.Key() == tcell.KeyEscape && editMode {
+		if event.Key() == tcell.KeyEscape {
 			defer colorText()
 			editedMsg := editArea.GetText()
 			if editedMsg == "" {
@@ -319,8 +320,8 @@ func init() {
 		SetDoneFunc(func(key tcell.Key) {
 			defer indexPickWindow.SetText("")
 			pages.RemovePage(indexPage)
-			colorText()
-			updateStatusLine()
+			// colorText()
+			// updateStatusLine()
 		})
 	indexPickWindow.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		switch event.Key() {
@@ -349,6 +350,7 @@ func init() {
 			}
 			m := chatBody.Messages[selectedIndex]
 			if editMode && event.Key() == tcell.KeyEnter {
+				pages.RemovePage(indexPage)
 				pages.AddPage(editMsgPage, editArea, true, true)
 				editArea.SetText(m.Content, true)
 			}
