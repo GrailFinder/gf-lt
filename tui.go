@@ -291,11 +291,9 @@ func init() {
 		SetPlaceholder("Replace msg...")
 	editArea.SetBorder(true).SetTitle("input")
 	editArea.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		defer func() {
-			editMode = false
-		}()
 		// if event.Key() == tcell.KeyEscape && editMode {
 		if event.Key() == tcell.KeyEscape {
+			logger.Warn("edit debug; esc is pressed")
 			defer colorText()
 			editedMsg := editArea.GetText()
 			if editedMsg == "" {
@@ -309,6 +307,7 @@ func init() {
 			// change textarea
 			textView.SetText(chatToText(cfg.ShowSys))
 			pages.RemovePage(editMsgPage)
+			editMode = false
 			return nil
 		}
 		return event
