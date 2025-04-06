@@ -8,6 +8,7 @@ import (
 	_ "image/jpeg"
 	_ "image/png"
 	"os"
+	"path"
 	"slices"
 	"strconv"
 	"strings"
@@ -54,7 +55,7 @@ var (
 [yellow]F8[white]: copy n msg to clipboard (linux xclip)
 [yellow]F9[white]: table to copy from; with all code blocks
 [yellow]F10[white]: manage loaded rag files (that already in vector db)
-[yellow]F11[white]: switch RAGEnabled boolean
+[yellow]F11[white]: import chat file
 [yellow]F12[white]: show this help page
 [yellow]Ctrl+w[white]: resume generation on the last msg
 [yellow]Ctrl+s[white]: load new char/agent
@@ -201,7 +202,9 @@ func makePropsForm(props map[string]float32) *tview.Form {
 		AddTextView("Notes", "Props for llamacpp completion call", 40, 2, true, false).
 		AddCheckbox("Insert <think> (/completion only)", cfg.ThinkUse, func(checked bool) {
 			cfg.ThinkUse = checked
-		}).AddDropDown("Set log level (Enter): ", []string{"Debug", "Info", "Warn"}, 1,
+		}).AddCheckbox("RAG use", cfg.RAGEnabled, func(checked bool) {
+		cfg.RAGEnabled = checked
+	}).AddDropDown("Set log level (Enter): ", []string{"Debug", "Info", "Warn"}, 1,
 		func(option string, optionIndex int) {
 			setLogLevel(option)
 		}).AddDropDown("Select an api: ", slices.Insert(cfg.ApiLinks, 0, cfg.CurrentAPI), 0,
@@ -555,8 +558,25 @@ func init() {
 			return nil
 		}
 		if event.Key() == tcell.KeyF11 {
-			// xor
-			cfg.RAGEnabled = !cfg.RAGEnabled
+			// read files in chat_exports
+			dirname := "chat_exports"
+			filelist, err := os.ReadDir(dirname)
+			if err != nil {
+				if err := notifyUser("failed to load exports", err.Error()); err != nil {
+					logger.Error("failed to send notification", "error", err)
+				}
+			}
+			fli := []string{}
+			for _, f := range filelist {
+				if f.IsDir() || !strings.HasSuffix(f.Name(), ".json") {
+					continue
+				}
+				fpath := path.Join(dirname, f.Name())
+				fli = append(fli, fpath)
+			}
+			// check error
+			exportsTable := makeImportChatTable(fli)
+			pages.AddPage(historyPage, exportsTable, true, true)
 			updateStatusLine()
 			return nil
 		}

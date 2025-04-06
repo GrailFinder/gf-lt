@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -32,6 +33,24 @@ func exportChat() error {
 		return err
 	}
 	return os.WriteFile(activeChatName+".json", data, 0666)
+}
+
+func importChat(filename string) error {
+	data, err := os.ReadFile(filename)
+	if err != nil {
+		return err
+	}
+	messages := []models.RoleMsg{}
+	if err := json.Unmarshal(data, &messages); err != nil {
+		return err
+	}
+	activeChatName = filepath.Base(filename)
+	chatBody.Messages = messages
+	cfg.AssistantRole = messages[1].Role
+	if cfg.AssistantRole == cfg.UserRole {
+		cfg.AssistantRole = messages[2].Role
+	}
+	return nil
 }
 
 func updateStorageChat(name string, msgs []models.RoleMsg) error {
