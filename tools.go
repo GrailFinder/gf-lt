@@ -26,7 +26,7 @@ Your current tools:
 [
 {
 "name":"recall",
-"args": "topic",
+"args": ["topic"],
 "when_to_use": "when asked about topic that user previously asked to memorise"
 },
 {
@@ -36,7 +36,7 @@ Your current tools:
 },
 {
 "name":"recall_topics",
-"args": null,
+"args": [],
 "when_to_use": "to see what topics are saved in memory"
 }
 ]
@@ -46,7 +46,7 @@ To make a function call return a json object within __tool_call__ tags;
 __tool_call__
 {
 "name":"recall",
-"args": "Adam's number"
+"args": ["Adam's number"]
 }
 __tool_call__
 </example_request>

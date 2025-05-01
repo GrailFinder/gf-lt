@@ -272,6 +272,28 @@ func roleToIcon(role string) string {
 	return "<" + role + ">: "
 }
 
+func checkGame(role string, tv *tview.TextView) {
+	// Handle Cluedo game flow
+	// should go before form msg, since formmsg takes chatBody and makes ioreader out of it
+	// role is almost always user, unless it's regen or resume
+	// cannot get in this block, since cluedoState is nil;
+	// check if cfg.EnableCluedo is true and init the cluedo state; ai!
+	if cfg.EnableCluedo && cluedoState != nil {
+		notifyUser("got in cluedo", "yay")
+		currentPlayer := playerOrder[0]
+		playerOrder = append(playerOrder[1:], currentPlayer) // Rotate turns
+		if role == cfg.UserRole {
+			fmt.Fprintf(tv, "Your (%s) cards: %s\n", currentPlayer, cluedoState.GetPlayerCards(currentPlayer))
+		} else {
+			chatBody.Messages = append(chatBody.Messages, models.RoleMsg{
+				Role:    cfg.ToolRole,
+				Content: cluedoState.GetPlayerCards(currentPlayer),
+			})
+		}
+	}
+	return
+}
+
 func chatRound(userMsg, role string, tv *tview.TextView, regen, resume bool) {
 	botRespMode = true
 	defer func() { botRespMode = false }()
@@ -285,23 +307,8 @@ func chatRound(userMsg, role string, tv *tview.TextView, regen, resume bool) {
 			return
 		}
 	}
-	// Handle Cluedo game flow
-	// should go before form msg, since formmsg takes chatBody and makes ioreader out of it
-	// role is almost always user, unless it's regen or resume
-	// cannot get in this block, since cluedoState is nil;
-	// check if cfg.EnableCluedo is true and init the cluedo state; ai!
-	if cfg.EnableCluedo && cluedoState != nil && !resume {
-		notifyUser("got in cluedo", "yay")
-		currentPlayer := playerOrder[0]
-		playerOrder = append(playerOrder[1:], currentPlayer) // Rotate turns
-		if role == cfg.UserRole {
-			fmt.Fprintf(tv, "Your (%s) cards: %s\n", currentPlayer, cluedoState.GetPlayerCards(currentPlayer))
-		} else {
-			chatBody.Messages = append(chatBody.Messages, models.RoleMsg{
-				Role:    cfg.ToolRole,
-				Content: cluedoState.GetPlayerCards(currentPlayer),
-			})
-		}
+	if !resume {
+		checkGame(role, tv)
 	}
 	choseChunkParser()
 	reader, err := chunkParser.FormMsg(userMsg, role, resume)
