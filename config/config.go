@@ -7,8 +7,8 @@ import (
 )
 
 type Config struct {
-	EnableCluedo    bool   `toml:"EnableCluedo"`      // Cluedo game mode toggle
-	CluedoRole2     string `toml:"CluedoRole2"`       // Secondary AI role name
+	EnableCluedo    bool   `toml:"EnableCluedo"` // Cluedo game mode toggle
+	CluedoRole2     string `toml:"CluedoRole2"`  // Secondary AI role name
 	ChatAPI         string `toml:"ChatAPI"`
 	CompletionAPI   string `toml:"CompletionAPI"`
 	CurrentAPI      string
@@ -39,6 +39,9 @@ type Config struct {
 	DeepSeekToken         string `toml:"DeepSeekToken"`
 	DeepSeekModel         string `toml:"DeepSeekModel"`
 	ApiLinks              []string
+	// TTS
+	TTS_URL     string `toml:"TTS_URL"`
+	TTS_ENABLED bool   `toml:"TTS_ENABLED"`
 }
 
 func LoadConfigOrDefault(fn string) *Config {
@@ -66,6 +69,9 @@ func LoadConfigOrDefault(fn string) *Config {
 		config.RAGBatchSize = 100
 		config.RAGWordLimit = 80
 		config.RAGWorkers = 5
+		// tts
+		config.TTS_ENABLED = false
+		config.TTS_URL = "http://localhost:8880/v1/audio/speech"
 	}
 	config.CurrentAPI = config.ChatAPI
 	config.APIMap = map[string]string{

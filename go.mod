@@ -7,6 +7,7 @@ require (
 	github.com/asg017/sqlite-vec-go-bindings v0.1.6
 	github.com/gdamore/tcell/v2 v2.7.4
 	github.com/glebarez/go-sqlite v1.22.0
+	github.com/gopxl/beep v1.4.1
 	github.com/jmoiron/sqlx v1.4.0
 	github.com/ncruces/go-sqlite3 v0.21.3
 	github.com/neurosnap/sentences v1.1.2
@@ -15,12 +16,16 @@ require (
 
 require (
 	github.com/dustin/go-humanize v1.0.1 // indirect
+	github.com/ebitengine/oto/v3 v3.1.0 // indirect
+	github.com/ebitengine/purego v0.7.1 // indirect
 	github.com/gdamore/encoding v1.0.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
+	github.com/hajimehoshi/go-mp3 v0.3.4 // indirect
 	github.com/lucasb-eyer/go-colorful v1.2.0 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mattn/go-runewidth v0.0.15 // indirect
 	github.com/ncruces/julianday v1.0.0 // indirect
+	github.com/pkg/errors v0.9.1 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
 	github.com/tetratelabs/wazero v1.8.2 // indirect

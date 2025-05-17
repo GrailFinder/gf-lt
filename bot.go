@@ -67,6 +67,7 @@ var (
 	interruptResp       = false
 	ragger              *rag.RAG
 	chunkParser         ChunkParser
+	orator              extra.Orator
 	defaultLCPProps     = map[string]float32{
 		"temperature":    0.8,
 		"dry_multiplier": 0.0,
@@ -277,8 +278,13 @@ func checkGame(role string, tv *tview.TextView) {
 	// should go before form msg, since formmsg takes chatBody and makes ioreader out of it
 	// role is almost always user, unless it's regen or resume
 	// cannot get in this block, since cluedoState is nil;
-	// check if cfg.EnableCluedo is true and init the cluedo state; ai!
-	if cfg.EnableCluedo && cluedoState != nil {
+	if cfg.EnableCluedo {
+		// Initialize Cluedo game if needed
+		if cluedoState == nil {
+			playerOrder = []string{cfg.UserRole, cfg.AssistantRole, cfg.CluedoRole2}
+			cluedoState = extra.CluedoPrepCards(playerOrder)
+		}
+
 		notifyUser("got in cluedo", "yay")
 		currentPlayer := playerOrder[0]
 		playerOrder = append(playerOrder[1:], currentPlayer) // Rotate turns
@@ -328,6 +334,12 @@ func chatRound(userMsg, role string, tv *tview.TextView, regen, resume bool) {
 		}
 	}
 	respText := strings.Builder{}
+	// if tts is enabled
+	// var audioStream *extra.AudioStream
+	// if cfg.TTS_ENABLED {
+	// 	audioStream = extra.RunOrator(orator)
+	// 	// defer close(audioStream.DoneChan)
+	// }
 out:
 	for {
 		select {
@@ -335,6 +347,11 @@ out:
 			fmt.Fprint(tv, chunk)
 			respText.WriteString(chunk)
 			tv.ScrollToEnd()
+			// Send chunk to audio stream handler
+			if cfg.TTS_ENABLED {
+				// audioStream.TextChan <- chunk
+				extra.TTSTextChan <- chunk
+			}
 		case <-streamDone:
 			botRespMode = false
 			break out
@@ -508,6 +525,8 @@ func init() {
 	}
 	choseChunkParser()
 	httpClient = createClient(time.Second * 15)
+	// TODO: check config for orator
+	orator = extra.InitOrator(logger, "http://localhost:8880/v1/audio/speech")
 	// go runModelNameTicker(time.Second * 120)
 	// tempLoad()
 }
