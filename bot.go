@@ -334,12 +334,6 @@ func chatRound(userMsg, role string, tv *tview.TextView, regen, resume bool) {
 		}
 	}
 	respText := strings.Builder{}
-	// if tts is enabled
-	// var audioStream *extra.AudioStream
-	// if cfg.TTS_ENABLED {
-	// 	audioStream = extra.RunOrator(orator)
-	// 	// defer close(audioStream.DoneChan)
-	// }
 out:
 	for {
 		select {
@@ -354,6 +348,10 @@ out:
 			}
 		case <-streamDone:
 			botRespMode = false
+			if cfg.TTS_ENABLED {
+				// audioStream.TextChan <- chunk
+				extra.TTSFlushChan <- true
+			}
 			break out
 		}
 	}

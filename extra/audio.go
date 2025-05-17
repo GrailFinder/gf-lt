@@ -8,6 +8,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gopxl/beep"
@@ -17,8 +18,9 @@ import (
 )
 
 var (
-	TTSTextChan = make(chan string, 1000)
-	TTSDoneChan = make(chan bool, 1)
+	TTSTextChan  = make(chan string, 1000)
+	TTSFlushChan = make(chan bool, 1)
+	TTSDoneChan  = make(chan bool, 1)
 )
 
 type Orator interface {
@@ -39,6 +41,7 @@ type KokoroOrator struct {
 func readroutine(orator Orator) {
 	tokenizer, _ := english.NewSentenceTokenizer(nil)
 	var sentenceBuf bytes.Buffer
+	var remainder strings.Builder
 	for {
 		select {
 		case chunk := <-TTSTextChan:
@@ -54,6 +57,26 @@ func readroutine(orator Orator) {
 				// Send complete sentence to TTS
 				if err := orator.Speak(sentence.Text); err != nil {
 					orator.GetLogger().Error("tts failed", "sentence", sentence.Text, "error", err)
+				}
+			}
+		case <-TTSFlushChan:
+			// lln is done get the whole message out
+			// FIXME: loses one token
+			for chunk := range TTSTextChan {
+				// orator.GetLogger().Info("flushing", "chunk", chunk)
+				// sentenceBuf.WriteString(chunk)
+				remainder.WriteString(chunk) // I get text here
+				if len(TTSTextChan) == 0 {
+					break
+				}
+			}
+			// Flush remaining text
+			remaining := remainder.String()
+			orator.GetLogger().Info("flushing", "rem", remaining)
+			if remaining != "" { // but nothing is here?
+				orator.GetLogger().Info("flushing", "remaining", remaining)
+				if err := orator.Speak(remaining); err != nil {
+					orator.GetLogger().Error("tts failed", "sentence", remaining, "error", err)
 				}
 			}
 		case <-TTSDoneChan:
