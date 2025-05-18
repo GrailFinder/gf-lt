@@ -42,6 +42,9 @@ type Config struct {
 	// TTS
 	TTS_URL     string `toml:"TTS_URL"`
 	TTS_ENABLED bool   `toml:"TTS_ENABLED"`
+	// STT
+	STT_URL     string `toml:"STT_URL"`
+	STT_ENABLED bool   `toml:"STT_ENABLED"`
 }
 
 func LoadConfigOrDefault(fn string) *Config {

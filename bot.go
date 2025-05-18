@@ -149,7 +149,7 @@ func sendMsgToLLM(body io.Reader) {
 	// resp, err := httpClient.Post(cfg.CurrentAPI, "application/json", body)
 	resp, err := httpClient.Do(req)
 	if err != nil {
-		logger.Error("llamacpp api", "error", err, "body", string(bodyBytes))
+		logger.Error("llamacpp api", "error", err)
 		if err := notifyUser("error", "apicall failed:"+err.Error()); err != nil {
 			logger.Error("failed to notify", "error", err)
 		}
@@ -498,6 +498,7 @@ func init() {
 	//
 	logLevel.Set(slog.LevelInfo)
 	logger = slog.New(slog.NewTextHandler(logfile, &slog.HandlerOptions{Level: logLevel}))
+	// TODO: rename and/or put in cfg
 	store = storage.NewProviderSQL("test.db", logger)
 	if store == nil {
 		os.Exit(1)
@@ -511,7 +512,7 @@ func init() {
 	}
 	lastChat := loadOldChatOrGetNew()
 	chatBody = &models.ChatBody{
-		Model:    "modl_name",
+		Model:    "modelname",
 		Stream:   true,
 		Messages: lastChat,
 	}
@@ -522,9 +523,10 @@ func init() {
 	}
 	choseChunkParser()
 	httpClient = createClient(time.Second * 15)
-	// TODO: check config for orator
-	orator = extra.InitOrator(logger, "http://localhost:8880/v1/audio/speech")
-	asr = extra.NewWhisperSTT(logger, "http://localhost:8081/inference", 44100)
-	// go runModelNameTicker(time.Second * 120)
-	// tempLoad()
+	if cfg.TTS_ENABLED {
+		orator = extra.InitOrator(logger, cfg.TTS_URL)
+	}
+	if cfg.STT_ENABLED {
+		asr = extra.NewWhisperSTT(logger, cfg.STT_URL, 16000)
+	}
 }

@@ -15,3 +15,6 @@ RAGWorkers = 5
 # extra tts
 TTS_ENABLED = false
 TTS_URL = "http://localhost:8880/v1/audio/speech"
+# extra stt
+STT_ENABLED = false
+STT_URL = "http://localhost:8081/inference"

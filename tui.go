@@ -666,6 +666,7 @@ func init() {
 			pages.AddPage(imgPage, imgView, true, true)
 			return nil
 		}
+		// TODO: move to menu or table
 		// if event.Key() == tcell.KeyCtrlR && cfg.HFToken != "" {
 		// 	// rag load
 		// 	// menu of the text files from defined rag directory
@@ -685,7 +686,7 @@ func init() {
 		// 	pages.AddPage(RAGPage, chatRAGTable, true, true)
 		// 	return nil
 		// }
-		if event.Key() == tcell.KeyCtrlR {
+		if event.Key() == tcell.KeyCtrlR && cfg.STT_ENABLED {
 			defer updateStatusLine()
 			if asr.IsRecording() {
 				userSpeech, err := asr.StopRecording()
@@ -694,7 +695,9 @@ func init() {
 					return nil
 				}
 				if userSpeech != "" {
-					textArea.SetText(userSpeech, true)
+					// append indtead of replacing
+					prevText := textArea.GetText()
+					textArea.SetText(prevText+userSpeech, true)
 				} else {
 					logger.Warn("empty user speech")
 				}
