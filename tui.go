@@ -139,7 +139,7 @@ func colorText() {
 }
 
 func updateStatusLine() {
-	position.SetText(fmt.Sprintf(indexLine, botRespMode, cfg.AssistantRole, activeChatName, cfg.RAGEnabled, cfg.ToolUse, chatBody.Model, cfg.CurrentAPI, cfg.ThinkUse, logLevel.Level()))
+	position.SetText(fmt.Sprintf(indexLine, botRespMode, cfg.AssistantRole, activeChatName, cfg.RAGEnabled, cfg.ToolUse, chatBody.Model, cfg.CurrentAPI, cfg.ThinkUse, logLevel.Level(), asr.IsRecording()))
 }
 
 func initSysCards() ([]string, error) {
@@ -666,24 +666,44 @@ func init() {
 			pages.AddPage(imgPage, imgView, true, true)
 			return nil
 		}
-		if event.Key() == tcell.KeyCtrlR && cfg.HFToken != "" {
-			// rag load
-			// menu of the text files from defined rag directory
-			files, err := os.ReadDir(cfg.RAGDir)
-			if err != nil {
-				logger.Error("failed to read dir", "dir", cfg.RAGDir, "error", err)
+		// if event.Key() == tcell.KeyCtrlR && cfg.HFToken != "" {
+		// 	// rag load
+		// 	// menu of the text files from defined rag directory
+		// 	files, err := os.ReadDir(cfg.RAGDir)
+		// 	if err != nil {
+		// 		logger.Error("failed to read dir", "dir", cfg.RAGDir, "error", err)
+		// 		return nil
+		// 	}
+		// 	fileList := []string{}
+		// 	for _, f := range files {
+		// 		if f.IsDir() {
+		// 			continue
+		// 		}
+		// 		fileList = append(fileList, f.Name())
+		// 	}
+		// 	chatRAGTable := makeRAGTable(fileList)
+		// 	pages.AddPage(RAGPage, chatRAGTable, true, true)
+		// 	return nil
+		// }
+		if event.Key() == tcell.KeyCtrlR {
+			defer updateStatusLine()
+			if asr.IsRecording() {
+				userSpeech, err := asr.StopRecording()
+				if err != nil {
+					logger.Error("failed to inference user speech", "error", err)
+					return nil
+				}
+				if userSpeech != "" {
+					textArea.SetText(userSpeech, true)
+				} else {
+					logger.Warn("empty user speech")
+				}
 				return nil
 			}
-			fileList := []string{}
-			for _, f := range files {
-				if f.IsDir() {
-					continue
-				}
-				fileList = append(fileList, f.Name())
+			if err := asr.StartRecording(); err != nil {
+				logger.Error("failed to start recording user speech", "error", err)
+				return nil
 			}
-			chatRAGTable := makeRAGTable(fileList)
-			pages.AddPage(RAGPage, chatRAGTable, true, true)
-			return nil
 		}
 		if event.Key() == tcell.KeyCtrlW {
 			// INFO: continue bot/text message

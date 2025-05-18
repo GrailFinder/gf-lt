@@ -4,11 +4,11 @@ go 1.23.2
 
 require (
 	github.com/BurntSushi/toml v1.4.0
-	github.com/MarkKremer/microphone/v2 v2.0.1
 	github.com/asg017/sqlite-vec-go-bindings v0.1.6
 	github.com/gdamore/tcell/v2 v2.7.4
 	github.com/glebarez/go-sqlite v1.22.0
 	github.com/gopxl/beep/v2 v2.1.0
+	github.com/gordonklaus/portaudio v0.0.0-20230709114228-aafa478834f5
 	github.com/jmoiron/sqlx v1.4.0
 	github.com/ncruces/go-sqlite3 v0.21.3
 	github.com/neurosnap/sentences v1.1.2
@@ -21,7 +21,6 @@ require (
 	github.com/ebitengine/purego v0.7.1 // indirect
 	github.com/gdamore/encoding v1.0.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
-	github.com/gordonklaus/portaudio v0.0.0-20230709114228-aafa478834f5 // indirect
 	github.com/hajimehoshi/go-mp3 v0.3.4 // indirect
 	github.com/lucasb-eyer/go-colorful v1.2.0 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect

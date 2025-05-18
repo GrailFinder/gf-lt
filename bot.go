@@ -25,32 +25,8 @@ import (
 	"github.com/rivo/tview"
 )
 
-var httpClient = &http.Client{}
-
-func createClient(connectTimeout time.Duration) *http.Client {
-	// Custom transport with connection timeout
-	transport := &http.Transport{
-		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
-			// Create a dialer with connection timeout
-			dialer := &net.Dialer{
-				Timeout:   connectTimeout,
-				KeepAlive: 30 * time.Second, // Optional
-			}
-			return dialer.DialContext(ctx, network, addr)
-		},
-		// Other transport settings (optional)
-		TLSHandshakeTimeout:   connectTimeout,
-		ResponseHeaderTimeout: connectTimeout,
-	}
-
-	// Client with no overall timeout (or set to streaming-safe duration)
-	return &http.Client{
-		Transport: transport,
-		Timeout:   0, // No overall timeout (for streaming)
-	}
-}
-
 var (
+	httpClient          = &http.Client{}
 	cluedoState         *extra.CluedoRoundInfo // Current game state
 	playerOrder         []string               // Turn order tracking
 	cfg                 *config.Config
@@ -68,6 +44,7 @@ var (
 	ragger              *rag.RAG
 	chunkParser         ChunkParser
 	orator              extra.Orator
+	asr                 extra.STT
 	defaultLCPProps     = map[string]float32{
 		"temperature":    0.8,
 		"dry_multiplier": 0.0,
@@ -75,6 +52,28 @@ var (
 		"n_predict":      -1.0,
 	}
 )
+
+func createClient(connectTimeout time.Duration) *http.Client {
+	// Custom transport with connection timeout
+	transport := &http.Transport{
+		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+			// Create a dialer with connection timeout
+			dialer := &net.Dialer{
+				Timeout:   connectTimeout,
+				KeepAlive: 30 * time.Second, // Optional
+			}
+			return dialer.DialContext(ctx, network, addr)
+		},
+		// Other transport settings (optional)
+		TLSHandshakeTimeout:   connectTimeout,
+		ResponseHeaderTimeout: connectTimeout,
+	}
+	// Client with no overall timeout (or set to streaming-safe duration)
+	return &http.Client{
+		Transport: transport,
+		Timeout:   0, // No overall timeout (for streaming)
+	}
+}
 
 func fetchModelName() *models.LLMModels {
 	// TODO: to config
@@ -525,6 +524,7 @@ func init() {
 	httpClient = createClient(time.Second * 15)
 	// TODO: check config for orator
 	orator = extra.InitOrator(logger, "http://localhost:8880/v1/audio/speech")
+	asr = extra.NewWhisperSTT(logger, "http://localhost:8081/inference", 44100)
 	// go runModelNameTicker(time.Second * 120)
 	// tempLoad()
 }
