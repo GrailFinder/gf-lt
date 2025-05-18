@@ -9,10 +9,13 @@ import (
 	"log/slog"
 	"mime/multipart"
 	"net/http"
+	"regexp"
 	"strings"
 
 	"github.com/gordonklaus/portaudio"
 )
+
+var specialRE = regexp.MustCompile(`\[.*?\]`)
 
 type STT interface {
 	StartRecording() error
@@ -99,7 +102,9 @@ func (stt *WhisperSTT) StopRecording() (string, error) {
 		stt.logger.Error("fn: StopRecording", "error", err)
 		return "", err
 	}
-	return strings.TrimRight(string(responseTextBytes), "\n"), nil
+	resptext := strings.TrimRight(string(responseTextBytes), "\n")
+	// in case there are special tokens like [_BEG_]
+	return specialRE.ReplaceAllString(resptext, ""), nil
 }
 
 func (stt *WhisperSTT) writeWavHeader(w io.Writer, dataSize int) {
