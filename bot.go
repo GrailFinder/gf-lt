@@ -43,9 +43,10 @@ var (
 	interruptResp       = false
 	ragger              *rag.RAG
 	chunkParser         ChunkParser
-	orator              extra.Orator
-	asr                 extra.STT
-	defaultLCPProps     = map[string]float32{
+	//nolint:unused // TTS_ENABLED conditionally uses this
+	orator          extra.Orator
+	asr             extra.STT
+	defaultLCPProps = map[string]float32{
 		"temperature":    0.8,
 		"dry_multiplier": 0.0,
 		"min_p":          0.05,
@@ -272,6 +273,7 @@ func roleToIcon(role string) string {
 	return "<" + role + ">: "
 }
 
+// FIXME: it should not be here; move to extra
 func checkGame(role string, tv *tview.TextView) {
 	// Handle Cluedo game flow
 	// should go before form msg, since formmsg takes chatBody and makes ioreader out of it
@@ -283,8 +285,7 @@ func checkGame(role string, tv *tview.TextView) {
 			playerOrder = []string{cfg.UserRole, cfg.AssistantRole, cfg.CluedoRole2}
 			cluedoState = extra.CluedoPrepCards(playerOrder)
 		}
-
-		notifyUser("got in cluedo", "yay")
+		// notifyUser("got in cluedo", "yay")
 		currentPlayer := playerOrder[0]
 		playerOrder = append(playerOrder[1:], currentPlayer) // Rotate turns
 		if role == cfg.UserRole {
@@ -296,7 +297,6 @@ func checkGame(role string, tv *tview.TextView) {
 			})
 		}
 	}
-	return
 }
 
 func chatRound(userMsg, role string, tv *tview.TextView, regen, resume bool) {

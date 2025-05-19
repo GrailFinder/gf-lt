@@ -22,7 +22,6 @@ const (
 	writeHeader = "\x89\x50\x4E\x47\x0D\x0A\x1A\x0A"
 )
 
-
 type PngEmbed struct {
 	Key   string
 	Value string
@@ -96,7 +95,7 @@ func ReadCard(fname, uname string) (*models.CharCard, error) {
 		return nil, err
 	}
 	if charSpec.Name == "" {
-		return nil, fmt.Errorf("failed to find role; fname %s\n", fname)
+		return nil, fmt.Errorf("failed to find role; fname %s", fname)
 	}
 	return charSpec.Simplify(uname, fname), nil
 }

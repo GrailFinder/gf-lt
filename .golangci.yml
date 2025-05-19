@@ -1,32 +1,44 @@
+version: "2"
 run:
-  timeout: 1m
   concurrency: 2
   tests: false
-
 linters:
-  enable-all: false
-  disable-all: true
+  default: none
   enable:
+    - bodyclose
     - errcheck
-    - gosimple
+    - fatcontext
     - govet
     - ineffassign
-    - staticcheck
-    - typecheck
-    - unused
+    - noctx
+    - perfsprint
     - prealloc
-  presets:
-    - performance
-
-linters-settings:
-  funlen:
-    lines: 80
-    statements: 50
-  lll:
-    line-length: 80
-
+    - staticcheck
+    - unused
+  settings:
+    funlen:
+      lines: 80
+      statements: 50
+    lll:
+      line-length: 80
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
 issues:
-  exclude:
-  # Display all issues
   max-issues-per-linter: 0
   max-same-issues: 0
+formatters:
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$

@@ -46,17 +46,12 @@ type KokoroOrator struct {
 }
 
 func stoproutine(orator Orator) {
-	select {
-	case <-TTSDoneChan:
-		orator.GetLogger().Info("orator got done signal")
-		orator.Stop()
-		// close(TTSTextChan)
-		// TTSTextChan = make(chan string, 10000)
-		// drain the channel
-		for len(TTSTextChan) > 0 {
-			<-TTSTextChan
-		}
-		return
+	<-TTSDoneChan
+	orator.GetLogger().Info("orator got done signal")
+	orator.Stop()
+	// drain the channel
+	for len(TTSTextChan) > 0 {
+		<-TTSTextChan
 	}
 }
 

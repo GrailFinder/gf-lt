@@ -32,7 +32,6 @@ type WhisperSTT struct {
 	ServerURL   string
 	SampleRate  int
 	AudioBuffer *bytes.Buffer
-	streamer    StreamCloser
 	recording   bool
 }
 
@@ -90,7 +89,7 @@ func (stt *WhisperSTT) StopRecording() (string, error) {
 		return "", err
 	}
 	// Send request
-	resp, err := http.Post("http://localhost:8081/inference", writer.FormDataContentType(), body)
+	resp, err := http.Post(stt.ServerURL, writer.FormDataContentType(), body)
 	if err != nil {
 		stt.logger.Error("fn: StopRecording", "error", err)
 		return "", err
@@ -122,7 +121,9 @@ func (stt *WhisperSTT) writeWavHeader(w io.Writer, dataSize int) {
 	binary.LittleEndian.PutUint16(header[34:36], 16)
 	copy(header[36:40], "data")
 	binary.LittleEndian.PutUint32(header[40:44], uint32(dataSize))
-	w.Write(header)
+	if _, err := w.Write(header); err != nil {
+		stt.logger.Error("writeWavHeader", "error", err)
+	}
 }
 
 func (stt *WhisperSTT) IsRecording() bool {
@@ -136,7 +137,9 @@ func (stt *WhisperSTT) microphoneStream(sampleRate int) error {
 	in := make([]int16, 64)
 	stream, err := portaudio.OpenDefaultStream(1, 0, float64(sampleRate), len(in), in)
 	if err != nil {
-		portaudio.Terminate()
+		if paErr := portaudio.Terminate(); paErr != nil {
+			return fmt.Errorf("failed to open microphone: %w; terminate error: %w", err, paErr)
+		}
 		return fmt.Errorf("failed to open microphone: %w", err)
 	}
 	go func(stream *portaudio.Stream) {

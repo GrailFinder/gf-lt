@@ -235,7 +235,7 @@ func (r *RAG) LineToVector(line string) ([]float32, error) {
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != 200 {
-		err = fmt.Errorf("non 200 resp; code: %v\n", resp.StatusCode)
+		err = fmt.Errorf("non 200 resp; code: %v", resp.StatusCode)
 		r.logger.Error(err.Error())
 		return nil, err
 	}
