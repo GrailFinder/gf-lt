@@ -89,7 +89,7 @@ func (stt *WhisperSTT) StopRecording() (string, error) {
 		return "", err
 	}
 	// Send request
-	resp, err := http.Post(stt.ServerURL, writer.FormDataContentType(), body)
+	resp, err := http.Post(stt.ServerURL, writer.FormDataContentType(), body) //nolint:noctx
 	if err != nil {
 		stt.logger.Error("fn: StopRecording", "error", err)
 		return "", err

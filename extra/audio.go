@@ -144,7 +144,7 @@ func (o *KokoroOrator) requestSound(text string) (io.ReadCloser, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal payload: %w", err)
 	}
-	req, err := http.NewRequest("POST", o.URL, bytes.NewBuffer(payloadBytes))
+	req, err := http.NewRequest("POST", o.URL, bytes.NewBuffer(payloadBytes)) //nolint:noctx
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}

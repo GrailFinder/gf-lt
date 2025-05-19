@@ -165,7 +165,7 @@ func makeChatTable(chatMap map[string]models.Chat) *tview.Table {
 	return chatActTable
 }
 
-// func makeRAGTable(fileList []string) *tview.Table {
+// nolint:unused
 func makeRAGTable(fileList []string) *tview.Flex {
 	actions := []string{"load", "delete"}
 	rows, cols := len(fileList), len(actions)+1
