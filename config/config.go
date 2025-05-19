@@ -40,8 +40,9 @@ type Config struct {
 	DeepSeekModel         string `toml:"DeepSeekModel"`
 	ApiLinks              []string
 	// TTS
-	TTS_URL     string `toml:"TTS_URL"`
-	TTS_ENABLED bool   `toml:"TTS_ENABLED"`
+	TTS_URL     string  `toml:"TTS_URL"`
+	TTS_ENABLED bool    `toml:"TTS_ENABLED"`
+	TTS_SPEED   float32 `toml:"TTS_SPEED"`
 	// STT
 	STT_URL     string `toml:"STT_URL"`
 	STT_ENABLED bool   `toml:"STT_ENABLED"`

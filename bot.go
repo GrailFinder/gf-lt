@@ -524,7 +524,7 @@ func init() {
 	choseChunkParser()
 	httpClient = createClient(time.Second * 15)
 	if cfg.TTS_ENABLED {
-		orator = extra.InitOrator(logger, cfg.TTS_URL)
+		orator = extra.NewOrator(logger, cfg)
 	}
 	if cfg.STT_ENABLED {
 		asr = extra.NewWhisperSTT(logger, cfg.STT_URL, 16000)

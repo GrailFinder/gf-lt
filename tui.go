@@ -1,6 +1,7 @@
 package main
 
 import (
+	"elefant/extra"
 	"elefant/models"
 	"elefant/pngmeta"
 	"fmt"
@@ -706,6 +707,14 @@ func init() {
 			if err := asr.StartRecording(); err != nil {
 				logger.Error("failed to start recording user speech", "error", err)
 				return nil
+			}
+		}
+		// I need keybind for tts to shut up
+		if event.Key() == tcell.KeyCtrlA {
+			textArea.SetText("pressed ctrl+A", true)
+			if cfg.TTS_ENABLED {
+				// audioStream.TextChan <- chunk
+				extra.TTSDoneChan <- true
 			}
 		}
 		if event.Key() == tcell.KeyCtrlW {
