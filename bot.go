@@ -4,13 +4,13 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"encoding/json"
+	"fmt"
 	"gf-lt/config"
 	"gf-lt/extra"
 	"gf-lt/models"
 	"gf-lt/rag"
 	"gf-lt/storage"
-	"encoding/json"
-	"fmt"
 	"io"
 	"log/slog"
 	"net"
@@ -350,6 +350,7 @@ out:
 			if cfg.TTS_ENABLED {
 				// audioStream.TextChan <- chunk
 				extra.TTSFlushChan <- true
+				logger.Info("sending flushchan signal")
 			}
 			break out
 		}

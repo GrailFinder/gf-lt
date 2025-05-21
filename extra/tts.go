@@ -2,13 +2,14 @@ package extra
 
 import (
 	"bytes"
-	"gf-lt/config"
-	"gf-lt/models"
 	"encoding/json"
 	"fmt"
+	"gf-lt/config"
+	"gf-lt/models"
 	"io"
 	"log/slog"
 	"net/http"
+	"regexp"
 	"strings"
 	"time"
 
@@ -19,16 +20,16 @@ import (
 )
 
 var (
-	TTSTextChan  = make(chan string, 10000)
-	TTSFlushChan = make(chan bool, 1)
-	TTSDoneChan  = make(chan bool, 1)
+	TTSTextChan         = make(chan string, 10000)
+	TTSFlushChan        = make(chan bool, 1)
+	TTSDoneChan         = make(chan bool, 1)
+	endsWithPunctuation = regexp.MustCompile(`[;.!?]$`)
 )
 
 type Orator interface {
 	Speak(text string) error
 	Stop()
 	// pause and resume?
-	GetSBuilder() strings.Builder
 	GetLogger() *slog.Logger
 }
 
@@ -43,69 +44,79 @@ type KokoroOrator struct {
 	Voice         string
 	currentStream *beep.Ctrl // Added for playback control
 	textBuffer    strings.Builder
+	// textBuffer bytes.Buffer
 }
 
-func stoproutine(orator Orator) {
+func (o *KokoroOrator) stoproutine() {
 	<-TTSDoneChan
-	orator.GetLogger().Info("orator got done signal")
-	orator.Stop()
+	o.logger.Info("orator got done signal")
+	o.Stop()
 	// drain the channel
 	for len(TTSTextChan) > 0 {
 		<-TTSTextChan
 	}
 }
 
-func readroutine(orator Orator) {
+func (o *KokoroOrator) readroutine() {
 	tokenizer, _ := english.NewSentenceTokenizer(nil)
-	var sentenceBuf bytes.Buffer
-	var remainder strings.Builder
+	// var sentenceBuf bytes.Buffer
+	// var remainder strings.Builder
 	for {
 		select {
 		case chunk := <-TTSTextChan:
-			sentenceBuf.WriteString(chunk)
-			text := sentenceBuf.String()
+			// sentenceBuf.WriteString(chunk)
+			// text := sentenceBuf.String()
+			_, err := o.textBuffer.WriteString(chunk)
+			if err != nil {
+				o.logger.Warn("failed to write to stringbuilder", "error", err)
+				continue
+			}
+			text := o.textBuffer.String()
 			sentences := tokenizer.Tokenize(text)
+			o.logger.Info("adding chunk", "chunk", chunk, "text", text, "sen-len", len(sentences))
 			for i, sentence := range sentences {
 				if i == len(sentences)-1 {
-					sentenceBuf.Reset()
-					sentenceBuf.WriteString(sentence.Text)
-					continue
+					o.textBuffer.Reset()
+					_, err := o.textBuffer.WriteString(sentence.Text)
+					if err != nil {
+						o.logger.Warn("failed to write to stringbuilder", "error", err)
+						continue
+					}
+					continue // if only one (often incomplete) sentence; wait for next chunk
 				}
-				// Send complete sentence to TTS
-				if err := orator.Speak(sentence.Text); err != nil {
-					orator.GetLogger().Error("tts failed", "sentence", sentence.Text, "error", err)
+				o.logger.Info("calling Speak with sentence", "sent", sentence.Text)
+				if err := o.Speak(sentence.Text); err != nil {
+					o.logger.Error("tts failed", "sentence", sentence.Text, "error", err)
 				}
 			}
 		case <-TTSFlushChan:
+			o.logger.Info("got flushchan signal start")
 			// lln is done get the whole message out
-			// FIXME: loses one token
-			for chunk := range TTSTextChan {
-				// orator.GetLogger().Info("flushing", "chunk", chunk)
-				// sentenceBuf.WriteString(chunk)
-				remainder.WriteString(chunk) // I get text here
-				if len(TTSTextChan) == 0 {
-					break
+			if len(TTSTextChan) > 0 { // otherwise might get stuck
+				for chunk := range TTSTextChan {
+					_, err := o.textBuffer.WriteString(chunk)
+					if err != nil {
+						o.logger.Warn("failed to write to stringbuilder", "error", err)
+						continue
+					}
+					if len(TTSTextChan) == 0 {
+						break
+					}
 				}
 			}
 			// INFO: if there is a lot of text it will take some time to make with tts at once
 			// to avoid this pause, it might be better to keep splitting on sentences
 			// but keepinig in mind that remainder could be ommited by tokenizer
 			// Flush remaining text
-			remaining := remainder.String()
-			remainder.Reset()
+			remaining := o.textBuffer.String()
+			o.logger.Info("got flushchan signal", "rem", remaining)
+			defer o.textBuffer.Reset()
 			if remaining != "" {
-				// orator.GetLogger().Info("flushing", "remaining", remaining)
-				if err := orator.Speak(remaining); err != nil {
-					orator.GetLogger().Error("tts failed", "sentence", remaining, "error", err)
+				o.logger.Info("calling Speak with remainder", "rem", remaining)
+				if err := o.Speak(remaining); err != nil {
+					o.logger.Error("tts failed", "sentence", remaining, "error", err)
 				}
 			}
-			// case <-TTSDoneChan:
-			// 	orator.GetLogger().Info("orator got done signal")
-			// 	orator.Stop()
-			// 	// it that the best way to empty channel?
-			// 	close(TTSTextChan)
-			// 	TTSTextChan = make(chan string, 10000)
-			// 	return
 		}
 	}
 }
@@ -120,8 +131,8 @@ func NewOrator(log *slog.Logger, cfg *config.Config) Orator {
 		Language: "a",
 		Voice:    "af_bella(1)+af_sky(1)",
 	}
-	go readroutine(orator)
-	go stoproutine(orator)
+	go orator.readroutine()
+	go orator.stoproutine()
 	return orator
 }
 
@@ -191,18 +202,13 @@ func (o *KokoroOrator) Speak(text string) error {
 	return nil
 }
 
-// TODO: stop works; but new stream does not start afterwards
 func (o *KokoroOrator) Stop() {
 	// speaker.Clear()
 	o.logger.Info("attempted to stop orator", "orator", o)
 	speaker.Lock()
 	defer speaker.Unlock()
 	if o.currentStream != nil {
-		o.currentStream.Paused = true
+		// o.currentStream.Paused = true
 		o.currentStream.Streamer = nil
 	}
-}
-
-func (o *KokoroOrator) GetSBuilder() strings.Builder {
-	return o.textBuffer
 }
