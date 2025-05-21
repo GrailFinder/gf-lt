@@ -2,9 +2,9 @@ package rag
 
 import (
 	"bytes"
-	"elefant/config"
-	"elefant/models"
-	"elefant/storage"
+	"gf-lt/config"
+	"gf-lt/models"
+	"gf-lt/storage"
 	"encoding/json"
 	"errors"
 	"fmt"

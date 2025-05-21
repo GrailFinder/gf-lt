@@ -1,7 +1,7 @@
 package storage
 
 import (
-	"elefant/models"
+	"gf-lt/models"
 	"log/slog"
 
 	_ "github.com/glebarez/go-sqlite"

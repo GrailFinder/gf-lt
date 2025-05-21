@@ -2,8 +2,8 @@ package extra
 
 import (
 	"bytes"
-	"elefant/config"
-	"elefant/models"
+	"gf-lt/config"
+	"gf-lt/models"
 	"encoding/json"
 	"fmt"
 	"io"

@@ -1,7 +1,7 @@
 package models
 
 import (
-	"elefant/config"
+	"gf-lt/config"
 	"fmt"
 	"strings"
 )

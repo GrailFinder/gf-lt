@@ -1,6 +1,6 @@
 package storage
 
-import "elefant/models"
+import "gf-lt/models"
 
 type Memories interface {
 	Memorise(m *models.Memory) (*models.Memory, error)

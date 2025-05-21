@@ -1,7 +1,7 @@
 package main
 
 import (
-	"elefant/models"
+	"gf-lt/models"
 	"fmt"
 	"strings"
 	"testing"

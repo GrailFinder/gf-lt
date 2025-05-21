@@ -1,9 +1,9 @@
 package main
 
 import (
-	"elefant/extra"
-	"elefant/models"
-	"elefant/pngmeta"
+	"gf-lt/extra"
+	"gf-lt/models"
+	"gf-lt/pngmeta"
 	"fmt"
 	"image"
 	_ "image/jpeg"

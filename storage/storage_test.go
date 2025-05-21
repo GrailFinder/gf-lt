@@ -1,7 +1,7 @@
 package storage
 
 import (
-	"elefant/models"
+	"gf-lt/models"
 	"fmt"
 	"log/slog"
 	"os"

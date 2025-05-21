@@ -1,7 +1,7 @@
 package main
 
 import (
-	"elefant/config"
+	"gf-lt/config"
 	"encoding/json"
 	"fmt"
 	"net/http"

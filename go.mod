@@ -1,4 +1,4 @@
-module elefant
+module gf-lt
 
 go 1.23.2
 

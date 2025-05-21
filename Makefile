@@ -1,10 +1,10 @@
 .PHONY: setconfig run lint
 
 run: setconfig
-	go build -o elefant && ./elefant
+	go build -o gf-lt && ./gf-lt
 
 server: setconfig
-	go build -o elefant && ./elefant -port 3333
+	go build -o gf-lt && ./gf-lt -port 3333
 
 setconfig:
 	find config.toml &>/dev/null || cp config.example.toml config.toml

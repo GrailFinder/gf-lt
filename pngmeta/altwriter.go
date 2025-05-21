@@ -2,7 +2,7 @@ package pngmeta
 
 import (
 	"bytes"
-	"elefant/models"
+	"gf-lt/models"
 	"encoding/base64"
 	"encoding/binary"
 	"encoding/json"
@@ -30,7 +30,7 @@ func WriteToPng(metadata *models.CharCardSpec, sourcePath, outfile string) error
 	}
 	base64Data := base64.StdEncoding.EncodeToString(jsonData)
 	embedData := PngEmbed{
-		Key:   "elefant", // Replace with appropriate key constant
+		Key:   "gf-lt", // Replace with appropriate key constant
 		Value: base64Data,
 	}
 	var outputBuffer bytes.Buffer

@@ -7,9 +7,9 @@ import (
 	"strings"
 	"time"
 
-	"elefant/models"
-	"elefant/pngmeta"
-	"elefant/rag"
+	"gf-lt/models"
+	"gf-lt/pngmeta"
+	"gf-lt/rag"
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"

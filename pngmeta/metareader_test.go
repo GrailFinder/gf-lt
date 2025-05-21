@@ -2,7 +2,7 @@ package pngmeta
 
 import (
 	"bytes"
-	"elefant/models"
+	"gf-lt/models"
 	"encoding/base64"
 	"encoding/binary"
 	"encoding/json"
