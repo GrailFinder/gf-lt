@@ -1,10 +1,10 @@
 package main
 
 import (
+	"fmt"
 	"gf-lt/extra"
 	"gf-lt/models"
 	"gf-lt/pngmeta"
-	"fmt"
 	"image"
 	_ "image/jpeg"
 	_ "image/png"
@@ -140,7 +140,11 @@ func colorText() {
 }
 
 func updateStatusLine() {
-	position.SetText(fmt.Sprintf(indexLine, botRespMode, cfg.AssistantRole, activeChatName, cfg.RAGEnabled, cfg.ToolUse, chatBody.Model, cfg.CurrentAPI, cfg.ThinkUse, logLevel.Level(), asr.IsRecording()))
+	isRecording := false
+	if asr != nil {
+		isRecording = asr.IsRecording()
+	}
+	position.SetText(fmt.Sprintf(indexLine, botRespMode, cfg.AssistantRole, activeChatName, cfg.RAGEnabled, cfg.ToolUse, chatBody.Model, cfg.CurrentAPI, cfg.ThinkUse, logLevel.Level(), isRecording))
 }
 
 func initSysCards() ([]string, error) {
