@@ -75,7 +75,7 @@ func (o *KokoroOrator) readroutine() {
 			sentences := tokenizer.Tokenize(text)
 			o.logger.Info("adding chunk", "chunk", chunk, "text", text, "sen-len", len(sentences))
 			for i, sentence := range sentences {
-				if i == len(sentences)-1 {
+				if i == len(sentences)-1 { // last sentence
 					o.textBuffer.Reset()
 					_, err := o.textBuffer.WriteString(sentence.Text)
 					if err != nil {
@@ -109,8 +109,7 @@ func (o *KokoroOrator) readroutine() {
 			// but keepinig in mind that remainder could be ommited by tokenizer
 			// Flush remaining text
 			remaining := o.textBuffer.String()
-			o.logger.Info("got flushchan signal", "rem", remaining)
-			defer o.textBuffer.Reset()
+			o.textBuffer.Reset()
 			if remaining != "" {
 				o.logger.Info("calling Speak with remainder", "rem", remaining)
 				if err := o.Speak(remaining); err != nil {
