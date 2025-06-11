@@ -2,22 +2,23 @@
 Terminal program to chat with llm.
 
 #### Has/Supports
-- card protocol;
-- /completion (fill) and openai's /v1/chat/completion (chat);
+- character card spec;
 - llama.cpp api, deepseek (other ones were not tested);
 - showing images (not really, for now only if your char card is png it could show it);
 - tts/sst (if whisper.cpp server / fastapi tts server are provided);
 
 #### usage examples
-[!usage example](assets/usage_ex_01.png)
-place a gif here
-and/or link to video
+[!usage example](assets/ex01.png)
 
 #### how to install
+clone the project
 ```
-git clone <url>
 cd gf-lt
 make
 ```
 
 #### setting up config
+```
+cp config.example.toml config.toml
+```
+set values as you need them to be.
