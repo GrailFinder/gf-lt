@@ -8,7 +8,7 @@ Terminal program to chat with llm.
 - tts/sst (if whisper.cpp server / fastapi tts server are provided);
 
 #### usage examples
-[!usage example](assets/ex01.png)
+![usage example](assets/ex01.png)
 
 #### how to install
 clone the project
