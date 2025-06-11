@@ -437,6 +437,7 @@ func removeThinking(chatBody *models.ChatBody) {
 
 func applyCharCard(cc *models.CharCard) {
 	cfg.AssistantRole = cc.Role
+	// FIXME: remove
 	// Initialize Cluedo if enabled and matching role
 	if cfg.EnableCluedo && cc.Role == "CluedoPlayer" {
 		playerOrder = []string{cfg.UserRole, cfg.AssistantRole, cfg.CluedoRole2}
@@ -444,6 +445,7 @@ func applyCharCard(cc *models.CharCard) {
 	}
 	history, err := loadAgentsLastChat(cfg.AssistantRole)
 	if err != nil {
+		// TODO: too much action for err != nil; loadAgentsLastChat needs to be split up
 		logger.Warn("failed to load last agent chat;", "agent", cc.Role, "err", err)
 		history = []models.RoleMsg{
 			{Role: "system", Content: cc.SysPrompt},

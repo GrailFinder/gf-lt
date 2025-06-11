@@ -9,7 +9,6 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
-	"regexp"
 	"strings"
 	"time"
 
@@ -20,10 +19,10 @@ import (
 )
 
 var (
-	TTSTextChan         = make(chan string, 10000)
-	TTSFlushChan        = make(chan bool, 1)
-	TTSDoneChan         = make(chan bool, 1)
-	endsWithPunctuation = regexp.MustCompile(`[;.!?]$`)
+	TTSTextChan  = make(chan string, 10000)
+	TTSFlushChan = make(chan bool, 1)
+	TTSDoneChan  = make(chan bool, 1)
+	// endsWithPunctuation = regexp.MustCompile(`[;.!?]$`)
 )
 
 type Orator interface {

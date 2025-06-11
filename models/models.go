@@ -1,8 +1,8 @@
 package models
 
 import (
-	"gf-lt/config"
 	"fmt"
+	"gf-lt/config"
 	"strings"
 )
 
@@ -74,6 +74,27 @@ type ChatBody struct {
 	Model    string    `json:"model"`
 	Stream   bool      `json:"stream"`
 	Messages []RoleMsg `json:"messages"`
+}
+
+func (cb *ChatBody) Rename(oldname, newname string) {
+	for i, m := range cb.Messages {
+		cb.Messages[i].Content = strings.ReplaceAll(m.Content, oldname, newname)
+		cb.Messages[i].Role = strings.ReplaceAll(m.Role, oldname, newname)
+	}
+}
+
+func (cb *ChatBody) ListRoles() []string {
+	namesMap := make(map[string]struct{})
+	for _, m := range cb.Messages {
+		namesMap[m.Role] = struct{}{}
+	}
+	resp := make([]string, len(namesMap))
+	i := 0
+	for k := range namesMap {
+		resp[i] = k
+		i++
+	}
+	return resp
 }
 
 type ChatToolsBody struct {

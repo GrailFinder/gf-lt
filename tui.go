@@ -43,6 +43,7 @@ var (
 	codeBlockPage = "codeBlockPage"
 	imgPage       = "imgPage"
 	// help text
+	// [yellow]F10[white]: manage loaded rag files (that already in vector db)
 	helpText = `
 [yellow]Esc[white]: send msg
 [yellow]PgUp/Down[white]: switch focus between input and chat widgets
@@ -55,7 +56,6 @@ var (
 [yellow]F7[white]: copy last msg to clipboard (linux xclip)
 [yellow]F8[white]: copy n msg to clipboard (linux xclip)
 [yellow]F9[white]: table to copy from; with all code blocks
-[yellow]F10[white]: manage loaded rag files (that already in vector db)
 [yellow]F11[white]: import chat file
 [yellow]F12[white]: show this help page
 [yellow]Ctrl+w[white]: resume generation on the last msg
@@ -65,11 +65,12 @@ var (
 [yellow]Ctrl+c[white]: close programm
 [yellow]Ctrl+p[white]: props edit form (min-p, dry, etc.)
 [yellow]Ctrl+v[white]: switch between /completion and /chat api (if provided in config)
-[yellow]Ctrl+r[white]: menu of files that can be loaded in vector db (RAG)
+[yellow]Ctrl+r[white]: start/stop recording from your microphone (needs stt server)
 [yellow]Ctrl+t[white]: remove thinking (<think>) and tool messages from context (delete from chat)
 [yellow]Ctrl+l[white]: update connected model name (llamacpp)
 [yellow]Ctrl+k[white]: switch tool use (recommend tool use to llm after user msg)
 [yellow]Ctrl+j[white]: if chat agent is char.png will show the image; then any key to return
+[yellow]Ctrl+a[white]: interrupt tts (needs tts server)
 
 Press Enter to go back
 `
@@ -144,7 +145,7 @@ func updateStatusLine() {
 	if asr != nil {
 		isRecording = asr.IsRecording()
 	}
-	position.SetText(fmt.Sprintf(indexLine, botRespMode, cfg.AssistantRole, activeChatName, cfg.RAGEnabled, cfg.ToolUse, chatBody.Model, cfg.CurrentAPI, cfg.ThinkUse, logLevel.Level(), isRecording))
+	position.SetText(fmt.Sprintf(indexLine, botRespMode, cfg.AssistantRole, activeChatName, cfg.ToolUse, chatBody.Model, cfg.CurrentAPI, cfg.ThinkUse, logLevel.Level(), isRecording))
 }
 
 func initSysCards() ([]string, error) {
@@ -164,6 +165,36 @@ func initSysCards() ([]string, error) {
 		labels = append(labels, cc.Role)
 	}
 	return labels, nil
+}
+
+func renameUser(oldname, newname string) {
+	if oldname == "" {
+		// not provided; deduce who user is
+		// INFO: if user not yet spoke, it is hard to replace mentions in sysprompt and first message about thme
+		roles := chatBody.ListRoles()
+		for _, role := range roles {
+			if role == cfg.AssistantRole {
+				continue
+			}
+			if role == cfg.ToolRole {
+				continue
+			}
+			if role == "system" {
+				continue
+			}
+			oldname = role
+			break
+		}
+		if oldname == "" {
+			// still
+			logger.Warn("fn: renameUser; failed to find old name", "newname", newname)
+			return
+		}
+	}
+	viewText := textView.GetText(false)
+	viewText = strings.ReplaceAll(viewText, oldname, newname)
+	chatBody.Rename(oldname, newname)
+	textView.SetText(viewText)
 }
 
 func startNewChat() {
@@ -218,7 +249,12 @@ func makePropsForm(props map[string]float32) *tview.Form {
 		}).AddDropDown("Select a model: ", []string{chatBody.Model, "deepseek-chat", "deepseek-reasoner"}, 0,
 		func(option string, optionIndex int) {
 			chatBody.Model = option
-		}).
+		}).AddInputField("username: ", cfg.UserRole, 32, tview.InputFieldMaxLength(32), func(text string) {
+		if text != "" {
+			renameUser(cfg.UserRole, text)
+			cfg.UserRole = text
+		}
+	}).
 		AddButton("Quit", func() {
 			pages.RemovePage(propsPage)
 		})
@@ -545,23 +581,23 @@ func init() {
 			// updateStatusLine()
 			return nil
 		}
-		if event.Key() == tcell.KeyF10 {
-			// list rag loaded in db
-			loadedFiles, err := ragger.ListLoaded()
-			if err != nil {
-				logger.Error("failed to list regfiles in db", "error", err)
-				return nil
-			}
-			if len(loadedFiles) == 0 {
-				if err := notifyUser("loaded RAG", "no files in db"); err != nil {
-					logger.Error("failed to send notification", "error", err)
-				}
-				return nil
-			}
-			dbRAGTable := makeLoadedRAGTable(loadedFiles)
-			pages.AddPage(RAGPage, dbRAGTable, true, true)
-			return nil
-		}
+		// if event.Key() == tcell.KeyF10 {
+		// 	// list rag loaded in db
+		// 	loadedFiles, err := ragger.ListLoaded()
+		// 	if err != nil {
+		// 		logger.Error("failed to list regfiles in db", "error", err)
+		// 		return nil
+		// 	}
+		// 	if len(loadedFiles) == 0 {
+		// 		if err := notifyUser("loaded RAG", "no files in db"); err != nil {
+		// 			logger.Error("failed to send notification", "error", err)
+		// 		}
+		// 		return nil
+		// 	}
+		// 	dbRAGTable := makeLoadedRAGTable(loadedFiles)
+		// 	pages.AddPage(RAGPage, dbRAGTable, true, true)
+		// 	return nil
+		// }
 		if event.Key() == tcell.KeyF11 {
 			// read files in chat_exports
 			dirname := "chat_exports"
