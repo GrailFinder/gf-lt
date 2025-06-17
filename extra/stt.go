@@ -103,7 +103,8 @@ func (stt *WhisperSTT) StopRecording() (string, error) {
 	}
 	resptext := strings.TrimRight(string(responseTextBytes), "\n")
 	// in case there are special tokens like [_BEG_]
-	return specialRE.ReplaceAllString(resptext, ""), nil
+	resptext = specialRE.ReplaceAllString(resptext, "")
+	return strings.TrimSpace(strings.ReplaceAll(resptext, "\n ", "\n")), nil
 }
 
 func (stt *WhisperSTT) writeWavHeader(w io.Writer, dataSize int) {
