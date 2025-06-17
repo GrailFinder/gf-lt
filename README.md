@@ -8,10 +8,10 @@ made with use of [tview](https://github.com/rivo/tview)
 - showing images (not really, for now only if your char card is png it could show it);
 - tts/stt (if whisper.cpp server / fastapi tts server are provided);
 
-#### does not have/supprot
+#### does not have/support
 - images; (ctrl+j will show an image of the card you use, but that is about it);
 - RAG; (RAG was implemented, but I found it unusable and then sql extention broke, so no RAG);
-- MCP; (agentic is implemented, but as a raw and predifined functions for llm to use. see [tools.go](https://github.com/GrailFinder/gf-lt/blob/master/tools.go));
+- MCP; (agentic is implemented, but as a raw and predefined functions for llm to use. see [tools.go](https://github.com/GrailFinder/gf-lt/blob/master/tools.go));
 
 #### usage examples
 ![usage example](assets/ex01.png)
