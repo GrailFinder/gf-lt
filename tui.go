@@ -38,7 +38,7 @@ var (
 	indexPage     = "indexPage"
 	helpPage      = "helpPage"
 	renamePage    = "renamePage"
-	RAGPage       = "RAGPage "
+	RAGPage       = "RAGPage"
 	propsPage     = "propsPage"
 	codeBlockPage = "codeBlockPage"
 	imgPage       = "imgPage"
