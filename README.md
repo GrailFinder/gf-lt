@@ -1,5 +1,6 @@
 ### gf-lt (grail finder's llm tui)
-Terminal user interface for large language models.
+terminal user interface for large language models.
+made with use of [tview](https://github.com/rivo/tview)
 
 #### has/supports
 - character card spec;
