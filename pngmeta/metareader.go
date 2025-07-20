@@ -2,11 +2,11 @@ package pngmeta
 
 import (
 	"bytes"
-	"gf-lt/models"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"gf-lt/models"
 	"io"
 	"log/slog"
 	"os"
@@ -100,7 +100,7 @@ func ReadCard(fname, uname string) (*models.CharCard, error) {
 	return charSpec.Simplify(uname, fname), nil
 }
 
-func readCardJson(fname string) (*models.CharCard, error) {
+func ReadCardJson(fname string) (*models.CharCard, error) {
 	data, err := os.ReadFile(fname)
 	if err != nil {
 		return nil, err
@@ -134,7 +134,7 @@ func ReadDirCards(dirname, uname string, log *slog.Logger) ([]*models.CharCard, 
 		}
 		if strings.HasSuffix(f.Name(), ".json") {
 			fpath := path.Join(dirname, f.Name())
-			cc, err := readCardJson(fpath)
+			cc, err := ReadCardJson(fpath)
 			if err != nil {
 				return nil, err // better to log and continue
 			}
