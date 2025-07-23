@@ -382,7 +382,7 @@ func init() {
 				return event
 			}
 			selectedIndex = siInt
-			if len(chatBody.Messages)+1 < selectedIndex || selectedIndex < 0 {
+			if len(chatBody.Messages)-1 < selectedIndex || selectedIndex < 0 {
 				msg := "chosen index is out of bounds"
 				logger.Warn(msg, "index", selectedIndex)
 				if err := notifyUser("error", msg); err != nil {
