@@ -43,7 +43,6 @@ var (
 	codeBlockPage = "codeBlockPage"
 	imgPage       = "imgPage"
 	// help text
-	// [yellow]F10[white]: manage loaded rag files (that already in vector db)
 	helpText = `
 [yellow]Esc[white]: send msg
 [yellow]PgUp/Down[white]: switch focus between input and chat widgets
@@ -56,6 +55,7 @@ var (
 [yellow]F7[white]: copy last msg to clipboard (linux xclip)
 [yellow]F8[white]: copy n msg to clipboard (linux xclip)
 [yellow]F9[white]: table to copy from; with all code blocks
+[yellow]F10[white]: switch if LLM will respond on this message (for user to write multiple messages in a row)
 [yellow]F11[white]: import chat file
 [yellow]F12[white]: show this help page
 [yellow]Ctrl+w[white]: resume generation on the last msg
@@ -71,6 +71,7 @@ var (
 [yellow]Ctrl+k[white]: switch tool use (recommend tool use to llm after user msg)
 [yellow]Ctrl+j[white]: if chat agent is char.png will show the image; then any key to return
 [yellow]Ctrl+a[white]: interrupt tts (needs tts server)
+[yellow]Ctrl+q[white]: cycle through mentioned chars in chat, to pick persona to send next msg as
 
 Press Enter to go back
 `
@@ -145,7 +146,12 @@ func updateStatusLine() {
 	if asr != nil {
 		isRecording = asr.IsRecording()
 	}
-	position.SetText(fmt.Sprintf(indexLine, botRespMode, cfg.AssistantRole, activeChatName, cfg.ToolUse, chatBody.Model, cfg.CurrentAPI, cfg.ThinkUse, logLevel.Level(), isRecording))
+	persona := cfg.UserRole
+	if cfg.WriteNextMsgAs != "" {
+		persona = cfg.WriteNextMsgAs
+	}
+	position.SetText(fmt.Sprintf(indexLine, botRespMode, cfg.AssistantRole, activeChatName, cfg.ToolUse, chatBody.Model,
+		cfg.SkipLLMResp, cfg.CurrentAPI, cfg.ThinkUse, logLevel.Level(), isRecording, persona))
 }
 
 func initSysCards() ([]string, error) {
@@ -249,6 +255,14 @@ func makePropsForm(props map[string]float32) *tview.Form {
 		}).AddDropDown("Select a model: ", []string{chatBody.Model, "deepseek-chat", "deepseek-reasoner"}, 0,
 		func(option string, optionIndex int) {
 			chatBody.Model = option
+		}).AddDropDown("Write next message as: ", chatBody.ListRoles(), 0,
+		func(option string, optionIndex int) {
+			cfg.WriteNextMsgAs = option
+		}).AddInputField("new char to write msg as: ", "", 32, tview.InputFieldMaxLength(32),
+		func(text string) {
+			if text != "" {
+				cfg.WriteNextMsgAs = text
+			}
 		}).AddInputField("username: ", cfg.UserRole, 32, tview.InputFieldMaxLength(32), func(text string) {
 		if text != "" {
 			renameUser(cfg.UserRole, text)
@@ -598,6 +612,10 @@ func init() {
 		// 	pages.AddPage(RAGPage, dbRAGTable, true, true)
 		// 	return nil
 		// }
+		if event.Key() == tcell.KeyF10 {
+			cfg.SkipLLMResp = !cfg.SkipLLMResp
+			updateStatusLine()
+		}
 		if event.Key() == tcell.KeyF11 {
 			// read files in chat_exports
 			dirname := "chat_exports"
@@ -751,7 +769,7 @@ func init() {
 		}
 		// I need keybind for tts to shut up
 		if event.Key() == tcell.KeyCtrlA {
-			textArea.SetText("pressed ctrl+A", true)
+			// textArea.SetText("pressed ctrl+A", true)
 			if cfg.TTS_ENABLED {
 				// audioStream.TextChan <- chunk
 				extra.TTSDoneChan <- true
@@ -764,27 +782,56 @@ func init() {
 			go chatRound("", lastRole, textView, false, true)
 			return nil
 		}
+		if event.Key() == tcell.KeyCtrlQ {
+			persona := cfg.UserRole
+			if cfg.WriteNextMsgAs != "" {
+				persona = cfg.WriteNextMsgAs
+			}
+			roles := chatBody.ListRoles()
+			if len(roles) == 0 {
+				logger.Warn("empty roles in chat")
+			}
+			for i, role := range roles {
+				if strings.EqualFold(role, persona) {
+					if i == len(roles)-1 {
+						cfg.WriteNextMsgAs = roles[0] // reached last, get first
+						break
+					}
+					cfg.WriteNextMsgAs = roles[i+1] // get next role
+					break
+				}
+			}
+			updateStatusLine()
+			return nil
+		}
 		// cannot send msg in editMode or botRespMode
 		if event.Key() == tcell.KeyEscape && !editMode && !botRespMode {
 			// read all text into buffer
 			msgText := textArea.GetText()
 			nl := "\n"
 			prevText := textView.GetText(true)
+			persona := cfg.UserRole
 			// strings.LastIndex()
 			// newline is not needed is prev msg ends with one
 			if strings.HasSuffix(prevText, nl) {
 				nl = ""
 			}
 			if msgText != "" {
+				// as what char user sends msg?
+				if cfg.WriteNextMsgAs != "" {
+					persona = cfg.WriteNextMsgAs
+				}
 				// add user icon before user msg
 				fmt.Fprintf(textView, "%s[-:-:b](%d) <%s>: [-:-:-]\n%s\n",
-					nl, len(chatBody.Messages), cfg.UserRole, msgText)
+					nl, len(chatBody.Messages), persona, msgText)
 				textArea.SetText("", true)
 				textView.ScrollToEnd()
 				colorText()
 			}
-			// update statue line
-			go chatRound(msgText, cfg.UserRole, textView, false, false)
+			if !cfg.SkipLLMResp {
+				// update statue line
+				go chatRound(msgText, persona, textView, false, false)
+			}
 			return nil
 		}
 		if event.Key() == tcell.KeyPgUp || event.Key() == tcell.KeyPgDn {
