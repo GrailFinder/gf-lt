@@ -2,8 +2,8 @@ package main
 
 import (
 	"bytes"
-	"gf-lt/models"
 	"encoding/json"
+	"gf-lt/models"
 	"io"
 	"strings"
 )
@@ -88,10 +88,10 @@ func (lcp LlamaCPPeer) FormMsg(msg, role string, resume bool) (io.Reader, error)
 	logger.Debug("checking prompt for /completion", "tool_use", cfg.ToolUse,
 		"msg", msg, "resume", resume, "prompt", prompt)
 	var payload any
-	payload = models.NewLCPReq(prompt, cfg, defaultLCPProps)
+	payload = models.NewLCPReq(prompt, cfg, defaultLCPProps, chatBody.MakeStopSlice())
 	if strings.Contains(chatBody.Model, "deepseek") {
 		payload = models.NewDSCompletionReq(prompt, chatBody.Model,
-			defaultLCPProps["temp"], cfg)
+			defaultLCPProps["temp"], cfg, chatBody.MakeStopSlice())
 	}
 	data, err := json.Marshal(payload)
 	if err != nil {
@@ -213,7 +213,7 @@ func (ds DeepSeekerCompletion) FormMsg(msg, role string, resume bool) (io.Reader
 	logger.Debug("checking prompt for /completion", "tool_use", cfg.ToolUse,
 		"msg", msg, "resume", resume, "prompt", prompt)
 	payload := models.NewDSCompletionReq(prompt, chatBody.Model,
-		defaultLCPProps["temp"], cfg)
+		defaultLCPProps["temp"], cfg, chatBody.MakeStopSlice())
 	data, err := json.Marshal(payload)
 	if err != nil {
 		logger.Error("failed to form a msg", "error", err)
