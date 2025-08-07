@@ -1,5 +1,7 @@
 ChatAPI = "http://localhost:8080/v1/chat/completions"
 CompletionAPI = "http://localhost:8080/completion"
+OpenRouterCompletionAPI = "https://openrouter.ai/api/v1/completions"
+OpenRouterChatAPI = "https://openrouter.ai/api/v1/chat/completions"
 EmbedURL = "http://localhost:8080/v1/embeddings"
 ShowSys = true
 LogFile = "log.txt"

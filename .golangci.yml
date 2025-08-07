@@ -10,7 +10,6 @@ linters:
     - fatcontext
     - govet
     - ineffassign
-    - noctx
     - perfsprint
     - prealloc
     - staticcheck

@@ -241,6 +241,8 @@ func setLogLevel(sl string) {
 func makePropsForm(props map[string]float32) *tview.Form {
 	// https://github.com/rivo/tview/commit/0a18dea458148770d212d348f656988df75ff341
 	// no way to close a form by a key press; a shame.
+	modelList := []string{chatBody.Model, "deepseek-chat", "deepseek-reasoner"}
+	modelList = append(modelList, ORFreeModels...)
 	form := tview.NewForm().
 		AddTextView("Notes", "Props for llamacpp completion call", 40, 2, true, false).
 		AddCheckbox("Insert <think> (/completion only)", cfg.ThinkUse, func(checked bool) {
@@ -253,7 +255,7 @@ func makePropsForm(props map[string]float32) *tview.Form {
 		}).AddDropDown("Select an api: ", slices.Insert(cfg.ApiLinks, 0, cfg.CurrentAPI), 0,
 		func(option string, optionIndex int) {
 			cfg.CurrentAPI = option
-		}).AddDropDown("Select a model: ", []string{chatBody.Model, "deepseek-chat", "deepseek-reasoner"}, 0,
+		}).AddDropDown("Select a model: ", modelList, 0,
 		func(option string, optionIndex int) {
 			chatBody.Model = option
 		}).AddDropDown("Write next message as: ", chatBody.ListRoles(), 0,
@@ -694,11 +696,10 @@ func init() {
 				return nil
 			}
 			cfg.CurrentAPI = newAPI
-			if strings.Contains(cfg.CurrentAPI, "deepseek") {
-				chatBody.Model = "deepseek-chat"
-			} else {
-				chatBody.Model = "local"
-			}
+			// // TODO: implement model pick
+			// if strings.Contains(cfg.CurrentAPI, "deepseek") {
+			// 	chatBody.Model = "deepseek-chat"
+			// }
 			choseChunkParser()
 			updateStatusLine()
 			return nil

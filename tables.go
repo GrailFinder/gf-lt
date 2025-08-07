@@ -144,7 +144,6 @@ func makeChatTable(chatMap map[string]models.Chat) *tview.Table {
 				return
 			}
 			// Reload card from disk
-			newCard := &models.CharCard{}
 			newCard, err := pngmeta.ReadCard(cc.FilePath, cfg.UserRole)
 			if err != nil {
 				logger.Error("failed to reload charcard", "path", cc.FilePath, "error", err)

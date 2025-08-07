@@ -52,6 +52,14 @@ var (
 		"min_p":          0.05,
 		"n_predict":      -1.0,
 	}
+	ORFreeModels = []string{
+		"google/gemini-2.0-flash-exp:free",
+		"deepseek/deepseek-chat-v3-0324:free",
+		"mistralai/mistral-small-3.2-24b-instruct:free",
+		"qwen/qwen3-14b:free",
+		"google/gemma-3-27b-it:free",
+		"meta-llama/llama-3.3-70b-instruct:free",
+	}
 )
 
 func createClient(connectTimeout time.Duration) *http.Client {
@@ -124,6 +132,24 @@ func fetchDSBalance() *models.DSBalance {
 	return &resp
 }
 
+func fetchORModels(free bool) ([]string, error) {
+	resp, err := http.Get("https://openrouter.ai/api/v1/models")
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		err := fmt.Errorf("failed to fetch or models; status: %s", resp.Status)
+		return nil, err
+	}
+	data := &models.ORModels{}
+	if err := json.NewDecoder(resp.Body).Decode(data); err != nil {
+		return nil, err
+	}
+	freeModels := data.ListModels(free)
+	return freeModels, nil
+}
+
 func sendMsgToLLM(body io.Reader) {
 	choseChunkParser()
 	bodyBytes, _ := io.ReadAll(body)
@@ -143,7 +169,7 @@ func sendMsgToLLM(body io.Reader) {
 	}
 	req.Header.Add("Accept", "application/json")
 	req.Header.Add("Content-Type", "application/json")
-	req.Header.Add("Authorization", "Bearer "+cfg.DeepSeekToken)
+	req.Header.Add("Authorization", "Bearer "+chunkParser.GetToken())
 	req.Header.Set("Content-Length", strconv.Itoa(len(bodyBytes)))
 	req.Header.Set("Accept-Encoding", "gzip")
 	// nolint
@@ -195,6 +221,9 @@ func sendMsgToLLM(body io.Reader) {
 		if bytes.Equal(line, []byte("[DONE]\n")) {
 			streamDone <- true
 			break
+		}
+		if bytes.Equal(line, []byte("ROUTER PROCESSING\n")) {
+			continue
 		}
 		content, stop, err = chunkParser.ParseChunk(line)
 		if err != nil {
@@ -408,7 +437,7 @@ func chatToTextSlice(showSys bool) []string {
 		if !showSys && (msg.Role != cfg.AssistantRole && msg.Role != cfg.UserRole) {
 			continue
 		}
-		resp[i] = msg.ToText(i, cfg)
+		resp[i] = msg.ToText(i)
 	}
 	return resp
 }
@@ -523,6 +552,14 @@ func init() {
 	if cfg.EnableCluedo && cfg.AssistantRole == "CluedoPlayer" {
 		playerOrder = []string{cfg.UserRole, cfg.AssistantRole, cfg.CluedoRole2}
 		cluedoState = extra.CluedoPrepCards(playerOrder)
+	}
+	if cfg.OpenRouterToken != "" {
+		ORModels, err := fetchORModels(true)
+		if err != nil {
+			logger.Error("failed to fetch or models", "error", err)
+		} else {
+			ORFreeModels = ORModels
+		}
 	}
 	choseChunkParser()
 	httpClient = createClient(time.Second * 15)

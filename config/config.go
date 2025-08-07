@@ -41,6 +41,11 @@ type Config struct {
 	DeepSeekToken         string `toml:"DeepSeekToken"`
 	DeepSeekModel         string `toml:"DeepSeekModel"`
 	ApiLinks              []string
+	// openrouter
+	OpenRouterChatAPI       string `toml:"OpenRouterChatAPI"`
+	OpenRouterCompletionAPI string `toml:"OpenRouterCompletionAPI"`
+	OpenRouterToken         string `toml:"OpenRouterToken"`
+	OpenRouterModel         string `toml:"OpenRouterModel"`
 	// TTS
 	TTS_URL     string  `toml:"TTS_URL"`
 	TTS_ENABLED bool    `toml:"TTS_ENABLED"`
@@ -62,6 +67,8 @@ func LoadConfigOrDefault(fn string) *Config {
 		config.CompletionAPI = "http://localhost:8080/completion"
 		config.DeepSeekCompletionAPI = "https://api.deepseek.com/beta/completions"
 		config.DeepSeekChatAPI = "https://api.deepseek.com/chat/completions"
+		config.OpenRouterCompletionAPI = "https://openrouter.ai/api/v1/completions"
+		config.OpenRouterChatAPI = "https://openrouter.ai/api/v1/chat/completions"
 		config.RAGEnabled = false
 		config.EmbedURL = "http://localhost:8080/v1/embiddings"
 		config.ShowSys = true
@@ -81,10 +88,12 @@ func LoadConfigOrDefault(fn string) *Config {
 	}
 	config.CurrentAPI = config.ChatAPI
 	config.APIMap = map[string]string{
-		config.ChatAPI:               config.CompletionAPI,
-		config.CompletionAPI:         config.DeepSeekChatAPI,
-		config.DeepSeekChatAPI:       config.DeepSeekCompletionAPI,
-		config.DeepSeekCompletionAPI: config.ChatAPI,
+		config.ChatAPI:                 config.CompletionAPI,
+		config.CompletionAPI:           config.DeepSeekChatAPI,
+		config.DeepSeekChatAPI:         config.DeepSeekCompletionAPI,
+		config.DeepSeekCompletionAPI:   config.OpenRouterCompletionAPI,
+		config.OpenRouterCompletionAPI: config.OpenRouterChatAPI,
+		config.OpenRouterChatAPI:       config.ChatAPI,
 	}
 	for _, el := range []string{config.ChatAPI, config.CompletionAPI, config.DeepSeekChatAPI, config.DeepSeekCompletionAPI} {
 		if el != "" {
