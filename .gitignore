@@ -11,3 +11,4 @@ history_bak/
 .aider*
 tags
 gf-lt
+chat_exports/*.json

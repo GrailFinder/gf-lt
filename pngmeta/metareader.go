@@ -126,9 +126,8 @@ func ReadDirCards(dirname, uname string, log *slog.Logger) ([]*models.CharCard, 
 			fpath := path.Join(dirname, f.Name())
 			cc, err := ReadCard(fpath, uname)
 			if err != nil {
-				log.Warn("failed to load card", "error", err)
+				log.Warn("failed to load card", "error", err, "card", fpath)
 				continue
-				// return nil, err // better to log and continue
 			}
 			resp = append(resp, cc)
 		}
@@ -136,7 +135,8 @@ func ReadDirCards(dirname, uname string, log *slog.Logger) ([]*models.CharCard, 
 			fpath := path.Join(dirname, f.Name())
 			cc, err := ReadCardJson(fpath)
 			if err != nil {
-				return nil, err // better to log and continue
+				log.Warn("failed to load card", "error", err, "card", fpath)
+				continue
 			}
 			cc.FirstMsg = strings.ReplaceAll(strings.ReplaceAll(cc.FirstMsg, "{{char}}", cc.Role), "{{user}}", uname)
 			cc.SysPrompt = strings.ReplaceAll(strings.ReplaceAll(cc.SysPrompt, "{{char}}", cc.Role), "{{user}}", uname)

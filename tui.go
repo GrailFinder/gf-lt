@@ -42,6 +42,7 @@ var (
 	propsPage     = "propsPage"
 	codeBlockPage = "codeBlockPage"
 	imgPage       = "imgPage"
+	exportDir     = "chat_exports"
 	// help text
 	helpText = `
 [yellow]Esc[white]: send msg
@@ -618,19 +619,19 @@ func init() {
 		}
 		if event.Key() == tcell.KeyF11 {
 			// read files in chat_exports
-			dirname := "chat_exports"
-			filelist, err := os.ReadDir(dirname)
+			filelist, err := os.ReadDir(exportDir)
 			if err != nil {
 				if err := notifyUser("failed to load exports", err.Error()); err != nil {
 					logger.Error("failed to send notification", "error", err)
 				}
+				return nil
 			}
 			fli := []string{}
 			for _, f := range filelist {
 				if f.IsDir() || !strings.HasSuffix(f.Name(), ".json") {
 					continue
 				}
-				fpath := path.Join(dirname, f.Name())
+				fpath := path.Join(exportDir, f.Name())
 				fli = append(fli, fpath)
 			}
 			// check error

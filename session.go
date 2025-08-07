@@ -1,12 +1,13 @@
 package main
 
 import (
-	"gf-lt/models"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"gf-lt/models"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"strings"
 	"time"
@@ -32,7 +33,8 @@ func exportChat() error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(activeChatName+".json", data, 0666)
+	fp := path.Join(exportDir, activeChatName+".json")
+	return os.WriteFile(fp, data, 0666)
 }
 
 func importChat(filename string) error {
