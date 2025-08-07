@@ -516,12 +516,12 @@ func init() {
 	logfile, err := os.OpenFile(cfg.LogFile,
 		os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
-		logger.Error("failed to open log file", "error", err, "filename", cfg.LogFile)
+		slog.Error("failed to open log file", "error", err, "filename", cfg.LogFile)
 		return
 	}
 	defaultStarterBytes, err = json.Marshal(defaultStarter)
 	if err != nil {
-		logger.Error("failed to marshal defaultStarter", "error", err)
+		slog.Error("failed to marshal defaultStarter", "error", err)
 		return
 	}
 	// load cards
