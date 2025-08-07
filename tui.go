@@ -390,18 +390,24 @@ func init() {
 			siInt, err := strconv.Atoi(si)
 			if err != nil {
 				logger.Error("failed to convert provided index", "error", err, "si", si)
-				if err := notifyUser("cancel", "no index provided"); err != nil {
+				if err := notifyUser("cancel", "no index provided, copying user input"); err != nil {
 					logger.Error("failed to send notification", "error", err)
+				}
+				if err := copyToClipboard(textArea.GetText()); err != nil {
+					logger.Error("failed to copy to clipboard", "error", err)
 				}
 				pages.RemovePage(indexPage)
 				return event
 			}
 			selectedIndex = siInt
 			if len(chatBody.Messages)-1 < selectedIndex || selectedIndex < 0 {
-				msg := "chosen index is out of bounds"
+				msg := "chosen index is out of bounds, will copy user input"
 				logger.Warn(msg, "index", selectedIndex)
 				if err := notifyUser("error", msg); err != nil {
 					logger.Error("failed to send notification", "error", err)
+				}
+				if err := copyToClipboard(textArea.GetText()); err != nil {
+					logger.Error("failed to copy to clipboard", "error", err)
 				}
 				pages.RemovePage(indexPage)
 				return event
