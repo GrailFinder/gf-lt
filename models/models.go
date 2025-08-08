@@ -108,33 +108,6 @@ func (cb *ChatBody) MakeStopSlice() []string {
 	return ss
 }
 
-type ChatToolsBody struct {
-	Model    string    `json:"model"`
-	Messages []RoleMsg `json:"messages"`
-	Tools    []struct {
-		Type     string `json:"type"`
-		Function struct {
-			Name        string `json:"name"`
-			Description string `json:"description"`
-			Parameters  struct {
-				Type       string `json:"type"`
-				Properties struct {
-					Location struct {
-						Type        string `json:"type"`
-						Description string `json:"description"`
-					} `json:"location"`
-					Unit struct {
-						Type string   `json:"type"`
-						Enum []string `json:"enum"`
-					} `json:"unit"`
-				} `json:"properties"`
-				Required []string `json:"required"`
-			} `json:"parameters"`
-		} `json:"function"`
-	} `json:"tools"`
-	ToolChoice string `json:"tool_choice"`
-}
-
 type DSChatReq struct {
 	Messages         []RoleMsg `json:"messages"`
 	Model            string    `json:"model"`
@@ -286,6 +259,37 @@ type EmbeddingResp struct {
 // 		Object    string    `json:"object"`
 // 	} `json:"data"`
 // }
+
+// === tools models
+
+type ToolArgProps struct {
+	Type        string `json:"type"`
+	Description string `json:"description"`
+}
+
+type ToolFuncParams struct {
+	Type       string                  `json:"type"`
+	Properties map[string]ToolArgProps `json:"properties"`
+	Required   []string                `json:"required"`
+}
+
+type ToolFunc struct {
+	Name        string         `json:"name"`
+	Description string         `json:"description"`
+	Parameters  ToolFuncParams `json:"parameters"`
+}
+
+type Tool struct {
+	Type     string   `json:"type"`
+	Function ToolFunc `json:"function"`
+}
+
+type OpenAIReq struct {
+	ChatBody
+	Tools []Tool `json:"tools"`
+}
+
+// ===
 
 type LLMModels struct {
 	Object string `json:"object"`

@@ -1,8 +1,8 @@
 package main
 
 import (
-	"gf-lt/models"
 	"fmt"
+	"gf-lt/models"
 	"regexp"
 	"strings"
 	"time"
@@ -140,4 +140,30 @@ var fnMap = map[string]fnSig{
 	"recall":        recall,
 	"recall_topics": recallTopics,
 	"memorise":      memorise,
+}
+
+// openai style def
+var baseTools = []models.Tool{
+	// memorise
+	models.Tool{
+		Type: "function",
+		Function: models.ToolFunc{
+			Name:        "memorise",
+			Description: "save topic-data in key-value cache",
+			Parameters: models.ToolFuncParams{
+				Type:     "object",
+				Required: []string{"topic", "data"},
+				Properties: map[string]models.ToolArgProps{
+					"topic": models.ToolArgProps{
+						Type:        "string",
+						Description: "topic is the key under which data is saved",
+					},
+					"data": models.ToolArgProps{
+						Type:        "string",
+						Description: "data is the value that is saved under the topic-key",
+					},
+				},
+			},
+		},
+	},
 }
