@@ -551,8 +551,7 @@ func init() {
 	//
 	logLevel.Set(slog.LevelInfo)
 	logger = slog.New(slog.NewTextHandler(logfile, &slog.HandlerOptions{Level: logLevel}))
-	// TODO: rename and/or put in cfg
-	store = storage.NewProviderSQL("test.db", logger)
+	store = storage.NewProviderSQL(cfg.DBPATH, logger)
 	if store == nil {
 		os.Exit(1)
 	}

@@ -53,6 +53,7 @@ type Config struct {
 	// STT
 	STT_URL     string `toml:"STT_URL"`
 	STT_ENABLED bool   `toml:"STT_ENABLED"`
+	DBPATH      string `toml:"DBPATH"`
 }
 
 func LoadConfigOrDefault(fn string) *Config {
@@ -78,6 +79,7 @@ func LoadConfigOrDefault(fn string) *Config {
 		config.AssistantRole = "assistant"
 		config.SysDir = "sysprompts"
 		config.ChunkLimit = 8192
+		config.DBPATH = "gflt.db"
 		//
 		config.RAGBatchSize = 100
 		config.RAGWordLimit = 80

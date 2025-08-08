@@ -21,3 +21,4 @@ TTS_SPEED = 1.0
 # extra stt
 STT_ENABLED = false
 STT_URL = "http://localhost:8081/inference"
+DBPATH = "gflt.db"
