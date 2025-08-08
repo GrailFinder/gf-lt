@@ -142,8 +142,10 @@ func (op OpenAIer) ParseChunk(data []byte) (*models.TextChunk, error) {
 		return nil, err
 	}
 	resp := &models.TextChunk{
-		Chunk:     llmchunk.Choices[len(llmchunk.Choices)-1].Delta.Content,
-		ToolChunk: llmchunk.Choices[len(llmchunk.Choices)-1].Delta.ToolCalls[0].Function.Arguments,
+		Chunk: llmchunk.Choices[len(llmchunk.Choices)-1].Delta.Content,
+	}
+	if len(llmchunk.Choices[len(llmchunk.Choices)-1].Delta.ToolCalls) > 0 {
+		resp.ToolChunk = llmchunk.Choices[len(llmchunk.Choices)-1].Delta.ToolCalls[0].Function.Arguments
 	}
 	if llmchunk.Choices[len(llmchunk.Choices)-1].FinishReason == "stop" {
 		if resp.Chunk != "" {

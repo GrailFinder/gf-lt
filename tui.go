@@ -558,7 +558,7 @@ func init() {
 		if event.Key() == tcell.KeyF5 {
 			// switch cfg.ShowSys
 			cfg.ShowSys = !cfg.ShowSys
-			textView.SetText(chatToText(cfg.ShowSys))
+			textView.SetText(chatToText(cfg.ShowSys)) // TODO: fix removing all new names
 			colorText()
 		}
 		if event.Key() == tcell.KeyF6 {

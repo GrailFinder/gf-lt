@@ -5,9 +5,14 @@ import (
 	"strings"
 )
 
+// type FuncCall struct {
+// 	Name string   `json:"name"`
+// 	Args []string `json:"args"`
+// }
+
 type FuncCall struct {
-	Name string   `json:"name"`
-	Args []string `json:"args"`
+	Name string            `json:"name"`
+	Args map[string]string `json:"args"`
 }
 
 type LLMResp struct {
@@ -30,11 +35,14 @@ type LLMResp struct {
 	ID string `json:"id"`
 }
 
+type ToolDeltaFunc struct {
+	Name      string `json:"name"`
+	Arguments string `json:"arguments"`
+}
+
 type ToolDeltaResp struct {
-	Index    int `json:"index"`
-	Function struct {
-		Arguments string `json:"arguments"`
-	} `json:"function"`
+	Index    int           `json:"index"`
+	Function ToolDeltaFunc `json:"function"`
 }
 
 // for streaming
@@ -63,6 +71,7 @@ type TextChunk struct {
 	ToolChunk string
 	Finished  bool
 	ToolResp  bool
+	FuncName  string
 }
 
 type RoleMsg struct {
