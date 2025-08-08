@@ -454,8 +454,8 @@ func findCall(msg, toolCall string, tv *tview.TextView) {
 func chatToTextSlice(showSys bool) []string {
 	resp := make([]string, len(chatBody.Messages))
 	for i, msg := range chatBody.Messages {
-		// INFO: skips system msg
-		if !showSys && (msg.Role != cfg.AssistantRole && msg.Role != cfg.UserRole) {
+		// INFO: skips system msg and tool msg
+		if !showSys && (msg.Role == cfg.ToolRole || msg.Role == "system") {
 			continue
 		}
 		resp[i] = msg.ToText(i)
