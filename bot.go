@@ -442,7 +442,7 @@ func findCall(msg, toolCall string, tv *tview.TextView) {
 	// call a func
 	f, ok := fnMap[fc.Name]
 	if !ok {
-		m := fc.Name + "%s is not implemented"
+		m := fc.Name + " is not implemented"
 		chatRound(m, cfg.ToolRole, tv, false, false)
 		return
 	}
