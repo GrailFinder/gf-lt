@@ -448,6 +448,8 @@ func findCall(msg, toolCall string, tv *tview.TextView) {
 	}
 	resp := f(fc.Args)
 	toolMsg := fmt.Sprintf("tool response: %+v", string(resp))
+	fmt.Fprintf(tv, "%s[-:-:b](%d) <%s>: [-:-:-]\n%s\n",
+		"\n", len(chatBody.Messages), cfg.ToolRole, toolMsg)
 	chatRound(toolMsg, cfg.ToolRole, tv, false, false)
 }
 

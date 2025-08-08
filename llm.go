@@ -173,7 +173,7 @@ func (op OpenAIer) FormMsg(msg, role string, resume bool) (io.Reader, error) {
 		ChatBody: chatBody,
 		Tools:    nil,
 	}
-	if cfg.ToolUse && !resume {
+	if cfg.ToolUse && !resume && role != cfg.ToolRole {
 		req.Tools = baseTools // set tools to use
 	}
 	data, err := json.Marshal(req)

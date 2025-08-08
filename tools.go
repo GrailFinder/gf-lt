@@ -149,7 +149,7 @@ var baseTools = []models.Tool{
 		Type: "function",
 		Function: models.ToolFunc{
 			Name:        "memorise",
-			Description: "save topic-data in key-value cache",
+			Description: "Save topic-data in key-value cache. Use when asked to remember something/keep in mind.",
 			Parameters: models.ToolFuncParams{
 				Type:     "object",
 				Required: []string{"topic", "data"},
@@ -171,7 +171,7 @@ var baseTools = []models.Tool{
 		Type: "function",
 		Function: models.ToolFunc{
 			Name:        "recall",
-			Description: "recall topic-data from key-value cache",
+			Description: "Recall topic-data from key-value cache. Use when precise info about the topic is needed.",
 			Parameters: models.ToolFuncParams{
 				Type:     "object",
 				Required: []string{"topic"},
@@ -189,7 +189,7 @@ var baseTools = []models.Tool{
 		Type: "function",
 		Function: models.ToolFunc{
 			Name:        "recall_topics",
-			Description: "recall all topics from key-value cache",
+			Description: "Recall all topics from key-value cache. Use when need to know what topics are currently stored in memory.",
 			Parameters: models.ToolFuncParams{
 				Type:       "object",
 				Required:   []string{},
