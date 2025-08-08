@@ -246,22 +246,27 @@ func (ds DeepSeekerCompletion) FormMsg(msg, role string, resume bool) (io.Reader
 	return bytes.NewReader(data), nil
 }
 
-func (ds DeepSeekerChat) ParseChunk(data []byte) (string, bool, error) {
+func (ds DeepSeekerChat) ParseChunk(data []byte) (*models.TextChunk, error) {
 	llmchunk := models.DSChatStreamResp{}
 	if err := json.Unmarshal(data, &llmchunk); err != nil {
 		logger.Error("failed to decode", "error", err, "line", string(data))
-		return "", false, err
+		return nil, err
 	}
+	resp := &models.TextChunk{}
 	if llmchunk.Choices[0].FinishReason != "" {
 		if llmchunk.Choices[0].Delta.Content != "" {
 			logger.Error("text inside of finish llmchunk", "chunk", llmchunk)
 		}
-		return llmchunk.Choices[0].Delta.Content, true, nil
+		resp.Chunk = llmchunk.Choices[0].Delta.Content
+		resp.Finished = true
+	} else {
+		if llmchunk.Choices[0].Delta.ReasoningContent != "" {
+			resp.Chunk = llmchunk.Choices[0].Delta.ReasoningContent
+		} else {
+			resp.Chunk = llmchunk.Choices[0].Delta.Content
+		}
 	}
-	if llmchunk.Choices[0].Delta.ReasoningContent != "" {
-		return llmchunk.Choices[0].Delta.ReasoningContent, false, nil
-	}
-	return llmchunk.Choices[0].Delta.Content, false, nil
+	return resp, nil
 }
 
 func (ds DeepSeekerChat) GetToken() string {
@@ -316,20 +321,22 @@ func (ds DeepSeekerChat) FormMsg(msg, role string, resume bool) (io.Reader, erro
 }
 
 // openrouter
-func (or OpenRouterCompletion) ParseChunk(data []byte) (string, bool, error) {
+func (or OpenRouterCompletion) ParseChunk(data []byte) (*models.TextChunk, error) {
 	llmchunk := models.OpenRouterCompletionResp{}
 	if err := json.Unmarshal(data, &llmchunk); err != nil {
 		logger.Error("failed to decode", "error", err, "line", string(data))
-		return "", false, err
+		return nil, err
 	}
-	content := llmchunk.Choices[len(llmchunk.Choices)-1].Text
+	resp := &models.TextChunk{
+		Chunk: llmchunk.Choices[len(llmchunk.Choices)-1].Text,
+	}
 	if llmchunk.Choices[len(llmchunk.Choices)-1].FinishReason == "stop" {
-		if content != "" {
+		if resp.Chunk != "" {
 			logger.Error("text inside of finish llmchunk", "chunk", llmchunk)
 		}
-		return content, true, nil
+		resp.Finished = true
 	}
-	return content, false, nil
+	return resp, nil
 }
 
 func (or OpenRouterCompletion) GetToken() string {
@@ -381,20 +388,22 @@ func (or OpenRouterCompletion) FormMsg(msg, role string, resume bool) (io.Reader
 }
 
 // chat
-func (or OpenRouterChat) ParseChunk(data []byte) (string, bool, error) {
+func (or OpenRouterChat) ParseChunk(data []byte) (*models.TextChunk, error) {
 	llmchunk := models.OpenRouterChatResp{}
 	if err := json.Unmarshal(data, &llmchunk); err != nil {
 		logger.Error("failed to decode", "error", err, "line", string(data))
-		return "", false, err
+		return nil, err
 	}
-	content := llmchunk.Choices[len(llmchunk.Choices)-1].Delta.Content
+	resp := &models.TextChunk{
+		Chunk: llmchunk.Choices[len(llmchunk.Choices)-1].Delta.Content,
+	}
 	if llmchunk.Choices[len(llmchunk.Choices)-1].FinishReason == "stop" {
-		if content != "" {
+		if resp.Chunk != "" {
 			logger.Error("text inside of finish llmchunk", "chunk", llmchunk)
 		}
-		return content, true, nil
+		resp.Finished = true
 	}
-	return content, false, nil
+	return resp, nil
 }
 
 func (or OpenRouterChat) GetToken() string {
