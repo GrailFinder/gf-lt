@@ -30,13 +30,21 @@ type LLMResp struct {
 	ID string `json:"id"`
 }
 
+type ToolDeltaResp struct {
+	Index    int `json:"index"`
+	Function struct {
+		Arguments string `json:"arguments"`
+	} `json:"function"`
+}
+
 // for streaming
 type LLMRespChunk struct {
 	Choices []struct {
 		FinishReason string `json:"finish_reason"`
 		Index        int    `json:"index"`
 		Delta        struct {
-			Content string `json:"content"`
+			Content   string          `json:"content"`
+			ToolCalls []ToolDeltaResp `json:"tool_calls"`
 		} `json:"delta"`
 	} `json:"choices"`
 	Created int    `json:"created"`
@@ -48,6 +56,13 @@ type LLMRespChunk struct {
 		PromptTokens     int `json:"prompt_tokens"`
 		TotalTokens      int `json:"total_tokens"`
 	} `json:"usage"`
+}
+
+type TextChunk struct {
+	Chunk     string
+	ToolChunk string
+	Finished  bool
+	ToolResp  bool
 }
 
 type RoleMsg struct {
