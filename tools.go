@@ -166,4 +166,35 @@ var baseTools = []models.Tool{
 			},
 		},
 	},
+	// recall
+	models.Tool{
+		Type: "function",
+		Function: models.ToolFunc{
+			Name:        "recall",
+			Description: "recall topic-data from key-value cache",
+			Parameters: models.ToolFuncParams{
+				Type:     "object",
+				Required: []string{"topic"},
+				Properties: map[string]models.ToolArgProps{
+					"topic": models.ToolArgProps{
+						Type:        "string",
+						Description: "topic is the key to recall data from",
+					},
+				},
+			},
+		},
+	},
+	// recall_topics
+	models.Tool{
+		Type: "function",
+		Function: models.ToolFunc{
+			Name:        "recall_topics",
+			Description: "recall all topics from key-value cache",
+			Parameters: models.ToolFuncParams{
+				Type:       "object",
+				Required:   []string{},
+				Properties: map[string]models.ToolArgProps{},
+			},
+		},
+	},
 }

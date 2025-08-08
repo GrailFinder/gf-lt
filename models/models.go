@@ -285,7 +285,7 @@ type Tool struct {
 }
 
 type OpenAIReq struct {
-	ChatBody
+	*ChatBody
 	Tools []Tool `json:"tools"`
 }
 

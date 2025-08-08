@@ -554,12 +554,14 @@ func init() {
 		cluedoState = extra.CluedoPrepCards(playerOrder)
 	}
 	if cfg.OpenRouterToken != "" {
-		ORModels, err := fetchORModels(true)
-		if err != nil {
-			logger.Error("failed to fetch or models", "error", err)
-		} else {
-			ORFreeModels = ORModels
-		}
+		go func() {
+			ORModels, err := fetchORModels(true)
+			if err != nil {
+				logger.Error("failed to fetch or models", "error", err)
+			} else {
+				ORFreeModels = ORModels
+			}
+		}()
 	}
 	choseChunkParser()
 	httpClient = createClient(time.Second * 15)

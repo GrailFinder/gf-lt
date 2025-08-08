@@ -151,26 +151,18 @@ func (op OpenAIer) ParseChunk(data []byte) (string, bool, error) {
 
 func (op OpenAIer) FormMsg(msg, role string, resume bool) (io.Reader, error) {
 	logger.Debug("formmsg openaier", "link", cfg.CurrentAPI)
-	if cfg.ToolUse && !resume {
-		// prompt += "\n" + cfg.ToolRole + ":\n" + toolSysMsg
-		// add to chat body
-		chatBody.Messages = append(chatBody.Messages, models.RoleMsg{Role: cfg.ToolRole, Content: toolSysMsg})
-	}
 	if msg != "" { // otherwise let the bot continue
 		newMsg := models.RoleMsg{Role: role, Content: msg}
 		chatBody.Messages = append(chatBody.Messages, newMsg)
-		// if rag
-		if cfg.RAGEnabled {
-			ragResp, err := chatRagUse(newMsg.Content)
-			if err != nil {
-				logger.Error("failed to form a rag msg", "error", err)
-				return nil, err
-			}
-			ragMsg := models.RoleMsg{Role: cfg.ToolRole, Content: ragResp}
-			chatBody.Messages = append(chatBody.Messages, ragMsg)
-		}
 	}
-	data, err := json.Marshal(chatBody)
+	req := models.OpenAIReq{
+		ChatBody: chatBody,
+		Tools:    nil,
+	}
+	if cfg.ToolUse && !resume {
+		req.Tools = baseTools // set tools to use
+	}
+	data, err := json.Marshal(req)
 	if err != nil {
 		logger.Error("failed to form a msg", "error", err)
 		return nil, err
