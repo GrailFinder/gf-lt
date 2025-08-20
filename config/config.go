@@ -15,17 +15,18 @@ type Config struct {
 	CurrentProvider string
 	APIMap          map[string]string
 	//
-	ShowSys        bool   `toml:"ShowSys"`
-	LogFile        string `toml:"LogFile"`
-	UserRole       string `toml:"UserRole"`
-	ToolRole       string `toml:"ToolRole"`
-	ToolUse        bool   `toml:"ToolUse"`
-	ThinkUse       bool   `toml:"ThinkUse"`
-	AssistantRole  string `toml:"AssistantRole"`
-	SysDir         string `toml:"SysDir"`
-	ChunkLimit     uint32 `toml:"ChunkLimit"`
-	WriteNextMsgAs string
-	SkipLLMResp    bool
+	ShowSys                       bool   `toml:"ShowSys"`
+	LogFile                       string `toml:"LogFile"`
+	UserRole                      string `toml:"UserRole"`
+	ToolRole                      string `toml:"ToolRole"`
+	ToolUse                       bool   `toml:"ToolUse"`
+	ThinkUse                      bool   `toml:"ThinkUse"`
+	AssistantRole                 string `toml:"AssistantRole"`
+	SysDir                        string `toml:"SysDir"`
+	ChunkLimit                    uint32 `toml:"ChunkLimit"`
+	WriteNextMsgAs                string
+	WriteNextMsgAsCompletionAgent string
+	SkipLLMResp                   bool
 	// embeddings
 	RAGEnabled bool   `toml:"RAGEnabled"`
 	EmbedURL   string `toml:"EmbedURL"`

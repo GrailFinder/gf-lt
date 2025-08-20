@@ -203,7 +203,7 @@ func sendMsgToLLM(body io.Reader) {
 		line, err := reader.ReadBytes('\n')
 		if err != nil {
 			logger.Error("error reading response body", "error", err, "line", string(line),
-				"reqbody", string(bodyBytes), "user_role", cfg.UserRole, "parser", chunkParser, "link", cfg.CurrentAPI)
+				"user_role", cfg.UserRole, "parser", chunkParser, "link", cfg.CurrentAPI)
 			// if err.Error() != "EOF" {
 			streamDone <- true
 			break
@@ -353,6 +353,9 @@ func chatRound(userMsg, role string, tv *tview.TextView, regen, resume bool) {
 	reader, err := chunkParser.FormMsg(userMsg, role, resume)
 	if reader == nil || err != nil {
 		logger.Error("empty reader from msgs", "role", role, "error", err)
+		return
+	}
+	if cfg.SkipLLMResp {
 		return
 	}
 	go sendMsgToLLM(reader)

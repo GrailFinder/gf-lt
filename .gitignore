@@ -1,7 +1,6 @@
 *.txt
 *.json
 testlog
-elefant
 history/
 *.db
 config.toml
@@ -11,4 +10,5 @@ history_bak/
 .aider*
 tags
 gf-lt
+gflt
 chat_exports/*.json

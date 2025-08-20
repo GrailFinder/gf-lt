@@ -92,7 +92,11 @@ func (lcp LlamaCPPeer) FormMsg(msg, role string, resume bool) (io.Reader, error)
 	prompt := strings.Join(messages, "\n")
 	// strings builder?
 	if !resume {
-		botMsgStart := "\n" + cfg.AssistantRole + ":\n"
+		botPersona := cfg.AssistantRole
+		if cfg.WriteNextMsgAsCompletionAgent != "" {
+			botPersona = cfg.WriteNextMsgAsCompletionAgent
+		}
+		botMsgStart := "\n" + botPersona + ":\n"
 		prompt += botMsgStart
 	}
 	if cfg.ThinkUse && !cfg.ToolUse {
@@ -234,7 +238,11 @@ func (ds DeepSeekerCompletion) FormMsg(msg, role string, resume bool) (io.Reader
 	prompt := strings.Join(messages, "\n")
 	// strings builder?
 	if !resume {
-		botMsgStart := "\n" + cfg.AssistantRole + ":\n"
+		botPersona := cfg.AssistantRole
+		if cfg.WriteNextMsgAsCompletionAgent != "" {
+			botPersona = cfg.WriteNextMsgAsCompletionAgent
+		}
+		botMsgStart := "\n" + botPersona + ":\n"
 		prompt += botMsgStart
 	}
 	if cfg.ThinkUse && !cfg.ToolUse {
@@ -376,7 +384,11 @@ func (or OpenRouterCompletion) FormMsg(msg, role string, resume bool) (io.Reader
 	prompt := strings.Join(messages, "\n")
 	// strings builder?
 	if !resume {
-		botMsgStart := "\n" + cfg.AssistantRole + ":\n"
+		botPersona := cfg.AssistantRole
+		if cfg.WriteNextMsgAsCompletionAgent != "" {
+			botPersona = cfg.WriteNextMsgAsCompletionAgent
+		}
+		botMsgStart := "\n" + botPersona + ":\n"
 		prompt += botMsgStart
 	}
 	if cfg.ThinkUse && !cfg.ToolUse {

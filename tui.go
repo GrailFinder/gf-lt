@@ -98,6 +98,15 @@ func loadImage() {
 	imgView.SetImage(img)
 }
 
+func strInSlice(s string, sl []string) bool {
+	for _, el := range sl {
+		if strings.EqualFold(s, el) {
+			return true
+		}
+	}
+	return false
+}
+
 func colorText() {
 	text := textView.GetText(false)
 	// Step 1: Extract code blocks and replace them with unique placeholders
@@ -151,8 +160,17 @@ func updateStatusLine() {
 	if cfg.WriteNextMsgAs != "" {
 		persona = cfg.WriteNextMsgAs
 	}
-	position.SetText(fmt.Sprintf(indexLine, botRespMode, cfg.AssistantRole, activeChatName, cfg.ToolUse, chatBody.Model,
-		cfg.SkipLLMResp, cfg.CurrentAPI, cfg.ThinkUse, logLevel.Level(), isRecording, persona))
+	if strings.Contains(cfg.CurrentAPI, "chat") {
+		position.SetText(fmt.Sprintf(indexLine, botRespMode, cfg.AssistantRole, activeChatName, cfg.ToolUse, chatBody.Model,
+			cfg.SkipLLMResp, cfg.CurrentAPI, cfg.ThinkUse, logLevel.Level(), isRecording, persona))
+		return
+	}
+	botPersona := cfg.AssistantRole
+	if cfg.WriteNextMsgAsCompletionAgent != "" {
+		botPersona = cfg.WriteNextMsgAsCompletionAgent
+	}
+	position.SetText(fmt.Sprintf(indexLineCompletion, botRespMode, cfg.AssistantRole, activeChatName, cfg.ToolUse, chatBody.Model,
+		cfg.SkipLLMResp, cfg.CurrentAPI, cfg.ThinkUse, logLevel.Level(), isRecording, persona, botPersona))
 }
 
 func initSysCards() ([]string, error) {
@@ -354,7 +372,6 @@ func init() {
 	editArea.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		// if event.Key() == tcell.KeyEscape && editMode {
 		if event.Key() == tcell.KeyEscape {
-			logger.Warn("edit debug; esc is pressed")
 			defer colorText()
 			editedMsg := editArea.GetText()
 			if editedMsg == "" {
@@ -424,10 +441,7 @@ func init() {
 				if err := copyToClipboard(m.Content); err != nil {
 					logger.Error("failed to copy to clipboard", "error", err)
 				}
-				previewLen := 30
-				if len(m.Content) < 30 {
-					previewLen = len(m.Content)
-				}
+				previewLen := min(30, len(m.Content))
 				notification := fmt.Sprintf("msg '%s' was copied to the clipboard", m.Content[:previewLen])
 				if err := notifyUser("copied", notification); err != nil {
 					logger.Error("failed to send notification", "error", err)
@@ -573,10 +587,7 @@ func init() {
 			if err := copyToClipboard(m.Content); err != nil {
 				logger.Error("failed to copy to clipboard", "error", err)
 			}
-			previewLen := 30
-			if len(m.Content) < 30 {
-				previewLen = len(m.Content)
-			}
+			previewLen := min(30, len(m.Content))
 			notification := fmt.Sprintf("msg '%s' was copied to the clipboard", m.Content[:previewLen])
 			if err := notifyUser("copied", notification); err != nil {
 				logger.Error("failed to send notification", "error", err)
@@ -798,7 +809,12 @@ func init() {
 			roles := chatBody.ListRoles()
 			if len(roles) == 0 {
 				logger.Warn("empty roles in chat")
+				return nil
 			}
+			if !strInSlice(cfg.UserRole, roles) {
+				roles = append(roles, cfg.UserRole)
+			}
+			logger.Info("list roles", "roles", roles)
 			for i, role := range roles {
 				if strings.EqualFold(role, persona) {
 					if i == len(roles)-1 {
@@ -806,6 +822,33 @@ func init() {
 						break
 					}
 					cfg.WriteNextMsgAs = roles[i+1] // get next role
+					logger.Info("picked role", "roles", roles, "index", i+1)
+					break
+				}
+			}
+			updateStatusLine()
+			return nil
+		}
+		if event.Key() == tcell.KeyCtrlX {
+			persona := cfg.AssistantRole
+			if cfg.WriteNextMsgAsCompletionAgent != "" {
+				persona = cfg.WriteNextMsgAsCompletionAgent
+			}
+			roles := chatBody.ListRoles()
+			if len(roles) == 0 {
+				logger.Warn("empty roles in chat")
+			}
+			if !strInSlice(cfg.AssistantRole, roles) {
+				roles = append(roles, cfg.AssistantRole)
+			}
+			for i, role := range roles {
+				if strings.EqualFold(role, persona) {
+					if i == len(roles)-1 {
+						cfg.WriteNextMsgAsCompletionAgent = roles[0] // reached last, get first
+						break
+					}
+					cfg.WriteNextMsgAsCompletionAgent = roles[i+1] // get next role
+					logger.Info("picked role", "roles", roles, "index", i+1)
 					break
 				}
 			}
@@ -836,10 +879,10 @@ func init() {
 				textView.ScrollToEnd()
 				colorText()
 			}
-			if !cfg.SkipLLMResp {
-				// update statue line
-				go chatRound(msgText, persona, textView, false, false)
-			}
+			go chatRound(msgText, persona, textView, false, false)
+			// if !cfg.SkipLLMResp {
+			// 	// update statue line
+			// }
 			return nil
 		}
 		if event.Key() == tcell.KeyPgUp || event.Key() == tcell.KeyPgDn {
