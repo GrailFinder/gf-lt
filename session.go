@@ -47,6 +47,9 @@ func importChat(filename string) error {
 		return err
 	}
 	activeChatName = filepath.Base(filename)
+	if _, ok := chatMap[activeChatName]; !ok {
+		addNewChat(activeChatName)
+	}
 	chatBody.Messages = messages
 	cfg.AssistantRole = messages[1].Role
 	if cfg.AssistantRole == cfg.UserRole {

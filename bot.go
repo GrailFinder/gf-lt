@@ -335,6 +335,10 @@ func checkGame(role string, tv *tview.TextView) {
 
 func chatRound(userMsg, role string, tv *tview.TextView, regen, resume bool) {
 	botRespMode = true
+	botPersona := cfg.AssistantRole
+	if cfg.WriteNextMsgAsCompletionAgent != "" {
+		botPersona = cfg.WriteNextMsgAsCompletionAgent
+	}
 	defer func() { botRespMode = false }()
 	// check that there is a model set to use if is not local
 	if cfg.CurrentAPI == cfg.DeepSeekChatAPI || cfg.CurrentAPI == cfg.DeepSeekCompletionAPI {
@@ -362,7 +366,7 @@ func chatRound(userMsg, role string, tv *tview.TextView, regen, resume bool) {
 	logger.Debug("looking at vars in chatRound", "msg", userMsg, "regen", regen, "resume", resume)
 	if !resume {
 		fmt.Fprintf(tv, "[-:-:b](%d) ", len(chatBody.Messages))
-		fmt.Fprint(tv, roleToIcon(cfg.AssistantRole))
+		fmt.Fprint(tv, roleToIcon(botPersona))
 		fmt.Fprint(tv, "[-:-:-]\n")
 		if cfg.ThinkUse && !strings.Contains(cfg.CurrentAPI, "v1") {
 			// fmt.Fprint(tv, "<think>")
@@ -404,7 +408,7 @@ out:
 		// lastM.Content = lastM.Content + respText.String()
 	} else {
 		chatBody.Messages = append(chatBody.Messages, models.RoleMsg{
-			Role: cfg.AssistantRole, Content: respText.String(),
+			Role: botPersona, Content: respText.String(),
 		})
 	}
 	colorText()
@@ -490,6 +494,26 @@ func removeThinking(chatBody *models.ChatBody) {
 	chatBody.Messages = msgs
 }
 
+func addNewChat(chatName string) {
+	id, err := store.ChatGetMaxID()
+	if err != nil {
+		logger.Error("failed to get max chat id from db;", "id:", id)
+		// INFO: will rewrite first chat
+	}
+	chat := &models.Chat{
+		ID:        id + 1,
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+		Agent:     cfg.AssistantRole,
+	}
+	if chatName == "" {
+		chatName = fmt.Sprintf("%d_%s", chat.ID, cfg.AssistantRole)
+	}
+	chat.Name = chatName
+	chatMap[chat.Name] = chat
+	activeChatName = chat.Name
+}
+
 func applyCharCard(cc *models.CharCard) {
 	cfg.AssistantRole = cc.Role
 	// FIXME: remove
@@ -506,20 +530,7 @@ func applyCharCard(cc *models.CharCard) {
 			{Role: "system", Content: cc.SysPrompt},
 			{Role: cfg.AssistantRole, Content: cc.FirstMsg},
 		}
-		id, err := store.ChatGetMaxID()
-		if err != nil {
-			logger.Error("failed to get max chat id from db;", "id:", id)
-			// INFO: will rewrite first chat
-		}
-		chat := &models.Chat{
-			ID:        id + 1,
-			CreatedAt: time.Now(),
-			UpdatedAt: time.Now(),
-			Agent:     cfg.AssistantRole,
-		}
-		chat.Name = fmt.Sprintf("%d_%s", chat.ID, cfg.AssistantRole)
-		chatMap[chat.Name] = chat
-		activeChatName = chat.Name
+		addNewChat("")
 	}
 	chatBody.Messages = history
 }

@@ -880,9 +880,6 @@ func init() {
 				colorText()
 			}
 			go chatRound(msgText, persona, textView, false, false)
-			// if !cfg.SkipLLMResp {
-			// 	// update statue line
-			// }
 			return nil
 		}
 		if event.Key() == tcell.KeyPgUp || event.Key() == tcell.KeyPgDn {
