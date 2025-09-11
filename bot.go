@@ -190,7 +190,6 @@ func sendMsgToLLM(body io.Reader) {
 	for {
 		var (
 			answerText string
-			stop       bool
 			chunk      *models.TextChunk
 		)
 		counter++
@@ -239,9 +238,11 @@ func sendMsgToLLM(body io.Reader) {
 			streamDone <- true
 			break
 		}
-		if stop {
+		if chunk.Finished {
 			if chunk.Chunk != "" {
 				logger.Warn("text inside of finish llmchunk", "chunk", chunk, "counter", counter)
+				answerText = strings.ReplaceAll(chunk.Chunk, "\n\n", "\n")
+				chunkChan <- answerText
 			}
 			streamDone <- true
 			break
