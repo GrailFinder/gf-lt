@@ -394,9 +394,10 @@ func (or OpenRouterCompletion) FormMsg(msg, role string, resume bool) (io.Reader
 	if cfg.ThinkUse && !cfg.ToolUse {
 		prompt += "<think>"
 	}
+	ss := chatBody.MakeStopSlice()
 	logger.Debug("checking prompt for /completion", "tool_use", cfg.ToolUse,
-		"msg", msg, "resume", resume, "prompt", prompt)
-	payload := models.NewOpenRouterCompletionReq(chatBody.Model, prompt, defaultLCPProps, chatBody.MakeStopSlice())
+		"msg", msg, "resume", resume, "prompt", prompt, "stop_strings", ss)
+	payload := models.NewOpenRouterCompletionReq(chatBody.Model, prompt, defaultLCPProps, ss)
 	data, err := json.Marshal(payload)
 	if err != nil {
 		logger.Error("failed to form a msg", "error", err)

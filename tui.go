@@ -163,6 +163,14 @@ func strInSlice(s string, sl []string) bool {
 
 func colorText() {
 	text := textView.GetText(false)
+	quoteReplacer := strings.NewReplacer(
+		`”`, `"`,
+		`“`, `"`,
+		`“`, `"`,
+		`”`, `"`,
+		`**`, `*`,
+	)
+	text = quoteReplacer.Replace(text)
 	// Step 1: Extract code blocks and replace them with unique placeholders
 	var codeBlocks []string
 	placeholder := "__CODE_BLOCK_%d__"
