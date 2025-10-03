@@ -1,9 +1,9 @@
 package main
 
 import (
-	"gf-lt/config"
 	"encoding/json"
 	"fmt"
+	"gf-lt/config"
 	"net/http"
 	"time"
 )
@@ -61,7 +61,7 @@ out:
 }
 
 func modelHandler(w http.ResponseWriter, req *http.Request) {
-	llmModel := fetchModelName()
+	llmModel := fetchLCPModelName()
 	payload, err := json.Marshal(llmModel)
 	if err != nil {
 		logger.Error("model handler", "error", err)

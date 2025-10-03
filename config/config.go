@@ -7,13 +7,14 @@ import (
 )
 
 type Config struct {
-	EnableCluedo    bool   `toml:"EnableCluedo"` // Cluedo game mode toggle
-	CluedoRole2     string `toml:"CluedoRole2"`  // Secondary AI role name
-	ChatAPI         string `toml:"ChatAPI"`
-	CompletionAPI   string `toml:"CompletionAPI"`
-	CurrentAPI      string
-	CurrentProvider string
-	APIMap          map[string]string
+	EnableCluedo      bool   `toml:"EnableCluedo"` // Cluedo game mode toggle
+	CluedoRole2       string `toml:"CluedoRole2"`  // Secondary AI role name
+	ChatAPI           string `toml:"ChatAPI"`
+	CompletionAPI     string `toml:"CompletionAPI"`
+	CurrentAPI        string
+	CurrentProvider   string
+	APIMap            map[string]string
+	FetchModelNameAPI string `toml:"FetchModelNameAPI"`
 	//
 	ShowSys                       bool   `toml:"ShowSys"`
 	LogFile                       string `toml:"LogFile"`
@@ -88,6 +89,7 @@ func LoadConfigOrDefault(fn string) *Config {
 		// tts
 		config.TTS_ENABLED = false
 		config.TTS_URL = "http://localhost:8880/v1/audio/speech"
+		config.FetchModelNameAPI = "http://localhost:8080/v1/models"
 	}
 	config.CurrentAPI = config.ChatAPI
 	config.APIMap = map[string]string{

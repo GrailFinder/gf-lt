@@ -104,12 +104,7 @@ func (lcp LlamaCPPeer) FormMsg(msg, role string, resume bool) (io.Reader, error)
 	}
 	logger.Debug("checking prompt for /completion", "tool_use", cfg.ToolUse,
 		"msg", msg, "resume", resume, "prompt", prompt)
-	var payload any
-	payload = models.NewLCPReq(prompt, defaultLCPProps, chatBody.MakeStopSlice())
-	if strings.Contains(chatBody.Model, "deepseek") { // TODO: why?
-		payload = models.NewDSCompletionReq(prompt, chatBody.Model,
-			defaultLCPProps["temp"], chatBody.MakeStopSlice())
-	}
+	payload := models.NewLCPReq(prompt, defaultLCPProps, chatBody.MakeStopSlice())
 	data, err := json.Marshal(payload)
 	if err != nil {
 		logger.Error("failed to form a msg", "error", err)

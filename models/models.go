@@ -5,11 +5,6 @@ import (
 	"strings"
 )
 
-// type FuncCall struct {
-// 	Name string   `json:"name"`
-// 	Args []string `json:"args"`
-// }
-
 type FuncCall struct {
 	Name string            `json:"name"`
 	Args map[string]string `json:"args"`

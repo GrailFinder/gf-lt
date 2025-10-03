@@ -85,19 +85,17 @@ func createClient(connectTimeout time.Duration) *http.Client {
 	}
 }
 
-func fetchModelName() *models.LLMModels {
-	// TODO: to config
-	api := "http://localhost:8080/v1/models"
+func fetchLCPModelName() *models.LLMModels {
 	//nolint
-	resp, err := httpClient.Get(api)
+	resp, err := httpClient.Get(cfg.FetchModelNameAPI)
 	if err != nil {
-		logger.Warn("failed to get model", "link", api, "error", err)
+		logger.Warn("failed to get model", "link", cfg.FetchModelNameAPI, "error", err)
 		return nil
 	}
 	defer resp.Body.Close()
 	llmModel := models.LLMModels{}
 	if err := json.NewDecoder(resp.Body).Decode(&llmModel); err != nil {
-		logger.Warn("failed to decode resp", "link", api, "error", err)
+		logger.Warn("failed to decode resp", "link", cfg.FetchModelNameAPI, "error", err)
 		return nil
 	}
 	if resp.StatusCode != 200 {
@@ -272,7 +270,7 @@ func chatRagUse(qText string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	// TODO: this where llm should find the questions in text and ask them
+	// this where llm should find the questions in text and ask them
 	questionsS := tokenizer.Tokenize(qText)
 	questions := make([]string, len(questionsS))
 	for i, q := range questionsS {
@@ -525,7 +523,7 @@ func applyCharCard(cc *models.CharCard) {
 	}
 	history, err := loadAgentsLastChat(cfg.AssistantRole)
 	if err != nil {
-		// TODO: too much action for err != nil; loadAgentsLastChat needs to be split up
+		// too much action for err != nil; loadAgentsLastChat needs to be split up
 		logger.Warn("failed to load last agent chat;", "agent", cc.Role, "err", err)
 		history = []models.RoleMsg{
 			{Role: "system", Content: cc.SysPrompt},

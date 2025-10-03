@@ -735,7 +735,7 @@ func init() {
 		}
 		if event.Key() == tcell.KeyCtrlL {
 			go func() {
-				fetchModelName() // blocks
+				fetchLCPModelName() // blocks
 				updateStatusLine()
 			}()
 			return nil
@@ -756,10 +756,6 @@ func init() {
 				return nil
 			}
 			cfg.CurrentAPI = newAPI
-			// // TODO: implement model pick
-			// if strings.Contains(cfg.CurrentAPI, "deepseek") {
-			// 	chatBody.Model = "deepseek-chat"
-			// }
 			choseChunkParser()
 			updateStatusLine()
 			return nil
@@ -793,7 +789,7 @@ func init() {
 			pages.AddPage(imgPage, imgView, true, true)
 			return nil
 		}
-		// TODO: move to menu or table
+		// DEPRECATED: rag is deprecated until I change my mind
 		// if event.Key() == tcell.KeyCtrlR && cfg.HFToken != "" {
 		// 	// rag load
 		// 	// menu of the text files from defined rag directory

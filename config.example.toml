@@ -22,3 +22,4 @@ TTS_SPEED = 1.0
 STT_ENABLED = false
 STT_URL = "http://localhost:8081/inference"
 DBPATH = "gflt.db"
+FetchModelNameAPI = "http://localhost:8080/v1/models"
