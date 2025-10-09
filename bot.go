@@ -151,13 +151,8 @@ func fetchORModels(free bool) ([]string, error) {
 
 func sendMsgToLLM(body io.Reader) {
 	choseChunkParser()
-	bodyBytes, _ := io.ReadAll(body)
-	ok := json.Valid(bodyBytes)
-	if !ok {
-		panic("invalid json")
-	}
 	// nolint
-	req, err := http.NewRequest("POST", cfg.CurrentAPI, bytes.NewReader(bodyBytes))
+	req, err := http.NewRequest("POST", cfg.CurrentAPI, body)
 	if err != nil {
 		logger.Error("newreq error", "error", err)
 		if err := notifyUser("error", "apicall failed:"+err.Error()); err != nil {
@@ -172,7 +167,6 @@ func sendMsgToLLM(body io.Reader) {
 	// req.Header.Set("Content-Length", strconv.Itoa(len(bodyBytes)))
 	req.Header.Set("Accept-Encoding", "gzip")
 	// nolint
-	// resp, err := httpClient.Post(cfg.CurrentAPI, "application/json", body)
 	resp, err := httpClient.Do(req)
 	if err != nil {
 		logger.Error("llamacpp api", "error", err)

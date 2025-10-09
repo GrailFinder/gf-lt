@@ -15,6 +15,9 @@ type Config struct {
 	CurrentProvider   string
 	APIMap            map[string]string
 	FetchModelNameAPI string `toml:"FetchModelNameAPI"`
+	//  ToolsAPI list?
+	SearchAPI      string `toml:"SearchAPI"`
+	SearchDescribe string `toml:"SearchDescribe"`
 	//
 	ShowSys                       bool   `toml:"ShowSys"`
 	LogFile                       string `toml:"LogFile"`

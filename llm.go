@@ -320,7 +320,7 @@ func (ds DeepSeekerChat) FormMsg(msg, role string, resume bool) (io.Reader, erro
 			bodyCopy.Messages[i] = msg
 		}
 	}
-	dsBody := models.NewDSCharReq(*bodyCopy)
+	dsBody := models.NewDSChatReq(*bodyCopy)
 	data, err := json.Marshal(dsBody)
 	if err != nil {
 		logger.Error("failed to form a msg", "error", err)
@@ -462,8 +462,8 @@ func (or OpenRouterChat) FormMsg(msg, role string, resume bool) (io.Reader, erro
 			bodyCopy.Messages[i] = msg
 		}
 	}
-	dsBody := models.NewDSCharReq(*bodyCopy)
-	data, err := json.Marshal(dsBody)
+	orBody := models.NewOpenRouterChatReq(*bodyCopy, defaultLCPProps)
+	data, err := json.Marshal(orBody)
 	if err != nil {
 		logger.Error("failed to form a msg", "error", err)
 		return nil, err
