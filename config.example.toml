@@ -23,3 +23,6 @@ STT_ENABLED = false
 STT_URL = "http://localhost:8081/inference"
 DBPATH = "gflt.db"
 FetchModelNameAPI = "http://localhost:8080/v1/models"
+# external search tool
+SearchAPI = "" # url to call the tool by
+SearchDescribe = "" # link that returns models.Tool
