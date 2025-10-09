@@ -4,9 +4,8 @@ import (
 	"gf-lt/models"
 	"encoding/binary"
 	"fmt"
+	"sort"
 	"unsafe"
-
-	"github.com/jmoiron/sqlx"
 )
 
 type VectorRepo interface {
@@ -14,7 +13,6 @@ type VectorRepo interface {
 	SearchClosest(q []float32) ([]models.VectorRow, error)
 	ListFiles() ([]string, error)
 	RemoveEmbByFileName(filename string) error
-	DB() *sqlx.DB
 }
 
 // SerializeVector converts []float32 to binary blob
@@ -102,10 +100,52 @@ func decodeUnsafe(bs []byte) []float32 {
 }
 
 func (p ProviderSQL) SearchClosest(q []float32) ([]models.VectorRow, error) {
-	// TODO: This function has been temporarily disabled to avoid deprecated library usage. 
-	// In the new RAG implementation, this functionality is now in rag_new package. 
-	// For compatibility, return empty result instead of using deprecated vector extension. 
-	return []models.VectorRow{}, nil 
+	tableName, err := fetchTableName(q)
+	if err != nil {
+		return nil, err
+	}
+	stmt, _, err := p.s3Conn.Prepare(
+		fmt.Sprintf(`SELECT
+			distance,
+			embedding,
+			slug,
+			raw_text,
+			filename
+		FROM %s
+		WHERE embedding MATCH ?
+		ORDER BY distance
+		LIMIT 3
+	`, tableName))
+	if err != nil {
+		return nil, err
+	}
+	// This function needs to be completely rewritten to use the new binary storage approach
+	if err != nil {
+		return nil, err
+	}
+	if err := stmt.BindBlob(1, query); err != nil {
+		p.logger.Error("failed to bind", "error", err)
+		return nil, err
+	}
+	resp := []models.VectorRow{}
+	for stmt.Step() {
+		res := models.VectorRow{}
+		res.Distance = float32(stmt.ColumnFloat(0))
+		emb := stmt.ColumnRawText(1)
+		res.Embeddings = decodeUnsafe(emb)
+		res.Slug = stmt.ColumnText(2)
+		res.RawText = stmt.ColumnText(3)
+		res.FileName = stmt.ColumnText(4)
+		resp = append(resp, res)
+	}
+	if err := stmt.Err(); err != nil {
+		return nil, err
+	}
+	err = stmt.Close()
+	if err != nil {
+		return nil, err
+	}
+	return resp, nil
 }
 
 func (p ProviderSQL) ListFiles() ([]string, error) {

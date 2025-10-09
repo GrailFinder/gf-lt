@@ -10,6 +10,7 @@ require (
 	github.com/gopxl/beep/v2 v2.1.0
 	github.com/gordonklaus/portaudio v0.0.0-20230709114228-aafa478834f5
 	github.com/jmoiron/sqlx v1.4.0
+	github.com/mattn/go-sqlite3 v1.14.22
 	github.com/ncruces/go-sqlite3 v0.21.3
 	github.com/neurosnap/sentences v1.1.2
 	github.com/rivo/tview v0.0.0-20241103174730-c76f7879f592

@@ -9,7 +9,7 @@ import (
 	"gf-lt/config"
 	"gf-lt/extra"
 	"gf-lt/models"
-	"gf-lt/rag"
+	"gf-lt/rag_new"
 	"gf-lt/storage"
 	"io"
 	"log/slog"
@@ -41,7 +41,7 @@ var (
 	defaultStarter      = []models.RoleMsg{}
 	defaultStarterBytes = []byte{}
 	interruptResp       = false
-	ragger              *rag.RAG
+	ragger              *rag_new.RAG
 	chunkParser         ChunkParser
 	lastToolCall        *models.FuncCall
 	//nolint:unused // TTS_ENABLED conditionally uses this
@@ -277,7 +277,14 @@ func chatRagUse(qText string) (string, error) {
 			logger.Error("failed to get embs", "error", err, "index", i, "question", q)
 			continue
 		}
-		vecs, err := store.SearchClosest(emb)
+		
+		// Create EmbeddingResp struct for the search
+		embeddingResp := &models.EmbeddingResp{
+			Embedding: emb,
+			Index:     0, // Not used in search but required for the struct
+		}
+		
+		vecs, err := ragger.SearchEmb(embeddingResp)
 		if err != nil {
 			logger.Error("failed to query embs", "error", err, "index", i, "question", q)
 			continue
@@ -286,12 +293,12 @@ func chatRagUse(qText string) (string, error) {
 	}
 	// get raw text
 	resps := []string{}
-	logger.Debug("sqlvec resp", "vecs len", len(respVecs))
+	logger.Debug("rag query resp", "vecs len", len(respVecs))
 	for _, rv := range respVecs {
 		resps = append(resps, rv.RawText)
 	}
 	if len(resps) == 0 {
-		return "No related results from vector storage.", nil
+		return "No related results from RAG vector storage.", nil
 	}
 	return strings.Join(resps, "\n"), nil
 }
@@ -564,7 +571,7 @@ func init() {
 	if store == nil {
 		os.Exit(1)
 	}
-	ragger = rag.New(logger, store, cfg)
+	ragger = rag_new.New(logger, store, cfg)
 	// https://github.com/coreydaley/ggerganov-llama.cpp/blob/master/examples/server/README.md
 	// load all chats in memory
 	if _, err := loadHistoryChats(); err != nil {

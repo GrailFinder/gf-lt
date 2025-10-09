@@ -113,3 +113,8 @@ func NewProviderSQL(dbPath string, logger *slog.Logger) FullRepo {
 	p.Migrate()
 	return p
 }
+
+// DB returns the underlying database connection
+func (p ProviderSQL) DB() *sqlx.DB {
+	return p.db
+}
