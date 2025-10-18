@@ -73,6 +73,7 @@ var (
 [yellow]Ctrl+j[white]: if chat agent is char.png will show the image; then any key to return
 [yellow]Ctrl+a[white]: interrupt tts (needs tts server)
 [yellow]Ctrl+q[white]: cycle through mentioned chars in chat, to pick persona to send next msg as
+[yellow]Ctrl+x[white]: cycle through mentioned chars in chat, to pick persona to send next msg as (for llm)
 
 Press Enter to go back
 `
@@ -898,6 +899,29 @@ func init() {
 				}
 			}
 			updateStatusLine()
+			return nil
+		}
+		if event.Key() == tcell.KeyCtrlG {
+			// cfg.RAGDir is the directory with files to use with RAG
+			// rag load
+			// menu of the text files from defined rag directory
+			files, err := os.ReadDir(cfg.RAGDir)
+			if err != nil {
+				logger.Error("failed to read dir", "dir", cfg.RAGDir, "error", err)
+				if notifyerr := notifyUser("failed to open RAG files dir", err.Error()); notifyerr != nil {
+					logger.Error("failed to send notification", "error", notifyerr)
+				}
+				return nil
+			}
+			fileList := []string{}
+			for _, f := range files {
+				if f.IsDir() {
+					continue
+				}
+				fileList = append(fileList, f.Name())
+			}
+			chatRAGTable := makeRAGTable(fileList)
+			pages.AddPage(RAGPage, chatRAGTable, true, true)
 			return nil
 		}
 		// cannot send msg in editMode or botRespMode
