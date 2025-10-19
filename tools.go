@@ -1,14 +1,14 @@
 package main
 
 import (
-	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"gf-lt/config"
+	"gf-lt/extra"
 	"gf-lt/models"
-	"io"
-	"net/http"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -116,29 +116,52 @@ func websearch(args map[string]string) []byte {
 		logger.Error(msg)
 		return []byte(msg)
 	}
-	payload, err := json.Marshal(args)
+	limitS, ok := args["limit"]
+	if !ok || limitS == "" {
+		limitS = "3"
+	}
+	limit, err := strconv.Atoi(limitS)
+	if err != nil || limit == 0 {
+		logger.Warn("websearch limit; passed bad value; setting to default (3)",
+			"limit_arg", limitS, "error", err)
+		limit = 3
+	}
+	// // external
+	// payload, err := json.Marshal(args)
+	// if err != nil {
+	// 	logger.Error("failed to marshal web_search arguments", "error", err)
+	// 	msg := fmt.Sprintf("failed to marshal web_search arguments; error: %s\n", err)
+	// 	return []byte(msg)
+	// }
+	// req, err := http.NewRequest("POST", cfg.SearchAPI, bytes.NewReader(payload))
+	// if err != nil {
+	// 	logger.Error("failed to build an http request", "error", err)
+	// 	msg := fmt.Sprintf("failed to build an http request; error: %s\n", err)
+	// 	return []byte(msg)
+	// }
+	// resp, err := httpClient.Do(req)
+	// if err != nil {
+	// 	logger.Error("failed to execute http request", "error", err)
+	// 	msg := fmt.Sprintf("failed to execute http request; error: %s\n", err)
+	// 	return []byte(msg)
+	// }
+	// defer resp.Body.Close()
+	// data, err := io.ReadAll(resp.Body)
+	// if err != nil {
+	// 	logger.Error("failed to read response body", "error", err)
+	// 	msg := fmt.Sprintf("failed to read response body; error: %s\n", err)
+	// 	return []byte(msg)
+	// }
+	resp, err := extra.WebSearcher.Search(context.Background(), query, limit)
 	if err != nil {
-		logger.Error("failed to marshal web_search arguments", "error", err)
-		msg := fmt.Sprintf("failed to marshal web_search arguments; error: %s\n", err)
+		msg := "search tool failed; error: " + err.Error()
+		logger.Error(msg)
 		return []byte(msg)
 	}
-	req, err := http.NewRequest("POST", cfg.SearchAPI, bytes.NewReader(payload))
+	data, err := json.Marshal(resp)
 	if err != nil {
-		logger.Error("failed to build an http request", "error", err)
-		msg := fmt.Sprintf("failed to build an http request; error: %s\n", err)
-		return []byte(msg)
-	}
-	resp, err := httpClient.Do(req)
-	if err != nil {
-		logger.Error("failed to execute http request", "error", err)
-		msg := fmt.Sprintf("failed to execute http request; error: %s\n", err)
-		return []byte(msg)
-	}
-	defer resp.Body.Close()
-	data, err := io.ReadAll(resp.Body)
-	if err != nil {
-		logger.Error("failed to read response body", "error", err)
-		msg := fmt.Sprintf("failed to read response body; error: %s\n", err)
+		msg := "failed to marshal search result; error: " + err.Error()
+		logger.Error(msg)
 		return []byte(msg)
 	}
 	return data
