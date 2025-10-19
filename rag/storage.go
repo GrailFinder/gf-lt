@@ -1,10 +1,10 @@
-package rag_new
+package rag
 
 import (
-	"gf-lt/models"
-	"gf-lt/storage"
 	"encoding/binary"
 	"fmt"
+	"gf-lt/models"
+	"gf-lt/storage"
 	"log/slog"
 	"sort"
 	"strings"
@@ -23,7 +23,7 @@ type VectorStorage struct {
 func NewVectorStorage(logger *slog.Logger, store storage.FullRepo) *VectorStorage {
 	return &VectorStorage{
 		logger: logger,
-		sqlxDB: store.DB(),  // Use the new DB() method
+		sqlxDB: store.DB(), // Use the new DB() method
 		store:  store,
 	}
 }
@@ -53,7 +53,7 @@ func (vs *VectorStorage) CreateTables() error {
 		`CREATE INDEX IF NOT EXISTS idx_embeddings_5120_filename ON embeddings_5120(filename)`,
 		`CREATE INDEX IF NOT EXISTS idx_embeddings_384_slug ON embeddings_384(slug)`,
 		`CREATE INDEX IF NOT EXISTS idx_embeddings_5120_slug ON embeddings_5120(slug)`,
-		
+
 		// Additional indexes that may help with searches
 		`CREATE INDEX IF NOT EXISTS idx_embeddings_384_created_at ON embeddings_384(created_at)`,
 		`CREATE INDEX IF NOT EXISTS idx_embeddings_5120_created_at ON embeddings_5120(created_at)`,
@@ -140,7 +140,7 @@ func (vs *VectorStorage) SearchClosest(query []float32) ([]models.VectorRow, err
 	// For better performance, instead of loading all vectors at once,
 	// we'll implement batching and potentially add L2 distance-based pre-filtering
 	// since cosine similarity is related to L2 distance for normalized vectors
-	
+
 	querySQL := fmt.Sprintf("SELECT embeddings, slug, raw_text, filename FROM %s", tableName)
 	rows, err := vs.sqlxDB.Query(querySQL)
 	if err != nil {
@@ -153,27 +153,27 @@ func (vs *VectorStorage) SearchClosest(query []float32) ([]models.VectorRow, err
 		vector   models.VectorRow
 		distance float32
 	}
-	
+
 	var topResults []SearchResult
-	
+
 	// Process vectors one by one to avoid loading everything into memory
 	for rows.Next() {
 		var (
-			embeddingsBlob []byte
+			embeddingsBlob          []byte
 			slug, rawText, fileName string
 		)
-		
+
 		if err := rows.Scan(&embeddingsBlob, &slug, &rawText, &fileName); err != nil {
 			vs.logger.Error("failed to scan row", "error", err)
 			continue
 		}
-		
+
 		storedEmbeddings := DeserializeVector(embeddingsBlob)
-		
+
 		// Calculate cosine similarity (returns value between -1 and 1, where 1 is most similar)
 		similarity := cosineSimilarity(query, storedEmbeddings)
 		distance := 1 - similarity // Convert to distance where 0 is most similar
-		
+
 		result := SearchResult{
 			vector: models.VectorRow{
 				Embeddings: storedEmbeddings,
@@ -183,34 +183,34 @@ func (vs *VectorStorage) SearchClosest(query []float32) ([]models.VectorRow, err
 			},
 			distance: distance,
 		}
-		
+
 		// Add to top results and maintain only top 3
 		topResults = append(topResults, result)
-		
+
 		// Sort and keep only top 3
 		sort.Slice(topResults, func(i, j int) bool {
 			return topResults[i].distance < topResults[j].distance
 		})
-		
+
 		if len(topResults) > 3 {
 			topResults = topResults[:3] // Keep only closest 3
 		}
 	}
-	
+
 	// Convert back to VectorRow slice
 	var results []models.VectorRow
 	for _, result := range topResults {
 		result.vector.Distance = result.distance
 		results = append(results, result.vector)
 	}
-	
+
 	return results, nil
 }
 
 // ListFiles returns a list of all loaded files
 func (vs *VectorStorage) ListFiles() ([]string, error) {
 	var fileLists [][]string
-	
+
 	// Query both tables and combine results
 	for _, table := range []string{"embeddings_384", "embeddings_5120"} {
 		query := fmt.Sprintf("SELECT DISTINCT filename FROM %s", table)
@@ -219,7 +219,7 @@ func (vs *VectorStorage) ListFiles() ([]string, error) {
 			// Continue if one table doesn't exist
 			continue
 		}
-		
+
 		var files []string
 		for rows.Next() {
 			var filename string
@@ -229,10 +229,10 @@ func (vs *VectorStorage) ListFiles() ([]string, error) {
 			files = append(files, filename)
 		}
 		rows.Close()
-		
+
 		fileLists = append(fileLists, files)
 	}
-	
+
 	// Combine and deduplicate
 	fileSet := make(map[string]bool)
 	var allFiles []string
@@ -244,25 +244,25 @@ func (vs *VectorStorage) ListFiles() ([]string, error) {
 			}
 		}
 	}
-	
+
 	return allFiles, nil
 }
 
 // RemoveEmbByFileName removes all embeddings associated with a specific filename
 func (vs *VectorStorage) RemoveEmbByFileName(filename string) error {
 	var errors []string
-	
+
 	for _, table := range []string{"embeddings_384", "embeddings_5120"} {
 		query := fmt.Sprintf("DELETE FROM %s WHERE filename = ?", table)
 		if _, err := vs.sqlxDB.Exec(query, filename); err != nil {
 			errors = append(errors, err.Error())
 		}
 	}
-	
+
 	if len(errors) > 0 {
 		return fmt.Errorf("errors occurred: %s", strings.Join(errors, "; "))
 	}
-	
+
 	return nil
 }
 
@@ -298,3 +298,4 @@ func sqrt(f float32) float32 {
 	}
 	return guess
 }
+

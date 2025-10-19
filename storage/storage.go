@@ -6,7 +6,6 @@ import (
 
 	_ "github.com/glebarez/go-sqlite"
 	"github.com/jmoiron/sqlx"
-	"github.com/ncruces/go-sqlite3"
 )
 
 type FullRepo interface {
@@ -28,7 +27,6 @@ type ChatHistory interface {
 
 type ProviderSQL struct {
 	db     *sqlx.DB
-	s3Conn *sqlite3.Conn
 	logger *slog.Logger
 }
 
@@ -97,7 +95,7 @@ func (p ProviderSQL) ChatGetMaxID() (uint32, error) {
 	return id, err
 }
 
-// opens two connections
+// opens database connection
 func NewProviderSQL(dbPath string, logger *slog.Logger) FullRepo {
 	db, err := sqlx.Open("sqlite", dbPath)
 	if err != nil {
@@ -105,11 +103,7 @@ func NewProviderSQL(dbPath string, logger *slog.Logger) FullRepo {
 		return nil
 	}
 	p := ProviderSQL{db: db, logger: logger}
-	p.s3Conn, err = sqlite3.Open(dbPath)
-	if err != nil {
-		logger.Error("failed to open vecdb connection", "error", err)
-		return nil
-	}
+
 	p.Migrate()
 	return p
 }

@@ -1,10 +1,10 @@
-package rag_new
+package rag
 
 import (
 	"bytes"
-	"gf-lt/config"
 	"encoding/json"
 	"fmt"
+	"gf-lt/config"
 	"log/slog"
 	"net/http"
 )
@@ -17,9 +17,9 @@ type Embedder interface {
 
 // APIEmbedder implements embedder using an API (like Hugging Face, OpenAI, etc.)
 type APIEmbedder struct {
-	logger  *slog.Logger
-	client  *http.Client
-	cfg     *config.Config
+	logger *slog.Logger
+	client *http.Client
+	cfg    *config.Config
 }
 
 func NewAPIEmbedder(l *slog.Logger, cfg *config.Config) *APIEmbedder {
@@ -44,11 +44,11 @@ func (a *APIEmbedder) Embed(text []string) ([][]float32, error) {
 		a.logger.Error("failed to create new req", "err", err.Error())
 		return nil, err
 	}
-	
+
 	if a.cfg.HFToken != "" {
 		req.Header.Add("Authorization", "Bearer "+a.cfg.HFToken)
 	}
-	
+
 	resp, err := a.client.Do(req)
 	if err != nil {
 		a.logger.Error("failed to embed text", "err", err.Error())
@@ -96,3 +96,4 @@ func (a *APIEmbedder) EmbedSingle(text string) ([]float32, error) {
 //
 // For now, we'll focus on the API implementation which is already working in the current system,
 // and can be extended later when we have ONNX runtime integration
+

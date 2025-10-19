@@ -1,10 +1,10 @@
-package rag_new
+package rag
 
 import (
+	"fmt"
 	"gf-lt/config"
 	"gf-lt/models"
 	"gf-lt/storage"
-	"fmt"
 	"log/slog"
 	"os"
 	"path"
@@ -16,37 +16,37 @@ import (
 
 var (
 	// Status messages for TUI integration
-	LongJobStatusCh = make(chan string, 10) // Increased buffer size to prevent blocking
+	LongJobStatusCh     = make(chan string, 10) // Increased buffer size to prevent blocking
 	FinishedRAGStatus   = "finished loading RAG file; press Enter"
 	LoadedFileRAGStatus = "loaded file"
 	ErrRAGStatus        = "some error occurred; failed to transfer data to vector db"
 )
 
 type RAG struct {
-	logger *slog.Logger
-	store  storage.FullRepo
-	cfg    *config.Config
+	logger   *slog.Logger
+	store    storage.FullRepo
+	cfg      *config.Config
 	embedder Embedder
-	storage *VectorStorage
+	storage  *VectorStorage
 }
 
 func New(l *slog.Logger, s storage.FullRepo, cfg *config.Config) *RAG {
 	// Initialize with API embedder by default, could be configurable later
 	embedder := NewAPIEmbedder(l, cfg)
-	
+
 	rag := &RAG{
-		logger: l,
-		store:  s,
-		cfg:    cfg,
+		logger:   l,
+		store:    s,
+		cfg:      cfg,
 		embedder: embedder,
-		storage: NewVectorStorage(l, s),
+		storage:  NewVectorStorage(l, s),
 	}
-	
+
 	// Create the necessary tables
 	if err := rag.storage.CreateTables(); err != nil {
 		l.Error("failed to create vector tables", "error", err)
 	}
-	
+
 	return rag
 }
 
@@ -61,7 +61,7 @@ func (r *RAG) LoadRAG(fpath string) error {
 	}
 	r.logger.Debug("rag: loaded file", "fp", fpath)
 	LongJobStatusCh <- LoadedFileRAGStatus
-	
+
 	fileText := string(data)
 	tokenizer, err := english.NewSentenceTokenizer(nil)
 	if err != nil {
@@ -72,7 +72,7 @@ func (r *RAG) LoadRAG(fpath string) error {
 	for i, s := range sentences {
 		sents[i] = s.Text
 	}
-	
+
 	// Group sentences into paragraphs based on word limit
 	paragraphs := []string{}
 	par := strings.Builder{}
@@ -84,7 +84,7 @@ func (r *RAG) LoadRAG(fpath string) error {
 			}
 			par.WriteString(sents[i])
 		}
-		
+
 		if wordCounter(par.String()) > int(r.cfg.RAGWordLimit) {
 			paragraph := strings.TrimSpace(par.String())
 			if paragraph != "" {
@@ -93,7 +93,7 @@ func (r *RAG) LoadRAG(fpath string) error {
 			par.Reset()
 		}
 	}
-	
+
 	// Handle any remaining content in the paragraph buffer
 	if par.Len() > 0 {
 		paragraph := strings.TrimSpace(par.String())
@@ -101,16 +101,16 @@ func (r *RAG) LoadRAG(fpath string) error {
 			paragraphs = append(paragraphs, paragraph)
 		}
 	}
-	
+
 	// Adjust batch size if needed
 	if len(paragraphs) < int(r.cfg.RAGBatchSize) && len(paragraphs) > 0 {
 		r.cfg.RAGBatchSize = len(paragraphs)
 	}
-	
+
 	if len(paragraphs) == 0 {
 		return fmt.Errorf("no valid paragraphs found in file")
 	}
-	
+
 	var (
 		maxChSize = 100
 		left      = 0
@@ -121,11 +121,11 @@ func (r *RAG) LoadRAG(fpath string) error {
 		doneCh    = make(chan bool, 1)
 		lock      = new(sync.Mutex)
 	)
-	
+
 	defer close(doneCh)
 	defer close(errCh)
 	defer close(batchCh)
-	
+
 	// Fill input channel with batches
 	ctn := 0
 	totalParagraphs := len(paragraphs)
@@ -138,19 +138,19 @@ func (r *RAG) LoadRAG(fpath string) error {
 		left, right = right, right+r.cfg.RAGBatchSize
 		ctn++
 	}
-	
+
 	finishedBatchesMsg := fmt.Sprintf("finished batching batches#: %d; paragraphs: %d; sentences: %d\n", ctn+1, len(paragraphs), len(sents))
 	r.logger.Debug(finishedBatchesMsg)
 	LongJobStatusCh <- finishedBatchesMsg
-	
+
 	// Start worker goroutines
 	for w := 0; w < int(r.cfg.RAGWorkers); w++ {
 		go r.batchToVectorAsync(lock, w, batchCh, vectorCh, errCh, doneCh, path.Base(fpath))
 	}
-	
+
 	// Wait for embedding to be done
 	<-doneCh
-	
+
 	// Write vectors to storage
 	return r.writeVectors(vectorCh)
 }
@@ -182,14 +182,14 @@ func (r *RAG) batchToVectorAsync(lock *sync.Mutex, id int, inputCh <-chan map[in
 			doneCh <- true
 		}
 	}()
-	
+
 	for {
 		lock.Lock()
 		if len(inputCh) == 0 {
 			lock.Unlock()
 			return
 		}
-		
+
 		select {
 		case linesMap := <-inputCh:
 			for leftI, lines := range linesMap {
@@ -207,7 +207,7 @@ func (r *RAG) batchToVectorAsync(lock *sync.Mutex, id int, inputCh <-chan map[in
 		default:
 			lock.Unlock()
 		}
-		
+
 		r.logger.Debug("processed batch", "batches#", len(inputCh), "worker#", id)
 		LongJobStatusCh <- fmt.Sprintf("converted to vector; batches: %d, worker#: %d", len(inputCh), id)
 	}
@@ -220,14 +220,14 @@ func (r *RAG) fetchEmb(lines []string, errCh chan error, vectorCh chan<- []model
 		errCh <- err
 		return err
 	}
-	
+
 	if len(embeddings) == 0 {
 		err := fmt.Errorf("no embeddings returned")
 		r.logger.Error("empty embeddings")
 		errCh <- err
 		return err
 	}
-	
+
 	vectors := make([]models.VectorRow, len(embeddings))
 	for i, emb := range embeddings {
 		vector := models.VectorRow{
@@ -238,7 +238,7 @@ func (r *RAG) fetchEmb(lines []string, errCh chan error, vectorCh chan<- []model
 		}
 		vectors[i] = vector
 	}
-	
+
 	vectorCh <- vectors
 	return nil
 }
@@ -258,3 +258,4 @@ func (r *RAG) ListLoaded() ([]string, error) {
 func (r *RAG) RemoveFile(filename string) error {
 	return r.storage.RemoveEmbByFileName(filename)
 }
+

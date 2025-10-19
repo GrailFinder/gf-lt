@@ -9,7 +9,7 @@ import (
 	"gf-lt/config"
 	"gf-lt/extra"
 	"gf-lt/models"
-	"gf-lt/rag_new"
+	"gf-lt/rag"
 	"gf-lt/storage"
 	"io"
 	"log/slog"
@@ -41,7 +41,7 @@ var (
 	defaultStarter      = []models.RoleMsg{}
 	defaultStarterBytes = []byte{}
 	interruptResp       = false
-	ragger              *rag_new.RAG
+	ragger              *rag.RAG
 	chunkParser         ChunkParser
 	lastToolCall        *models.FuncCall
 	//nolint:unused // TTS_ENABLED conditionally uses this
@@ -277,13 +277,13 @@ func chatRagUse(qText string) (string, error) {
 			logger.Error("failed to get embs", "error", err, "index", i, "question", q)
 			continue
 		}
-		
+
 		// Create EmbeddingResp struct for the search
 		embeddingResp := &models.EmbeddingResp{
 			Embedding: emb,
 			Index:     0, // Not used in search but required for the struct
 		}
-		
+
 		vecs, err := ragger.SearchEmb(embeddingResp)
 		if err != nil {
 			logger.Error("failed to query embs", "error", err, "index", i, "question", q)
@@ -571,7 +571,7 @@ func init() {
 	if store == nil {
 		os.Exit(1)
 	}
-	ragger = rag_new.New(logger, store, cfg)
+	ragger = rag.New(logger, store, cfg)
 	// https://github.com/coreydaley/ggerganov-llama.cpp/blob/master/examples/server/README.md
 	// load all chats in memory
 	if _, err := loadHistoryChats(); err != nil {

@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"io/fs"
 	"strings"
-
-	_ "github.com/asg017/sqlite-vec-go-bindings/ncruces"
 )
 
 //go:embed migrations/*
@@ -53,8 +51,8 @@ func (p *ProviderSQL) executeMigration(migrationsDir fs.FS, fileName string) err
 }
 
 func (p *ProviderSQL) executeSQL(sqlContent []byte) error {
-	// Connect to the database (example using a simple connection)
-	err := p.s3Conn.Exec(string(sqlContent))
+	// Execute the migration content using standard database connection
+	_, err := p.db.Exec(string(sqlContent))
 	if err != nil {
 		return fmt.Errorf("failed to execute SQL: %w", err)
 	}
