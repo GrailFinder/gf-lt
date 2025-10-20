@@ -231,10 +231,33 @@ var fnMap = map[string]fnSig{
 	"recall":        recall,
 	"recall_topics": recallTopics,
 	"memorise":      memorise,
+	"websearch":     websearch,
 }
 
 // openai style def
 var baseTools = []models.Tool{
+	// websearch
+	models.Tool{
+		Type: "function",
+		Function: models.ToolFunc{
+			Name:        "websearch",
+			Description: "Search web given query, limit of sources (default 3).",
+			Parameters: models.ToolFuncParams{
+				Type:     "object",
+				Required: []string{"query", "limit"},
+				Properties: map[string]models.ToolArgProps{
+					"query": models.ToolArgProps{
+						Type:        "string",
+						Description: "search query",
+					},
+					"limit": models.ToolArgProps{
+						Type:        "string",
+						Description: "limit of the website results",
+					},
+				},
+			},
+		},
+	},
 	// memorise
 	models.Tool{
 		Type: "function",
