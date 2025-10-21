@@ -3,6 +3,7 @@ package rag
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"gf-lt/config"
 	"log/slog"
@@ -69,7 +70,7 @@ func (a *APIEmbedder) Embed(text []string) ([][]float32, error) {
 	}
 
 	if len(emb) == 0 {
-		err = fmt.Errorf("empty embedding response")
+		err = errors.New("empty embedding response")
 		a.logger.Error("empty embedding response")
 		return nil, err
 	}
@@ -83,7 +84,7 @@ func (a *APIEmbedder) EmbedSingle(text string) ([]float32, error) {
 		return nil, err
 	}
 	if len(result) == 0 {
-		return nil, fmt.Errorf("no embeddings returned")
+		return nil, errors.New("no embeddings returned")
 	}
 	return result[0], nil
 }

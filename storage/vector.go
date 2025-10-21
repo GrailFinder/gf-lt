@@ -75,9 +75,7 @@ func (p ProviderSQL) WriteVector(row *models.VectorRow) error {
 	return err
 }
 
-func decodeUnsafe(bs []byte) []float32 {
-	return unsafe.Slice((*float32)(unsafe.Pointer(&bs[0])), len(bs)/4)
-}
+
 
 func (p ProviderSQL) SearchClosest(q []float32) ([]models.VectorRow, error) {
 	// TODO: This function has been temporarily disabled to avoid deprecated library usage. 

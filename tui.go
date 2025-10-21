@@ -950,7 +950,7 @@ func init() {
 					persona = cfg.WriteNextMsgAs
 				}
 				// check if plain text
-				if injectRole == false {
+				if !injectRole {
 					matches := roleRE.FindStringSubmatch(msgText)
 					if len(matches) > 1 {
 						persona = matches[1]

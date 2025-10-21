@@ -141,7 +141,7 @@ func (vs *VectorStorage) SearchClosest(query []float32) ([]models.VectorRow, err
 	// we'll implement batching and potentially add L2 distance-based pre-filtering
 	// since cosine similarity is related to L2 distance for normalized vectors
 
-	querySQL := fmt.Sprintf("SELECT embeddings, slug, raw_text, filename FROM %s", tableName)
+	querySQL := "SELECT embeddings, slug, raw_text, filename FROM " + tableName
 	rows, err := vs.sqlxDB.Query(querySQL)
 	if err != nil {
 		return nil, err
@@ -198,7 +198,7 @@ func (vs *VectorStorage) SearchClosest(query []float32) ([]models.VectorRow, err
 	}
 
 	// Convert back to VectorRow slice
-	var results []models.VectorRow
+	results := make([]models.VectorRow, 0, len(topResults))
 	for _, result := range topResults {
 		result.vector.Distance = result.distance
 		results = append(results, result.vector)
@@ -209,11 +209,11 @@ func (vs *VectorStorage) SearchClosest(query []float32) ([]models.VectorRow, err
 
 // ListFiles returns a list of all loaded files
 func (vs *VectorStorage) ListFiles() ([]string, error) {
-	var fileLists [][]string
+	fileLists := make([][]string, 0)
 
 	// Query both tables and combine results
 	for _, table := range []string{"embeddings_384", "embeddings_5120"} {
-		query := fmt.Sprintf("SELECT DISTINCT filename FROM %s", table)
+		query := "SELECT DISTINCT filename FROM " + table
 		rows, err := vs.sqlxDB.Query(query)
 		if err != nil {
 			// Continue if one table doesn't exist

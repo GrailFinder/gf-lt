@@ -1,6 +1,7 @@
 package rag
 
 import (
+	"errors"
 	"fmt"
 	"gf-lt/config"
 	"gf-lt/models"
@@ -108,7 +109,7 @@ func (r *RAG) LoadRAG(fpath string) error {
 	}
 
 	if len(paragraphs) == 0 {
-		return fmt.Errorf("no valid paragraphs found in file")
+		return errors.New("no valid paragraphs found in file")
 	}
 
 	var (
@@ -222,7 +223,7 @@ func (r *RAG) fetchEmb(lines []string, errCh chan error, vectorCh chan<- []model
 	}
 
 	if len(embeddings) == 0 {
-		err := fmt.Errorf("no embeddings returned")
+		err := errors.New("no embeddings returned")
 		r.logger.Error("empty embeddings")
 		errCh <- err
 		return err
