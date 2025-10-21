@@ -75,6 +75,8 @@ var (
 [yellow]Ctrl+q[white]: cycle through mentioned chars in chat, to pick persona to send next msg as
 [yellow]Ctrl+x[white]: cycle through mentioned chars in chat, to pick persona to send next msg as (for llm)
 
+%s
+
 Press Enter to go back
 `
 	colorschemes = map[string]tview.Theme{
@@ -214,7 +216,7 @@ func colorText() {
 	textView.SetText(text)
 }
 
-func updateStatusLine() {
+func makeStatusLine() string {
 	isRecording := false
 	if asr != nil {
 		isRecording = asr.IsRecording()
@@ -223,17 +225,18 @@ func updateStatusLine() {
 	if cfg.WriteNextMsgAs != "" {
 		persona = cfg.WriteNextMsgAs
 	}
-	if strings.Contains(cfg.CurrentAPI, "chat") {
-		position.SetText(fmt.Sprintf(indexLine, botRespMode, cfg.AssistantRole, activeChatName, cfg.ToolUse, chatBody.Model,
-			cfg.SkipLLMResp, cfg.CurrentAPI, cfg.ThinkUse, logLevel.Level(), isRecording, persona))
-		return
-	}
 	botPersona := cfg.AssistantRole
 	if cfg.WriteNextMsgAsCompletionAgent != "" {
 		botPersona = cfg.WriteNextMsgAsCompletionAgent
 	}
-	position.SetText(fmt.Sprintf(indexLineCompletion, botRespMode, cfg.AssistantRole, activeChatName, cfg.ToolUse, chatBody.Model,
-		cfg.SkipLLMResp, cfg.CurrentAPI, cfg.ThinkUse, logLevel.Level(), isRecording, persona, botPersona))
+	statusLine := fmt.Sprintf(indexLineCompletion, botRespMode, cfg.AssistantRole, activeChatName, cfg.ToolUse, chatBody.Model,
+		cfg.SkipLLMResp, cfg.CurrentAPI, cfg.ThinkUse, logLevel.Level(), isRecording, persona, botPersona)
+	return statusLine
+}
+
+func updateStatusLine() {
+	position.SetText(makeStatusLine())
+	helpView.SetText(fmt.Sprintf(helpText, makeStatusLine()))
 }
 
 func initSysCards() ([]string, error) {
@@ -533,9 +536,11 @@ func init() {
 		return event
 	})
 	//
-	helpView = tview.NewTextView().SetDynamicColors(true).SetText(helpText).SetDoneFunc(func(key tcell.Key) {
-		pages.RemovePage(helpPage)
-	})
+	helpView = tview.NewTextView().SetDynamicColors(true).
+		SetText(fmt.Sprintf(helpText, makeStatusLine())).
+		SetDoneFunc(func(key tcell.Key) {
+			pages.RemovePage(helpPage)
+		})
 	helpView.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		switch event.Key() {
 		case tcell.KeyEsc, tcell.KeyEnter:
