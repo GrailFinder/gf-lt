@@ -19,6 +19,7 @@ var (
 	starRE             = regexp.MustCompile(`(\*.*?\*)`)
 	thinkRE            = regexp.MustCompile(`(<think>\s*([\s\S]*?)</think>)`)
 	codeBlockRE        = regexp.MustCompile(`(?s)\x60{3}(?:.*?)\n(.*?)\n\s*\x60{3}\s*`)
+	roleRE             = regexp.MustCompile(`^(\w+):`)
 	rpDefenitionSysMsg = `
 For this roleplay immersion is at most importance.
 Every character thinks and acts based on their personality and setting of the roleplay.

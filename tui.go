@@ -229,8 +229,9 @@ func makeStatusLine() string {
 	if cfg.WriteNextMsgAsCompletionAgent != "" {
 		botPersona = cfg.WriteNextMsgAsCompletionAgent
 	}
-	statusLine := fmt.Sprintf(indexLineCompletion, botRespMode, cfg.AssistantRole, activeChatName, cfg.ToolUse, chatBody.Model,
-		cfg.SkipLLMResp, cfg.CurrentAPI, cfg.ThinkUse, logLevel.Level(), isRecording, persona, botPersona)
+	statusLine := fmt.Sprintf(indexLineCompletion, botRespMode, cfg.AssistantRole, activeChatName,
+		cfg.ToolUse, chatBody.Model, cfg.SkipLLMResp, cfg.CurrentAPI, cfg.ThinkUse, logLevel.Level(),
+		isRecording, persona, botPersona, injectRole)
 	return statusLine
 }
 
@@ -333,6 +334,8 @@ func makePropsForm(props map[string]float32) *tview.Form {
 			cfg.ThinkUse = checked
 		}).AddCheckbox("RAG use", cfg.RAGEnabled, func(checked bool) {
 		cfg.RAGEnabled = checked
+	}).AddCheckbox("Inject role", injectRole, func(checked bool) {
+		injectRole = checked
 	}).AddDropDown("Set log level (Enter): ", []string{"Debug", "Info", "Warn"}, 1,
 		func(option string, optionIndex int) {
 			setLogLevel(option)
@@ -945,6 +948,14 @@ func init() {
 				// as what char user sends msg?
 				if cfg.WriteNextMsgAs != "" {
 					persona = cfg.WriteNextMsgAs
+				}
+				// check if plain text
+				if injectRole == false {
+					matches := roleRE.FindStringSubmatch(msgText)
+					if len(matches) > 1 {
+						persona = matches[1]
+						msgText = strings.TrimLeft(msgText[len(matches[0]):], " ")
+					}
 				}
 				// add user icon before user msg
 				fmt.Fprintf(textView, "%s[-:-:b](%d) <%s>: [-:-:-]\n%s\n",
