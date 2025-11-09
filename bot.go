@@ -606,6 +606,6 @@ func init() {
 		orator = extra.NewOrator(logger, cfg)
 	}
 	if cfg.STT_ENABLED {
-		asr = extra.NewWhisperSTT(logger, cfg.STT_URL, 16000)
+		asr = extra.NewSTT(logger, cfg)
 	}
 }

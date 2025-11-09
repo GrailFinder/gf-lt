@@ -56,9 +56,14 @@ type Config struct {
 	TTS_ENABLED bool    `toml:"TTS_ENABLED"`
 	TTS_SPEED   float32 `toml:"TTS_SPEED"`
 	// STT
-	STT_URL     string `toml:"STT_URL"`
-	STT_ENABLED bool   `toml:"STT_ENABLED"`
-	DBPATH      string `toml:"DBPATH"`
+	STT_TYPE          string `toml:"STT_TYPE"` // WHISPER_SERVER, WHISPER_BINARY
+	STT_URL           string `toml:"STT_URL"`
+	STT_SR            int    `toml:"STT_SR"`
+	STT_ENABLED       bool   `toml:"STT_ENABLED"`
+	WhisperBinaryPath string `toml:"WhisperBinaryPath"`
+	WhisperModelPath  string `toml:"WhisperModelPath"`
+	STT_LANG          string `toml:"STT_LANG"`
+	DBPATH            string `toml:"DBPATH"`
 }
 
 func LoadConfigOrDefault(fn string) *Config {
@@ -93,6 +98,7 @@ func LoadConfigOrDefault(fn string) *Config {
 		config.TTS_ENABLED = false
 		config.TTS_URL = "http://localhost:8880/v1/audio/speech"
 		config.FetchModelNameAPI = "http://localhost:8080/v1/models"
+		config.STT_SR = 16000
 	}
 	config.CurrentAPI = config.ChatAPI
 	config.APIMap = map[string]string{

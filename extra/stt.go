@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"gf-lt/config"
 	"io"
 	"log/slog"
 	"mime/multipart"
@@ -27,7 +28,16 @@ type StreamCloser interface {
 	Close() error
 }
 
-type WhisperSTT struct {
+func NewSTT(logger *slog.Logger, cfg *config.Config) STT {
+	switch cfg.STT_TYPE {
+	case "WHISPER_BINARY":
+	case "WHISPER_SERVER":
+		return NewWhisperServer(logger, cfg)
+	}
+	return NewWhisperServer(logger, cfg)
+}
+
+type WhisperServer struct {
 	logger      *slog.Logger
 	ServerURL   string
 	SampleRate  int
@@ -35,16 +45,16 @@ type WhisperSTT struct {
 	recording   bool
 }
 
-func NewWhisperSTT(logger *slog.Logger, serverURL string, sampleRate int) *WhisperSTT {
-	return &WhisperSTT{
+func NewWhisperServer(logger *slog.Logger, cfg *config.Config) *WhisperServer {
+	return &WhisperServer{
 		logger:      logger,
-		ServerURL:   serverURL,
-		SampleRate:  sampleRate,
+		ServerURL:   cfg.STT_URL,
+		SampleRate:  cfg.STT_SR,
 		AudioBuffer: new(bytes.Buffer),
 	}
 }
 
-func (stt *WhisperSTT) StartRecording() error {
+func (stt *WhisperServer) StartRecording() error {
 	if err := stt.microphoneStream(stt.SampleRate); err != nil {
 		return fmt.Errorf("failed to init microphone: %w", err)
 	}
@@ -52,7 +62,7 @@ func (stt *WhisperSTT) StartRecording() error {
 	return nil
 }
 
-func (stt *WhisperSTT) StopRecording() (string, error) {
+func (stt *WhisperServer) StopRecording() (string, error) {
 	stt.recording = false
 	// wait loop to finish?
 	if stt.AudioBuffer == nil {
@@ -107,7 +117,7 @@ func (stt *WhisperSTT) StopRecording() (string, error) {
 	return strings.TrimSpace(strings.ReplaceAll(resptext, "\n ", "\n")), nil
 }
 
-func (stt *WhisperSTT) writeWavHeader(w io.Writer, dataSize int) {
+func (stt *WhisperServer) writeWavHeader(w io.Writer, dataSize int) {
 	header := make([]byte, 44)
 	copy(header[0:4], "RIFF")
 	binary.LittleEndian.PutUint32(header[4:8], uint32(36+dataSize))
@@ -127,11 +137,11 @@ func (stt *WhisperSTT) writeWavHeader(w io.Writer, dataSize int) {
 	}
 }
 
-func (stt *WhisperSTT) IsRecording() bool {
+func (stt *WhisperServer) IsRecording() bool {
 	return stt.recording
 }
 
-func (stt *WhisperSTT) microphoneStream(sampleRate int) error {
+func (stt *WhisperServer) microphoneStream(sampleRate int) error {
 	if err := portaudio.Initialize(); err != nil {
 		return fmt.Errorf("portaudio init failed: %w", err)
 	}
