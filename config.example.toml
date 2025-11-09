@@ -20,8 +20,14 @@ TTS_URL = "http://localhost:8880/v1/audio/speech"
 TTS_SPEED = 1.0
 # extra stt
 STT_ENABLED = false
+STT_TYPE = "WHISPER_SERVER" # WHISPER_SERVER or WHISPER_BINARY
 STT_URL = "http://localhost:8081/inference"
+WhisperBinaryPath = "./whisper-cli"  # Path to whisper binary (for WHISPER_BINARY mode)
+WhisperModelPath = "./ggml-model.bin"  # Path to whisper model file (for WHISPER_BINARY mode)
+STT_LANG = "en"  # Language for speech recognition (for WHISPER_BINARY mode)
+STT_SR = 16000  # Sample rate for audio recording
 DBPATH = "gflt.db"
+#
 FetchModelNameAPI = "http://localhost:8080/v1/models"
 # external search tool
 SearchAPI = "" # url to call the tool by
