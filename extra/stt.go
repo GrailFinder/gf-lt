@@ -31,8 +31,10 @@ type StreamCloser interface {
 func NewSTT(logger *slog.Logger, cfg *config.Config) STT {
 	switch cfg.STT_TYPE {
 	case "WHISPER_BINARY":
+		logger.Debug("stt init, chosen whisper binary")
 		return NewWhisperBinary(logger, cfg)
 	case "WHISPER_SERVER":
+		logger.Debug("stt init, chosen whisper server")
 		return NewWhisperServer(logger, cfg)
 	}
 	return NewWhisperServer(logger, cfg)

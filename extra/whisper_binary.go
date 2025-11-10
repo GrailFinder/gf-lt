@@ -6,31 +6,32 @@ import (
 	"errors"
 	"fmt"
 	"gf-lt/config"
+	"io"
 	"log/slog"
 	"os"
 	"os/exec"
 	"sync"
+	"time"
 
 	"github.com/gordonklaus/portaudio"
 )
 
-
-
 type WhisperBinary struct {
+	logger      *slog.Logger
 	whisperPath string
 	modelPath   string
 	lang        string
 	ctx         context.Context
 	cancel      context.CancelFunc
 	mu          sync.Mutex
-	running     bool
-	cmd         *exec.Cmd
+	recording   bool
 	audioBuffer []int16
 }
 
 func NewWhisperBinary(logger *slog.Logger, cfg *config.Config) *WhisperBinary {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &WhisperBinary{
+		logger:      logger,
 		whisperPath: cfg.WhisperBinaryPath,
 		modelPath:   cfg.WhisperModelPath,
 		lang:        cfg.STT_LANG,
@@ -42,18 +43,59 @@ func NewWhisperBinary(logger *slog.Logger, cfg *config.Config) *WhisperBinary {
 func (w *WhisperBinary) StartRecording() error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
-
-	if w.running {
+	if w.recording {
 		return errors.New("recording is already in progress")
 	}
 
+	// Suppress ALSA warnings by setting environment variables
+	origCard := os.Getenv("ALSA_PCM_CARD")
+	origDevice := os.Getenv("ALSA_PCM_DEVICE")
+	origSubdevice := os.Getenv("ALSA_PCM_SUBDEVICE")
+
+	// Set specific ALSA device to prevent "Unknown PCM card.pcm.rear" warnings
+	os.Setenv("ALSA_PCM_CARD", "0")
+	os.Setenv("ALSA_PCM_DEVICE", "0")
+	os.Setenv("ALSA_PCM_SUBDEVICE", "0")
+
 	if err := portaudio.Initialize(); err != nil {
+		// Restore original environment variables on error
+		if origCard != "" {
+			os.Setenv("ALSA_PCM_CARD", origCard)
+		} else {
+			os.Unsetenv("ALSA_PCM_CARD")
+		}
+		if origDevice != "" {
+			os.Setenv("ALSA_PCM_DEVICE", origDevice)
+		} else {
+			os.Unsetenv("ALSA_PCM_DEVICE")
+		}
+		if origSubdevice != "" {
+			os.Setenv("ALSA_PCM_SUBDEVICE", origSubdevice)
+		} else {
+			os.Unsetenv("ALSA_PCM_SUBDEVICE")
+		}
 		return fmt.Errorf("portaudio init failed: %w", err)
+	}
+
+	// Restore original environment variables after initialization
+	if origCard != "" {
+		os.Setenv("ALSA_PCM_CARD", origCard)
+	} else {
+		os.Unsetenv("ALSA_PCM_CARD")
+	}
+	if origDevice != "" {
+		os.Setenv("ALSA_PCM_DEVICE", origDevice)
+	} else {
+		os.Unsetenv("ALSA_PCM_DEVICE")
+	}
+	if origSubdevice != "" {
+		os.Setenv("ALSA_PCM_SUBDEVICE", origSubdevice)
+	} else {
+		os.Unsetenv("ALSA_PCM_SUBDEVICE")
 	}
 
 	// Initialize audio buffer
 	w.audioBuffer = make([]int16, 0)
-
 	in := make([]int16, 1024) // buffer size
 	stream, err := portaudio.OpenDefaultStream(1, 0, 16000.0, len(in), in)
 	if err != nil {
@@ -63,37 +105,45 @@ func (w *WhisperBinary) StartRecording() error {
 		return fmt.Errorf("failed to open microphone: %w", err)
 	}
 
-	// Create a dummy command just for context management
-	w.cmd = exec.CommandContext(w.ctx, "sh", "-c", "echo 'dummy command'")
-
 	go w.recordAudio(stream, in)
-	w.running = true
-
+	w.recording = true
+	w.logger.Debug("Recording started")
 	return nil
 }
 
 func (w *WhisperBinary) recordAudio(stream *portaudio.Stream, in []int16) {
 	defer func() {
+		w.logger.Debug("recordAudio defer function called")
+		_ = stream.Stop()         // Stop the stream
 		_ = portaudio.Terminate() // ignoring error as we're shutting down
+		w.logger.Debug("recordAudio terminated")
 	}()
-
+	w.logger.Debug("Starting audio stream")
 	if err := stream.Start(); err != nil {
+		w.logger.Error("Failed to start audio stream", "error", err)
 		return
 	}
-
+	w.logger.Debug("Audio stream started, entering recording loop")
 	for {
 		select {
 		case <-w.ctx.Done():
+			w.logger.Debug("Context done, exiting recording loop")
 			return
 		default:
-			if !w.running {
+			// Check recording status with minimal lock time
+			w.mu.Lock()
+			recording := w.recording
+			w.mu.Unlock()
+
+			if !recording {
+				w.logger.Debug("Recording flag is false, exiting recording loop")
 				return
 			}
 			if err := stream.Read(); err != nil {
+				w.logger.Error("Error reading from stream", "error", err)
 				return
 			}
-
-			// Append samples to buffer
+			// Append samples to buffer - only acquire lock when necessary
 			w.mu.Lock()
 			if w.audioBuffer == nil {
 				w.audioBuffer = make([]int16, 0)
@@ -108,98 +158,136 @@ func (w *WhisperBinary) recordAudio(stream *portaudio.Stream, in []int16) {
 }
 
 func (w *WhisperBinary) StopRecording() (string, error) {
+	w.logger.Debug("StopRecording called")
 	w.mu.Lock()
-	if !w.running {
+	if !w.recording {
 		w.mu.Unlock()
 		return "", errors.New("not currently recording")
 	}
-
-	w.running = false
+	w.logger.Debug("Setting recording to false and cancelling context")
+	w.recording = false
 	w.cancel() // This will stop the recording goroutine
 	w.mu.Unlock()
+
+	// Small delay to allow the recording goroutine to react to context cancellation
+	time.Sleep(100 * time.Millisecond)
 
 	// Save the recorded audio to a temporary file
 	tempFile, err := w.saveAudioToTempFile()
 	if err != nil {
+		w.logger.Error("Error saving audio to temp file", "error", err)
 		return "", fmt.Errorf("failed to save audio to temp file: %w", err)
 	}
-	defer os.Remove(tempFile) // Clean up the temp file
+	w.logger.Debug("Saved audio to temp file", "file", tempFile)
 
-	// Run the whisper binary
-	cmd := exec.CommandContext(w.ctx, w.whisperPath, "-m", w.modelPath, "-l", w.lang, tempFile)
-
-	var outBuf, errBuf bytes.Buffer
+	// Run the whisper binary with a separate context to avoid cancellation during transcription
+	cmd := exec.Command(w.whisperPath, "-m", w.modelPath, "-l", w.lang, tempFile, "2>/dev/null")
+	var outBuf bytes.Buffer
 	cmd.Stdout = &outBuf
-	cmd.Stderr = &errBuf
+	// Redirect stderr to suppress ALSA warnings and other stderr output
+	cmd.Stderr = io.Discard // Suppress stderr output from whisper binary
 
+	w.logger.Debug("Running whisper binary command")
 	if err := cmd.Run(); err != nil {
-		return "", fmt.Errorf("whisper binary failed: %w, stderr: %s", err, errBuf.String())
+		// Clean up audio buffer
+		w.mu.Lock()
+		w.audioBuffer = nil
+		w.mu.Unlock()
+		// Since we're suppressing stderr, we'll just log that the command failed
+		w.logger.Error("Error running whisper binary", "error", err)
+		return "", fmt.Errorf("whisper binary failed: %w", err)
 	}
-
 	result := outBuf.String()
-	
+	w.logger.Debug("Whisper binary completed", "result", result)
+
 	// Clean up audio buffer
 	w.mu.Lock()
 	w.audioBuffer = nil
 	w.mu.Unlock()
-	
+
+	// Clean up the temporary file after transcription
+	w.logger.Debug("StopRecording completed")
+	os.Remove(tempFile)
+
 	return result, nil
 }
 
 // saveAudioToTempFile saves the recorded audio data to a temporary WAV file
 func (w *WhisperBinary) saveAudioToTempFile() (string, error) {
+	w.logger.Debug("saveAudioToTempFile called")
 	// Create temporary WAV file
 	tempFile, err := os.CreateTemp("", "recording_*.wav")
 	if err != nil {
+		w.logger.Error("Failed to create temp file", "error", err)
 		return "", fmt.Errorf("failed to create temp file: %w", err)
 	}
+	w.logger.Debug("Created temp file", "file", tempFile.Name())
 	defer tempFile.Close()
 
 	// Write WAV header and data
+	w.logger.Debug("About to write WAV file", "file", tempFile.Name())
 	err = w.writeWAVFile(tempFile.Name())
 	if err != nil {
+		w.logger.Error("Error writing WAV file", "error", err)
 		return "", fmt.Errorf("failed to write WAV file: %w", err)
 	}
+	w.logger.Debug("WAV file written successfully", "file", tempFile.Name())
 
 	return tempFile.Name(), nil
 }
 
 // writeWAVFile creates a WAV file from the recorded audio data
 func (w *WhisperBinary) writeWAVFile(filename string) error {
+	w.logger.Debug("writeWAVFile called", "filename", filename)
 	// Open file for writing
 	file, err := os.Create(filename)
 	if err != nil {
+		w.logger.Error("Error creating file", "error", err)
 		return err
 	}
 	defer file.Close()
 
+	w.logger.Debug("About to acquire mutex in writeWAVFile")
 	w.mu.Lock()
+	w.logger.Debug("Locked mutex, copying audio buffer")
 	audioData := make([]int16, len(w.audioBuffer))
 	copy(audioData, w.audioBuffer)
 	w.mu.Unlock()
+	w.logger.Debug("Unlocked mutex", "audio_data_length", len(audioData))
 
 	if len(audioData) == 0 {
+		w.logger.Warn("No audio data to write")
 		return errors.New("no audio data to write")
 	}
 
 	// Calculate data size (number of samples * size of int16)
 	dataSize := len(audioData) * 2 // 2 bytes per int16 sample
+	w.logger.Debug("Calculated data size", "size", dataSize)
 
 	// Write WAV header with the correct data size
 	header := w.createWAVHeader(16000, 1, 16, dataSize)
 	_, err = file.Write(header)
 	if err != nil {
+		w.logger.Error("Error writing WAV header", "error", err)
 		return err
 	}
+	w.logger.Debug("WAV header written successfully")
 
 	// Write audio data
-	for _, sample := range audioData {
+	w.logger.Debug("About to write audio data samples")
+	for i, sample := range audioData {
 		// Write little-endian 16-bit sample
 		_, err := file.Write([]byte{byte(sample), byte(sample >> 8)})
 		if err != nil {
+			w.logger.Error("Error writing sample", "index", i, "error", err)
 			return err
 		}
+		// Log progress every 10000 samples to avoid too much output
+		if i%10000 == 0 {
+			w.logger.Debug("Written samples", "count", i)
+		}
 	}
+	w.logger.Debug("All audio data written successfully")
 
 	return nil
 }
@@ -254,5 +342,5 @@ func (w *WhisperBinary) createWAVHeader(sampleRate, channels, bitsPerSample int,
 func (w *WhisperBinary) IsRecording() bool {
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	return w.running
+	return w.recording
 }
