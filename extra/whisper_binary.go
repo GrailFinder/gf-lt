@@ -47,51 +47,30 @@ func (w *WhisperBinary) StartRecording() error {
 		return errors.New("recording is already in progress")
 	}
 
-	// Suppress ALSA warnings by setting environment variables
-	origCard := os.Getenv("ALSA_PCM_CARD")
-	origDevice := os.Getenv("ALSA_PCM_DEVICE")
-	origSubdevice := os.Getenv("ALSA_PCM_SUBDEVICE")
-
-	// Set specific ALSA device to prevent "Unknown PCM card.pcm.rear" warnings
-	os.Setenv("ALSA_PCM_CARD", "0")
-	os.Setenv("ALSA_PCM_DEVICE", "0")
-	os.Setenv("ALSA_PCM_SUBDEVICE", "0")
-
-	if err := portaudio.Initialize(); err != nil {
-		// Restore original environment variables on error
-		if origCard != "" {
-			os.Setenv("ALSA_PCM_CARD", origCard)
-		} else {
-			os.Unsetenv("ALSA_PCM_CARD")
-		}
-		if origDevice != "" {
-			os.Setenv("ALSA_PCM_DEVICE", origDevice)
-		} else {
-			os.Unsetenv("ALSA_PCM_DEVICE")
-		}
-		if origSubdevice != "" {
-			os.Setenv("ALSA_PCM_SUBDEVICE", origSubdevice)
-		} else {
-			os.Unsetenv("ALSA_PCM_SUBDEVICE")
-		}
-		return fmt.Errorf("portaudio init failed: %w", err)
+	// Temporarily redirect stderr to suppress ALSA warnings during PortAudio init
+	origStderr := os.Stderr
+	origStdout := os.Stdout
+	nullFile, err := os.OpenFile("/dev/null", os.O_WRONLY, 0)
+	if err != nil {
+		return fmt.Errorf("failed to open /dev/null: %w", err)
 	}
+	defer nullFile.Close()
 
-	// Restore original environment variables after initialization
-	if origCard != "" {
-		os.Setenv("ALSA_PCM_CARD", origCard)
-	} else {
-		os.Unsetenv("ALSA_PCM_CARD")
-	}
-	if origDevice != "" {
-		os.Setenv("ALSA_PCM_DEVICE", origDevice)
-	} else {
-		os.Unsetenv("ALSA_PCM_DEVICE")
-	}
-	if origSubdevice != "" {
-		os.Setenv("ALSA_PCM_SUBDEVICE", origSubdevice)
-	} else {
-		os.Unsetenv("ALSA_PCM_SUBDEVICE")
+	// Redirect stderr temporarily
+	os.Stderr = nullFile
+	os.Stdout = nullFile
+
+	// Initialize PortAudio (this is where ALSA warnings occur)
+	portaudioErr := portaudio.Initialize()
+
+	defer func() {
+		// Restore stderr
+		os.Stderr = origStderr
+		os.Stdout = origStdout
+	}()
+
+	if portaudioErr != nil {
+		return fmt.Errorf("portaudio init failed: %w", portaudioErr)
 	}
 
 	// Initialize audio buffer
@@ -112,6 +91,26 @@ func (w *WhisperBinary) StartRecording() error {
 }
 
 func (w *WhisperBinary) recordAudio(stream *portaudio.Stream, in []int16) {
+	// Temporarily redirect stderr to suppress ALSA warnings during recording operations
+	origStderr := os.Stderr
+	origStdout := os.Stdout
+	nullFile, err := os.OpenFile("/dev/null", os.O_WRONLY, 0)
+	if err != nil {
+		// If we can't open /dev/null, log the error but continue anyway
+		w.logger.Error("Failed to open /dev/null for stderr redirection", "error", err)
+		// Continue without stderr redirection
+	} else {
+		// Redirect stderr temporarily for the duration of this function
+		os.Stderr = nullFile
+		os.Stdout = nullFile
+		defer func() {
+			// Restore stderr when function exits
+			os.Stderr = origStderr
+			os.Stdout = origStdout
+			nullFile.Close()
+		}()
+	}
+
 	defer func() {
 		w.logger.Debug("recordAudio defer function called")
 		_ = stream.Stop()         // Stop the stream
