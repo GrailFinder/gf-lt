@@ -1,5 +1,22 @@
 package extra
 
+/*
+#cgo LDFLAGS: -lasound
+
+#include <alsa/asoundlib.h>
+
+extern void go_alsa_error_handler(const char *file, int line, const char *function, int err, const char *fmt, ...);
+
+void set_alsa_error_handler() {
+    snd_lib_error_set_handler(go_alsa_error_handler);
+}
+
+void go_alsa_error_handler(const char *file, int line, const char *function, int err, const char *fmt, ...) {
+    return; // Complete suppression
+}
+*/
+import "C"
+
 import (
 	"bytes"
 	"context"
@@ -10,8 +27,9 @@ import (
 	"log/slog"
 	"os"
 	"os/exec"
+	"strings"
 	"sync"
-	"time"
+	"syscall"
 
 	"github.com/gordonklaus/portaudio"
 )
@@ -30,6 +48,8 @@ type WhisperBinary struct {
 
 func NewWhisperBinary(logger *slog.Logger, cfg *config.Config) *WhisperBinary {
 	ctx, cancel := context.WithCancel(context.Background())
+	// Set ALSA error handler first
+	C.set_alsa_error_handler()
 	return &WhisperBinary{
 		logger:      logger,
 		whisperPath: cfg.WhisperBinaryPath,
@@ -46,33 +66,25 @@ func (w *WhisperBinary) StartRecording() error {
 	if w.recording {
 		return errors.New("recording is already in progress")
 	}
-
 	// Temporarily redirect stderr to suppress ALSA warnings during PortAudio init
-	origStderr := os.Stderr
-	origStdout := os.Stdout
-	nullFile, err := os.OpenFile("/dev/null", os.O_WRONLY, 0)
+	origStderr, err := syscall.Dup(syscall.Stderr)
+	nullFD, err := syscall.Open("/dev/null", syscall.O_WRONLY, 0)
 	if err != nil {
 		return fmt.Errorf("failed to open /dev/null: %w", err)
 	}
-	defer nullFile.Close()
-
-	// Redirect stderr temporarily
-	os.Stderr = nullFile
-	os.Stdout = nullFile
-
+	// redirect stderr
+	syscall.Dup2(nullFD, syscall.Stderr)
 	// Initialize PortAudio (this is where ALSA warnings occur)
 	portaudioErr := portaudio.Initialize()
-
 	defer func() {
 		// Restore stderr
-		os.Stderr = origStderr
-		os.Stdout = origStdout
+		syscall.Dup2(origStderr, syscall.Stderr)
+		syscall.Close(origStderr)
+		syscall.Close(nullFD)
 	}()
-
 	if portaudioErr != nil {
 		return fmt.Errorf("portaudio init failed: %w", portaudioErr)
 	}
-
 	// Initialize audio buffer
 	w.audioBuffer = make([]int16, 0)
 	in := make([]int16, 1024) // buffer size
@@ -83,7 +95,6 @@ func (w *WhisperBinary) StartRecording() error {
 		}
 		return fmt.Errorf("failed to open microphone: %w", err)
 	}
-
 	go w.recordAudio(stream, in)
 	w.recording = true
 	w.logger.Debug("Recording started")
@@ -91,26 +102,6 @@ func (w *WhisperBinary) StartRecording() error {
 }
 
 func (w *WhisperBinary) recordAudio(stream *portaudio.Stream, in []int16) {
-	// Temporarily redirect stderr to suppress ALSA warnings during recording operations
-	origStderr := os.Stderr
-	origStdout := os.Stdout
-	nullFile, err := os.OpenFile("/dev/null", os.O_WRONLY, 0)
-	if err != nil {
-		// If we can't open /dev/null, log the error but continue anyway
-		w.logger.Error("Failed to open /dev/null for stderr redirection", "error", err)
-		// Continue without stderr redirection
-	} else {
-		// Redirect stderr temporarily for the duration of this function
-		os.Stderr = nullFile
-		os.Stdout = nullFile
-		defer func() {
-			// Restore stderr when function exits
-			os.Stderr = origStderr
-			os.Stdout = origStdout
-			nullFile.Close()
-		}()
-	}
-
 	defer func() {
 		w.logger.Debug("recordAudio defer function called")
 		_ = stream.Stop()         // Stop the stream
@@ -167,10 +158,8 @@ func (w *WhisperBinary) StopRecording() (string, error) {
 	w.recording = false
 	w.cancel() // This will stop the recording goroutine
 	w.mu.Unlock()
-
-	// Small delay to allow the recording goroutine to react to context cancellation
-	time.Sleep(100 * time.Millisecond)
-
+	// // Small delay to allow the recording goroutine to react to context cancellation
+	// time.Sleep(20 * time.Millisecond)
 	// Save the recorded audio to a temporary file
 	tempFile, err := w.saveAudioToTempFile()
 	if err != nil {
@@ -178,14 +167,12 @@ func (w *WhisperBinary) StopRecording() (string, error) {
 		return "", fmt.Errorf("failed to save audio to temp file: %w", err)
 	}
 	w.logger.Debug("Saved audio to temp file", "file", tempFile)
-
 	// Run the whisper binary with a separate context to avoid cancellation during transcription
 	cmd := exec.Command(w.whisperPath, "-m", w.modelPath, "-l", w.lang, tempFile, "2>/dev/null")
 	var outBuf bytes.Buffer
 	cmd.Stdout = &outBuf
 	// Redirect stderr to suppress ALSA warnings and other stderr output
 	cmd.Stderr = io.Discard // Suppress stderr output from whisper binary
-
 	w.logger.Debug("Running whisper binary command")
 	if err := cmd.Run(); err != nil {
 		// Clean up audio buffer
@@ -198,17 +185,17 @@ func (w *WhisperBinary) StopRecording() (string, error) {
 	}
 	result := outBuf.String()
 	w.logger.Debug("Whisper binary completed", "result", result)
-
 	// Clean up audio buffer
 	w.mu.Lock()
 	w.audioBuffer = nil
 	w.mu.Unlock()
-
 	// Clean up the temporary file after transcription
 	w.logger.Debug("StopRecording completed")
 	os.Remove(tempFile)
-
-	return result, nil
+	result = strings.TrimRight(result, "\n")
+	// in case there are special tokens like [_BEG_]
+	result = specialRE.ReplaceAllString(result, "")
+	return strings.TrimSpace(strings.ReplaceAll(result, "\n ", "\n")), nil
 }
 
 // saveAudioToTempFile saves the recorded audio data to a temporary WAV file
