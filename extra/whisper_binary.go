@@ -1,22 +1,5 @@
 package extra
 
-/*
-#cgo LDFLAGS: -lasound
-
-#include <alsa/asoundlib.h>
-
-extern void go_alsa_error_handler(const char *file, int line, const char *function, int err, const char *fmt, ...);
-
-void set_alsa_error_handler() {
-    snd_lib_error_set_handler(go_alsa_error_handler);
-}
-
-void go_alsa_error_handler(const char *file, int line, const char *function, int err, const char *fmt, ...) {
-    return; // Complete suppression
-}
-*/
-import "C"
-
 import (
 	"bytes"
 	"context"
@@ -49,7 +32,6 @@ type WhisperBinary struct {
 func NewWhisperBinary(logger *slog.Logger, cfg *config.Config) *WhisperBinary {
 	ctx, cancel := context.WithCancel(context.Background())
 	// Set ALSA error handler first
-	C.set_alsa_error_handler()
 	return &WhisperBinary{
 		logger:      logger,
 		whisperPath: cfg.WhisperBinaryPath,

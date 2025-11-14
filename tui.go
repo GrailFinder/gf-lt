@@ -823,7 +823,9 @@ func init() {
 			if asr.IsRecording() {
 				userSpeech, err := asr.StopRecording()
 				if err != nil {
-					logger.Error("failed to inference user speech", "error", err)
+					msg := "failed to inference user speech; error:" + err.Error()
+					logger.Error(msg)
+					notifyUser("stt error", msg)
 					return nil
 				}
 				if userSpeech != "" {
