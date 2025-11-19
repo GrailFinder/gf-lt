@@ -1,8 +1,8 @@
 package storage
 
 import (
-	"gf-lt/models"
 	"fmt"
+	"gf-lt/models"
 	"log/slog"
 	"os"
 	"testing"
@@ -173,88 +173,3 @@ func TestChatHistory(t *testing.T) {
 		t.Errorf("Expected 0 chats, got %d", len(chats))
 	}
 }
-
-// func TestVecTable(t *testing.T) {
-// 	// healthcheck
-// 	db, err := sqlite3.Open(":memory:")
-// 	if err != nil {
-// 		t.Fatal(err)
-// 	}
-// 	stmt, _, err := db.Prepare(`SELECT sqlite_version(), vec_version()`)
-// 	if err != nil {
-// 		t.Fatal(err)
-// 	}
-// 	stmt.Step()
-// 	log.Printf("sqlite_version=%s, vec_version=%s\n", stmt.ColumnText(0), stmt.ColumnText(1))
-// 	stmt.Close()
-// 	// migration
-// 	err = db.Exec("CREATE VIRTUAL TABLE vec_items USING vec0(embedding float[4], chat_name TEXT NOT NULL)")
-// 	if err != nil {
-// 		t.Fatal(err)
-// 	}
-// 	// data prep and insert
-// 	items := map[int][]float32{
-// 		1: {0.1, 0.1, 0.1, 0.1},
-// 		2: {0.2, 0.2, 0.2, 0.2},
-// 		3: {0.3, 0.3, 0.3, 0.3},
-// 		4: {0.4, 0.4, 0.4, 0.4},
-// 		5: {0.5, 0.5, 0.5, 0.5},
-// 	}
-// 	q := []float32{0.4, 0.3, 0.3, 0.3}
-// 	stmt, _, err = db.Prepare("INSERT INTO vec_items(rowid, embedding, chat_name) VALUES (?, ?, ?)")
-// 	if err != nil {
-// 		t.Fatal(err)
-// 	}
-// 	for id, values := range items {
-// 		v, err := sqlite_vec.SerializeFloat32(values)
-// 		if err != nil {
-// 			t.Fatal(err)
-// 		}
-// 		stmt.BindInt(1, id)
-// 		stmt.BindBlob(2, v)
-// 		stmt.BindText(3, "some_chat")
-// 		err = stmt.Exec()
-// 		if err != nil {
-// 			t.Fatal(err)
-// 		}
-// 		stmt.Reset()
-// 	}
-// 	stmt.Close()
-// 	// select | vec search
-// 	stmt, _, err = db.Prepare(`
-// 		SELECT
-// 			rowid,
-// 			distance,
-// 			embedding
-// 		FROM vec_items
-// 		WHERE embedding MATCH ?
-// 		ORDER BY distance
-// 		LIMIT 3
-// 	`)
-// 	if err != nil {
-// 		t.Fatal(err)
-// 	}
-// 	query, err := sqlite_vec.SerializeFloat32(q)
-// 	if err != nil {
-// 		t.Fatal(err)
-// 	}
-// 	stmt.BindBlob(1, query)
-// 	for stmt.Step() {
-// 		rowid := stmt.ColumnInt64(0)
-// 		distance := stmt.ColumnFloat(1)
-// 		emb := stmt.ColumnRawText(2)
-// 		floats := decodeUnsafe(emb)
-// 		log.Printf("rowid=%d, distance=%f, floats=%v\n", rowid, distance, floats)
-// 	}
-// 	if err := stmt.Err(); err != nil {
-// 		t.Fatal(err)
-// 	}
-// 	err = stmt.Close()
-// 	if err != nil {
-// 		t.Fatal(err)
-// 	}
-// 	err = db.Close()
-// 	if err != nil {
-// 		t.Fatal(err)
-// 	}
-// }
