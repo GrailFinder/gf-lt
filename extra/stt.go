@@ -147,19 +147,23 @@ func (stt *WhisperServer) IsRecording() bool {
 
 func (stt *WhisperServer) microphoneStream(sampleRate int) error {
 	// Temporarily redirect stderr to suppress ALSA warnings during PortAudio init
-	origStderr, err := syscall.Dup(syscall.Stderr)
+	origStderr, errDup := syscall.Dup(syscall.Stderr)
+	if errDup != nil {
+		return fmt.Errorf("failed to dup stderr: %w", errDup)
+	}
 	nullFD, err := syscall.Open("/dev/null", syscall.O_WRONLY, 0)
 	if err != nil {
+		_ = syscall.Close(origStderr) // Close the dup'd fd if open fails
 		return fmt.Errorf("failed to open /dev/null: %w", err)
 	}
 	// redirect stderr
-	syscall.Dup2(nullFD, syscall.Stderr)
+	_ = syscall.Dup2(nullFD, syscall.Stderr)
 	// Initialize PortAudio (this is where ALSA warnings occur)
 	defer func() {
 		// Restore stderr
-		syscall.Dup2(origStderr, syscall.Stderr)
-		syscall.Close(origStderr)
-		syscall.Close(nullFD)
+		_ = syscall.Dup2(origStderr, syscall.Stderr)
+		_ = syscall.Close(origStderr)
+		_ = syscall.Close(nullFD)
 	}()
 	if err := portaudio.Initialize(); err != nil {
 		return fmt.Errorf("portaudio init failed: %w", err)

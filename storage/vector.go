@@ -81,7 +81,7 @@ func (p ProviderSQL) SearchClosest(q []float32) ([]models.VectorRow, error) {
 		return nil, err
 	}
 
-	querySQL := fmt.Sprintf("SELECT embedding, slug, raw_text, filename FROM %s", tableName)
+	querySQL := "SELECT embeddings, slug, raw_text, filename FROM " + tableName
 	rows, err := p.db.Query(querySQL)
 	if err != nil {
 		return nil, err
@@ -187,7 +187,7 @@ func (p ProviderSQL) ListFiles() ([]string, error) {
 
 	// Query both tables and combine results
 	for _, table := range []string{vecTableName384, vecTableName5120} {
-		query := fmt.Sprintf("SELECT DISTINCT filename FROM %s", table)
+		query := "SELECT DISTINCT filename FROM " + table
 		rows, err := p.db.Query(query)
 		if err != nil {
 			// Continue if one table doesn't exist
@@ -233,7 +233,7 @@ func (p ProviderSQL) RemoveEmbByFileName(filename string) error {
 	}
 
 	if len(errors) > 0 {
-		return fmt.Errorf("errors occurred: %s", fmt.Sprintf("%v", errors))
+		return fmt.Errorf("errors occurred: %v", errors)
 	}
 
 	return nil

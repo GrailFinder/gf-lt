@@ -825,7 +825,9 @@ func init() {
 				if err != nil {
 					msg := "failed to inference user speech; error:" + err.Error()
 					logger.Error(msg)
-					notifyUser("stt error", msg)
+					if err := notifyUser("stt error", msg); err != nil {
+						logger.Error("failed to notify user", "error", err)
+					}
 					return nil
 				}
 				if userSpeech != "" {
