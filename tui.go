@@ -231,10 +231,22 @@ func makeStatusLine() string {
 	if cfg.WriteNextMsgAsCompletionAgent != "" {
 		botPersona = cfg.WriteNextMsgAsCompletionAgent
 	}
+
+	// Add image attachment info to status line
+	var imageInfo string
+	if imageAttachmentPath != "" {
+		// Get just the filename from the path
+		imageName := path.Base(imageAttachmentPath)
+		imageInfo = fmt.Sprintf(" | attached img: [orange:-:b]%s[-:-:-]", imageName)
+	} else {
+		imageInfo = ""
+	}
+
 	statusLine := fmt.Sprintf(indexLineCompletion, botRespMode, cfg.AssistantRole, activeChatName,
 		cfg.ToolUse, chatBody.Model, cfg.SkipLLMResp, cfg.CurrentAPI, cfg.ThinkUse, logLevel.Level(),
 		isRecording, persona, botPersona, injectRole)
-	return statusLine
+
+	return statusLine + imageInfo
 }
 
 func updateStatusLine() {
@@ -422,7 +434,7 @@ func init() {
 	})
 	flex = tview.NewFlex().SetDirection(tview.FlexRow).
 		AddItem(textView, 0, 40, false).
-		AddItem(textArea, 0, 10, true).
+		AddItem(textArea, 0, 10, true).  // Restore original height
 		AddItem(position, 0, 2, false)
 	editArea = tview.NewTextArea().
 		SetPlaceholder("Replace msg...")
@@ -801,8 +813,29 @@ func init() {
 			return nil
 		}
 		if event.Key() == tcell.KeyCtrlJ {
-			// show image
-			loadImage()
+			// show image - check for attached image first, then fall back to agent image
+			if imageAttachmentPath != "" {
+				// Load the attached image
+				file, err := os.Open(imageAttachmentPath)
+				if err != nil {
+					logger.Error("failed to open attached image", "path", imageAttachmentPath, "error", err)
+					// Fall back to showing agent image
+					loadImage()
+				} else {
+					defer file.Close()
+					img, _, err := image.Decode(file)
+					if err != nil {
+						logger.Error("failed to decode attached image", "path", imageAttachmentPath, "error", err)
+						// Fall back to showing agent image
+						loadImage()
+					} else {
+						imgView.SetImage(img)
+					}
+				}
+			} else {
+				// No attached image, show agent image as before
+				loadImage()
+			}
 			pages.AddPage(imgPage, imgView, true, true)
 			return nil
 		}
@@ -977,6 +1010,13 @@ func init() {
 				colorText()
 			}
 			go chatRound(msgText, persona, textView, false, false)
+			// Also clear any image attachment after sending the message
+			go func() {
+				// Wait a short moment for the message to be processed, then clear the image attachment
+				// This allows the image to be sent with the current message if it was attached
+				// But clears it for the next message
+				ClearImageAttachment()
+			}()
 			return nil
 		}
 		if event.Key() == tcell.KeyPgUp || event.Key() == tcell.KeyPgDn {
@@ -989,4 +1029,11 @@ func init() {
 		}
 		return event
 	})
+}
+
+// UpdateImageAttachmentStatus updates the UI to reflect the current image attachment status
+func UpdateImageAttachmentStatus(imagePath string) {
+	// The image attachment status is now shown in the main status line
+	// Just update the status line to reflect the current image attachment
+	updateStatusLine()
 }

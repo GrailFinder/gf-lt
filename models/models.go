@@ -1,7 +1,10 @@
 package models
 
 import (
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
 )
 
@@ -69,23 +72,215 @@ type TextChunk struct {
 	FuncName  string
 }
 
+type TextContentPart struct {
+	Type string `json:"type"`
+	Text string `json:"text"`
+}
+
+type ImageContentPart struct {
+	Type     string `json:"type"`
+	ImageURL struct {
+		URL string `json:"url"`
+	} `json:"image_url"`
+}
+
+// RoleMsg represents a message with content that can be either a simple string or structured content parts
 type RoleMsg struct {
-	Role    string `json:"role"`
-	Content string `json:"content"`
+	Role        string          `json:"role"`
+	Content     string          `json:"-"`
+	ContentParts []interface{}   `json:"-"`
+	hasContentParts bool         // Flag to indicate which content type to marshal
+}
+
+// MarshalJSON implements custom JSON marshaling for RoleMsg
+func (m RoleMsg) MarshalJSON() ([]byte, error) {
+	if m.hasContentParts {
+		// Use structured content format
+		aux := struct {
+			Role    string        `json:"role"`
+			Content []interface{} `json:"content"`
+		}{
+			Role:    m.Role,
+			Content: m.ContentParts,
+		}
+		return json.Marshal(aux)
+	} else {
+		// Use simple content format
+		aux := struct {
+			Role    string `json:"role"`
+			Content string `json:"content"`
+		}{
+			Role:    m.Role,
+			Content: m.Content,
+		}
+		return json.Marshal(aux)
+	}
+}
+
+// UnmarshalJSON implements custom JSON unmarshaling for RoleMsg
+func (m *RoleMsg) UnmarshalJSON(data []byte) error {
+	// First, try to unmarshal as structured content format
+	var structured struct {
+		Role    string        `json:"role"`
+		Content []interface{} `json:"content"`
+	}
+	if err := json.Unmarshal(data, &structured); err == nil && len(structured.Content) > 0 {
+		m.Role = structured.Role
+		m.ContentParts = structured.Content
+		m.hasContentParts = true
+		return nil
+	}
+
+	// Otherwise, unmarshal as simple content format
+	var simple struct {
+		Role    string `json:"role"`
+		Content string `json:"content"`
+	}
+	if err := json.Unmarshal(data, &simple); err != nil {
+		return err
+	}
+	m.Role = simple.Role
+	m.Content = simple.Content
+	m.hasContentParts = false
+	return nil
 }
 
 func (m RoleMsg) ToText(i int) string {
 	icon := fmt.Sprintf("(%d)", i)
+
+	// Convert content to string representation
+	contentStr := ""
+	if !m.hasContentParts {
+		contentStr = m.Content
+	} else {
+		// For structured content, just take the text parts
+		for _, part := range m.ContentParts {
+			if partMap, ok := part.(map[string]interface{}); ok {
+				if partType, exists := partMap["type"]; exists && partType == "text" {
+					if textVal, textExists := partMap["text"]; textExists {
+						if textStr, isStr := textVal.(string); isStr {
+							contentStr += textStr + " "
+						}
+					}
+				}
+			}
+		}
+	}
+
 	// check if already has role annotation (/completion makes them)
-	if !strings.HasPrefix(m.Content, m.Role+":") {
+	if !strings.HasPrefix(contentStr, m.Role+":") {
 		icon = fmt.Sprintf("(%d) <%s>: ", i, m.Role)
 	}
-	textMsg := fmt.Sprintf("[-:-:b]%s[-:-:-]\n%s\n", icon, m.Content)
+	textMsg := fmt.Sprintf("[-:-:b]%s[-:-:-]\n%s\n", icon, contentStr)
 	return strings.ReplaceAll(textMsg, "\n\n", "\n")
 }
 
 func (m RoleMsg) ToPrompt() string {
-	return strings.ReplaceAll(fmt.Sprintf("%s:\n%s", m.Role, m.Content), "\n\n", "\n")
+	contentStr := ""
+	if !m.hasContentParts {
+		contentStr = m.Content
+	} else {
+		// For structured content, just take the text parts
+		for _, part := range m.ContentParts {
+			if partMap, ok := part.(map[string]interface{}); ok {
+				if partType, exists := partMap["type"]; exists && partType == "text" {
+					if textVal, textExists := partMap["text"]; textExists {
+						if textStr, isStr := textVal.(string); isStr {
+							contentStr += textStr + " "
+						}
+					}
+				}
+			}
+		}
+	}
+	return strings.ReplaceAll(fmt.Sprintf("%s:\n%s", m.Role, contentStr), "\n\n", "\n")
+}
+
+// NewRoleMsg creates a simple RoleMsg with string content
+func NewRoleMsg(role, content string) RoleMsg {
+	return RoleMsg{
+		Role:        role,
+		Content:     content,
+		hasContentParts: false,
+	}
+}
+
+// NewMultimodalMsg creates a RoleMsg with structured content parts (text and images)
+func NewMultimodalMsg(role string, contentParts []interface{}) RoleMsg {
+	return RoleMsg{
+		Role:            role,
+		ContentParts:    contentParts,
+		hasContentParts: true,
+	}
+}
+
+// AddTextPart adds a text content part to the message
+func (m *RoleMsg) AddTextPart(text string) {
+	if !m.hasContentParts {
+		// Convert to content parts format
+		if m.Content != "" {
+			m.ContentParts = []interface{}{TextContentPart{Type: "text", Text: m.Content}}
+		} else {
+			m.ContentParts = []interface{}{}
+		}
+		m.hasContentParts = true
+	}
+
+	textPart := TextContentPart{Type: "text", Text: text}
+	m.ContentParts = append(m.ContentParts, textPart)
+}
+
+// AddImagePart adds an image content part to the message
+func (m *RoleMsg) AddImagePart(imageURL string) {
+	if !m.hasContentParts {
+		// Convert to content parts format
+		if m.Content != "" {
+			m.ContentParts = []interface{}{TextContentPart{Type: "text", Text: m.Content}}
+		} else {
+			m.ContentParts = []interface{}{}
+		}
+		m.hasContentParts = true
+	}
+
+	imagePart := ImageContentPart{
+		Type: "image_url",
+		ImageURL: struct {
+			URL string `json:"url"`
+		}{URL: imageURL},
+	}
+	m.ContentParts = append(m.ContentParts, imagePart)
+}
+
+// CreateImageURLFromPath creates a data URL from an image file path
+func CreateImageURLFromPath(imagePath string) (string, error) {
+	// Read the image file
+	data, err := os.ReadFile(imagePath)
+	if err != nil {
+		return "", err
+	}
+
+	// Determine the image format based on file extension
+	var mimeType string
+	switch {
+	case strings.HasSuffix(strings.ToLower(imagePath), ".png"):
+		mimeType = "image/png"
+	case strings.HasSuffix(strings.ToLower(imagePath), ".jpg"):
+		fallthrough
+	case strings.HasSuffix(strings.ToLower(imagePath), ".jpeg"):
+		mimeType = "image/jpeg"
+	case strings.HasSuffix(strings.ToLower(imagePath), ".gif"):
+		mimeType = "image/gif"
+	case strings.HasSuffix(strings.ToLower(imagePath), ".webp"):
+		mimeType = "image/webp"
+	default:
+		mimeType = "image/jpeg" // default
+	}
+
+	// Encode to base64
+	encoded := base64.StdEncoding.EncodeToString(data)
+
+	// Create data URL
+	return fmt.Sprintf("data:%s;base64,%s", mimeType, encoded), nil
 }
 
 type ChatBody struct {

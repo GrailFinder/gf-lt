@@ -563,6 +563,18 @@ func makeFilePicker() *tview.Flex {
 	// Track currently displayed directory (changes as user navigates)
 	var currentDisplayDir string = startDir
 
+	// Helper function to check if a file is an image
+	isImageFile := func(filename string) bool {
+		imageExtensions := []string{".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".tiff", ".svg"}
+		lowerFilename := strings.ToLower(filename)
+		for _, ext := range imageExtensions {
+			if strings.HasSuffix(lowerFilename, ext) {
+				return true
+			}
+		}
+		return false
+	}
+
 	// Create UI elements
 	listView := tview.NewList()
 	listView.SetBorder(true).SetTitle("Files & Directories").SetTitleAlign(tview.AlignLeft)
@@ -584,11 +596,23 @@ func makeFilePicker() *tview.Flex {
 	loadButton := tview.NewButton("Load")
 	loadButton.SetSelectedFunc(func() {
 		if selectedFile != "" {
-			// Update the global text area with the selected file path
-			textArea.SetText(selectedFile, true)
-			app.SetFocus(textArea)
+			// Check if the selected file is an image
+			if isImageFile(selectedFile) {
+				// For image files, set it as an attachment for the next LLM message
+				SetImageAttachment(selectedFile)
+				statusView.SetText("Image attached: " + selectedFile + " (will be sent with next message)")
+				// Close the file picker but don't change the text area
+				pages.RemovePage(filePickerPage)
+			} else {
+				// For non-image files, update the text area with file path
+				textArea.SetText(selectedFile, true)
+				app.SetFocus(textArea)
+				pages.RemovePage(filePickerPage)
+			}
+		} else {
+			// If no file is selected, just close the picker
+			pages.RemovePage(filePickerPage)
 		}
-		pages.RemovePage(filePickerPage)
 	})
 
 	cancelButton := tview.NewButton("Cancel")
@@ -649,6 +673,12 @@ func makeFilePicker() *tview.Flex {
 		// Add directories and files to the list
 		for _, file := range files {
 			name := file.Name()
+
+			// Skip hidden files and directories (those starting with a dot)
+			if strings.HasPrefix(name, ".") {
+				continue
+			}
+
 			if file.IsDir() {
 				// Capture the directory name for the closure to avoid loop variable issues
 				dirName := name
@@ -662,9 +692,19 @@ func makeFilePicker() *tview.Flex {
 			} else {
 				// Capture the file name for the closure to avoid loop variable issues
 				fileName := name
+				fullFilePath := path.Join(dir, fileName)
 				listView.AddItem(fileName, "(File)", 0, func() {
-					selectedFile = path.Join(dir, fileName)
+					selectedFile = fullFilePath
 					statusView.SetText("Selected: " + selectedFile)
+
+					// Check if the file is an image
+					if isImageFile(fileName) {
+						// For image files, offer to attach to the next LLM message
+						statusView.SetText("Selected image: " + selectedFile + " (Press Load to attach)")
+					} else {
+						// For non-image files, display as before
+						statusView.SetText("Selected: " + selectedFile)
+					}
 				})
 			}
 		}
@@ -769,9 +809,23 @@ func makeFilePicker() *tview.Flex {
 					filePath := path.Join(currentDisplayDir, itemText)
 					// Verify it's actually a file (not just lacking a directory suffix)
 					if info, err := os.Stat(filePath); err == nil && !info.IsDir() {
-						textArea.SetText(filePath, true)
-						app.SetFocus(textArea)
-						pages.RemovePage(filePickerPage)
+						// Check if the file is an image
+						if isImageFile(itemText) {
+							// For image files, set it as an attachment for the next LLM message
+							// Use the version without UI updates to avoid hangs in event handlers
+							logger.Info("setting image", "file", itemText)
+							SetImageAttachmentWithoutUI(filePath)
+							logger.Info("after setting image", "file", itemText)
+							statusView.SetText("Image attached: " + filePath + " (will be sent with next message)")
+							logger.Info("after setting text", "file", itemText)
+							pages.RemovePage(filePickerPage)
+							logger.Info("after update drawn", "file", itemText)
+						} else {
+							// For non-image files, update the text area with file path
+							textArea.SetText(filePath, true)
+							app.SetFocus(textArea)
+							pages.RemovePage(filePickerPage)
+						}
 					}
 					return nil
 				}

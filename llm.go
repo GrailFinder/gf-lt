@@ -8,6 +8,32 @@ import (
 	"strings"
 )
 
+var imageAttachmentPath string // Global variable to track image attachment for next message
+
+// SetImageAttachment sets an image to be attached to the next message sent to the LLM and updates UI
+func SetImageAttachment(imagePath string) {
+	imageAttachmentPath = imagePath
+	// Update the UI to show image is attached (call function from tui.go)
+	// UpdateImageAttachmentStatus(imagePath)
+}
+
+// SetImageAttachmentWithoutUI sets an image to be attached without UI updates (for internal use where UI updates might cause hangs)
+func SetImageAttachmentWithoutUI(imagePath string) {
+	imageAttachmentPath = imagePath
+}
+
+// ClearImageAttachment clears any pending image attachment and updates UI
+func ClearImageAttachment() {
+	imageAttachmentPath = ""
+	// Update the UI to clear image attachment status (call function from tui.go)
+	// UpdateImageAttachmentStatus("")
+}
+
+// ClearImageAttachmentWithoutUI clears any pending image attachment without UI updates
+func ClearImageAttachmentWithoutUI() {
+	imageAttachmentPath = ""
+}
+
 type ChunkParser interface {
 	ParseChunk([]byte) (*models.TextChunk, error)
 	FormMsg(msg, role string, cont bool) (io.Reader, error)
@@ -165,7 +191,33 @@ func (op OpenAIer) ParseChunk(data []byte) (*models.TextChunk, error) {
 func (op OpenAIer) FormMsg(msg, role string, resume bool) (io.Reader, error) {
 	logger.Debug("formmsg openaier", "link", cfg.CurrentAPI)
 	if msg != "" { // otherwise let the bot continue
-		newMsg := models.RoleMsg{Role: role, Content: msg}
+		// Create the message with support for multimodal content
+		var newMsg models.RoleMsg
+
+		// Check if we have an image to add to this message
+		if imageAttachmentPath != "" {
+			// Create a multimodal message with both text and image
+			newMsg = models.NewMultimodalMsg(role, []interface{}{})
+
+			// Add the text content
+			newMsg.AddTextPart(msg)
+
+			// Add the image content
+			imageURL, err := models.CreateImageURLFromPath(imageAttachmentPath)
+			if err != nil {
+				logger.Error("failed to create image URL from path", "error", err, "path", imageAttachmentPath)
+				// If image processing fails, fall back to simple text message
+				newMsg = models.NewRoleMsg(role, msg)
+				imageAttachmentPath = "" // Clear the attachment
+			} else {
+				newMsg.AddImagePart(imageURL)
+				imageAttachmentPath = "" // Clear the attachment after use
+			}
+		} else {
+			// Create a simple text message
+			newMsg = models.NewRoleMsg(role, msg)
+		}
+
 		chatBody.Messages = append(chatBody.Messages, newMsg)
 	}
 	req := models.OpenAIReq{
