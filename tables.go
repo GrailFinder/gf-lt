@@ -561,7 +561,7 @@ func makeFilePicker() *tview.Flex {
 	var selectedFile string
 
 	// Track currently displayed directory (changes as user navigates)
-	var currentDisplayDir string = startDir
+	currentDisplayDir := startDir
 
 	// Helper function to check if a file is an image
 	isImageFile := func(filename string) bool {

@@ -154,17 +154,19 @@ func (m RoleMsg) ToText(i int) string {
 		contentStr = m.Content
 	} else {
 		// For structured content, just take the text parts
+		var textParts []string
 		for _, part := range m.ContentParts {
 			if partMap, ok := part.(map[string]interface{}); ok {
 				if partType, exists := partMap["type"]; exists && partType == "text" {
 					if textVal, textExists := partMap["text"]; textExists {
 						if textStr, isStr := textVal.(string); isStr {
-							contentStr += textStr + " "
+							textParts = append(textParts, textStr)
 						}
 					}
 				}
 			}
 		}
+		contentStr = strings.Join(textParts, " ") + " "
 	}
 
 	// check if already has role annotation (/completion makes them)
@@ -181,17 +183,19 @@ func (m RoleMsg) ToPrompt() string {
 		contentStr = m.Content
 	} else {
 		// For structured content, just take the text parts
+		var textParts []string
 		for _, part := range m.ContentParts {
 			if partMap, ok := part.(map[string]interface{}); ok {
 				if partType, exists := partMap["type"]; exists && partType == "text" {
 					if textVal, textExists := partMap["text"]; textExists {
 						if textStr, isStr := textVal.(string); isStr {
-							contentStr += textStr + " "
+							textParts = append(textParts, textStr)
 						}
 					}
 				}
 			}
 		}
+		contentStr = strings.Join(textParts, " ") + " "
 	}
 	return strings.ReplaceAll(fmt.Sprintf("%s:\n%s", m.Role, contentStr), "\n\n", "\n")
 }
