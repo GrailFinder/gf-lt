@@ -540,21 +540,39 @@ func makeImportChatTable(filenames []string) *tview.Table {
 
 func makeFilePicker() *tview.Flex {
 	// Initialize with directory from config or current directory
-	currentDir := cfg.FilePickerDir
-	if currentDir == "" {
-		currentDir = "."
+	startDir := cfg.FilePickerDir
+	if startDir == "" {
+		startDir = "."
+	}
+
+	// If startDir is ".", resolve it to the actual current working directory
+	if startDir == "." {
+		wd, err := os.Getwd()
+		if err == nil {
+			startDir = wd
+		}
 	}
 
 	// Track navigation history
-	dirStack := []string{currentDir}
+	dirStack := []string{startDir}
 	currentStackPos := 0
 
 	// Track selected file
 	var selectedFile string
 
+	// Track currently displayed directory (changes as user navigates)
+	var currentDisplayDir string = startDir
+
 	// Create UI elements
 	listView := tview.NewList()
 	listView.SetBorder(true).SetTitle("Files & Directories").SetTitleAlign(tview.AlignLeft)
+
+	// Path input field
+	pathInput := tview.NewInputField().
+		SetLabel("Path: ").
+		SetText(startDir).
+		SetFieldWidth(50)
+	pathInput.SetBorder(true).SetTitle("Enter Path").SetTitleAlign(tview.AlignLeft)
 
 	statusView := tview.NewTextView()
 	statusView.SetBorder(true).SetTitle("Selected File").SetTitleAlign(tview.AlignLeft)
@@ -578,14 +596,20 @@ func makeFilePicker() *tview.Flex {
 		pages.RemovePage(filePickerPage)
 	})
 
+	// Path input button - will be updated after refreshList is defined
+	goButton := tview.NewButton("Go")
+
 	buttonBar.AddItem(tview.NewBox().SetBackgroundColor(tcell.ColorDefault), 0, 1, false)
+	buttonBar.AddItem(goButton, 5, 1, true)
+	buttonBar.AddItem(tview.NewBox(), 1, 1, false)
 	buttonBar.AddItem(loadButton, 8, 1, true)
 	buttonBar.AddItem(tview.NewBox(), 1, 1, false)
 	buttonBar.AddItem(cancelButton, 8, 1, true)
 	buttonBar.AddItem(tview.NewBox().SetBackgroundColor(tcell.ColorDefault), 0, 1, false)
 
-	// Layout
+	// Layout - add path input field at the top
 	flex := tview.NewFlex().SetDirection(tview.FlexRow)
+	flex.AddItem(pathInput, 3, 0, false)
 	flex.AddItem(listView, 0, 3, true)
 	flex.AddItem(statusView, 3, 0, false)
 	flex.AddItem(buttonBar, 3, 0, false)
@@ -594,6 +618,10 @@ func makeFilePicker() *tview.Flex {
 	var refreshList func(string)
 	refreshList = func(dir string) {
 		listView.Clear()
+
+		// Update the path input field and current display directory
+		pathInput.SetText(dir)
+		currentDisplayDir = dir // Update the current display directory
 
 		// Add parent directory (..) if not at root
 		if dir != "/" {
@@ -622,16 +650,20 @@ func makeFilePicker() *tview.Flex {
 		for _, file := range files {
 			name := file.Name()
 			if file.IsDir() {
-				listView.AddItem(name+"/", "(Directory)", 0, func() {
-					newDir := path.Join(dir, name)
+				// Capture the directory name for the closure to avoid loop variable issues
+				dirName := name
+				listView.AddItem(dirName+"/", "(Directory)", 0, func() {
+					newDir := path.Join(dir, dirName)
 					refreshList(newDir)
 					dirStack = append(dirStack, newDir)
 					currentStackPos = len(dirStack) - 1
 					statusView.SetText("Current: " + newDir)
 				})
 			} else {
-				listView.AddItem(name, "(File)", 0, func() {
-					selectedFile = path.Join(dir, name)
+				// Capture the file name for the closure to avoid loop variable issues
+				fileName := name
+				listView.AddItem(fileName, "(File)", 0, func() {
+					selectedFile = path.Join(dir, fileName)
 					statusView.SetText("Selected: " + selectedFile)
 				})
 			}
@@ -641,7 +673,42 @@ func makeFilePicker() *tview.Flex {
 	}
 
 	// Initialize the file list
-	refreshList(currentDir)
+	refreshList(startDir)
+
+	// Set up keyboard navigation for the path input
+	pathInput.SetDoneFunc(func(key tcell.Key) {
+		if key == tcell.KeyEnter {
+			// Trigger the Go functionality when Enter is pressed in the path input
+			newPath := pathInput.GetText()
+			if newPath != "" {
+				// Check if path exists and is a directory
+				if info, err := os.Stat(newPath); err == nil && info.IsDir() {
+					refreshList(newPath)
+					dirStack = append(dirStack, newPath)
+					currentStackPos = len(dirStack) - 1
+					statusView.SetText("Current: " + newPath)
+				} else {
+					statusView.SetText("Invalid directory: " + newPath)
+				}
+			}
+		}
+	})
+
+	// Now that refreshList is defined, set the Go button's functionality
+	goButton.SetSelectedFunc(func() {
+		newPath := pathInput.GetText()
+		if newPath != "" {
+			// Check if path exists and is a directory
+			if info, err := os.Stat(newPath); err == nil && info.IsDir() {
+				refreshList(newPath)
+				dirStack = append(dirStack, newPath)
+				currentStackPos = len(dirStack) - 1
+				statusView.SetText("Current: " + newPath)
+			} else {
+				statusView.SetText("Invalid directory: " + newPath)
+			}
+		}
+	})
 
 	// Set up keyboard navigation
 	flex.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
@@ -667,6 +734,7 @@ func makeFilePicker() *tview.Flex {
 				// Let's improve the approach by tracking the currently selected item
 				itemText, _ := listView.GetItemText(itemIndex)
 
+				logger.Info("choosing dir", "itemText", itemText)
 				// Check if it's a directory (typically ends with /)
 				if strings.HasSuffix(itemText, "/") {
 					// This is a directory, we need to get the full path
@@ -674,28 +742,34 @@ func makeFilePicker() *tview.Flex {
 					var targetDir string
 					if strings.HasPrefix(itemText, "../") {
 						// Parent directory - need to go up from current directory
-						targetDir = path.Dir(currentDir)
+						targetDir = path.Dir(currentDisplayDir)
 						// Avoid going above root - if parent is same as current and it's system root
-						if targetDir == currentDir && currentDir == "/" {
+						if targetDir == currentDisplayDir && currentDisplayDir == "/" {
 							// We're at root, don't navigate
+							logger.Warn("went to root", "dir", targetDir)
 							return nil
 						}
 					} else {
 						// Regular subdirectory
 						dirName := strings.TrimSuffix(itemText, "/")
-						targetDir = path.Join(currentDir, dirName)
+						targetDir = path.Join(currentDisplayDir, dirName)
 					}
 
 					// Navigate to the selected directory
+					logger.Info("going to the dir", "dir", targetDir)
 					refreshList(targetDir)
 					dirStack = append(dirStack, targetDir)
 					currentStackPos = len(dirStack) - 1
 					statusView.SetText("Current: " + targetDir)
 					return nil
 				} else {
-					// It's a file, load it if one was selected
-					if selectedFile != "" {
-						textArea.SetText(selectedFile, true)
+					// It's a file - construct the full path from current directory and the item name
+					// We can't rely only on the selectedFile variable since Enter key might be pressed
+					// without having clicked the file first
+					filePath := path.Join(currentDisplayDir, itemText)
+					// Verify it's actually a file (not just lacking a directory suffix)
+					if info, err := os.Stat(filePath); err == nil && !info.IsDir() {
+						textArea.SetText(filePath, true)
 						app.SetFocus(textArea)
 						pages.RemovePage(filePickerPage)
 					}
