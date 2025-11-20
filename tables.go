@@ -537,3 +537,175 @@ func makeImportChatTable(filenames []string) *tview.Table {
 	})
 	return chatActTable
 }
+
+func makeFilePicker() *tview.Flex {
+	// Initialize with directory from config or current directory
+	currentDir := cfg.FilePickerDir
+	if currentDir == "" {
+		currentDir = "."
+	}
+
+	// Track navigation history
+	dirStack := []string{currentDir}
+	currentStackPos := 0
+
+	// Track selected file
+	var selectedFile string
+
+	// Create UI elements
+	listView := tview.NewList()
+	listView.SetBorder(true).SetTitle("Files & Directories").SetTitleAlign(tview.AlignLeft)
+
+	statusView := tview.NewTextView()
+	statusView.SetBorder(true).SetTitle("Selected File").SetTitleAlign(tview.AlignLeft)
+	statusView.SetTextColor(tcell.ColorYellow)
+
+	buttonBar := tview.NewFlex()
+
+	// Button functions
+	loadButton := tview.NewButton("Load")
+	loadButton.SetSelectedFunc(func() {
+		if selectedFile != "" {
+			// Update the global text area with the selected file path
+			textArea.SetText(selectedFile, true)
+			app.SetFocus(textArea)
+		}
+		pages.RemovePage(filePickerPage)
+	})
+
+	cancelButton := tview.NewButton("Cancel")
+	cancelButton.SetSelectedFunc(func() {
+		pages.RemovePage(filePickerPage)
+	})
+
+	buttonBar.AddItem(tview.NewBox().SetBackgroundColor(tcell.ColorDefault), 0, 1, false)
+	buttonBar.AddItem(loadButton, 8, 1, true)
+	buttonBar.AddItem(tview.NewBox(), 1, 1, false)
+	buttonBar.AddItem(cancelButton, 8, 1, true)
+	buttonBar.AddItem(tview.NewBox().SetBackgroundColor(tcell.ColorDefault), 0, 1, false)
+
+	// Layout
+	flex := tview.NewFlex().SetDirection(tview.FlexRow)
+	flex.AddItem(listView, 0, 3, true)
+	flex.AddItem(statusView, 3, 0, false)
+	flex.AddItem(buttonBar, 3, 0, false)
+
+	// Refresh the file list
+	var refreshList func(string)
+	refreshList = func(dir string) {
+		listView.Clear()
+
+		// Add parent directory (..) if not at root
+		if dir != "/" {
+			parentDir := path.Dir(dir)
+			// Special handling for edge cases - only return if we're truly at a system root
+			// For Unix-like systems, path.Dir("/") returns "/" which would cause parentDir == dir
+			if parentDir == dir && dir == "/" {
+				// We're at the root ("/") and trying to go up, just don't add the parent item
+			} else {
+				listView.AddItem("../", "(Parent Directory)", 'p', func() {
+					refreshList(parentDir)
+					dirStack = append(dirStack, parentDir)
+					currentStackPos = len(dirStack) - 1
+				})
+			}
+		}
+
+		// Read directory contents
+		files, err := os.ReadDir(dir)
+		if err != nil {
+			statusView.SetText("Error reading directory: " + err.Error())
+			return
+		}
+
+		// Add directories and files to the list
+		for _, file := range files {
+			name := file.Name()
+			if file.IsDir() {
+				listView.AddItem(name+"/", "(Directory)", 0, func() {
+					newDir := path.Join(dir, name)
+					refreshList(newDir)
+					dirStack = append(dirStack, newDir)
+					currentStackPos = len(dirStack) - 1
+					statusView.SetText("Current: " + newDir)
+				})
+			} else {
+				listView.AddItem(name, "(File)", 0, func() {
+					selectedFile = path.Join(dir, name)
+					statusView.SetText("Selected: " + selectedFile)
+				})
+			}
+		}
+
+		statusView.SetText("Current: " + dir)
+	}
+
+	// Initialize the file list
+	refreshList(currentDir)
+
+	// Set up keyboard navigation
+	flex.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		switch event.Key() {
+		case tcell.KeyEsc:
+			pages.RemovePage(filePickerPage)
+			return nil
+		case tcell.KeyBackspace2: // Backspace to go to parent directory
+			if currentStackPos > 0 {
+				currentStackPos--
+				prevDir := dirStack[currentStackPos]
+				refreshList(prevDir)
+				// Trim the stack to current position to avoid deep history
+				dirStack = dirStack[:currentStackPos+1]
+			}
+			return nil
+		case tcell.KeyEnter:
+			// Get the currently highlighted item in the list
+			itemIndex := listView.GetCurrentItem()
+			if itemIndex >= 0 && itemIndex < listView.GetItemCount() {
+				// We need to get the text of the currently selected item to determine if it's a directory
+				// Since we can't directly get the item text, we'll keep track of items differently
+				// Let's improve the approach by tracking the currently selected item
+				itemText, _ := listView.GetItemText(itemIndex)
+
+				// Check if it's a directory (typically ends with /)
+				if strings.HasSuffix(itemText, "/") {
+					// This is a directory, we need to get the full path
+					// Since the item text ends with "/" and represents a directory
+					var targetDir string
+					if strings.HasPrefix(itemText, "../") {
+						// Parent directory - need to go up from current directory
+						targetDir = path.Dir(currentDir)
+						// Avoid going above root - if parent is same as current and it's system root
+						if targetDir == currentDir && currentDir == "/" {
+							// We're at root, don't navigate
+							return nil
+						}
+					} else {
+						// Regular subdirectory
+						dirName := strings.TrimSuffix(itemText, "/")
+						targetDir = path.Join(currentDir, dirName)
+					}
+
+					// Navigate to the selected directory
+					refreshList(targetDir)
+					dirStack = append(dirStack, targetDir)
+					currentStackPos = len(dirStack) - 1
+					statusView.SetText("Current: " + targetDir)
+					return nil
+				} else {
+					// It's a file, load it if one was selected
+					if selectedFile != "" {
+						textArea.SetText(selectedFile, true)
+						app.SetFocus(textArea)
+						pages.RemovePage(filePickerPage)
+					}
+					return nil
+				}
+			}
+			return nil
+		}
+		return event
+	})
+
+	return flex
+}

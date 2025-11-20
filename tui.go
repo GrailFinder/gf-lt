@@ -42,6 +42,7 @@ var (
 	propsPage     = "propsPage"
 	codeBlockPage = "codeBlockPage"
 	imgPage       = "imgPage"
+	filePickerPage = "filePicker"
 	exportDir     = "chat_exports"
 	// help text
 	helpText = `
@@ -62,8 +63,9 @@ var (
 [yellow]Ctrl+w[white]: resume generation on the last msg
 [yellow]Ctrl+s[white]: load new char/agent
 [yellow]Ctrl+e[white]: export chat to json file
-[yellow]Ctrl+n[white]: start a new chat
 [yellow]Ctrl+c[white]: close programm
+[yellow]Ctrl+n[white]: start a new chat
+[yellow]Ctrl+o[white]: open file picker
 [yellow]Ctrl+p[white]: props edit form (min-p, dry, etc.)
 [yellow]Ctrl+v[white]: switch between /completion and /chat api (if provided in config)
 [yellow]Ctrl+r[white]: start/stop recording from your microphone (needs stt server)
@@ -740,6 +742,12 @@ func init() {
 		}
 		if event.Key() == tcell.KeyCtrlN {
 			startNewChat()
+			return nil
+		}
+		if event.Key() == tcell.KeyCtrlO {
+			// open file picker
+			filePicker := makeFilePicker()
+			pages.AddPage(filePickerPage, filePicker, true, true)
 			return nil
 		}
 		if event.Key() == tcell.KeyCtrlL {

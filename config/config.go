@@ -64,6 +64,7 @@ type Config struct {
 	WhisperModelPath  string `toml:"WhisperModelPath"`
 	STT_LANG          string `toml:"STT_LANG"`
 	DBPATH            string `toml:"DBPATH"`
+	FilePickerDir     string `toml:"FilePickerDir"`
 }
 
 func LoadConfigOrDefault(fn string) *Config {
@@ -99,6 +100,7 @@ func LoadConfigOrDefault(fn string) *Config {
 		config.TTS_URL = "http://localhost:8880/v1/audio/speech"
 		config.FetchModelNameAPI = "http://localhost:8080/v1/models"
 		config.STT_SR = 16000
+		config.FilePickerDir = "."  // Default to current directory
 	}
 	config.CurrentAPI = config.ChatAPI
 	config.APIMap = map[string]string{
