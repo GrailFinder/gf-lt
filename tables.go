@@ -563,6 +563,27 @@ func makeFilePicker() *tview.Flex {
 	// Track currently displayed directory (changes as user navigates)
 	currentDisplayDir := startDir
 
+	// Helper function to check if a file has an allowed extension from config
+	hasAllowedExtension := func(filename string) bool {
+		// If no allowed extensions are specified in config, allow all files
+		if cfg.FilePickerExts == "" {
+			return true
+		}
+
+		// Split the allowed extensions from the config string
+		allowedExts := strings.Split(cfg.FilePickerExts, ",")
+
+		lowerFilename := strings.ToLower(strings.TrimSpace(filename))
+
+		for _, ext := range allowedExts {
+			ext = strings.TrimSpace(ext) // Remove any whitespace around the extension
+			if ext != "" && strings.HasSuffix(lowerFilename, "."+ext) {
+				return true
+			}
+		}
+		return false
+	}
+
 	// Helper function to check if a file is an image
 	isImageFile := func(filename string) bool {
 		imageExtensions := []string{".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".tiff", ".svg"}
@@ -690,22 +711,25 @@ func makeFilePicker() *tview.Flex {
 					statusView.SetText("Current: " + newDir)
 				})
 			} else {
-				// Capture the file name for the closure to avoid loop variable issues
-				fileName := name
-				fullFilePath := path.Join(dir, fileName)
-				listView.AddItem(fileName, "(File)", 0, func() {
-					selectedFile = fullFilePath
-					statusView.SetText("Selected: " + selectedFile)
-
-					// Check if the file is an image
-					if isImageFile(fileName) {
-						// For image files, offer to attach to the next LLM message
-						statusView.SetText("Selected image: " + selectedFile + " (Press Load to attach)")
-					} else {
-						// For non-image files, display as before
+				// Only show files that have allowed extensions (from config)
+				if hasAllowedExtension(name) {
+					// Capture the file name for the closure to avoid loop variable issues
+					fileName := name
+					fullFilePath := path.Join(dir, fileName)
+					listView.AddItem(fileName, "(File)", 0, func() {
+						selectedFile = fullFilePath
 						statusView.SetText("Selected: " + selectedFile)
-					}
-				})
+
+						// Check if the file is an image
+						if isImageFile(fileName) {
+							// For image files, offer to attach to the next LLM message
+							statusView.SetText("Selected image: " + selectedFile + " (Press Load to attach)")
+						} else {
+							// For non-image files, display as before
+							statusView.SetText("Selected: " + selectedFile)
+						}
+					})
+				}
 			}
 		}
 

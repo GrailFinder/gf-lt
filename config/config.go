@@ -65,6 +65,7 @@ type Config struct {
 	STT_LANG          string `toml:"STT_LANG"`
 	DBPATH            string `toml:"DBPATH"`
 	FilePickerDir     string `toml:"FilePickerDir"`
+	FilePickerExts    string `toml:"FilePickerExts"`
 }
 
 func LoadConfigOrDefault(fn string) *Config {
@@ -101,6 +102,7 @@ func LoadConfigOrDefault(fn string) *Config {
 		config.FetchModelNameAPI = "http://localhost:8080/v1/models"
 		config.STT_SR = 16000
 		config.FilePickerDir = "."  // Default to current directory
+		config.FilePickerExts = "png,jpg,jpeg,gif,webp" // Default allowed extensions
 	}
 	config.CurrentAPI = config.ChatAPI
 	config.APIMap = map[string]string{

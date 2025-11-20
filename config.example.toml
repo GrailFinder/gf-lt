@@ -28,6 +28,7 @@ STT_LANG = "en"  # Language for speech recognition (for WHISPER_BINARY mode)
 STT_SR = 16000  # Sample rate for audio recording
 DBPATH = "gflt.db"
 FilePickerDir = "." # Directory where file picker should start
+FilePickerExts = "png,jpg,jpeg,gif,webp" # Comma-separated list of allowed file extensions for file picker
 #
 FetchModelNameAPI = "http://localhost:8080/v1/models"
 # external search tool
