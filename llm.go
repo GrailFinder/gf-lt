@@ -9,28 +9,16 @@ import (
 )
 
 var imageAttachmentPath string // Global variable to track image attachment for next message
+var lastImg string             // for ctrl+j
 
-// SetImageAttachment sets an image to be attached to the next message sent to the LLM and updates UI
+// SetImageAttachment sets an image to be attached to the next message sent to the LLM
 func SetImageAttachment(imagePath string) {
 	imageAttachmentPath = imagePath
-	// Update the UI to show image is attached (call function from tui.go)
-	// UpdateImageAttachmentStatus(imagePath)
-}
-
-// SetImageAttachmentWithoutUI sets an image to be attached without UI updates (for internal use where UI updates might cause hangs)
-func SetImageAttachmentWithoutUI(imagePath string) {
-	imageAttachmentPath = imagePath
+	lastImg = imagePath
 }
 
 // ClearImageAttachment clears any pending image attachment and updates UI
 func ClearImageAttachment() {
-	imageAttachmentPath = ""
-	// Update the UI to clear image attachment status (call function from tui.go)
-	// UpdateImageAttachmentStatus("")
-}
-
-// ClearImageAttachmentWithoutUI clears any pending image attachment without UI updates
-func ClearImageAttachmentWithoutUI() {
 	imageAttachmentPath = ""
 }
 

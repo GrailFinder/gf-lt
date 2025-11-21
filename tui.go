@@ -32,18 +32,18 @@ var (
 	indexPickWindow *tview.InputField
 	renameWindow    *tview.InputField
 	// pages
-	historyPage   = "historyPage"
-	agentPage     = "agentPage"
-	editMsgPage   = "editMsgPage"
-	indexPage     = "indexPage"
-	helpPage      = "helpPage"
-	renamePage    = "renamePage"
-	RAGPage       = "RAGPage"
-	propsPage     = "propsPage"
-	codeBlockPage = "codeBlockPage"
-	imgPage       = "imgPage"
+	historyPage    = "historyPage"
+	agentPage      = "agentPage"
+	editMsgPage    = "editMsgPage"
+	indexPage      = "indexPage"
+	helpPage       = "helpPage"
+	renamePage     = "renamePage"
+	RAGPage        = "RAGPage"
+	propsPage      = "propsPage"
+	codeBlockPage  = "codeBlockPage"
+	imgPage        = "imgPage"
 	filePickerPage = "filePicker"
-	exportDir     = "chat_exports"
+	exportDir      = "chat_exports"
 	// help text
 	helpText = `
 [yellow]Esc[white]: send msg
@@ -434,7 +434,7 @@ func init() {
 	})
 	flex = tview.NewFlex().SetDirection(tview.FlexRow).
 		AddItem(textView, 0, 40, false).
-		AddItem(textArea, 0, 10, true).  // Restore original height
+		AddItem(textArea, 0, 10, true). // Restore original height
 		AddItem(position, 0, 2, false)
 	editArea = tview.NewTextArea().
 		SetPlaceholder("Replace msg...")
@@ -814,18 +814,18 @@ func init() {
 		}
 		if event.Key() == tcell.KeyCtrlJ {
 			// show image - check for attached image first, then fall back to agent image
-			if imageAttachmentPath != "" {
+			if lastImg != "" {
 				// Load the attached image
-				file, err := os.Open(imageAttachmentPath)
+				file, err := os.Open(lastImg)
 				if err != nil {
-					logger.Error("failed to open attached image", "path", imageAttachmentPath, "error", err)
+					logger.Error("failed to open attached image", "path", lastImg, "error", err)
 					// Fall back to showing agent image
 					loadImage()
 				} else {
 					defer file.Close()
 					img, _, err := image.Decode(file)
 					if err != nil {
-						logger.Error("failed to decode attached image", "path", imageAttachmentPath, "error", err)
+						logger.Error("failed to decode attached image", "path", lastImg, "error", err)
 						// Fall back to showing agent image
 						loadImage()
 					} else {

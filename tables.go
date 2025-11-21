@@ -838,7 +838,7 @@ func makeFilePicker() *tview.Flex {
 							// For image files, set it as an attachment for the next LLM message
 							// Use the version without UI updates to avoid hangs in event handlers
 							logger.Info("setting image", "file", itemText)
-							SetImageAttachmentWithoutUI(filePath)
+							SetImageAttachment(filePath)
 							logger.Info("after setting image", "file", itemText)
 							statusView.SetText("Image attached: " + filePath + " (will be sent with next message)")
 							logger.Info("after setting text", "file", itemText)
