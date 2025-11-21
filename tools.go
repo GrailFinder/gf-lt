@@ -70,15 +70,15 @@ After that you are free to respond to the user.
 		Role:      "",
 		FilePath:  "",
 	}
-	toolCard = &models.CharCard{
-		SysPrompt: toolSysMsg,
-		FirstMsg:  defaultFirstMsg,
-		Role:      "",
-		FilePath:  "",
-	}
+	// toolCard = &models.CharCard{
+	// 	SysPrompt: toolSysMsg,
+	// 	FirstMsg:  defaultFirstMsg,
+	// 	Role:      "",
+	// 	FilePath:  "",
+	// }
 	// sysMap    = map[string]string{"basic_sys": basicSysMsg, "tool_sys": toolSysMsg}
-	sysMap    = map[string]*models.CharCard{"basic_sys": basicCard, "tool_sys": toolCard}
-	sysLabels = []string{"basic_sys", "tool_sys"}
+	sysMap    = map[string]*models.CharCard{"basic_sys": basicCard}
+	sysLabels = []string{"basic_sys"}
 )
 
 // web search (depends on extra server)

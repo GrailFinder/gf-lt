@@ -326,7 +326,7 @@ func makeRAGTable(fileList []string) *tview.Flex {
 // }
 
 func makeAgentTable(agentList []string) *tview.Table {
-	actions := []string{"load"}
+	actions := []string{"filepath", "load"}
 	rows, cols := len(agentList), len(actions)+1
 	chatActTable := tview.NewTable().
 		SetBorders(true)
@@ -339,6 +339,17 @@ func makeAgentTable(agentList []string) *tview.Table {
 						SetTextColor(color).
 						SetAlign(tview.AlignCenter))
 			} else {
+				if actions[c-1] == "filepath" {
+					cc, ok := sysMap[agentList[r]]
+					if !ok {
+						continue
+					}
+					chatActTable.SetCell(r, c,
+						tview.NewTableCell(cc.FilePath).
+							SetTextColor(color).
+							SetAlign(tview.AlignCenter))
+					continue
+				}
 				chatActTable.SetCell(r, c,
 					tview.NewTableCell(actions[c-1]).
 						SetTextColor(color).
@@ -693,7 +704,6 @@ func makeFilePicker() *tview.Flex {
 
 	// Initialize the file list
 	refreshList(startDir)
-
 
 	// Set up keyboard navigation
 	flex.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
