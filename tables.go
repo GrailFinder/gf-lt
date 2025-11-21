@@ -307,59 +307,105 @@ func makeRAGTable(fileList []string) *tview.Flex {
 	return ragflex
 }
 
-// func makeLoadedRAGTable(fileList []string) *tview.Table {
-// 	actions := []string{"delete"}
-// 	rows, cols := len(fileList), len(actions)+1
-// 	fileTable := tview.NewTable().
-// 		SetBorders(true)
-// 	for r := 0; r < rows; r++ {
-// 		for c := 0; c < cols; c++ {
-// 			color := tcell.ColorWhite
-// 			if c < 1 {
-// 				fileTable.SetCell(r, c,
-// 					tview.NewTableCell(fileList[r]).
-// 						SetTextColor(color).
-// 						SetAlign(tview.AlignCenter))
-// 			} else {
-// 				fileTable.SetCell(r, c,
-// 					tview.NewTableCell(actions[c-1]).
-// 						SetTextColor(color).
-// 						SetAlign(tview.AlignCenter))
-// 			}
-// 		}
-// 	}
-// 	fileTable.Select(0, 0).SetFixed(1, 1).SetDoneFunc(func(key tcell.Key) {
-// 		if key == tcell.KeyEsc || key == tcell.KeyF1 {
-// 			pages.RemovePage(RAGPage)
-// 			return
-// 		}
-// 		if key == tcell.KeyEnter {
-// 			fileTable.SetSelectable(true, true)
-// 		}
-// 	}).SetSelectedFunc(func(row int, column int) {
-// 		defer pages.RemovePage(RAGPage)
-// 		tc := fileTable.GetCell(row, column)
-// 		tc.SetTextColor(tcell.ColorRed)
-// 		fileTable.SetSelectable(false, false)
-// 		fpath := fileList[row]
-// 		// notification := fmt.Sprintf("chat: %s; action: %s", fpath, tc.Text)
-// 		switch tc.Text {
-// 		case "delete":
-// 			if err := ragger.RemoveFile(fpath); err != nil {
-// 				logger.Error("failed to delete file", "filename", fpath, "error", err)
-// 				return
-// 			}
-// 			if err := notifyUser("chat deleted", fpath+" was deleted"); err != nil {
-// 				logger.Error("failed to send notification", "error", err)
-// 			}
-// 			return
-// 		default:
-// 			// pages.RemovePage(RAGPage)
-// 			return
-// 		}
-// 	})
-// 	return fileTable
-// }
+func makeLoadedRAGTable(fileList []string) *tview.Flex {
+	actions := []string{"delete"}
+	rows, cols := len(fileList), len(actions)+1
+	// Add 1 extra row for the "exit" option at the top
+	fileTable := tview.NewTable().
+		SetBorders(true)
+	longStatusView := tview.NewTextView()
+	longStatusView.SetText("Loaded RAG files list")
+	longStatusView.SetBorder(true).SetTitle("status")
+	longStatusView.SetChangedFunc(func() {
+		app.Draw()
+	})
+	ragflex := tview.NewFlex().SetDirection(tview.FlexRow).
+		AddItem(longStatusView, 0, 10, false).
+		AddItem(fileTable, 0, 60, true)
+
+	// Add the exit option as the first row (row 0)
+	fileTable.SetCell(0, 0,
+		tview.NewTableCell("Exit Loaded Files manager").
+			SetTextColor(tcell.ColorWhite).
+			SetAlign(tview.AlignCenter))
+	fileTable.SetCell(0, 1,
+		tview.NewTableCell("(Close without action)").
+			SetTextColor(tcell.ColorGray).
+			SetAlign(tview.AlignCenter))
+	fileTable.SetCell(0, 2,
+		tview.NewTableCell("exit").
+			SetTextColor(tcell.ColorGray).
+			SetAlign(tview.AlignCenter))
+
+	// Add the file rows starting from row 1
+	for r := 0; r < rows; r++ {
+		for c := 0; c < cols; c++ {
+			color := tcell.ColorWhite
+			if c < 1 {
+				fileTable.SetCell(r+1, c, // +1 to account for the exit row at index 0
+					tview.NewTableCell(fileList[r]).
+						SetTextColor(color).
+						SetAlign(tview.AlignCenter))
+			} else {
+				fileTable.SetCell(r+1, c, // +1 to account for the exit row at index 0
+					tview.NewTableCell(actions[c-1]).
+						SetTextColor(color).
+						SetAlign(tview.AlignCenter))
+			}
+		}
+	}
+
+	fileTable.Select(0, 0).SetFixed(1, 1).SetDoneFunc(func(key tcell.Key) {
+		if key == tcell.KeyEsc || key == tcell.KeyF1 || key == tcell.Key('x') || key == tcell.KeyCtrlX {
+			pages.RemovePage(RAGLoadedPage)
+			return
+		}
+		if key == tcell.KeyEnter {
+			fileTable.SetSelectable(true, true)
+		}
+	}).SetSelectedFunc(func(row int, column int) {
+		tc := fileTable.GetCell(row, column)
+		tc.SetTextColor(tcell.ColorRed)
+		fileTable.SetSelectable(false, false)
+
+		// Check if the selected row is the exit row (row 0) - do this first to avoid index issues
+		if row == 0 {
+			pages.RemovePage(RAGLoadedPage)
+			return
+		}
+
+		// For file rows, get the filename (row index - 1 because of the exit row at index 0)
+		fpath := fileList[row-1] // -1 to account for the exit row at index 0
+
+		switch tc.Text {
+		case "delete":
+			if err := ragger.RemoveFile(fpath); err != nil {
+				logger.Error("failed to delete file from RAG", "filename", fpath, "error", err)
+				longStatusView.SetText(fmt.Sprintf("Error deleting file: %v", err))
+				return
+			}
+			if err := notifyUser("RAG file deleted", fpath+" was deleted from RAG system"); err != nil {
+				logger.Error("failed to send notification", "error", err)
+			}
+			longStatusView.SetText(fpath + " was deleted from RAG system")
+			return
+		default:
+			pages.RemovePage(RAGLoadedPage)
+			return
+		}
+	})
+
+	// Add input capture to the flex container to handle 'x' key for closing
+	ragflex.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		if event.Key() == tcell.KeyRune && event.Rune() == 'x' {
+			pages.RemovePage(RAGLoadedPage)
+			return nil
+		}
+		return event
+	})
+
+	return ragflex
+}
 
 func makeAgentTable(agentList []string) *tview.Table {
 	actions := []string{"filepath", "load"}

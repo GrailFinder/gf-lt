@@ -39,6 +39,7 @@ var (
 	helpPage       = "helpPage"
 	renamePage     = "renamePage"
 	RAGPage        = "RAGPage"
+	RAGLoadedPage  = "RAGLoadedPage"
 	propsPage      = "propsPage"
 	codeBlockPage  = "codeBlockPage"
 	imgPage        = "imgPage"
@@ -75,6 +76,7 @@ var (
 [yellow]Ctrl+j[white]: if chat agent is char.png will show the image; then any key to return
 [yellow]Ctrl+a[white]: interrupt tts (needs tts server)
 [yellow]Ctrl+g[white]: open RAG file manager (load files for context retrieval)
+[yellow]Ctrl+y[white]: list loaded RAG files (view and manage loaded files)
 [yellow]Ctrl+q[white]: cycle through mentioned chars in chat, to pick persona to send next msg as
 [yellow]Ctrl+x[white]: cycle through mentioned chars in chat, to pick persona to send next msg as (for llm)
 RAG Window: [yellow]x[white]: close window | [yellow]Enter[white]: select action
@@ -823,26 +825,6 @@ func init() {
 			pages.AddPage(imgPage, imgView, true, true)
 			return nil
 		}
-		// DEPRECATED: rag is deprecated until I change my mind
-		// if event.Key() == tcell.KeyCtrlR && cfg.HFToken != "" {
-		// 	// rag load
-		// 	// menu of the text files from defined rag directory
-		// 	files, err := os.ReadDir(cfg.RAGDir)
-		// 	if err != nil {
-		// 		logger.Error("failed to read dir", "dir", cfg.RAGDir, "error", err)
-		// 		return nil
-		// 	}
-		// 	fileList := []string{}
-		// 	for _, f := range files {
-		// 		if f.IsDir() {
-		// 			continue
-		// 		}
-		// 		fileList = append(fileList, f.Name())
-		// 	}
-		// 	chatRAGTable := makeRAGTable(fileList)
-		// 	pages.AddPage(RAGPage, chatRAGTable, true, true)
-		// 	return nil
-		// }
 		if event.Key() == tcell.KeyCtrlR && cfg.STT_ENABLED {
 			defer updateStatusLine()
 			if asr.IsRecording() {
@@ -959,6 +941,20 @@ func init() {
 			}
 			chatRAGTable := makeRAGTable(fileList)
 			pages.AddPage(RAGPage, chatRAGTable, true, true)
+			return nil
+		}
+		if event.Key() == tcell.KeyCtrlY { // Use Ctrl+Y to list loaded RAG files
+			// List files already loaded into the RAG system
+			fileList, err := ragger.ListLoaded()
+			if err != nil {
+				logger.Error("failed to list loaded RAG files", "error", err)
+				if notifyerr := notifyUser("failed to list RAG files", err.Error()); notifyerr != nil {
+					logger.Error("failed to send notification", "error", notifyerr)
+				}
+				return nil
+			}
+			chatLoadedRAGTable := makeLoadedRAGTable(fileList)
+			pages.AddPage(RAGLoadedPage, chatLoadedRAGTable, true, true)
 			return nil
 		}
 		// cannot send msg in editMode or botRespMode
