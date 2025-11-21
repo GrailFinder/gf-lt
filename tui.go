@@ -74,8 +74,10 @@ var (
 [yellow]Ctrl+k[white]: switch tool use (recommend tool use to llm after user msg)
 [yellow]Ctrl+j[white]: if chat agent is char.png will show the image; then any key to return
 [yellow]Ctrl+a[white]: interrupt tts (needs tts server)
+[yellow]Ctrl+g[white]: open RAG file manager (load files for context retrieval)
 [yellow]Ctrl+q[white]: cycle through mentioned chars in chat, to pick persona to send next msg as
 [yellow]Ctrl+x[white]: cycle through mentioned chars in chat, to pick persona to send next msg as (for llm)
+RAG Window: [yellow]x[white]: close window | [yellow]Enter[white]: select action
 
 %s
 
@@ -684,26 +686,8 @@ func init() {
 			}
 			table := makeCodeBlockTable(cb)
 			pages.AddPage(codeBlockPage, table, true, true)
-			// updateStatusLine()
 			return nil
 		}
-		// if event.Key() == tcell.KeyF10 {
-		// 	// list rag loaded in db
-		// 	loadedFiles, err := ragger.ListLoaded()
-		// 	if err != nil {
-		// 		logger.Error("failed to list regfiles in db", "error", err)
-		// 		return nil
-		// 	}
-		// 	if len(loadedFiles) == 0 {
-		// 		if err := notifyUser("loaded RAG", "no files in db"); err != nil {
-		// 			logger.Error("failed to send notification", "error", err)
-		// 		}
-		// 		return nil
-		// 	}
-		// 	dbRAGTable := makeLoadedRAGTable(loadedFiles)
-		// 	pages.AddPage(RAGPage, dbRAGTable, true, true)
-		// 	return nil
-		// }
 		if event.Key() == tcell.KeyF10 {
 			cfg.SkipLLMResp = !cfg.SkipLLMResp
 			updateStatusLine()
