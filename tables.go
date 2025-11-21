@@ -171,7 +171,7 @@ func makeChatTable(chatMap map[string]models.Chat) *tview.Table {
 
 // nolint:unused
 func makeRAGTable(fileList []string) *tview.Flex {
-	actions := []string{"load", "delete", "exit"}
+	actions := []string{"load", "delete"}
 	rows, cols := len(fileList), len(actions)+1
 	fileTable := tview.NewTable().
 		SetBorders(true)
@@ -184,16 +184,32 @@ func makeRAGTable(fileList []string) *tview.Flex {
 	ragflex := tview.NewFlex().SetDirection(tview.FlexRow).
 		AddItem(longStatusView, 0, 10, false).
 		AddItem(fileTable, 0, 60, true)
+
+	// Add the exit option as the first row (row 0)
+	fileTable.SetCell(0, 0,
+		tview.NewTableCell("Exit RAG manager").
+			SetTextColor(tcell.ColorWhite).
+			SetAlign(tview.AlignCenter))
+	fileTable.SetCell(0, 1,
+		tview.NewTableCell("(Close without action)").
+			SetTextColor(tcell.ColorGray).
+			SetAlign(tview.AlignCenter))
+	fileTable.SetCell(0, 2,
+		tview.NewTableCell("exit").
+			SetTextColor(tcell.ColorGray).
+			SetAlign(tview.AlignCenter))
+
+	// Add the file rows starting from row 1
 	for r := 0; r < rows; r++ {
 		for c := 0; c < cols; c++ {
 			color := tcell.ColorWhite
 			if c < 1 {
-				fileTable.SetCell(r, c,
+				fileTable.SetCell(r+1, c, // +1 to account for the exit row at index 0
 					tview.NewTableCell(fileList[r]).
 						SetTextColor(color).
 						SetAlign(tview.AlignCenter))
 			} else {
-				fileTable.SetCell(r, c,
+				fileTable.SetCell(r+1, c, // +1 to account for the exit row at index 0
 					tview.NewTableCell(actions[c-1]).
 						SetTextColor(color).
 						SetAlign(tview.AlignCenter))
@@ -239,7 +255,16 @@ func makeRAGTable(fileList []string) *tview.Flex {
 		tc := fileTable.GetCell(row, column)
 		tc.SetTextColor(tcell.ColorRed)
 		fileTable.SetSelectable(false, false)
-		fpath := fileList[row]
+
+		// Check if the selected row is the exit row (row 0) - do this first to avoid index issues
+		if row == 0 {
+			pages.RemovePage(RAGPage)
+			return
+		}
+
+		// For file rows, get the filename (row index - 1 because of the exit row at index 0)
+		fpath := fileList[row-1] // -1 to account for the exit row at index 0
+
 		// notification := fmt.Sprintf("chat: %s; action: %s", fpath, tc.Text)
 		switch tc.Text {
 		case "load":
@@ -269,6 +294,16 @@ func makeRAGTable(fileList []string) *tview.Flex {
 			return
 		}
 	})
+
+	// Add input capture to the flex container to handle 'x' key for closing
+	ragflex.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		if event.Key() == tcell.KeyRune && event.Rune() == 'x' {
+			pages.RemovePage(RAGPage)
+			return nil
+		}
+		return event
+	})
+
 	return ragflex
 }
 
