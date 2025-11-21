@@ -7,9 +7,9 @@ made with use of [tview](https://github.com/rivo/tview)
 - llama.cpp api, deepseek, openrouter (other ones were not tested);
 - showing images (not really, for now only if your char card is png it could show it);
 - tts/stt (if whisper.cpp server / fastapi tts server are provided);
+- image input;
 
 #### does not have/support
-- images; (ctrl+j will show an image of the card you use, but that is about it);
 - RAG; (RAG was implemented, but I found it unusable and then sql extention broke, so no RAG);
 - MCP; (agentic is implemented, but as a raw and predefined functions for llm to use. see [tools.go](https://github.com/GrailFinder/gf-lt/blob/master/tools.go));
 
@@ -44,8 +44,9 @@ F12: show this help page
 Ctrl+w: resume generation on the last msg
 Ctrl+s: load new char/agent
 Ctrl+e: export chat to json file
-Ctrl+n: start a new chat
 Ctrl+c: close programm
+Ctrl+n: start a new chat
+Ctrl+o: open file picker for img input
 Ctrl+p: props edit form (min-p, dry, etc.)
 Ctrl+v: switch between /completion and /chat api (if provided in config)
 Ctrl+r: start/stop recording from your microphone (needs stt server)
@@ -55,6 +56,7 @@ Ctrl+k: switch tool use (recommend tool use to llm after user msg)
 Ctrl+j: if chat agent is char.png will show the image; then any key to return
 Ctrl+a: interrupt tts (needs tts server)
 Ctrl+q: cycle through mentioned chars in chat, to pick persona to send next msg as
+Ctrl+x: cycle through mentioned chars in chat, to pick persona to send next msg as (for llm)
 ```
 
 #### setting up config

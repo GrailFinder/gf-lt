@@ -600,73 +600,28 @@ func makeFilePicker() *tview.Flex {
 	listView := tview.NewList()
 	listView.SetBorder(true).SetTitle("Files & Directories").SetTitleAlign(tview.AlignLeft)
 
-	// Path input field
-	pathInput := tview.NewInputField().
-		SetLabel("Path: ").
-		SetText(startDir).
-		SetFieldWidth(50)
-	pathInput.SetBorder(true).SetTitle("Enter Path").SetTitleAlign(tview.AlignLeft)
-
+	// Status view for selected file information
 	statusView := tview.NewTextView()
 	statusView.SetBorder(true).SetTitle("Selected File").SetTitleAlign(tview.AlignLeft)
 	statusView.SetTextColor(tcell.ColorYellow)
 
-	buttonBar := tview.NewFlex()
-
-	// Button functions
-	loadButton := tview.NewButton("Load")
-	loadButton.SetSelectedFunc(func() {
-		if selectedFile != "" {
-			// Check if the selected file is an image
-			if isImageFile(selectedFile) {
-				// For image files, set it as an attachment for the next LLM message
-				SetImageAttachment(selectedFile)
-				statusView.SetText("Image attached: " + selectedFile + " (will be sent with next message)")
-				// Close the file picker but don't change the text area
-				pages.RemovePage(filePickerPage)
-			} else {
-				// For non-image files, update the text area with file path
-				textArea.SetText(selectedFile, true)
-				app.SetFocus(textArea)
-				pages.RemovePage(filePickerPage)
-			}
-		} else {
-			// If no file is selected, just close the picker
-			pages.RemovePage(filePickerPage)
-		}
-	})
-
-	cancelButton := tview.NewButton("Cancel")
-	cancelButton.SetSelectedFunc(func() {
-		pages.RemovePage(filePickerPage)
-	})
-
-	// Path input button - will be updated after refreshList is defined
-	goButton := tview.NewButton("Go")
-
-	buttonBar.AddItem(tview.NewBox().SetBackgroundColor(tcell.ColorDefault), 0, 1, false)
-	buttonBar.AddItem(goButton, 5, 1, true)
-	buttonBar.AddItem(tview.NewBox(), 1, 1, false)
-	buttonBar.AddItem(loadButton, 8, 1, true)
-	buttonBar.AddItem(tview.NewBox(), 1, 1, false)
-	buttonBar.AddItem(cancelButton, 8, 1, true)
-	buttonBar.AddItem(tview.NewBox().SetBackgroundColor(tcell.ColorDefault), 0, 1, false)
-
-	// Layout - add path input field at the top
+	// Layout - only include list view and status view
 	flex := tview.NewFlex().SetDirection(tview.FlexRow)
-	flex.AddItem(pathInput, 3, 0, false)
 	flex.AddItem(listView, 0, 3, true)
 	flex.AddItem(statusView, 3, 0, false)
-	flex.AddItem(buttonBar, 3, 0, false)
 
 	// Refresh the file list
 	var refreshList func(string)
 	refreshList = func(dir string) {
 		listView.Clear()
 
-		// Update the path input field and current display directory
-		pathInput.SetText(dir)
+		// Update the current display directory
 		currentDisplayDir = dir // Update the current display directory
+
+		// Add exit option at the top
+		listView.AddItem("Exit file picker [gray](Close without selecting)[-]", "", 'x', func() {
+			pages.RemovePage(filePickerPage)
+		})
 
 		// Add parent directory (..) if not at root
 		if dir != "/" {
@@ -676,7 +631,7 @@ func makeFilePicker() *tview.Flex {
 			if parentDir == dir && dir == "/" {
 				// We're at the root ("/") and trying to go up, just don't add the parent item
 			} else {
-				listView.AddItem("../", "(Parent Directory)", 'p', func() {
+				listView.AddItem("../ [gray](Parent Directory)[-]", "", 'p', func() {
 					refreshList(parentDir)
 					dirStack = append(dirStack, parentDir)
 					currentStackPos = len(dirStack) - 1
@@ -703,7 +658,7 @@ func makeFilePicker() *tview.Flex {
 			if file.IsDir() {
 				// Capture the directory name for the closure to avoid loop variable issues
 				dirName := name
-				listView.AddItem(dirName+"/", "(Directory)", 0, func() {
+				listView.AddItem(dirName+"/ [gray](Directory)[-]", "", 0, func() {
 					newDir := path.Join(dir, dirName)
 					refreshList(newDir)
 					dirStack = append(dirStack, newDir)
@@ -716,14 +671,14 @@ func makeFilePicker() *tview.Flex {
 					// Capture the file name for the closure to avoid loop variable issues
 					fileName := name
 					fullFilePath := path.Join(dir, fileName)
-					listView.AddItem(fileName, "(File)", 0, func() {
+					listView.AddItem(fileName+" [gray](File)[-]", "", 0, func() {
 						selectedFile = fullFilePath
 						statusView.SetText("Selected: " + selectedFile)
 
 						// Check if the file is an image
 						if isImageFile(fileName) {
 							// For image files, offer to attach to the next LLM message
-							statusView.SetText("Selected image: " + selectedFile + " (Press Load to attach)")
+							statusView.SetText("Selected image: " + selectedFile)
 						} else {
 							// For non-image files, display as before
 							statusView.SetText("Selected: " + selectedFile)
@@ -739,40 +694,6 @@ func makeFilePicker() *tview.Flex {
 	// Initialize the file list
 	refreshList(startDir)
 
-	// Set up keyboard navigation for the path input
-	pathInput.SetDoneFunc(func(key tcell.Key) {
-		if key == tcell.KeyEnter {
-			// Trigger the Go functionality when Enter is pressed in the path input
-			newPath := pathInput.GetText()
-			if newPath != "" {
-				// Check if path exists and is a directory
-				if info, err := os.Stat(newPath); err == nil && info.IsDir() {
-					refreshList(newPath)
-					dirStack = append(dirStack, newPath)
-					currentStackPos = len(dirStack) - 1
-					statusView.SetText("Current: " + newPath)
-				} else {
-					statusView.SetText("Invalid directory: " + newPath)
-				}
-			}
-		}
-	})
-
-	// Now that refreshList is defined, set the Go button's functionality
-	goButton.SetSelectedFunc(func() {
-		newPath := pathInput.GetText()
-		if newPath != "" {
-			// Check if path exists and is a directory
-			if info, err := os.Stat(newPath); err == nil && info.IsDir() {
-				refreshList(newPath)
-				dirStack = append(dirStack, newPath)
-				currentStackPos = len(dirStack) - 1
-				statusView.SetText("Current: " + newPath)
-			} else {
-				statusView.SetText("Invalid directory: " + newPath)
-			}
-		}
-	})
 
 	// Set up keyboard navigation
 	flex.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
@@ -799,12 +720,26 @@ func makeFilePicker() *tview.Flex {
 				itemText, _ := listView.GetItemText(itemIndex)
 
 				logger.Info("choosing dir", "itemText", itemText)
-				// Check if it's a directory (typically ends with /)
-				if strings.HasSuffix(itemText, "/") {
+
+				// Check for the exit option first (should be the first item)
+				if strings.HasPrefix(itemText, "Exit file picker") {
+					pages.RemovePage(filePickerPage)
+					return nil
+				}
+
+				// Extract the actual filename/directory name by removing the type info in brackets
+				// Format is "name [gray](type)[-]"
+				actualItemName := itemText
+				if bracketPos := strings.Index(itemText, " ["); bracketPos != -1 {
+					actualItemName = itemText[:bracketPos]
+				}
+
+				// Check if it's a directory (ends with /)
+				if strings.HasSuffix(actualItemName, "/") {
 					// This is a directory, we need to get the full path
 					// Since the item text ends with "/" and represents a directory
 					var targetDir string
-					if strings.HasPrefix(itemText, "../") {
+					if strings.HasPrefix(actualItemName, "../") {
 						// Parent directory - need to go up from current directory
 						targetDir = path.Dir(currentDisplayDir)
 						// Avoid going above root - if parent is same as current and it's system root
@@ -815,7 +750,7 @@ func makeFilePicker() *tview.Flex {
 						}
 					} else {
 						// Regular subdirectory
-						dirName := strings.TrimSuffix(itemText, "/")
+						dirName := strings.TrimSuffix(actualItemName, "/")
 						targetDir = path.Join(currentDisplayDir, dirName)
 					}
 
@@ -827,23 +762,23 @@ func makeFilePicker() *tview.Flex {
 					statusView.SetText("Current: " + targetDir)
 					return nil
 				} else {
-					// It's a file - construct the full path from current directory and the item name
+					// It's a file - construct the full path from current directory and the actual item name
 					// We can't rely only on the selectedFile variable since Enter key might be pressed
 					// without having clicked the file first
-					filePath := path.Join(currentDisplayDir, itemText)
+					filePath := path.Join(currentDisplayDir, actualItemName)
 					// Verify it's actually a file (not just lacking a directory suffix)
 					if info, err := os.Stat(filePath); err == nil && !info.IsDir() {
 						// Check if the file is an image
-						if isImageFile(itemText) {
+						if isImageFile(actualItemName) {
 							// For image files, set it as an attachment for the next LLM message
 							// Use the version without UI updates to avoid hangs in event handlers
-							logger.Info("setting image", "file", itemText)
+							logger.Info("setting image", "file", actualItemName)
 							SetImageAttachment(filePath)
-							logger.Info("after setting image", "file", itemText)
+							logger.Info("after setting image", "file", actualItemName)
 							statusView.SetText("Image attached: " + filePath + " (will be sent with next message)")
-							logger.Info("after setting text", "file", itemText)
+							logger.Info("after setting text", "file", actualItemName)
 							pages.RemovePage(filePickerPage)
-							logger.Info("after update drawn", "file", itemText)
+							logger.Info("after update drawn", "file", actualItemName)
 						} else {
 							// For non-image files, update the text area with file path
 							textArea.SetText(filePath, true)
