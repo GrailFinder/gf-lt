@@ -81,32 +81,6 @@ After that you are free to respond to the user.
 	sysLabels = []string{"basic_sys", "tool_sys"}
 )
 
-// func populateTools(cfg config.Config) {
-// 	// if we have access to some server with funcs we can populate funcs (tools|toolbelt?) with it
-// 	// there must be a better way
-// 	if cfg.SearchAPI == "" || cfg.SearchDescribe == "" {
-// 		return
-// 	}
-// 	resp, err := httpClient.Get(cfg.SearchDescribe)
-// 	if err != nil {
-// 		logger.Error("failed to get websearch tool description",
-// 			"link", cfg.SearchDescribe, "error", err)
-// 		return
-// 	}
-// 	defer resp.Body.Close()
-// 	descResp := models.Tool{}
-// 	if err := json.NewDecoder(resp.Body).Decode(&descResp); err != nil {
-// 		logger.Error("failed to unmarshal websearch tool description",
-// 			"link", cfg.SearchDescribe, "error", err)
-// 		return
-// 	}
-// 	fnMap["web_search"] = websearch
-// 	baseTools = append(baseTools, descResp)
-// 	logger.Info("added web_search tool", "tool", descResp)
-// }
-
-// {"type":"function","function":{"name":"web_search","description":"Perform a web search to find information on varioust topics","parameters":{"type":"object","properties":{"num_results":{"type":"integer","description":"Maximum number of results to return (default: 10)"},"query":{"type":"string","description":"The search query to find information about"},"search_type":{"type":"string","description":"Type of search to perform: 'api' for SearXNG API search or 'scraper' for web scraping (default: 'scraper')"}},"required":["query"]}}}
-
 // web search (depends on extra server)
 func websearch(args map[string]string) []byte {
 	// make http request return bytes
@@ -126,32 +100,6 @@ func websearch(args map[string]string) []byte {
 			"limit_arg", limitS, "error", err)
 		limit = 3
 	}
-	// // external
-	// payload, err := json.Marshal(args)
-	// if err != nil {
-	// 	logger.Error("failed to marshal web_search arguments", "error", err)
-	// 	msg := fmt.Sprintf("failed to marshal web_search arguments; error: %s\n", err)
-	// 	return []byte(msg)
-	// }
-	// req, err := http.NewRequest("POST", cfg.SearchAPI, bytes.NewReader(payload))
-	// if err != nil {
-	// 	logger.Error("failed to build an http request", "error", err)
-	// 	msg := fmt.Sprintf("failed to build an http request; error: %s\n", err)
-	// 	return []byte(msg)
-	// }
-	// resp, err := httpClient.Do(req)
-	// if err != nil {
-	// 	logger.Error("failed to execute http request", "error", err)
-	// 	msg := fmt.Sprintf("failed to execute http request; error: %s\n", err)
-	// 	return []byte(msg)
-	// }
-	// defer resp.Body.Close()
-	// data, err := io.ReadAll(resp.Body)
-	// if err != nil {
-	// 	logger.Error("failed to read response body", "error", err)
-	// 	msg := fmt.Sprintf("failed to read response body; error: %s\n", err)
-	// 	return []byte(msg)
-	// }
 	resp, err := extra.WebSearcher.Search(context.Background(), query, limit)
 	if err != nil {
 		msg := "search tool failed; error: " + err.Error()
@@ -222,8 +170,6 @@ func recallTopics(args map[string]string) []byte {
 	joinedS := strings.Join(topics, ";")
 	return []byte(joinedS)
 }
-
-// func fullMemoryLoad() {}
 
 type fnSig func(map[string]string) []byte
 

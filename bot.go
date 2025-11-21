@@ -545,7 +545,13 @@ func charToStart(agentName string) bool {
 }
 
 func init() {
-	cfg = config.LoadConfigOrDefault("config.toml")
+	var err error
+	cfg, err = config.LoadConfig("config.toml")
+	if err != nil {
+		fmt.Println("failed to load config.toml")
+		os.Exit(1)
+		return
+	}
 	defaultStarter = []models.RoleMsg{
 		{Role: "system", Content: basicSysMsg},
 		{Role: cfg.AssistantRole, Content: defaultFirstMsg},

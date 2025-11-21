@@ -1,8 +1,6 @@
 package config
 
 import (
-	"fmt"
-
 	"github.com/BurntSushi/toml"
 )
 
@@ -68,41 +66,14 @@ type Config struct {
 	FilePickerExts    string `toml:"FilePickerExts"`
 }
 
-func LoadConfigOrDefault(fn string) *Config {
+func LoadConfig(fn string) (*Config, error) {
 	if fn == "" {
 		fn = "config.toml"
 	}
 	config := &Config{}
 	_, err := toml.DecodeFile(fn, &config)
 	if err != nil {
-		fmt.Println("failed to read config from file, loading default", "error", err)
-		config.ChatAPI = "http://localhost:8080/v1/chat/completions"
-		config.CompletionAPI = "http://localhost:8080/completion"
-		config.DeepSeekCompletionAPI = "https://api.deepseek.com/beta/completions"
-		config.DeepSeekChatAPI = "https://api.deepseek.com/chat/completions"
-		config.OpenRouterCompletionAPI = "https://openrouter.ai/api/v1/completions"
-		config.OpenRouterChatAPI = "https://openrouter.ai/api/v1/chat/completions"
-		config.RAGEnabled = false
-		config.EmbedURL = "http://localhost:8080/v1/embiddings"
-		config.ShowSys = true
-		config.LogFile = "log.txt"
-		config.UserRole = "user"
-		config.ToolRole = "tool"
-		config.AssistantRole = "assistant"
-		config.SysDir = "sysprompts"
-		config.ChunkLimit = 8192
-		config.DBPATH = "gflt.db"
-		//
-		config.RAGBatchSize = 100
-		config.RAGWordLimit = 80
-		config.RAGWorkers = 5
-		// tts
-		config.TTS_ENABLED = false
-		config.TTS_URL = "http://localhost:8880/v1/audio/speech"
-		config.FetchModelNameAPI = "http://localhost:8080/v1/models"
-		config.STT_SR = 16000
-		config.FilePickerDir = "."  // Default to current directory
-		config.FilePickerExts = "png,jpg,jpeg,gif,webp" // Default allowed extensions
+		return nil, err
 	}
 	config.CurrentAPI = config.ChatAPI
 	config.APIMap = map[string]string{
@@ -119,5 +90,5 @@ func LoadConfigOrDefault(fn string) *Config {
 		}
 	}
 	// if any value is empty fill with default
-	return config
+	return config, nil
 }
