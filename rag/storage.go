@@ -30,33 +30,34 @@ func NewVectorStorage(logger *slog.Logger, store storage.FullRepo) *VectorStorag
 
 // CreateTables creates the necessary tables for vector storage
 func (vs *VectorStorage) CreateTables() error {
-	// Create tables for different embedding dimensions
-	queries := []string{
-		`CREATE TABLE IF NOT EXISTS embeddings_384 (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			embeddings BLOB NOT NULL,
-			slug TEXT NOT NULL,
-			raw_text TEXT NOT NULL,
-			filename TEXT NOT NULL,
-			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-		)`,
-		`CREATE TABLE IF NOT EXISTS embeddings_5120 (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			embeddings BLOB NOT NULL,
-			slug TEXT NOT NULL,
-			raw_text TEXT NOT NULL,
-			filename TEXT NOT NULL,
-			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-		)`,
-		// Indexes for better performance
-		`CREATE INDEX IF NOT EXISTS idx_embeddings_384_filename ON embeddings_384(filename)`,
-		`CREATE INDEX IF NOT EXISTS idx_embeddings_5120_filename ON embeddings_5120(filename)`,
-		`CREATE INDEX IF NOT EXISTS idx_embeddings_384_slug ON embeddings_384(slug)`,
-		`CREATE INDEX IF NOT EXISTS idx_embeddings_5120_slug ON embeddings_5120(slug)`,
+	// Create tables for common embedding dimensions
+	embeddingSizes := []int{384, 768, 1024, 1536, 2048, 3072, 4096, 5120}
+	// Pre-allocate queries slice: each embedding size needs 1 table + 3 indexes = 4 queries per size
+	queries := make([]string, 0, len(embeddingSizes)*4)
 
-		// Additional indexes that may help with searches
-		`CREATE INDEX IF NOT EXISTS idx_embeddings_384_created_at ON embeddings_384(created_at)`,
-		`CREATE INDEX IF NOT EXISTS idx_embeddings_5120_created_at ON embeddings_5120(created_at)`,
+	// Generate table creation queries for each embedding size
+	for _, size := range embeddingSizes {
+		tableName := fmt.Sprintf("embeddings_%d", size)
+		queries = append(queries,
+			fmt.Sprintf(`CREATE TABLE IF NOT EXISTS %s (
+				id INTEGER PRIMARY KEY AUTOINCREMENT,
+				embeddings BLOB NOT NULL,
+				slug TEXT NOT NULL,
+				raw_text TEXT NOT NULL,
+				filename TEXT NOT NULL,
+				created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+			)`, tableName),
+		)
+	}
+
+	// Add indexes for all supported sizes
+	for _, size := range embeddingSizes {
+		tableName := fmt.Sprintf("embeddings_%d", size)
+		queries = append(queries,
+			fmt.Sprintf(`CREATE INDEX IF NOT EXISTS idx_%s_filename ON %s(filename)`, tableName, tableName),
+			fmt.Sprintf(`CREATE INDEX IF NOT EXISTS idx_%s_slug ON %s(slug)`, tableName, tableName),
+			fmt.Sprintf(`CREATE INDEX IF NOT EXISTS idx_%s_created_at ON %s(created_at)`, tableName, tableName),
+		)
 	}
 
 	for _, query := range queries {
@@ -120,14 +121,25 @@ func (vs *VectorStorage) WriteVector(row *models.VectorRow) error {
 
 // getTableName determines which table to use based on embedding size
 func (vs *VectorStorage) getTableName(emb []float32) (string, error) {
-	switch len(emb) {
-	case 384:
-		return "embeddings_384", nil
-	case 5120:
-		return "embeddings_5120", nil
-	default:
-		return "", fmt.Errorf("no table for embedding size of %d", len(emb))
+	size := len(emb)
+
+	// Check if we support this embedding size
+	supportedSizes := map[int]bool{
+		384:   true,
+		768:   true,
+		1024:  true,
+		1536:  true,
+		2048:  true,
+		3072:  true,
+		4096:  true,
+		5120:  true,
 	}
+
+	if supportedSizes[size] {
+		return fmt.Sprintf("embeddings_%d", size), nil
+	}
+
+	return "", fmt.Errorf("no table for embedding size of %d", size)
 }
 
 // SearchClosest finds vectors closest to the query vector using efficient cosine similarity calculation
@@ -211,8 +223,10 @@ func (vs *VectorStorage) SearchClosest(query []float32) ([]models.VectorRow, err
 func (vs *VectorStorage) ListFiles() ([]string, error) {
 	fileLists := make([][]string, 0)
 
-	// Query both tables and combine results
-	for _, table := range []string{"embeddings_384", "embeddings_5120"} {
+	// Query all supported tables and combine results
+	embeddingSizes := []int{384, 768, 1024, 1536, 2048, 3072, 4096, 5120}
+	for _, size := range embeddingSizes {
+		table := fmt.Sprintf("embeddings_%d", size)
 		query := "SELECT DISTINCT filename FROM " + table
 		rows, err := vs.sqlxDB.Query(query)
 		if err != nil {
@@ -252,7 +266,9 @@ func (vs *VectorStorage) ListFiles() ([]string, error) {
 func (vs *VectorStorage) RemoveEmbByFileName(filename string) error {
 	var errors []string
 
-	for _, table := range []string{"embeddings_384", "embeddings_5120"} {
+	embeddingSizes := []int{384, 768, 1024, 1536, 2048, 3072, 4096, 5120}
+	for _, size := range embeddingSizes {
+		table := fmt.Sprintf("embeddings_%d", size)
 		query := fmt.Sprintf("DELETE FROM %s WHERE filename = ?", table)
 		if _, err := vs.sqlxDB.Exec(query, filename); err != nil {
 			errors = append(errors, err.Error())

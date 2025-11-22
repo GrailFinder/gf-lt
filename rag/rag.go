@@ -163,9 +163,9 @@ func (r *RAG) writeVectors(vectorCh chan []models.VectorRow) error {
 		for batch := range vectorCh {
 			for _, vector := range batch {
 				if err := r.storage.WriteVector(&vector); err != nil {
-					r.logger.Error("failed to write vector", "error", err, "slug", vector.Slug)
+					r.logger.Error("failed to write vector to DB", "error", err, "slug", vector.Slug)
 					LongJobStatusCh <- ErrRAGStatus
-					continue // a duplicate is not critical
+					return err // Stop the entire RAG operation on DB error
 				}
 			}
 			r.logger.Debug("wrote batch to db", "size", len(batch), "vector_chan_len", len(vectorCh))
