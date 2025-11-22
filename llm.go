@@ -84,14 +84,15 @@ func (lcp LlamaCPPeer) FormMsg(msg, role string, resume bool) (io.Reader, error)
 	if msg != "" { // otherwise let the bot to continue
 		newMsg := models.RoleMsg{Role: role, Content: msg}
 		chatBody.Messages = append(chatBody.Messages, newMsg)
-		// if rag
+		// if rag - add as system message to avoid conflicts with tool usage
 		if cfg.RAGEnabled {
 			ragResp, err := chatRagUse(newMsg.Content)
 			if err != nil {
 				logger.Error("failed to form a rag msg", "error", err)
 				return nil, err
 			}
-			ragMsg := models.RoleMsg{Role: cfg.ToolRole, Content: ragResp}
+			// Use system role for RAG context to avoid conflicts with tool usage
+			ragMsg := models.RoleMsg{Role: "system", Content: "RAG context: " + ragResp}
 			chatBody.Messages = append(chatBody.Messages, ragMsg)
 		}
 	}
@@ -181,15 +182,12 @@ func (op OpenAIer) FormMsg(msg, role string, resume bool) (io.Reader, error) {
 	if msg != "" { // otherwise let the bot continue
 		// Create the message with support for multimodal content
 		var newMsg models.RoleMsg
-
 		// Check if we have an image to add to this message
 		if imageAttachmentPath != "" {
 			// Create a multimodal message with both text and image
 			newMsg = models.NewMultimodalMsg(role, []interface{}{})
-
 			// Add the text content
 			newMsg.AddTextPart(msg)
-
 			// Add the image content
 			imageURL, err := models.CreateImageURLFromPath(imageAttachmentPath)
 			if err != nil {
@@ -205,8 +203,19 @@ func (op OpenAIer) FormMsg(msg, role string, resume bool) (io.Reader, error) {
 			// Create a simple text message
 			newMsg = models.NewRoleMsg(role, msg)
 		}
-
 		chatBody.Messages = append(chatBody.Messages, newMsg)
+
+		// if rag - add as system message to avoid conflicts with tool usage
+		if cfg.RAGEnabled {
+			ragResp, err := chatRagUse(newMsg.Content)
+			if err != nil {
+				logger.Error("failed to form a rag msg", "error", err)
+				return nil, err
+			}
+			// Use system role for RAG context to avoid conflicts with tool usage
+			ragMsg := models.RoleMsg{Role: "system", Content: "RAG context: " + ragResp}
+			chatBody.Messages = append(chatBody.Messages, ragMsg)
+		}
 	}
 	req := models.OpenAIReq{
 		ChatBody: chatBody,
@@ -251,14 +260,15 @@ func (ds DeepSeekerCompletion) FormMsg(msg, role string, resume bool) (io.Reader
 	if msg != "" { // otherwise let the bot to continue
 		newMsg := models.RoleMsg{Role: role, Content: msg}
 		chatBody.Messages = append(chatBody.Messages, newMsg)
-		// if rag
+		// if rag - add as system message to avoid conflicts with tool usage
 		if cfg.RAGEnabled {
 			ragResp, err := chatRagUse(newMsg.Content)
 			if err != nil {
 				logger.Error("failed to form a rag msg", "error", err)
 				return nil, err
 			}
-			ragMsg := models.RoleMsg{Role: cfg.ToolRole, Content: ragResp}
+			// Use system role for RAG context to avoid conflicts with tool usage
+			ragMsg := models.RoleMsg{Role: "system", Content: "RAG context: " + ragResp}
 			chatBody.Messages = append(chatBody.Messages, ragMsg)
 		}
 	}
@@ -332,14 +342,15 @@ func (ds DeepSeekerChat) FormMsg(msg, role string, resume bool) (io.Reader, erro
 	if msg != "" { // otherwise let the bot continue
 		newMsg := models.RoleMsg{Role: role, Content: msg}
 		chatBody.Messages = append(chatBody.Messages, newMsg)
-		// if rag
+		// if rag - add as system message to avoid conflicts with tool usage
 		if cfg.RAGEnabled {
 			ragResp, err := chatRagUse(newMsg.Content)
 			if err != nil {
 				logger.Error("failed to form a rag msg", "error", err)
 				return nil, err
 			}
-			ragMsg := models.RoleMsg{Role: cfg.ToolRole, Content: ragResp}
+			// Use system role for RAG context to avoid conflicts with tool usage
+			ragMsg := models.RoleMsg{Role: "system", Content: "RAG context: " + ragResp}
 			chatBody.Messages = append(chatBody.Messages, ragMsg)
 		}
 	}
@@ -397,14 +408,15 @@ func (or OpenRouterCompletion) FormMsg(msg, role string, resume bool) (io.Reader
 	if msg != "" { // otherwise let the bot to continue
 		newMsg := models.RoleMsg{Role: role, Content: msg}
 		chatBody.Messages = append(chatBody.Messages, newMsg)
-		// if rag
+		// if rag - add as system message to avoid conflicts with tool usage
 		if cfg.RAGEnabled {
 			ragResp, err := chatRagUse(newMsg.Content)
 			if err != nil {
 				logger.Error("failed to form a rag msg", "error", err)
 				return nil, err
 			}
-			ragMsg := models.RoleMsg{Role: cfg.ToolRole, Content: ragResp}
+			// Use system role for RAG context to avoid conflicts with tool usage
+			ragMsg := models.RoleMsg{Role: "system", Content: "RAG context: " + ragResp}
 			chatBody.Messages = append(chatBody.Messages, ragMsg)
 		}
 	}
@@ -474,14 +486,15 @@ func (or OpenRouterChat) FormMsg(msg, role string, resume bool) (io.Reader, erro
 	if msg != "" { // otherwise let the bot continue
 		newMsg := models.RoleMsg{Role: role, Content: msg}
 		chatBody.Messages = append(chatBody.Messages, newMsg)
-		// if rag
+		// if rag - add as system message to avoid conflicts with tool usage
 		if cfg.RAGEnabled {
 			ragResp, err := chatRagUse(newMsg.Content)
 			if err != nil {
 				logger.Error("failed to form a rag msg", "error", err)
 				return nil, err
 			}
-			ragMsg := models.RoleMsg{Role: cfg.ToolRole, Content: ragResp}
+			// Use system role for RAG context to avoid conflicts with tool usage
+			ragMsg := models.RoleMsg{Role: "system", Content: "RAG context: " + ragResp}
 			chatBody.Messages = append(chatBody.Messages, ragMsg)
 		}
 	}
