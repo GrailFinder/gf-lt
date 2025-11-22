@@ -216,7 +216,7 @@ func makeRAGTable(fileList []string) *tview.Flex {
 			}
 		}
 	}
-	errCh := make(chan error, 1)
+	errCh := make(chan error, 1) // why?
 	go func() {
 		defer pages.RemovePage(RAGPage)
 		for {
@@ -273,6 +273,7 @@ func makeRAGTable(fileList []string) *tview.Flex {
 			go func() {
 				if err := ragger.LoadRAG(fpath); err != nil {
 					logger.Error("failed to embed file", "chat", fpath, "error", err)
+					_ = notifyUser("RAG", "failed to embed file; error: "+err.Error())
 					errCh <- err
 					// pages.RemovePage(RAGPage)
 					return
