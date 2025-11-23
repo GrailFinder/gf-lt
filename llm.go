@@ -10,6 +10,7 @@ import (
 
 var imageAttachmentPath string // Global variable to track image attachment for next message
 var lastImg string             // for ctrl+j
+var RAGMsg = "Retrieved context for user's query:\n"
 
 // SetImageAttachment sets an image to be attached to the next message sent to the LLM
 func SetImageAttachment(imagePath string) {
@@ -92,7 +93,7 @@ func (lcp LlamaCPPeer) FormMsg(msg, role string, resume bool) (io.Reader, error)
 				return nil, err
 			}
 			// Use system role for RAG context to avoid conflicts with tool usage
-			ragMsg := models.RoleMsg{Role: "system", Content: "RAG context: " + ragResp}
+			ragMsg := models.RoleMsg{Role: "system", Content: RAGMsg + ragResp}
 			chatBody.Messages = append(chatBody.Messages, ragMsg)
 		}
 	}
@@ -213,7 +214,7 @@ func (op OpenAIer) FormMsg(msg, role string, resume bool) (io.Reader, error) {
 				return nil, err
 			}
 			// Use system role for RAG context to avoid conflicts with tool usage
-			ragMsg := models.RoleMsg{Role: "system", Content: "RAG context: " + ragResp}
+			ragMsg := models.RoleMsg{Role: "system", Content: RAGMsg + ragResp}
 			chatBody.Messages = append(chatBody.Messages, ragMsg)
 		}
 	}
@@ -268,7 +269,7 @@ func (ds DeepSeekerCompletion) FormMsg(msg, role string, resume bool) (io.Reader
 				return nil, err
 			}
 			// Use system role for RAG context to avoid conflicts with tool usage
-			ragMsg := models.RoleMsg{Role: "system", Content: "RAG context: " + ragResp}
+			ragMsg := models.RoleMsg{Role: "system", Content: RAGMsg + ragResp}
 			chatBody.Messages = append(chatBody.Messages, ragMsg)
 		}
 	}
@@ -350,7 +351,7 @@ func (ds DeepSeekerChat) FormMsg(msg, role string, resume bool) (io.Reader, erro
 				return nil, err
 			}
 			// Use system role for RAG context to avoid conflicts with tool usage
-			ragMsg := models.RoleMsg{Role: "system", Content: "RAG context: " + ragResp}
+			ragMsg := models.RoleMsg{Role: "system", Content: RAGMsg + ragResp}
 			chatBody.Messages = append(chatBody.Messages, ragMsg)
 		}
 	}
@@ -416,7 +417,7 @@ func (or OpenRouterCompletion) FormMsg(msg, role string, resume bool) (io.Reader
 				return nil, err
 			}
 			// Use system role for RAG context to avoid conflicts with tool usage
-			ragMsg := models.RoleMsg{Role: "system", Content: "RAG context: " + ragResp}
+			ragMsg := models.RoleMsg{Role: "system", Content: RAGMsg + ragResp}
 			chatBody.Messages = append(chatBody.Messages, ragMsg)
 		}
 	}
@@ -494,7 +495,7 @@ func (or OpenRouterChat) FormMsg(msg, role string, resume bool) (io.Reader, erro
 				return nil, err
 			}
 			// Use system role for RAG context to avoid conflicts with tool usage
-			ragMsg := models.RoleMsg{Role: "system", Content: "RAG context: " + ragResp}
+			ragMsg := models.RoleMsg{Role: "system", Content: RAGMsg + ragResp}
 			chatBody.Messages = append(chatBody.Messages, ragMsg)
 		}
 	}
