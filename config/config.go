@@ -84,10 +84,33 @@ func LoadConfig(fn string) (*Config, error) {
 		config.OpenRouterCompletionAPI: config.OpenRouterChatAPI,
 		config.OpenRouterChatAPI:       config.ChatAPI,
 	}
-	for _, el := range []string{config.ChatAPI, config.CompletionAPI, config.DeepSeekChatAPI, config.DeepSeekCompletionAPI} {
-		if el != "" {
-			config.ApiLinks = append(config.ApiLinks, el)
+	// Build ApiLinks slice with only non-empty API links
+	// Only include DeepSeek APIs if DeepSeekToken is provided
+	if config.DeepSeekToken != "" {
+		if config.DeepSeekChatAPI != "" {
+			config.ApiLinks = append(config.ApiLinks, config.DeepSeekChatAPI)
 		}
+		if config.DeepSeekCompletionAPI != "" {
+			config.ApiLinks = append(config.ApiLinks, config.DeepSeekCompletionAPI)
+		}
+	}
+
+	// Only include OpenRouter APIs if OpenRouterToken is provided
+	if config.OpenRouterToken != "" {
+		if config.OpenRouterChatAPI != "" {
+			config.ApiLinks = append(config.ApiLinks, config.OpenRouterChatAPI)
+		}
+		if config.OpenRouterCompletionAPI != "" {
+			config.ApiLinks = append(config.ApiLinks, config.OpenRouterCompletionAPI)
+		}
+	}
+
+	// Always include basic APIs
+	if config.ChatAPI != "" {
+		config.ApiLinks = append(config.ApiLinks, config.ChatAPI)
+	}
+	if config.CompletionAPI != "" {
+		config.ApiLinks = append(config.ApiLinks, config.CompletionAPI)
 	}
 	// if any value is empty fill with default
 	return config, nil

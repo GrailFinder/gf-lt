@@ -764,13 +764,27 @@ func init() {
 			return nil
 		}
 		if event.Key() == tcell.KeyCtrlV {
-			// switch between /chat and /completion api
-			newAPI := cfg.APIMap[cfg.CurrentAPI]
-			if newAPI == "" {
-				// do not switch
+			// switch between API links using index-based rotation
+			if len(cfg.ApiLinks) == 0 {
+				// No API links to rotate through
 				return nil
 			}
-			cfg.CurrentAPI = newAPI
+			// Find current API in the list to get the current index
+			currentIndex := -1
+			for i, api := range cfg.ApiLinks {
+				if api == cfg.CurrentAPI {
+					currentIndex = i
+					break
+				}
+			}
+			// If current API is not in the list, start from beginning
+			// Otherwise, advance to next API in the list (with wrap-around)
+			if currentIndex == -1 {
+				currentAPIIndex = 0
+			} else {
+				currentAPIIndex = (currentIndex + 1) % len(cfg.ApiLinks)
+			}
+			cfg.CurrentAPI = cfg.ApiLinks[currentAPIIndex]
 			choseChunkParser()
 			updateStatusLine()
 			return nil

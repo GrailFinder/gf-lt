@@ -205,7 +205,6 @@ func (op OpenAIer) FormMsg(msg, role string, resume bool) (io.Reader, error) {
 			newMsg = models.NewRoleMsg(role, msg)
 		}
 		chatBody.Messages = append(chatBody.Messages, newMsg)
-
 		// if rag - add as system message to avoid conflicts with tool usage
 		if cfg.RAGEnabled {
 			ragResp, err := chatRagUse(newMsg.Content)
@@ -485,7 +484,28 @@ func (or OpenRouterChat) FormMsg(msg, role string, resume bool) (io.Reader, erro
 		chatBody.Messages = append(chatBody.Messages, models.RoleMsg{Role: cfg.ToolRole, Content: toolSysMsg})
 	}
 	if msg != "" { // otherwise let the bot continue
-		newMsg := models.RoleMsg{Role: role, Content: msg}
+		var newMsg models.RoleMsg
+		// Check if we have an image to add to this message
+		if imageAttachmentPath != "" {
+			// Create a multimodal message with both text and image
+			newMsg = models.NewMultimodalMsg(role, []interface{}{})
+			// Add the text content
+			newMsg.AddTextPart(msg)
+			// Add the image content
+			imageURL, err := models.CreateImageURLFromPath(imageAttachmentPath)
+			if err != nil {
+				logger.Error("failed to create image URL from path", "error", err, "path", imageAttachmentPath)
+				// If image processing fails, fall back to simple text message
+				newMsg = models.NewRoleMsg(role, msg)
+				imageAttachmentPath = "" // Clear the attachment
+			} else {
+				newMsg.AddImagePart(imageURL)
+				imageAttachmentPath = "" // Clear the attachment after use
+			}
+		} else {
+			// Create a simple text message
+			newMsg = models.NewRoleMsg(role, msg)
+		}
 		chatBody.Messages = append(chatBody.Messages, newMsg)
 		// if rag - add as system message to avoid conflicts with tool usage
 		if cfg.RAGEnabled {
