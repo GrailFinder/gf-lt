@@ -926,11 +926,33 @@ func init() {
 			// menu of the text files from defined rag directory
 			files, err := os.ReadDir(cfg.RAGDir)
 			if err != nil {
-				logger.Error("failed to read dir", "dir", cfg.RAGDir, "error", err)
-				if notifyerr := notifyUser("failed to open RAG files dir", err.Error()); notifyerr != nil {
-					logger.Error("failed to send notification", "error", notifyerr)
+				// Check if the error is because the directory doesn't exist
+				if os.IsNotExist(err) {
+					// Create the RAG directory if it doesn't exist
+					if mkdirErr := os.MkdirAll(cfg.RAGDir, 0755); mkdirErr != nil {
+						logger.Error("failed to create RAG directory", "dir", cfg.RAGDir, "error", mkdirErr)
+						if notifyerr := notifyUser("failed to create RAG directory", mkdirErr.Error()); notifyerr != nil {
+							logger.Error("failed to send notification", "error", notifyerr)
+						}
+						return nil
+					}
+					// Now try to read the directory again after creating it
+					files, err = os.ReadDir(cfg.RAGDir)
+					if err != nil {
+						logger.Error("failed to read dir after creating it", "dir", cfg.RAGDir, "error", err)
+						if notifyerr := notifyUser("failed to read RAG directory", err.Error()); notifyerr != nil {
+							logger.Error("failed to send notification", "error", notifyerr)
+						}
+						return nil
+					}
+				} else {
+					// Other error (permissions, etc.)
+					logger.Error("failed to read dir", "dir", cfg.RAGDir, "error", err)
+					if notifyerr := notifyUser("failed to open RAG files dir", err.Error()); notifyerr != nil {
+						logger.Error("failed to send notification", "error", notifyerr)
+					}
+					return nil
 				}
-				return nil
 			}
 			fileList := []string{}
 			for _, f := range files {

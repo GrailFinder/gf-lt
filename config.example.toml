@@ -1,7 +1,15 @@
 ChatAPI = "http://localhost:8080/v1/chat/completions"
 CompletionAPI = "http://localhost:8080/completion"
+FetchModelNameAPI = "http://localhost:8080/v1/models"
+# in case you have deepseek token
+DeepSeekCompletionAPI = "https://api.deepseek.com/beta/completions"
+DeepSeekChatAPI = "https://api.deepseek.com/chat/completions"
+DeepSeekModel = "deepseek-reasoner"
+# DeepSeekToken = ""
+# in case you have opentouter token
 OpenRouterCompletionAPI = "https://openrouter.ai/api/v1/completions"
 OpenRouterChatAPI = "https://openrouter.ai/api/v1/chat/completions"
+# OpenRouterToken = ""
 EmbedURL = "http://localhost:8080/v1/embeddings"
 ShowSys = true
 LogFile = "log.txt"
@@ -11,9 +19,9 @@ AssistantRole = "assistant"
 SysDir = "sysprompts"
 ChunkLimit = 100000
 # rag settings
-RAGBatchSize = 100
+RAGBatchSize = 10
 RAGWordLimit = 80
-RAGWorkers = 5
+RAGWorkers = 2
 RAGDir = "ragimport"
 # extra tts
 TTS_ENABLED = false
@@ -30,8 +38,3 @@ STT_SR = 16000  # Sample rate for audio recording
 DBPATH = "gflt.db"
 FilePickerDir = "." # Directory where file picker should start
 FilePickerExts = "png,jpg,jpeg,gif,webp" # Comma-separated list of allowed file extensions for file picker
-#
-FetchModelNameAPI = "http://localhost:8080/v1/models"
-# external search tool
-SearchAPI = "" # url to call the tool by
-SearchDescribe = "" # link that returns models.Tool
