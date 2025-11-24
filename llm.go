@@ -3,10 +3,8 @@ package main
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"gf-lt/models"
 	"io"
-	"os"
 	"strings"
 )
 
@@ -78,12 +76,6 @@ type OpenRouterChat struct {
 	Model string
 }
 
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}
 
 func (lcp LlamaCPPeer) GetToken() string {
 	return ""
@@ -211,9 +203,9 @@ func (op OpenAIer) FormMsg(msg, role string, resume bool) (io.Reader, error) {
 				newMsg = models.NewRoleMsg(role, msg)
 			} else {
 				newMsg.AddImagePart(imageURL)
-				// Only clear the global image attachment after successfully processing it in this API call
-				imageAttachmentPath = "" // Clear the attachment after use
 			}
+			// Only clear the global image attachment after successfully processing it in this API call
+			imageAttachmentPath = "" // Clear the attachment after use
 		} else {
 			// Create a simple text message
 			newMsg = models.NewRoleMsg(role, msg)
@@ -505,37 +497,22 @@ func (or OpenRouterChat) FormMsg(msg, role string, resume bool) (io.Reader, erro
 	if msg != "" { // otherwise let the bot continue
 		var newMsg models.RoleMsg
 		// Check if we have an image to add to this message
-		logger.Debug("checking for image attachment", "imageAttachmentPath", localImageAttachmentPath, "msg", msg, "role", role)
 		if localImageAttachmentPath != "" {
-			logger.Info("processing image attachment for OpenRouter", "path", localImageAttachmentPath, "msg", msg)
-			// Check if file exists before attempting to create image URL
-			if _, err := os.Stat(localImageAttachmentPath); os.IsNotExist(err) {
-				logger.Error("image file does not exist", "path", localImageAttachmentPath)
-				// Fallback to simple text message
-				newMsg = models.NewRoleMsg(role, msg)
-			} else if err != nil {
-				logger.Error("error checking image file", "path", localImageAttachmentPath, "error", err)
-				// Fallback to simple text message
+			// Create a multimodal message with both text and image
+			newMsg = models.NewMultimodalMsg(role, []interface{}{})
+			// Add the text content
+			newMsg.AddTextPart(msg)
+			// Add the image content
+			imageURL, err := models.CreateImageURLFromPath(localImageAttachmentPath)
+			if err != nil {
+				logger.Error("failed to create image URL from path", "error", err, "path", localImageAttachmentPath)
+				// If image processing fails, fall back to simple text message
 				newMsg = models.NewRoleMsg(role, msg)
 			} else {
-				logger.Debug("image file exists, proceeding to create URL", "path", localImageAttachmentPath)
-				// Create a multimodal message with both text and image
-				newMsg = models.NewMultimodalMsg(role, []interface{}{})
-				// Add the text content
-				newMsg.AddTextPart(msg)
-				// Add the image content
-				imageURL, err := models.CreateImageURLFromPath(localImageAttachmentPath)
-				if err != nil {
-					logger.Error("failed to create image URL from path", "error", err, "path", localImageAttachmentPath)
-					// If image processing fails, fall back to simple text message
-					newMsg = models.NewRoleMsg(role, msg)
-				} else {
-					logger.Info("image URL created successfully for OpenRouter", "imageURL", imageURL[:min(len(imageURL), 50)]+"...")
-					newMsg.AddImagePart(imageURL)
-					// Only clear the global image attachment after successfully processing it in this API call
-					imageAttachmentPath = "" // Clear the attachment after use
-				}
+				newMsg.AddImagePart(imageURL)
 			}
+			// Only clear the global image attachment after successfully processing it in this API call
+			imageAttachmentPath = "" // Clear the attachment after use
 		} else {
 			// Create a simple text message
 			newMsg = models.NewRoleMsg(role, msg)
@@ -561,110 +538,18 @@ func (or OpenRouterChat) FormMsg(msg, role string, resume bool) (io.Reader, erro
 	}
 
 	for i, msg := range chatBody.Messages {
-		logger.Debug("checking roles", "#", i, "role", msg.Role)
-		// Check if this message has content parts (multimodal) by attempting to marshal and checking structure
-		msgBytes, err := json.Marshal(msg)
-		if err != nil {
-			logger.Error("failed to serialize message for inspection", "error", err)
-			// Fallback to direct assignment
-			bodyCopy.Messages[i] = msg
-		} else {
-			// Try to deserialize to check if it has content parts
-			var tempMsg map[string]interface{}
-			if err := json.Unmarshal(msgBytes, &tempMsg); err != nil {
-				logger.Error("failed to inspect message structure", "error", err)
-				bodyCopy.Messages[i] = msg
-			} else {
-				// Check if content is an array (indicating content parts) or string (simple content)
-				if content, ok := tempMsg["content"]; ok {
-					if _, isArray := content.([]interface{}); isArray {
-						logger.Info("multimodal message detected", "#", i, "role", msg.Role)
-						// Deserialize to RoleMsg to access ContentParts
-						var detailedMsg models.RoleMsg
-						if err := json.Unmarshal(msgBytes, &detailedMsg); err == nil {
-							if len(detailedMsg.ContentParts) > 0 {
-								for j, part := range detailedMsg.ContentParts {
-									if textPart, ok := part.(models.TextContentPart); ok {
-										logger.Debug("text content part", "msg#", i, "part#", j, "text", textPart.Text)
-									} else if imgPart, ok := part.(models.ImageContentPart); ok {
-										logger.Info("image content part", "msg#", i, "part#", j, "url", imgPart.ImageURL.URL[:min(len(imgPart.ImageURL.URL), 50)]+"...")
-									} else {
-										logger.Debug("other content part", "msg#", i, "part#", j, "type", fmt.Sprintf("%T", part))
-									}
-								}
-							}
-						}
-					}
-				}
-			}
-		}
-
-		// Create a proper copy of the message that preserves all internal state
-		// First, serialize and deserialize to ensure content parts are preserved
-		copyMsgBytes, err := json.Marshal(msg)
-		if err != nil {
-			logger.Error("failed to serialize message", "error", err)
-			// Fallback to direct assignment
-			bodyCopy.Messages[i] = msg
-		} else {
-			// Deserialize back to preserve all internal state
-			var copiedMsg models.RoleMsg
-			err := json.Unmarshal(copyMsgBytes, &copiedMsg)
-			if err != nil {
-				logger.Error("failed to deserialize message", "error", err)
-				// Fallback to direct assignment
-				bodyCopy.Messages[i] = msg
-			} else {
-				bodyCopy.Messages[i] = copiedMsg
-			}
-		}
-
-		// Standardize role if it's a user role or first message
-		if bodyCopy.Messages[i].Role == cfg.UserRole || i == 1 {
+		bodyCopy.Messages[i] = msg
+		// Standardize role if it's a user role
+		if bodyCopy.Messages[i].Role == cfg.UserRole {
 			bodyCopy.Messages[i].Role = "user"
-			logger.Debug("replaced role in body", "#", i)
 		}
 	}
 
-	// Log the final request body before sending to OpenRouter
 	orBody := models.NewOpenRouterChatReq(*bodyCopy, defaultLCPProps)
 	data, err := json.Marshal(orBody)
 	if err != nil {
 		logger.Error("failed to form a msg", "error", err)
 		return nil, err
-	}
-
-	logger.Info("OpenRouter request prepared", "messages_count", len(orBody.Messages))
-	for i, msg := range orBody.Messages {
-		// Check if this final message has content parts (multimodal)
-		msgBytes, err := json.Marshal(msg)
-		if err == nil {
-			var tempMsg map[string]interface{}
-			if err := json.Unmarshal(msgBytes, &tempMsg); err == nil {
-				if content, ok := tempMsg["content"]; ok {
-					if _, isArray := content.([]interface{}); isArray {
-						logger.Debug("final message", "#", i, "role", msg.Role, "hasContentParts", true)
-						// Deserialize to access content parts
-						var detailedMsg models.RoleMsg
-						if err := json.Unmarshal(msgBytes, &detailedMsg); err == nil {
-							if len(detailedMsg.ContentParts) > 0 {
-								for j, part := range detailedMsg.ContentParts {
-									if textPart, ok := part.(models.TextContentPart); ok {
-										logger.Debug("final text part", "msg#", i, "part#", j, "text", textPart.Text)
-									} else if imgPart, ok := part.(models.ImageContentPart); ok {
-										logger.Info("final image part sent to OpenRouter", "msg#", i, "part#", j, "url", imgPart.ImageURL.URL[:min(len(imgPart.ImageURL.URL), 50)]+"...")
-									} else {
-										logger.Debug("final other part", "msg#", i, "part#", j, "type", fmt.Sprintf("%T", part))
-									}
-								}
-							}
-						}
-					} else {
-						logger.Debug("final message", "#", i, "role", msg.Role, "hasContentParts", false)
-					}
-				}
-			}
-		}
 	}
 
 	return bytes.NewReader(data), nil
