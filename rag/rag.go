@@ -43,10 +43,7 @@ func New(l *slog.Logger, s storage.FullRepo, cfg *config.Config) *RAG {
 		storage:  NewVectorStorage(l, s),
 	}
 
-	// Create the necessary tables
-	if err := rag.storage.CreateTables(); err != nil {
-		l.Error("failed to create vector tables", "error", err)
-	}
+	// Note: Vector tables are created via database migrations, not at runtime
 
 	return rag
 }

@@ -45,17 +45,24 @@ func mathBitsToFloat32(b uint32) float32 {
 	return *(*float32)(unsafe.Pointer(&b))
 }
 
-var (
-	vecTableName5120 = "embeddings_5120"
-	vecTableName384  = "embeddings_384"
-)
-
 func fetchTableName(emb []float32) (string, error) {
 	switch len(emb) {
-	case 5120:
-		return vecTableName5120, nil
 	case 384:
-		return vecTableName384, nil
+		return "embeddings_384", nil
+	case 768:
+		return "embeddings_768", nil
+	case 1024:
+		return "embeddings_1024", nil
+	case 1536:
+		return "embeddings_1536", nil
+	case 2048:
+		return "embeddings_2048", nil
+	case 3072:
+		return "embeddings_3072", nil
+	case 4096:
+		return "embeddings_4096", nil
+	case 5120:
+		return "embeddings_5120", nil
 	default:
 		return "", fmt.Errorf("no table for the size of %d", len(emb))
 	}
@@ -185,8 +192,12 @@ func sqrt(f float32) float32 {
 func (p ProviderSQL) ListFiles() ([]string, error) {
 	fileLists := make([][]string, 0)
 
-	// Query both tables and combine results
-	for _, table := range []string{vecTableName384, vecTableName5120} {
+	// Query all supported tables and combine results
+	tableNames := []string{
+		"embeddings_384", "embeddings_768", "embeddings_1024", "embeddings_1536",
+		"embeddings_2048", "embeddings_3072", "embeddings_4096", "embeddings_5120",
+	}
+	for _, table := range tableNames {
 		query := "SELECT DISTINCT filename FROM " + table
 		rows, err := p.db.Query(query)
 		if err != nil {
@@ -225,7 +236,11 @@ func (p ProviderSQL) ListFiles() ([]string, error) {
 func (p ProviderSQL) RemoveEmbByFileName(filename string) error {
 	var errors []string
 
-	for _, table := range []string{vecTableName384, vecTableName5120} {
+	tableNames := []string{
+		"embeddings_384", "embeddings_768", "embeddings_1024", "embeddings_1536",
+		"embeddings_2048", "embeddings_3072", "embeddings_4096", "embeddings_5120",
+	}
+	for _, table := range tableNames {
 		query := fmt.Sprintf("DELETE FROM %s WHERE filename = ?", table)
 		if _, err := p.db.Exec(query, filename); err != nil {
 			errors = append(errors, err.Error())

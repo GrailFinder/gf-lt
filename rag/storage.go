@@ -28,45 +28,6 @@ func NewVectorStorage(logger *slog.Logger, store storage.FullRepo) *VectorStorag
 	}
 }
 
-// CreateTables creates the necessary tables for vector storage
-func (vs *VectorStorage) CreateTables() error {
-	// Create tables for common embedding dimensions
-	embeddingSizes := []int{384, 768, 1024, 1536, 2048, 3072, 4096, 5120}
-	// Pre-allocate queries slice: each embedding size needs 1 table + 3 indexes = 4 queries per size
-	queries := make([]string, 0, len(embeddingSizes)*4)
-
-	// Generate table creation queries for each embedding size
-	for _, size := range embeddingSizes {
-		tableName := fmt.Sprintf("embeddings_%d", size)
-		queries = append(queries,
-			fmt.Sprintf(`CREATE TABLE IF NOT EXISTS %s (
-				id INTEGER PRIMARY KEY AUTOINCREMENT,
-				embeddings BLOB NOT NULL,
-				slug TEXT NOT NULL,
-				raw_text TEXT NOT NULL,
-				filename TEXT NOT NULL,
-				created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-			)`, tableName),
-		)
-	}
-
-	// Add indexes for all supported sizes
-	for _, size := range embeddingSizes {
-		tableName := fmt.Sprintf("embeddings_%d", size)
-		queries = append(queries,
-			fmt.Sprintf(`CREATE INDEX IF NOT EXISTS idx_%s_filename ON %s(filename)`, tableName, tableName),
-			fmt.Sprintf(`CREATE INDEX IF NOT EXISTS idx_%s_slug ON %s(slug)`, tableName, tableName),
-			fmt.Sprintf(`CREATE INDEX IF NOT EXISTS idx_%s_created_at ON %s(created_at)`, tableName, tableName),
-		)
-	}
-
-	for _, query := range queries {
-		if _, err := vs.sqlxDB.Exec(query); err != nil {
-			return fmt.Errorf("failed to create table: %w", err)
-		}
-	}
-	return nil
-}
 
 // SerializeVector converts []float32 to binary blob
 func SerializeVector(vec []float32) []byte {
