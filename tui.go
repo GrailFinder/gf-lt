@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"gf-lt/extra"
 	"gf-lt/models"
-	"gf-lt/pngmeta"
 	"image"
 	_ "image/jpeg"
 	_ "image/png"
@@ -66,7 +65,7 @@ var (
 [yellow]Ctrl+e[white]: export chat to json file
 [yellow]Ctrl+c[white]: close programm
 [yellow]Ctrl+n[white]: start a new chat
-[yellow]Ctrl+o[white]: open file picker
+[yellow]Ctrl+o[white]: open image file picker
 [yellow]Ctrl+p[white]: props edit form (min-p, dry, etc.)
 [yellow]Ctrl+v[white]: switch between /completion and /chat api (if provided in config)
 [yellow]Ctrl+r[white]: start/stop recording from your microphone (needs stt server)
@@ -79,7 +78,6 @@ var (
 [yellow]Ctrl+y[white]: list loaded RAG files (view and manage loaded files)
 [yellow]Ctrl+q[white]: cycle through mentioned chars in chat, to pick persona to send next msg as
 [yellow]Ctrl+x[white]: cycle through mentioned chars in chat, to pick persona to send next msg as (for llm)
-RAG Window: [yellow]x[white]: close window | [yellow]Enter[white]: select action
 
 %s
 
@@ -141,206 +139,6 @@ Press Enter to go back
 	}
 )
 
-func loadImage() {
-	filepath := defaultImage
-	cc, ok := sysMap[cfg.AssistantRole]
-	if ok {
-		if strings.HasSuffix(cc.FilePath, ".png") {
-			filepath = cc.FilePath
-		}
-	}
-	file, err := os.Open(filepath)
-	if err != nil {
-		panic(err)
-	}
-	defer file.Close()
-	img, _, err := image.Decode(file)
-	if err != nil {
-		panic(err)
-	}
-	imgView.SetImage(img)
-}
-
-func strInSlice(s string, sl []string) bool {
-	for _, el := range sl {
-		if strings.EqualFold(s, el) {
-			return true
-		}
-	}
-	return false
-}
-
-func colorText() {
-	text := textView.GetText(false)
-	quoteReplacer := strings.NewReplacer(
-		`”`, `"`,
-		`“`, `"`,
-		`“`, `"`,
-		`”`, `"`,
-		`**`, `*`,
-	)
-	text = quoteReplacer.Replace(text)
-	// Step 1: Extract code blocks and replace them with unique placeholders
-	var codeBlocks []string
-	placeholder := "__CODE_BLOCK_%d__"
-	counter := 0
-	// thinking
-	var thinkBlocks []string
-	placeholderThink := "__THINK_BLOCK_%d__"
-	counterThink := 0
-	// Replace code blocks with placeholders and store their styled versions
-	text = codeBlockRE.ReplaceAllStringFunc(text, func(match string) string {
-		// Style the code block and store it
-		styled := fmt.Sprintf("[red::i]%s[-:-:-]", match)
-		codeBlocks = append(codeBlocks, styled)
-		// Generate a unique placeholder (e.g., "__CODE_BLOCK_0__")
-		id := fmt.Sprintf(placeholder, counter)
-		counter++
-		return id
-	})
-	text = thinkRE.ReplaceAllStringFunc(text, func(match string) string {
-		// Style the code block and store it
-		styled := fmt.Sprintf("[red::i]%s[-:-:-]", match)
-		thinkBlocks = append(thinkBlocks, styled)
-		// Generate a unique placeholder (e.g., "__CODE_BLOCK_0__")
-		id := fmt.Sprintf(placeholderThink, counterThink)
-		counterThink++
-		return id
-	})
-	// Step 2: Apply other regex styles to the non-code parts
-	text = quotesRE.ReplaceAllString(text, `[orange::-]$1[-:-:-]`)
-	text = starRE.ReplaceAllString(text, `[turquoise::i]$1[-:-:-]`)
-	// text = thinkRE.ReplaceAllString(text, `[yellow::i]$1[-:-:-]`)
-	// Step 3: Restore the styled code blocks from placeholders
-	for i, cb := range codeBlocks {
-		text = strings.Replace(text, fmt.Sprintf(placeholder, i), cb, 1)
-	}
-	logger.Debug("thinking debug", "blocks", thinkBlocks)
-	for i, tb := range thinkBlocks {
-		text = strings.Replace(text, fmt.Sprintf(placeholderThink, i), tb, 1)
-	}
-	textView.SetText(text)
-}
-
-func makeStatusLine() string {
-	isRecording := false
-	if asr != nil {
-		isRecording = asr.IsRecording()
-	}
-	persona := cfg.UserRole
-	if cfg.WriteNextMsgAs != "" {
-		persona = cfg.WriteNextMsgAs
-	}
-	botPersona := cfg.AssistantRole
-	if cfg.WriteNextMsgAsCompletionAgent != "" {
-		botPersona = cfg.WriteNextMsgAsCompletionAgent
-	}
-
-	// Add image attachment info to status line
-	var imageInfo string
-	if imageAttachmentPath != "" {
-		// Get just the filename from the path
-		imageName := path.Base(imageAttachmentPath)
-		imageInfo = fmt.Sprintf(" | attached img: [orange:-:b]%s[-:-:-]", imageName)
-	} else {
-		imageInfo = ""
-	}
-
-	statusLine := fmt.Sprintf(indexLineCompletion, botRespMode, cfg.AssistantRole, activeChatName,
-		cfg.ToolUse, chatBody.Model, cfg.SkipLLMResp, cfg.CurrentAPI, cfg.ThinkUse, logLevel.Level(),
-		isRecording, persona, botPersona, injectRole)
-
-	return statusLine + imageInfo
-}
-
-func updateStatusLine() {
-	position.SetText(makeStatusLine())
-	helpView.SetText(fmt.Sprintf(helpText, makeStatusLine()))
-}
-
-func initSysCards() ([]string, error) {
-	labels := []string{}
-	labels = append(labels, sysLabels...)
-	cards, err := pngmeta.ReadDirCards(cfg.SysDir, cfg.UserRole, logger)
-	if err != nil {
-		logger.Error("failed to read sys dir", "error", err)
-		return nil, err
-	}
-	for _, cc := range cards {
-		if cc.Role == "" {
-			logger.Warn("empty role", "file", cc.FilePath)
-			continue
-		}
-		sysMap[cc.Role] = cc
-		labels = append(labels, cc.Role)
-	}
-	return labels, nil
-}
-
-func renameUser(oldname, newname string) {
-	if oldname == "" {
-		// not provided; deduce who user is
-		// INFO: if user not yet spoke, it is hard to replace mentions in sysprompt and first message about thme
-		roles := chatBody.ListRoles()
-		for _, role := range roles {
-			if role == cfg.AssistantRole {
-				continue
-			}
-			if role == cfg.ToolRole {
-				continue
-			}
-			if role == "system" {
-				continue
-			}
-			oldname = role
-			break
-		}
-		if oldname == "" {
-			// still
-			logger.Warn("fn: renameUser; failed to find old name", "newname", newname)
-			return
-		}
-	}
-	viewText := textView.GetText(false)
-	viewText = strings.ReplaceAll(viewText, oldname, newname)
-	chatBody.Rename(oldname, newname)
-	textView.SetText(viewText)
-}
-
-func startNewChat() {
-	id, err := store.ChatGetMaxID()
-	if err != nil {
-		logger.Error("failed to get chat id", "error", err)
-	}
-	if ok := charToStart(cfg.AssistantRole); !ok {
-		logger.Warn("no such sys msg", "name", cfg.AssistantRole)
-	}
-	// set chat body
-	chatBody.Messages = chatBody.Messages[:2]
-	textView.SetText(chatToText(cfg.ShowSys))
-	newChat := &models.Chat{
-		ID:    id + 1,
-		Name:  fmt.Sprintf("%d_%s", id+1, cfg.AssistantRole),
-		Msgs:  string(defaultStarterBytes),
-		Agent: cfg.AssistantRole,
-	}
-	activeChatName = newChat.Name
-	chatMap[newChat.Name] = newChat
-	updateStatusLine()
-	colorText()
-}
-
-func setLogLevel(sl string) {
-	switch sl {
-	case "Debug":
-		logLevel.Set(-4)
-	case "Info":
-		logLevel.Set(0)
-	case "Warn":
-		logLevel.Set(4)
-	}
-}
-
 func makePropsForm(props map[string]float32) *tview.Form {
 	// https://github.com/rivo/tview/commit/0a18dea458148770d212d348f656988df75ff341
 	// no way to close a form by a key press; a shame.
@@ -363,7 +161,7 @@ func makePropsForm(props map[string]float32) *tview.Form {
 		}).AddDropDown("Select a model: ", modelList, 0,
 		func(option string, optionIndex int) {
 			chatBody.Model = option
-		}).AddDropDown("Write next message as: ", chatBody.ListRoles(), 0,
+		}).AddDropDown("Write next message as: ", listRolesWithUser(), 0,
 		func(option string, optionIndex int) {
 			cfg.WriteNextMsgAs = option
 		}).AddInputField("new char to write msg as: ", "", 32, tview.InputFieldMaxLength(32),
@@ -885,14 +683,7 @@ func init() {
 			if cfg.WriteNextMsgAs != "" {
 				persona = cfg.WriteNextMsgAs
 			}
-			roles := chatBody.ListRoles()
-			if len(roles) == 0 {
-				logger.Warn("empty roles in chat")
-				return nil
-			}
-			if !strInSlice(cfg.UserRole, roles) {
-				roles = append(roles, cfg.UserRole)
-			}
+			roles := listRolesWithUser()
 			logger.Info("list roles", "roles", roles)
 			for i, role := range roles {
 				if strings.EqualFold(role, persona) {
@@ -1045,11 +836,4 @@ func init() {
 		}
 		return event
 	})
-}
-
-// UpdateImageAttachmentStatus updates the UI to reflect the current image attachment status
-func UpdateImageAttachmentStatus(imagePath string) {
-	// The image attachment status is now shown in the main status line
-	// Just update the status line to reflect the current image attachment
-	updateStatusLine()
 }
