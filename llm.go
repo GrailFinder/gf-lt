@@ -468,6 +468,19 @@ func (or OpenRouterChat) ParseChunk(data []byte) (*models.TextChunk, error) {
 	resp := &models.TextChunk{
 		Chunk: llmchunk.Choices[len(llmchunk.Choices)-1].Delta.Content,
 	}
+
+	// Handle tool calls similar to OpenAIer
+	if len(llmchunk.Choices[len(llmchunk.Choices)-1].Delta.ToolCalls) > 0 {
+		resp.ToolChunk = llmchunk.Choices[len(llmchunk.Choices)-1].Delta.ToolCalls[0].Function.Arguments
+		fname := llmchunk.Choices[len(llmchunk.Choices)-1].Delta.ToolCalls[0].Function.Name
+		if fname != "" {
+			resp.FuncName = fname
+		}
+	}
+	if resp.ToolChunk != "" {
+		resp.ToolResp = true
+	}
+
 	if llmchunk.Choices[len(llmchunk.Choices)-1].FinishReason == "stop" {
 		if resp.Chunk != "" {
 			logger.Error("text inside of finish llmchunk", "chunk", llmchunk)
