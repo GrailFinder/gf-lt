@@ -31,6 +31,7 @@ type OpenRouterChatReq struct {
 	Temperature float32   `json:"temperature"`
 	MinP        float32   `json:"min_p"`
 	NPredict    int32     `json:"max_tokens"`
+	Tools       []Tool    `json:"tools"`
 }
 
 func NewOpenRouterChatReq(cb ChatBody, props map[string]float32) OpenRouterChatReq {
