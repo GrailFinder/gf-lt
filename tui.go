@@ -207,7 +207,7 @@ func init() {
 	app = tview.NewApplication()
 	pages = tview.NewPages()
 	textArea = tview.NewTextArea().
-		SetPlaceholder("Type your prompt...")
+		SetPlaceholder("input is multiline; press <Enter> to start the next line;\npress <Esc> to send the message.")
 	textArea.SetBorder(true).SetTitle("input")
 	textView = tview.NewTextView().
 		SetDynamicColors(true).
