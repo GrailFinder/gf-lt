@@ -160,11 +160,14 @@ func (op OpenAIer) ParseChunk(data []byte) (*models.TextChunk, error) {
 		Chunk: llmchunk.Choices[len(llmchunk.Choices)-1].Delta.Content,
 	}
 	if len(llmchunk.Choices[len(llmchunk.Choices)-1].Delta.ToolCalls) > 0 {
-		resp.ToolChunk = llmchunk.Choices[len(llmchunk.Choices)-1].Delta.ToolCalls[0].Function.Arguments
-		fname := llmchunk.Choices[len(llmchunk.Choices)-1].Delta.ToolCalls[0].Function.Name
+		toolCall := llmchunk.Choices[len(llmchunk.Choices)-1].Delta.ToolCalls[0]
+		resp.ToolChunk = toolCall.Function.Arguments
+		fname := toolCall.Function.Name
 		if fname != "" {
 			resp.FuncName = fname
 		}
+		// Capture the tool call ID if available
+		resp.ToolID = toolCall.ID
 	}
 	if llmchunk.Choices[len(llmchunk.Choices)-1].FinishReason == "stop" {
 		if resp.Chunk != "" {
@@ -471,11 +474,14 @@ func (or OpenRouterChat) ParseChunk(data []byte) (*models.TextChunk, error) {
 
 	// Handle tool calls similar to OpenAIer
 	if len(llmchunk.Choices[len(llmchunk.Choices)-1].Delta.ToolCalls) > 0 {
-		resp.ToolChunk = llmchunk.Choices[len(llmchunk.Choices)-1].Delta.ToolCalls[0].Function.Arguments
-		fname := llmchunk.Choices[len(llmchunk.Choices)-1].Delta.ToolCalls[0].Function.Name
+		toolCall := llmchunk.Choices[len(llmchunk.Choices)-1].Delta.ToolCalls[0]
+		resp.ToolChunk = toolCall.Function.Arguments
+		fname := toolCall.Function.Name
 		if fname != "" {
 			resp.FuncName = fname
 		}
+		// Capture the tool call ID if available
+		resp.ToolID = toolCall.ID
 	}
 	if resp.ToolChunk != "" {
 		resp.ToolResp = true

@@ -44,6 +44,7 @@ var (
 	ragger              *rag.RAG
 	chunkParser         ChunkParser
 	lastToolCall        *models.FuncCall
+	lastToolCallID      string  // Store the ID of the most recent tool call
 	//nolint:unused // TTS_ENABLED conditionally uses this
 	orator          extra.Orator
 	asr             extra.STT
@@ -290,6 +291,8 @@ func sendMsgToLLM(body io.Reader) {
 		openAIToolChan <- chunk.ToolChunk
 		if chunk.FuncName != "" {
 			lastToolCall.Name = chunk.FuncName
+			// Store the tool call ID for the response
+			lastToolCallID = chunk.ToolID
 		}
 	interrupt:
 		if interruptResp { // read bytes, so it would not get into beginning of the next req
@@ -492,14 +495,40 @@ func findCall(msg, toolCall string, tv *tview.TextView) {
 	f, ok := fnMap[fc.Name]
 	if !ok {
 		m := fc.Name + " is not implemented"
-		chatRound(m, cfg.ToolRole, tv, false, false)
+		// Create tool response message with the proper tool_call_id
+		toolResponseMsg := models.RoleMsg{
+			Role: cfg.ToolRole,
+			Content: m,
+			ToolCallID: lastToolCallID, // Use the stored tool call ID
+		}
+		chatBody.Messages = append(chatBody.Messages, toolResponseMsg)
+		// Clear the stored tool call ID after using it
+		lastToolCallID = ""
+
+		// Trigger the assistant to continue processing with the new tool response
+		// by calling chatRound with empty content to continue the assistant's response
+		chatRound("", cfg.AssistantRole, tv, false, false)
 		return
 	}
 	resp := f(fc.Args)
-	toolMsg := fmt.Sprintf("tool response: %+v", string(resp))
+	toolMsg := string(resp) // Remove the "tool response: " prefix and %+v formatting
 	fmt.Fprintf(tv, "%s[-:-:b](%d) <%s>: [-:-:-]\n%s\n",
 		"\n", len(chatBody.Messages), cfg.ToolRole, toolMsg)
-	chatRound(toolMsg, cfg.ToolRole, tv, false, false)
+
+	// Create tool response message with the proper tool_call_id
+	toolResponseMsg := models.RoleMsg{
+		Role: cfg.ToolRole,
+		Content: toolMsg,
+		ToolCallID: lastToolCallID, // Use the stored tool call ID
+	}
+	chatBody.Messages = append(chatBody.Messages, toolResponseMsg)
+
+	// Clear the stored tool call ID after using it
+	lastToolCallID = ""
+
+	// Trigger the assistant to continue processing with the new tool response
+	// by calling chatRound with empty content to continue the assistant's response
+	chatRound("", cfg.AssistantRole, tv, false, false)
 }
 
 func chatToTextSlice(showSys bool) []string {

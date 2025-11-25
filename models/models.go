@@ -9,6 +9,7 @@ import (
 )
 
 type FuncCall struct {
+	ID   string            `json:"id,omitempty"`
 	Name string            `json:"name"`
 	Args map[string]string `json:"args"`
 }
@@ -39,6 +40,7 @@ type ToolDeltaFunc struct {
 }
 
 type ToolDeltaResp struct {
+	ID       string        `json:"id,omitempty"`
 	Index    int           `json:"index"`
 	Function ToolDeltaFunc `json:"function"`
 }
@@ -70,6 +72,7 @@ type TextChunk struct {
 	Finished  bool
 	ToolResp  bool
 	FuncName  string
+	ToolID    string
 }
 
 type TextContentPart struct {
@@ -86,10 +89,11 @@ type ImageContentPart struct {
 
 // RoleMsg represents a message with content that can be either a simple string or structured content parts
 type RoleMsg struct {
-	Role        string          `json:"role"`
-	Content     string          `json:"-"`
-	ContentParts []interface{}   `json:"-"`
-	hasContentParts bool         // Flag to indicate which content type to marshal
+	Role          string          `json:"role"`
+	Content       string          `json:"-"`
+	ContentParts  []interface{}   `json:"-"`
+	ToolCallID    string          `json:"tool_call_id,omitempty"`  // For tool response messages
+	hasContentParts bool          // Flag to indicate which content type to marshal
 }
 
 // MarshalJSON implements custom JSON marshaling for RoleMsg
@@ -97,21 +101,25 @@ func (m RoleMsg) MarshalJSON() ([]byte, error) {
 	if m.hasContentParts {
 		// Use structured content format
 		aux := struct {
-			Role    string        `json:"role"`
-			Content []interface{} `json:"content"`
+			Role       string        `json:"role"`
+			Content    []interface{} `json:"content"`
+			ToolCallID string        `json:"tool_call_id,omitempty"`
 		}{
-			Role:    m.Role,
-			Content: m.ContentParts,
+			Role:       m.Role,
+			Content:    m.ContentParts,
+			ToolCallID: m.ToolCallID,
 		}
 		return json.Marshal(aux)
 	} else {
 		// Use simple content format
 		aux := struct {
-			Role    string `json:"role"`
-			Content string `json:"content"`
+			Role       string `json:"role"`
+			Content    string `json:"content"`
+			ToolCallID string `json:"tool_call_id,omitempty"`
 		}{
-			Role:    m.Role,
-			Content: m.Content,
+			Role:       m.Role,
+			Content:    m.Content,
+			ToolCallID: m.ToolCallID,
 		}
 		return json.Marshal(aux)
 	}
@@ -121,26 +129,30 @@ func (m RoleMsg) MarshalJSON() ([]byte, error) {
 func (m *RoleMsg) UnmarshalJSON(data []byte) error {
 	// First, try to unmarshal as structured content format
 	var structured struct {
-		Role    string        `json:"role"`
-		Content []interface{} `json:"content"`
+		Role       string        `json:"role"`
+		Content    []interface{} `json:"content"`
+		ToolCallID string        `json:"tool_call_id,omitempty"`
 	}
 	if err := json.Unmarshal(data, &structured); err == nil && len(structured.Content) > 0 {
 		m.Role = structured.Role
 		m.ContentParts = structured.Content
+		m.ToolCallID = structured.ToolCallID
 		m.hasContentParts = true
 		return nil
 	}
 
 	// Otherwise, unmarshal as simple content format
 	var simple struct {
-		Role    string `json:"role"`
-		Content string `json:"content"`
+		Role       string `json:"role"`
+		Content    string `json:"content"`
+		ToolCallID string `json:"tool_call_id,omitempty"`
 	}
 	if err := json.Unmarshal(data, &simple); err != nil {
 		return err
 	}
 	m.Role = simple.Role
 	m.Content = simple.Content
+	m.ToolCallID = simple.ToolCallID
 	m.hasContentParts = false
 	return nil
 }
