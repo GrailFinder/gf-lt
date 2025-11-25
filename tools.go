@@ -10,6 +10,9 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"os"
+	"io"
+	"os/exec"
 )
 
 var (
@@ -171,13 +174,370 @@ func recallTopics(args map[string]string) []byte {
 	return []byte(joinedS)
 }
 
+// File Manipulation Tools
+
+func fileCreate(args map[string]string) []byte {
+	path, ok := args["path"]
+	if !ok || path == "" {
+		msg := "path not provided to file_create tool"
+		logger.Error(msg)
+		return []byte(msg)
+	}
+
+	content, ok := args["content"]
+	if !ok {
+		content = ""
+	}
+
+	if err := writeStringToFile(path, content); err != nil {
+		msg := "failed to create file; error: " + err.Error()
+		logger.Error(msg)
+		return []byte(msg)
+	}
+
+	msg := "file created successfully at " + path
+	return []byte(msg)
+}
+
+func fileRead(args map[string]string) []byte {
+	path, ok := args["path"]
+	if !ok || path == "" {
+		msg := "path not provided to file_read tool"
+		logger.Error(msg)
+		return []byte(msg)
+	}
+
+	content, err := readStringFromFile(path)
+	if err != nil {
+		msg := "failed to read file; error: " + err.Error()
+		logger.Error(msg)
+		return []byte(msg)
+	}
+
+	result := map[string]string{
+		"content": content,
+		"path":    path,
+	}
+	jsonResult, err := json.Marshal(result)
+	if err != nil {
+		msg := "failed to marshal result; error: " + err.Error()
+		logger.Error(msg)
+		return []byte(msg)
+	}
+
+	return jsonResult
+}
+
+func fileUpdate(args map[string]string) []byte {
+	path, ok := args["path"]
+	if !ok || path == "" {
+		msg := "path not provided to file_update tool"
+		logger.Error(msg)
+		return []byte(msg)
+	}
+
+	content, ok := args["content"]
+	if !ok {
+		content = ""
+	}
+
+	mode, ok := args["mode"]
+	if !ok || mode == "" {
+		mode = "overwrite"
+	}
+
+	switch mode {
+	case "overwrite":
+		if err := writeStringToFile(path, content); err != nil {
+			msg := "failed to update file; error: " + err.Error()
+			logger.Error(msg)
+			return []byte(msg)
+		}
+	case "append":
+		if err := appendStringToFile(path, content); err != nil {
+			msg := "failed to append to file; error: " + err.Error()
+			logger.Error(msg)
+			return []byte(msg)
+		}
+	default:
+		msg := "invalid mode; use 'overwrite' or 'append'"
+		logger.Error(msg)
+		return []byte(msg)
+	}
+
+	msg := "file updated successfully at " + path
+	return []byte(msg)
+}
+
+func fileDelete(args map[string]string) []byte {
+	path, ok := args["path"]
+	if !ok || path == "" {
+		msg := "path not provided to file_delete tool"
+		logger.Error(msg)
+		return []byte(msg)
+	}
+
+	if err := removeFile(path); err != nil {
+		msg := "failed to delete file; error: " + err.Error()
+		logger.Error(msg)
+		return []byte(msg)
+	}
+
+	msg := "file deleted successfully at " + path
+	return []byte(msg)
+}
+
+func fileMove(args map[string]string) []byte {
+	src, ok := args["src"]
+	if !ok || src == "" {
+		msg := "source path not provided to file_move tool"
+		logger.Error(msg)
+		return []byte(msg)
+	}
+
+	dst, ok := args["dst"]
+	if !ok || dst == "" {
+		msg := "destination path not provided to file_move tool"
+		logger.Error(msg)
+		return []byte(msg)
+	}
+
+	if err := moveFile(src, dst); err != nil {
+		msg := "failed to move file; error: " + err.Error()
+		logger.Error(msg)
+		return []byte(msg)
+	}
+
+	msg := fmt.Sprintf("file moved successfully from %s to %s", src, dst)
+	return []byte(msg)
+}
+
+func fileCopy(args map[string]string) []byte {
+	src, ok := args["src"]
+	if !ok || src == "" {
+		msg := "source path not provided to file_copy tool"
+		logger.Error(msg)
+		return []byte(msg)
+	}
+
+	dst, ok := args["dst"]
+	if !ok || dst == "" {
+		msg := "destination path not provided to file_copy tool"
+		logger.Error(msg)
+		return []byte(msg)
+	}
+
+	if err := copyFile(src, dst); err != nil {
+		msg := "failed to copy file; error: " + err.Error()
+		logger.Error(msg)
+		return []byte(msg)
+	}
+
+	msg := fmt.Sprintf("file copied successfully from %s to %s", src, dst)
+	return []byte(msg)
+}
+
+func fileList(args map[string]string) []byte {
+	path, ok := args["path"]
+	if !ok || path == "" {
+		path = "." // default to current directory
+	}
+
+	files, err := listDirectory(path)
+	if err != nil {
+		msg := "failed to list directory; error: " + err.Error()
+		logger.Error(msg)
+		return []byte(msg)
+	}
+
+	result := map[string]interface{}{
+		"directory": path,
+		"files":     files,
+	}
+	jsonResult, err := json.Marshal(result)
+	if err != nil {
+		msg := "failed to marshal result; error: " + err.Error()
+		logger.Error(msg)
+		return []byte(msg)
+	}
+
+	return jsonResult
+}
+
+// Helper functions for file operations
+
+func readStringFromFile(filename string) (string, error) {
+    data, err := os.ReadFile(filename)
+    if err != nil {
+        return "", err
+    }
+    return string(data), nil
+}
+
+func writeStringToFile(filename string, data string) error {
+    return os.WriteFile(filename, []byte(data), 0644)
+}
+
+func appendStringToFile(filename string, data string) error {
+    file, err := os.OpenFile(filename, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+    if err != nil {
+        return err
+    }
+    defer file.Close()
+
+    _, err = file.WriteString(data)
+    return err
+}
+
+func removeFile(filename string) error {
+    return os.Remove(filename)
+}
+
+func moveFile(src, dst string) error {
+    // First try with os.Rename (works within same filesystem)
+    if err := os.Rename(src, dst); err == nil {
+        return nil
+    }
+    // If that fails (e.g., cross-filesystem), copy and delete
+    return copyAndRemove(src, dst)
+}
+
+func copyFile(src, dst string) error {
+    srcFile, err := os.Open(src)
+    if err != nil {
+        return err
+    }
+    defer srcFile.Close()
+
+    dstFile, err := os.Create(dst)
+    if err != nil {
+        return err
+    }
+    defer dstFile.Close()
+
+    _, err = io.Copy(dstFile, srcFile)
+    return err
+}
+
+func copyAndRemove(src, dst string) error {
+    // Copy the file
+    if err := copyFile(src, dst); err != nil {
+        return err
+    }
+    // Remove the source file
+    return os.Remove(src)
+}
+
+func listDirectory(path string) ([]string, error) {
+    entries, err := os.ReadDir(path)
+    if err != nil {
+        return nil, err
+    }
+
+    var files []string
+    for _, entry := range entries {
+        if entry.IsDir() {
+            files = append(files, entry.Name()+"/") // Add "/" to indicate directory
+        } else {
+            files = append(files, entry.Name())
+        }
+    }
+
+    return files, nil
+}
+
+// Command Execution Tool
+
+func executeCommand(args map[string]string) []byte {
+    command, ok := args["command"]
+    if !ok || command == "" {
+        msg := "command not provided to execute_command tool"
+        logger.Error(msg)
+        return []byte(msg)
+    }
+
+    if !isCommandAllowed(command) {
+        msg := fmt.Sprintf("command '%s' is not allowed", command)
+        logger.Error(msg)
+        return []byte(msg)
+    }
+
+    // Get arguments - handle both single arg and multiple args
+    var cmdArgs []string
+    if args["args"] != "" {
+        // If args is provided as a single string, split by spaces
+        cmdArgs = strings.Fields(args["args"])
+    } else {
+        // If individual args are provided, collect them
+        argNum := 1
+        for {
+            argKey := fmt.Sprintf("arg%d", argNum)
+            if argValue, exists := args[argKey]; exists && argValue != "" {
+                cmdArgs = append(cmdArgs, argValue)
+            } else {
+                break
+            }
+            argNum++
+        }
+    }
+
+    // Execute with timeout for safety
+    ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+    defer cancel()
+    cmd := exec.CommandContext(ctx, command, cmdArgs...)
+
+    output, err := cmd.CombinedOutput()
+    if err != nil {
+        msg := fmt.Sprintf("command '%s' failed; error: %v; output: %s", command, err, string(output))
+        logger.Error(msg)
+        return []byte(msg)
+    }
+
+    return output
+}
+
+// Helper functions for command execution
+
+func isCommandAllowed(command string) bool {
+    allowedCommands := map[string]bool{
+        "grep":  true,
+        "sed":   true,
+        "awk":   true,
+        "find":  true,
+        "cat":   true,
+        "head":  true,
+        "tail":  true,
+        "sort":  true,
+        "uniq":  true,
+        "wc":    true,
+        "ls":    true,
+        "echo":  true,
+        "cut":   true,
+        "tr":    true,
+        "cp":    true,
+        "mv":    true,
+        "rm":    true,
+        "mkdir": true,
+        "rmdir": true,
+    }
+    return allowedCommands[command]
+}
+
 type fnSig func(map[string]string) []byte
 
 var fnMap = map[string]fnSig{
-	"recall":        recall,
-	"recall_topics": recallTopics,
-	"memorise":      memorise,
-	"websearch":     websearch,
+	"recall":          recall,
+	"recall_topics":   recallTopics,
+	"memorise":        memorise,
+	"websearch":       websearch,
+	"file_create":     fileCreate,
+	"file_read":       fileRead,
+	"file_update":     fileUpdate,
+	"file_delete":     fileDelete,
+	"file_move":       fileMove,
+	"file_copy":       fileCopy,
+	"file_list":       fileList,
+	"execute_command": executeCommand,
 }
 
 // openai style def
@@ -254,6 +614,182 @@ var baseTools = []models.Tool{
 				Type:       "object",
 				Required:   []string{},
 				Properties: map[string]models.ToolArgProps{},
+			},
+		},
+	},
+
+	// file_create
+	models.Tool{
+		Type: "function",
+		Function: models.ToolFunc{
+			Name:        "file_create",
+			Description: "Create a new file with specified content. Use when you need to create a new file.",
+			Parameters: models.ToolFuncParams{
+				Type:     "object",
+				Required: []string{"path"},
+				Properties: map[string]models.ToolArgProps{
+					"path": models.ToolArgProps{
+						Type:        "string",
+						Description: "path where the file should be created",
+					},
+					"content": models.ToolArgProps{
+						Type:        "string",
+						Description: "content to write to the file (optional, defaults to empty string)",
+					},
+				},
+			},
+		},
+	},
+
+	// file_read
+	models.Tool{
+		Type: "function",
+		Function: models.ToolFunc{
+			Name:        "file_read",
+			Description: "Read the content of a file. Use when you need to see the content of a file.",
+			Parameters: models.ToolFuncParams{
+				Type:     "object",
+				Required: []string{"path"},
+				Properties: map[string]models.ToolArgProps{
+					"path": models.ToolArgProps{
+						Type:        "string",
+						Description: "path of the file to read",
+					},
+				},
+			},
+		},
+	},
+
+	// file_update
+	models.Tool{
+		Type: "function",
+		Function: models.ToolFunc{
+			Name:        "file_update",
+			Description: "Update a file with new content. Use when you want to modify an existing file (overwrite or append).",
+			Parameters: models.ToolFuncParams{
+				Type:     "object",
+				Required: []string{"path", "content"},
+				Properties: map[string]models.ToolArgProps{
+					"path": models.ToolArgProps{
+						Type:        "string",
+						Description: "path of the file to update",
+					},
+					"content": models.ToolArgProps{
+						Type:        "string",
+						Description: "content to write to the file",
+					},
+					"mode": models.ToolArgProps{
+						Type:        "string",
+						Description: "update mode: 'overwrite' to replace entire file content, 'append' to add to the end (defaults to 'overwrite')",
+					},
+				},
+			},
+		},
+	},
+
+	// file_delete
+	models.Tool{
+		Type: "function",
+		Function: models.ToolFunc{
+			Name:        "file_delete",
+			Description: "Delete a file. Use when you need to remove a file.",
+			Parameters: models.ToolFuncParams{
+				Type:     "object",
+				Required: []string{"path"},
+				Properties: map[string]models.ToolArgProps{
+					"path": models.ToolArgProps{
+						Type:        "string",
+						Description: "path of the file to delete",
+					},
+				},
+			},
+		},
+	},
+
+	// file_move
+	models.Tool{
+		Type: "function",
+		Function: models.ToolFunc{
+			Name:        "file_move",
+			Description: "Move a file from one location to another. Use when you need to relocate a file.",
+			Parameters: models.ToolFuncParams{
+				Type:     "object",
+				Required: []string{"src", "dst"},
+				Properties: map[string]models.ToolArgProps{
+					"src": models.ToolArgProps{
+						Type:        "string",
+						Description: "source path of the file to move",
+					},
+					"dst": models.ToolArgProps{
+						Type:        "string",
+						Description: "destination path where the file should be moved",
+					},
+				},
+			},
+		},
+	},
+
+	// file_copy
+	models.Tool{
+		Type: "function",
+		Function: models.ToolFunc{
+			Name:        "file_copy",
+			Description: "Copy a file from one location to another. Use when you need to duplicate a file.",
+			Parameters: models.ToolFuncParams{
+				Type:     "object",
+				Required: []string{"src", "dst"},
+				Properties: map[string]models.ToolArgProps{
+					"src": models.ToolArgProps{
+						Type:        "string",
+						Description: "source path of the file to copy",
+					},
+					"dst": models.ToolArgProps{
+						Type:        "string",
+						Description: "destination path where the file should be copied",
+					},
+				},
+			},
+		},
+	},
+
+	// file_list
+	models.Tool{
+		Type: "function",
+		Function: models.ToolFunc{
+			Name:        "file_list",
+			Description: "List files and directories in a directory. Use when you need to see what files are in a directory.",
+			Parameters: models.ToolFuncParams{
+				Type:     "object",
+				Required: []string{},
+				Properties: map[string]models.ToolArgProps{
+					"path": models.ToolArgProps{
+						Type:        "string",
+						Description: "path of the directory to list (optional, defaults to current directory)",
+					},
+				},
+			},
+		},
+	},
+
+	// execute_command
+	models.Tool{
+		Type: "function",
+		Function: models.ToolFunc{
+			Name:        "execute_command",
+			Description: "Execute a shell command safely. Use when you need to run system commands like grep, sed, awk, cat, head, tail, find, etc.",
+			Parameters: models.ToolFuncParams{
+				Type:     "object",
+				Required: []string{"command"},
+				Properties: map[string]models.ToolArgProps{
+					"command": models.ToolArgProps{
+						Type:        "string",
+						Description: "command to execute (only commands from whitelist are allowed: grep, sed, awk, cat, head, tail, find, etc.)",
+					},
+					"args": models.ToolArgProps{
+						Type:        "string",
+						Description: "command arguments as a single string (e.g., 'pattern file.txt')",
+					},
+				},
 			},
 		},
 	},
