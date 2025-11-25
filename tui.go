@@ -70,7 +70,7 @@ var (
 [yellow]Ctrl+v[white]: switch between /completion and /chat api (if provided in config)
 [yellow]Ctrl+r[white]: start/stop recording from your microphone (needs stt server)
 [yellow]Ctrl+t[white]: remove thinking (<think>) and tool messages from context (delete from chat)
-[yellow]Ctrl+l[white]: update connected model name (llamacpp)
+[yellow]Ctrl+l[white]: rotate through free OpenRouter models (if openrouter api) or update connected model name (llamacpp)
 [yellow]Ctrl+k[white]: switch tool use (recommend tool use to llm after user msg)
 [yellow]Ctrl+j[white]: if chat agent is char.png will show the image; then any key to return
 [yellow]Ctrl+a[white]: interrupt tts (needs tts server)
@@ -547,10 +547,21 @@ func init() {
 			return nil
 		}
 		if event.Key() == tcell.KeyCtrlL {
-			go func() {
-				fetchLCPModelName() // blocks
+			// Check if the current API is an OpenRouter API
+			if strings.Contains(cfg.CurrentAPI, "openrouter.ai/api/v1/") {
+				// Rotate through OpenRouter free models
+				if len(ORFreeModels) > 0 {
+					currentORModelIndex = (currentORModelIndex + 1) % len(ORFreeModels)
+					chatBody.Model = ORFreeModels[currentORModelIndex]
+				}
 				updateStatusLine()
-			}()
+			} else {
+				// For non-OpenRouter APIs, use the old logic
+				go func() {
+					fetchLCPModelName() // blocks
+					updateStatusLine()
+				}()
+			}
 			return nil
 		}
 		if event.Key() == tcell.KeyCtrlT {
