@@ -6,13 +6,13 @@ import (
 	"fmt"
 	"gf-lt/extra"
 	"gf-lt/models"
+	"io"
+	"os"
+	"os/exec"
 	"regexp"
 	"strconv"
 	"strings"
 	"time"
-	"os"
-	"io"
-	"os/exec"
 )
 
 var (
@@ -367,160 +367,160 @@ func fileList(args map[string]string) []byte {
 // Helper functions for file operations
 
 func readStringFromFile(filename string) (string, error) {
-    data, err := os.ReadFile(filename)
-    if err != nil {
-        return "", err
-    }
-    return string(data), nil
+	data, err := os.ReadFile(filename)
+	if err != nil {
+		return "", err
+	}
+	return string(data), nil
 }
 
 func writeStringToFile(filename string, data string) error {
-    return os.WriteFile(filename, []byte(data), 0644)
+	return os.WriteFile(filename, []byte(data), 0644)
 }
 
 func appendStringToFile(filename string, data string) error {
-    file, err := os.OpenFile(filename, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-    if err != nil {
-        return err
-    }
-    defer file.Close()
+	file, err := os.OpenFile(filename, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
 
-    _, err = file.WriteString(data)
-    return err
+	_, err = file.WriteString(data)
+	return err
 }
 
 func removeFile(filename string) error {
-    return os.Remove(filename)
+	return os.Remove(filename)
 }
 
 func moveFile(src, dst string) error {
-    // First try with os.Rename (works within same filesystem)
-    if err := os.Rename(src, dst); err == nil {
-        return nil
-    }
-    // If that fails (e.g., cross-filesystem), copy and delete
-    return copyAndRemove(src, dst)
+	// First try with os.Rename (works within same filesystem)
+	if err := os.Rename(src, dst); err == nil {
+		return nil
+	}
+	// If that fails (e.g., cross-filesystem), copy and delete
+	return copyAndRemove(src, dst)
 }
 
 func copyFile(src, dst string) error {
-    srcFile, err := os.Open(src)
-    if err != nil {
-        return err
-    }
-    defer srcFile.Close()
+	srcFile, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer srcFile.Close()
 
-    dstFile, err := os.Create(dst)
-    if err != nil {
-        return err
-    }
-    defer dstFile.Close()
+	dstFile, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	defer dstFile.Close()
 
-    _, err = io.Copy(dstFile, srcFile)
-    return err
+	_, err = io.Copy(dstFile, srcFile)
+	return err
 }
 
 func copyAndRemove(src, dst string) error {
-    // Copy the file
-    if err := copyFile(src, dst); err != nil {
-        return err
-    }
-    // Remove the source file
-    return os.Remove(src)
+	// Copy the file
+	if err := copyFile(src, dst); err != nil {
+		return err
+	}
+	// Remove the source file
+	return os.Remove(src)
 }
 
 func listDirectory(path string) ([]string, error) {
-    entries, err := os.ReadDir(path)
-    if err != nil {
-        return nil, err
-    }
+	entries, err := os.ReadDir(path)
+	if err != nil {
+		return nil, err
+	}
 
-    var files []string
-    for _, entry := range entries {
-        if entry.IsDir() {
-            files = append(files, entry.Name()+"/") // Add "/" to indicate directory
-        } else {
-            files = append(files, entry.Name())
-        }
-    }
+	var files []string
+	for _, entry := range entries {
+		if entry.IsDir() {
+			files = append(files, entry.Name()+"/") // Add "/" to indicate directory
+		} else {
+			files = append(files, entry.Name())
+		}
+	}
 
-    return files, nil
+	return files, nil
 }
 
 // Command Execution Tool
 
 func executeCommand(args map[string]string) []byte {
-    command, ok := args["command"]
-    if !ok || command == "" {
-        msg := "command not provided to execute_command tool"
-        logger.Error(msg)
-        return []byte(msg)
-    }
+	command, ok := args["command"]
+	if !ok || command == "" {
+		msg := "command not provided to execute_command tool"
+		logger.Error(msg)
+		return []byte(msg)
+	}
 
-    if !isCommandAllowed(command) {
-        msg := fmt.Sprintf("command '%s' is not allowed", command)
-        logger.Error(msg)
-        return []byte(msg)
-    }
+	if !isCommandAllowed(command) {
+		msg := fmt.Sprintf("command '%s' is not allowed", command)
+		logger.Error(msg)
+		return []byte(msg)
+	}
 
-    // Get arguments - handle both single arg and multiple args
-    var cmdArgs []string
-    if args["args"] != "" {
-        // If args is provided as a single string, split by spaces
-        cmdArgs = strings.Fields(args["args"])
-    } else {
-        // If individual args are provided, collect them
-        argNum := 1
-        for {
-            argKey := fmt.Sprintf("arg%d", argNum)
-            if argValue, exists := args[argKey]; exists && argValue != "" {
-                cmdArgs = append(cmdArgs, argValue)
-            } else {
-                break
-            }
-            argNum++
-        }
-    }
+	// Get arguments - handle both single arg and multiple args
+	var cmdArgs []string
+	if args["args"] != "" {
+		// If args is provided as a single string, split by spaces
+		cmdArgs = strings.Fields(args["args"])
+	} else {
+		// If individual args are provided, collect them
+		argNum := 1
+		for {
+			argKey := fmt.Sprintf("arg%d", argNum)
+			if argValue, exists := args[argKey]; exists && argValue != "" {
+				cmdArgs = append(cmdArgs, argValue)
+			} else {
+				break
+			}
+			argNum++
+		}
+	}
 
-    // Execute with timeout for safety
-    ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-    defer cancel()
-    cmd := exec.CommandContext(ctx, command, cmdArgs...)
+	// Execute with timeout for safety
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, command, cmdArgs...)
 
-    output, err := cmd.CombinedOutput()
-    if err != nil {
-        msg := fmt.Sprintf("command '%s' failed; error: %v; output: %s", command, err, string(output))
-        logger.Error(msg)
-        return []byte(msg)
-    }
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		msg := fmt.Sprintf("command '%s' failed; error: %v; output: %s", command, err, string(output))
+		logger.Error(msg)
+		return []byte(msg)
+	}
 
-    return output
+	return output
 }
 
 // Helper functions for command execution
 
 func isCommandAllowed(command string) bool {
-    allowedCommands := map[string]bool{
-        "grep":  true,
-        "sed":   true,
-        "awk":   true,
-        "find":  true,
-        "cat":   true,
-        "head":  true,
-        "tail":  true,
-        "sort":  true,
-        "uniq":  true,
-        "wc":    true,
-        "ls":    true,
-        "echo":  true,
-        "cut":   true,
-        "tr":    true,
-        "cp":    true,
-        "mv":    true,
-        "rm":    true,
-        "mkdir": true,
-        "rmdir": true,
-    }
-    return allowedCommands[command]
+	allowedCommands := map[string]bool{
+		"grep":  true,
+		"sed":   true,
+		"awk":   true,
+		"find":  true,
+		"cat":   true,
+		"head":  true,
+		"tail":  true,
+		"sort":  true,
+		"uniq":  true,
+		"wc":    true,
+		"ls":    true,
+		"echo":  true,
+		"cut":   true,
+		"tr":    true,
+		"cp":    true,
+		"mv":    true,
+		"rm":    true,
+		"mkdir": true,
+		"rmdir": true,
+	}
+	return allowedCommands[command]
 }
 
 type fnSig func(map[string]string) []byte
@@ -776,14 +776,14 @@ var baseTools = []models.Tool{
 		Type: "function",
 		Function: models.ToolFunc{
 			Name:        "execute_command",
-			Description: "Execute a shell command safely. Use when you need to run system commands like grep, sed, awk, cat, head, tail, find, etc.",
+			Description: "Execute a shell command safely. Use when you need to run system commands like grep sed awk find cat head tail sort uniq wc ls echo cut tr cp mv rm mkdir rmdir",
 			Parameters: models.ToolFuncParams{
 				Type:     "object",
 				Required: []string{"command"},
 				Properties: map[string]models.ToolArgProps{
 					"command": models.ToolArgProps{
 						Type:        "string",
-						Description: "command to execute (only commands from whitelist are allowed: grep, sed, awk, cat, head, tail, find, etc.)",
+						Description: "command to execute (only commands from whitelist are allowed: grep sed awk find cat head tail sort uniq wc ls echo cut tr cp mv rm mkdir rmdir",
 					},
 					"args": models.ToolArgProps{
 						Type:        "string",
