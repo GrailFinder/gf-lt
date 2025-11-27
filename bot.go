@@ -11,6 +11,7 @@ import (
 	"gf-lt/models"
 	"gf-lt/rag"
 	"gf-lt/storage"
+	"html"
 	"io"
 	"log/slog"
 	"net"
@@ -473,10 +474,23 @@ out:
 func findCall(msg, toolCall string, tv *tview.TextView) {
 	fc := &models.FuncCall{}
 	if toolCall != "" {
+		// HTML-decode the tool call string to handle encoded characters like &lt; -> <=
+		decodedToolCall := html.UnescapeString(toolCall)
 		openAIToolMap := make(map[string]string)
 		// respect tool call
-		if err := json.Unmarshal([]byte(toolCall), &openAIToolMap); err != nil {
-			logger.Error("failed to unmarshal openai tool call", "call", toolCall, "error", err)
+		if err := json.Unmarshal([]byte(decodedToolCall), &openAIToolMap); err != nil {
+			logger.Error("failed to unmarshal openai tool call", "call", decodedToolCall, "error", err)
+			// Send error response to LLM so it can retry or handle the error
+			toolResponseMsg := models.RoleMsg{
+				Role:       cfg.ToolRole,
+				Content:    fmt.Sprintf("Error processing tool call: %v. Please check the JSON format and try again.", err),
+				ToolCallID: lastToolCallID, // Use the stored tool call ID
+			}
+			chatBody.Messages = append(chatBody.Messages, toolResponseMsg)
+			// Clear the stored tool call ID after using it
+			lastToolCallID = ""
+			// Trigger the assistant to continue processing with the error message
+			chatRound("", cfg.AssistantRole, tv, false, false)
 			return
 		}
 		lastToolCall.Args = openAIToolMap
@@ -489,8 +503,18 @@ func findCall(msg, toolCall string, tv *tview.TextView) {
 		prefix := "__tool_call__\n"
 		suffix := "\n__tool_call__"
 		jsStr = strings.TrimSuffix(strings.TrimPrefix(jsStr, prefix), suffix)
-		if err := json.Unmarshal([]byte(jsStr), &fc); err != nil {
-			logger.Error("failed to unmarshal tool call", "error", err, "json_string", jsStr)
+		// HTML-decode the JSON string to handle encoded characters like &lt; -> <=
+		decodedJsStr := html.UnescapeString(jsStr)
+		if err := json.Unmarshal([]byte(decodedJsStr), &fc); err != nil {
+			logger.Error("failed to unmarshal tool call", "error", err, "json_string", decodedJsStr)
+			// Send error response to LLM so it can retry or handle the error
+			toolResponseMsg := models.RoleMsg{
+				Role:    cfg.ToolRole,
+				Content: fmt.Sprintf("Error processing tool call: %v. Please check the JSON format and try again.", err),
+			}
+			chatBody.Messages = append(chatBody.Messages, toolResponseMsg)
+			// Trigger the assistant to continue processing with the error message
+			chatRound("", cfg.AssistantRole, tv, false, false)
 			return
 		}
 	}

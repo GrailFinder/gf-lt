@@ -228,10 +228,10 @@ func fileRead(args map[string]string) []byte {
 	return jsonResult
 }
 
-func fileUpdate(args map[string]string) []byte {
+func fileWrite(args map[string]string) []byte {
 	path, ok := args["path"]
 	if !ok || path == "" {
-		msg := "path not provided to file_update tool"
+		msg := "path not provided to file_write tool"
 		logger.Error(msg)
 		return []byte(msg)
 	}
@@ -249,7 +249,7 @@ func fileUpdate(args map[string]string) []byte {
 	switch mode {
 	case "overwrite":
 		if err := writeStringToFile(path, content); err != nil {
-			msg := "failed to update file; error: " + err.Error()
+			msg := "failed to write to file; error: " + err.Error()
 			logger.Error(msg)
 			return []byte(msg)
 		}
@@ -265,7 +265,7 @@ func fileUpdate(args map[string]string) []byte {
 		return []byte(msg)
 	}
 
-	msg := "file updated successfully at " + path
+	msg := "file written successfully at " + path
 	return []byte(msg)
 }
 
@@ -533,7 +533,7 @@ var fnMap = map[string]fnSig{
 	"websearch":       websearch,
 	"file_create":     fileCreate,
 	"file_read":       fileRead,
-	"file_update":     fileUpdate,
+	"file_write":      fileWrite,
 	"file_delete":     fileDelete,
 	"file_move":       fileMove,
 	"file_copy":       fileCopy,
@@ -661,19 +661,19 @@ var baseTools = []models.Tool{
 		},
 	},
 
-	// file_update
+	// file_write
 	models.Tool{
 		Type: "function",
 		Function: models.ToolFunc{
-			Name:        "file_update",
-			Description: "Update a file with new content. Use when you want to modify an existing file (overwrite or append).",
+			Name:        "file_write",
+			Description: "Write content to a file. Use when you want to create or modify a file (overwrite or append).",
 			Parameters: models.ToolFuncParams{
 				Type:     "object",
 				Required: []string{"path", "content"},
 				Properties: map[string]models.ToolArgProps{
 					"path": models.ToolArgProps{
 						Type:        "string",
-						Description: "path of the file to update",
+						Description: "path of the file to write to",
 					},
 					"content": models.ToolArgProps{
 						Type:        "string",
@@ -681,7 +681,7 @@ var baseTools = []models.Tool{
 					},
 					"mode": models.ToolArgProps{
 						Type:        "string",
-						Description: "update mode: 'overwrite' to replace entire file content, 'append' to add to the end (defaults to 'overwrite')",
+						Description: "write mode: 'overwrite' to replace entire file content, 'append' to add to the end (defaults to 'overwrite')",
 					},
 				},
 			},
