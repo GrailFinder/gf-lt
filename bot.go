@@ -44,7 +44,7 @@ var (
 	ragger              *rag.RAG
 	chunkParser         ChunkParser
 	lastToolCall        *models.FuncCall
-	lastToolCallID      string  // Store the ID of the most recent tool call
+	lastToolCallID      string // Store the ID of the most recent tool call
 	//nolint:unused // TTS_ENABLED conditionally uses this
 	orator          extra.Orator
 	asr             extra.STT
@@ -190,8 +190,7 @@ func sendMsgToLLM(body io.Reader) {
 			}
 		} else {
 			// Log the request body for debugging
-			logger.Info("sending request to API", "api", cfg.CurrentAPI, "body", string(bodyBytes))
-
+			logger.Debug("sending request to API", "api", cfg.CurrentAPI, "body", string(bodyBytes))
 			// Create request with the captured body
 			req, err = http.NewRequest("POST", cfg.CurrentAPI, bytes.NewReader(bodyBytes))
 			if err != nil {
@@ -239,6 +238,9 @@ func sendMsgToLLM(body io.Reader) {
 			logger.Error("error reading response body", "error", err, "line", string(line),
 				"user_role", cfg.UserRole, "parser", chunkParser, "link", cfg.CurrentAPI)
 			// if err.Error() != "EOF" {
+			if err := notifyUser("API error", err.Error()); err != nil {
+				logger.Error("failed to notify", "error", err)
+			}
 			streamDone <- true
 			break
 			// }
@@ -268,11 +270,12 @@ func sendMsgToLLM(body io.Reader) {
 			break
 		}
 		// Handle error messages in response content
-		if string(line) != "" && strings.Contains(strings.ToLower(string(line)), "error") {
-			logger.Error("API error response detected", "line", line, "url", cfg.CurrentAPI)
-			streamDone <- true
-			break
-		}
+		// example needed, since llm could use the word error in the normal msg
+		// if string(line) != "" && strings.Contains(strings.ToLower(string(line)), "error") {
+		// 	logger.Error("API error response detected", "line", line, "url", cfg.CurrentAPI)
+		// 	streamDone <- true
+		// 	break
+		// }
 		if chunk.Finished {
 			if chunk.Chunk != "" {
 				logger.Warn("text inside of finish llmchunk", "chunk", chunk, "counter", counter)
@@ -497,8 +500,8 @@ func findCall(msg, toolCall string, tv *tview.TextView) {
 		m := fc.Name + " is not implemented"
 		// Create tool response message with the proper tool_call_id
 		toolResponseMsg := models.RoleMsg{
-			Role: cfg.ToolRole,
-			Content: m,
+			Role:       cfg.ToolRole,
+			Content:    m,
 			ToolCallID: lastToolCallID, // Use the stored tool call ID
 		}
 		chatBody.Messages = append(chatBody.Messages, toolResponseMsg)
@@ -512,20 +515,18 @@ func findCall(msg, toolCall string, tv *tview.TextView) {
 	}
 	resp := f(fc.Args)
 	toolMsg := string(resp) // Remove the "tool response: " prefix and %+v formatting
+	logger.Info("llm used tool call", "tool_resp", toolMsg, "tool_attrs", fc)
 	fmt.Fprintf(tv, "%s[-:-:b](%d) <%s>: [-:-:-]\n%s\n",
 		"\n", len(chatBody.Messages), cfg.ToolRole, toolMsg)
-
 	// Create tool response message with the proper tool_call_id
 	toolResponseMsg := models.RoleMsg{
-		Role: cfg.ToolRole,
-		Content: toolMsg,
+		Role:       cfg.ToolRole,
+		Content:    toolMsg,
 		ToolCallID: lastToolCallID, // Use the stored tool call ID
 	}
 	chatBody.Messages = append(chatBody.Messages, toolResponseMsg)
-
 	// Clear the stored tool call ID after using it
 	lastToolCallID = ""
-
 	// Trigger the assistant to continue processing with the new tool response
 	// by calling chatRound with empty content to continue the assistant's response
 	chatRound("", cfg.AssistantRole, tv, false, false)
