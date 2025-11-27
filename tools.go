@@ -500,25 +500,27 @@ func executeCommand(args map[string]string) []byte {
 
 func isCommandAllowed(command string) bool {
 	allowedCommands := map[string]bool{
-		"grep":  true,
-		"sed":   true,
-		"awk":   true,
-		"find":  true,
-		"cat":   true,
-		"head":  true,
-		"tail":  true,
-		"sort":  true,
-		"uniq":  true,
-		"wc":    true,
-		"ls":    true,
-		"echo":  true,
-		"cut":   true,
-		"tr":    true,
-		"cp":    true,
-		"mv":    true,
-		"rm":    true,
-		"mkdir": true,
-		"rmdir": true,
+		"grep":     true,
+		"sed":      true,
+		"awk":      true,
+		"find":     true,
+		"cat":      true,
+		"head":     true,
+		"tail":     true,
+		"sort":     true,
+		"uniq":     true,
+		"wc":       true,
+		"ls":       true,
+		"echo":     true,
+		"cut":      true,
+		"tr":       true,
+		"cp":       true,
+		"mv":       true,
+		"rm":       true,
+		"mkdir":    true,
+		"rmdir":    true,
+		"pwd":      true,
+		"realpath": true,
 	}
 	return allowedCommands[command]
 }
@@ -776,18 +778,18 @@ var baseTools = []models.Tool{
 		Type: "function",
 		Function: models.ToolFunc{
 			Name:        "execute_command",
-			Description: "Execute a shell command safely. Use when you need to run system commands like grep sed awk find cat head tail sort uniq wc ls echo cut tr cp mv rm mkdir rmdir",
+			Description: "Execute a shell command safely. Use when you need to run system commands like grep sed awk find cat head tail sort uniq wc ls echo cut tr cp mv rm mkdir rmdir pwd realpath",
 			Parameters: models.ToolFuncParams{
 				Type:     "object",
 				Required: []string{"command"},
 				Properties: map[string]models.ToolArgProps{
 					"command": models.ToolArgProps{
 						Type:        "string",
-						Description: "command to execute (only commands from whitelist are allowed: grep sed awk find cat head tail sort uniq wc ls echo cut tr cp mv rm mkdir rmdir",
+						Description: "command to execute (only commands from whitelist are allowed: grep sed awk find cat head tail sort uniq wc ls echo cut tr cp mv rm mkdir rmdir pwd realpath",
 					},
 					"args": models.ToolArgProps{
 						Type:        "string",
-						Description: "command arguments as a single string (e.g., 'pattern file.txt')",
+						Description: "command arguments as a single string (e.g., '-la {path}')",
 					},
 				},
 			},
