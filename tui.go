@@ -79,6 +79,11 @@ var (
 [yellow]Ctrl+q[white]: cycle through mentioned chars in chat, to pick persona to send next msg as
 [yellow]Ctrl+x[white]: cycle through mentioned chars in chat, to pick persona to send next msg as (for llm)
 
+=== scrolling chat window (some keys similar to vim) ===
+[yellow]arrows up/down and j/k[white]: scroll up and down
+[yellow]gg/G[white]: jump to the begging / end of the chat
+
+=== status line ===
 %s
 
 Press Enter to go back
