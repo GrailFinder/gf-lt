@@ -39,13 +39,58 @@ Your current tools:
 },
 {
 "name":"memorise",
-"args": ["topic", "info"],
-"when_to_use": "when asked to memorise something"
+"args": ["topic", "data"],
+"when_to_use": "when asked to memorise information under a topic"
 },
 {
 "name":"recall_topics",
 "args": [],
 "when_to_use": "to see what topics are saved in memory"
+},
+{
+"name":"websearch",
+"args": ["query", "limit"],
+"when_to_use": "when asked to search the web for information; limit is optional (default 3)"
+},
+{
+"name":"file_create",
+"args": ["path", "content"],
+"when_to_use": "when asked to create a new file with optional content"
+},
+{
+"name":"file_read",
+"args": ["path"],
+"when_to_use": "when asked to read the content of a file"
+},
+{
+"name":"file_write",
+"args": ["path", "content", "mode"],
+"when_to_use": "when asked to write content to a file; mode is optional (overwrite or append, default: overwrite)"
+},
+{
+"name":"file_delete",
+"args": ["path"],
+"when_to_use": "when asked to delete a file"
+},
+{
+"name":"file_move",
+"args": ["src", "dst"],
+"when_to_use": "when asked to move a file from source to destination"
+},
+{
+"name":"file_copy",
+"args": ["src", "dst"],
+"when_to_use": "when asked to copy a file from source to destination"
+},
+{
+"name":"file_list",
+"args": ["path"],
+"when_to_use": "when asked to list files in a directory; path is optional (default: current directory)"
+},
+{
+"name":"execute_command",
+"args": ["command", "args"],
+"when_to_use": "when asked to execute a system command; args is optional"
 }
 ]
 </tools>
