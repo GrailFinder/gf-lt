@@ -30,6 +30,7 @@ var (
 	defaultImage    = "sysprompts/llama.png"
 	indexPickWindow *tview.InputField
 	renameWindow    *tview.InputField
+	fullscreenMode  bool
 	// pages
 	historyPage    = "historyPage"
 	agentPage      = "agentPage"
@@ -78,6 +79,7 @@ var (
 [yellow]Ctrl+y[white]: list loaded RAG files (view and manage loaded files)
 [yellow]Ctrl+q[white]: cycle through mentioned chars in chat, to pick persona to send next msg as
 [yellow]Ctrl+x[white]: cycle through mentioned chars in chat, to pick persona to send next msg as (for llm)
+[yellow]Alt+5[white]: toggle fullscreen for input/chat window
 
 %s
 
@@ -393,6 +395,32 @@ func init() {
 		logger.Error("failed to init sys cards", "error", err)
 	}
 	app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		if event.Key() == tcell.KeyRune && event.Rune() == '5' && event.Modifiers()&tcell.ModAlt != 0 {
+			fullscreenMode = !fullscreenMode
+			focused := app.GetFocus()
+			if fullscreenMode {
+				if focused == textArea || focused == textView {
+					flex.Clear()
+					flex.AddItem(focused, 0, 1, true)
+				} else {
+					// if focus is not on textarea or textview, cancel fullscreen
+					fullscreenMode = false
+				}
+			} else {
+				// focused is the fullscreened widget here
+				flex.Clear().
+					AddItem(textView, 0, 40, false).
+					AddItem(textArea, 0, 10, false).
+					AddItem(position, 0, 2, false)
+
+				if focused == textView {
+					app.SetFocus(textView)
+				} else { // default to textArea
+					app.SetFocus(textArea)
+				}
+			}
+			return nil
+		}
 		if event.Key() == tcell.KeyF1 {
 			// chatList, err := loadHistoryChats()
 			chatList, err := store.GetChatByChar(cfg.AssistantRole)
