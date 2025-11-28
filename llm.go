@@ -76,7 +76,6 @@ type OpenRouterChat struct {
 	Model string
 }
 
-
 func (lcp LlamaCPPeer) GetToken() string {
 	return ""
 }
@@ -161,11 +160,14 @@ func (op OpenAIer) ParseChunk(data []byte) (*models.TextChunk, error) {
 		Chunk: llmchunk.Choices[len(llmchunk.Choices)-1].Delta.Content,
 	}
 	if len(llmchunk.Choices[len(llmchunk.Choices)-1].Delta.ToolCalls) > 0 {
-		resp.ToolChunk = llmchunk.Choices[len(llmchunk.Choices)-1].Delta.ToolCalls[0].Function.Arguments
-		fname := llmchunk.Choices[len(llmchunk.Choices)-1].Delta.ToolCalls[0].Function.Name
+		toolCall := llmchunk.Choices[len(llmchunk.Choices)-1].Delta.ToolCalls[0]
+		resp.ToolChunk = toolCall.Function.Arguments
+		fname := toolCall.Function.Name
 		if fname != "" {
 			resp.FuncName = fname
 		}
+		// Capture the tool call ID if available
+		resp.ToolID = toolCall.ID
 	}
 	if llmchunk.Choices[len(llmchunk.Choices)-1].FinishReason == "stop" {
 		if resp.Chunk != "" {
@@ -469,6 +471,22 @@ func (or OpenRouterChat) ParseChunk(data []byte) (*models.TextChunk, error) {
 	resp := &models.TextChunk{
 		Chunk: llmchunk.Choices[len(llmchunk.Choices)-1].Delta.Content,
 	}
+
+	// Handle tool calls similar to OpenAIer
+	if len(llmchunk.Choices[len(llmchunk.Choices)-1].Delta.ToolCalls) > 0 {
+		toolCall := llmchunk.Choices[len(llmchunk.Choices)-1].Delta.ToolCalls[0]
+		resp.ToolChunk = toolCall.Function.Arguments
+		fname := toolCall.Function.Name
+		if fname != "" {
+			resp.FuncName = fname
+		}
+		// Capture the tool call ID if available
+		resp.ToolID = toolCall.ID
+	}
+	if resp.ToolChunk != "" {
+		resp.ToolResp = true
+	}
+
 	if llmchunk.Choices[len(llmchunk.Choices)-1].FinishReason == "stop" {
 		if resp.Chunk != "" {
 			logger.Error("text inside of finish llmchunk", "chunk", llmchunk)
@@ -484,16 +502,9 @@ func (or OpenRouterChat) GetToken() string {
 
 func (or OpenRouterChat) FormMsg(msg, role string, resume bool) (io.Reader, error) {
 	logger.Debug("formmsg open router completion", "link", cfg.CurrentAPI)
-
 	// Capture the image attachment path at the beginning to avoid race conditions
 	// with API rotation that might clear the global variable
 	localImageAttachmentPath := imageAttachmentPath
-
-	if cfg.ToolUse && !resume {
-		// prompt += "\n" + cfg.ToolRole + ":\n" + toolSysMsg
-		// add to chat body
-		chatBody.Messages = append(chatBody.Messages, models.RoleMsg{Role: cfg.ToolRole, Content: toolSysMsg})
-	}
 	if msg != "" { // otherwise let the bot continue
 		var newMsg models.RoleMsg
 		// Check if we have an image to add to this message
@@ -536,7 +547,6 @@ func (or OpenRouterChat) FormMsg(msg, role string, resume bool) (io.Reader, erro
 		Model:    chatBody.Model,
 		Stream:   chatBody.Stream,
 	}
-
 	for i, msg := range chatBody.Messages {
 		bodyCopy.Messages[i] = msg
 		// Standardize role if it's a user role
@@ -544,8 +554,10 @@ func (or OpenRouterChat) FormMsg(msg, role string, resume bool) (io.Reader, erro
 			bodyCopy.Messages[i].Role = "user"
 		}
 	}
-
 	orBody := models.NewOpenRouterChatReq(*bodyCopy, defaultLCPProps)
+	if cfg.ToolUse && !resume && role != cfg.ToolRole {
+		orBody.Tools = baseTools // set tools to use
+	}
 	data, err := json.Marshal(orBody)
 	if err != nil {
 		logger.Error("failed to form a msg", "error", err)

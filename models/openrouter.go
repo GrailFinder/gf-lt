@@ -31,6 +31,7 @@ type OpenRouterChatReq struct {
 	Temperature float32   `json:"temperature"`
 	MinP        float32   `json:"min_p"`
 	NPredict    int32     `json:"max_tokens"`
+	Tools       []Tool    `json:"tools"`
 }
 
 func NewOpenRouterChatReq(cb ChatBody, props map[string]float32) OpenRouterChatReq {
@@ -56,10 +57,11 @@ type OpenRouterChatRespNonStream struct {
 		NativeFinishReason string `json:"native_finish_reason"`
 		Index              int    `json:"index"`
 		Message            struct {
-			Role      string `json:"role"`
-			Content   string `json:"content"`
-			Refusal   any    `json:"refusal"`
-			Reasoning any    `json:"reasoning"`
+			Role      string          `json:"role"`
+			Content   string          `json:"content"`
+			Refusal   any             `json:"refusal"`
+			Reasoning any             `json:"reasoning"`
+			ToolCalls []ToolDeltaResp `json:"tool_calls"`
 		} `json:"message"`
 	} `json:"choices"`
 	Usage struct {
@@ -78,8 +80,9 @@ type OpenRouterChatResp struct {
 	Choices  []struct {
 		Index int `json:"index"`
 		Delta struct {
-			Role    string `json:"role"`
-			Content string `json:"content"`
+			Role      string          `json:"role"`
+			Content   string          `json:"content"`
+			ToolCalls []ToolDeltaResp `json:"tool_calls"`
 		} `json:"delta"`
 		FinishReason       string `json:"finish_reason"`
 		NativeFinishReason string `json:"native_finish_reason"`

@@ -11,6 +11,7 @@ import (
 	"gf-lt/models"
 	"gf-lt/rag"
 	"gf-lt/storage"
+	"html"
 	"io"
 	"log/slog"
 	"net"
@@ -44,6 +45,7 @@ var (
 	ragger              *rag.RAG
 	chunkParser         ChunkParser
 	lastToolCall        *models.FuncCall
+	lastToolCallID      string // Store the ID of the most recent tool call
 	//nolint:unused // TTS_ENABLED conditionally uses this
 	orator          extra.Orator
 	asr             extra.STT
@@ -189,8 +191,7 @@ func sendMsgToLLM(body io.Reader) {
 			}
 		} else {
 			// Log the request body for debugging
-			logger.Info("sending request to API", "api", cfg.CurrentAPI, "body", string(bodyBytes))
-
+			logger.Debug("sending request to API", "api", cfg.CurrentAPI, "body", string(bodyBytes))
 			// Create request with the captured body
 			req, err = http.NewRequest("POST", cfg.CurrentAPI, bytes.NewReader(bodyBytes))
 			if err != nil {
@@ -238,6 +239,9 @@ func sendMsgToLLM(body io.Reader) {
 			logger.Error("error reading response body", "error", err, "line", string(line),
 				"user_role", cfg.UserRole, "parser", chunkParser, "link", cfg.CurrentAPI)
 			// if err.Error() != "EOF" {
+			if err := notifyUser("API error", err.Error()); err != nil {
+				logger.Error("failed to notify", "error", err)
+			}
 			streamDone <- true
 			break
 			// }
@@ -267,11 +271,12 @@ func sendMsgToLLM(body io.Reader) {
 			break
 		}
 		// Handle error messages in response content
-		if string(line) != "" && strings.Contains(strings.ToLower(string(line)), "error") {
-			logger.Error("API error response detected", "line", line, "url", cfg.CurrentAPI)
-			streamDone <- true
-			break
-		}
+		// example needed, since llm could use the word error in the normal msg
+		// if string(line) != "" && strings.Contains(strings.ToLower(string(line)), "error") {
+		// 	logger.Error("API error response detected", "line", line, "url", cfg.CurrentAPI)
+		// 	streamDone <- true
+		// 	break
+		// }
 		if chunk.Finished {
 			if chunk.Chunk != "" {
 				logger.Warn("text inside of finish llmchunk", "chunk", chunk, "counter", counter)
@@ -290,6 +295,8 @@ func sendMsgToLLM(body io.Reader) {
 		openAIToolChan <- chunk.ToolChunk
 		if chunk.FuncName != "" {
 			lastToolCall.Name = chunk.FuncName
+			// Store the tool call ID for the response
+			lastToolCallID = chunk.ToolID
 		}
 	interrupt:
 		if interruptResp { // read bytes, so it would not get into beginning of the next req
@@ -467,10 +474,23 @@ out:
 func findCall(msg, toolCall string, tv *tview.TextView) {
 	fc := &models.FuncCall{}
 	if toolCall != "" {
+		// HTML-decode the tool call string to handle encoded characters like &lt; -> <=
+		decodedToolCall := html.UnescapeString(toolCall)
 		openAIToolMap := make(map[string]string)
 		// respect tool call
-		if err := json.Unmarshal([]byte(toolCall), &openAIToolMap); err != nil {
-			logger.Error("failed to unmarshal openai tool call", "call", toolCall, "error", err)
+		if err := json.Unmarshal([]byte(decodedToolCall), &openAIToolMap); err != nil {
+			logger.Error("failed to unmarshal openai tool call", "call", decodedToolCall, "error", err)
+			// Send error response to LLM so it can retry or handle the error
+			toolResponseMsg := models.RoleMsg{
+				Role:       cfg.ToolRole,
+				Content:    fmt.Sprintf("Error processing tool call: %v. Please check the JSON format and try again.", err),
+				ToolCallID: lastToolCallID, // Use the stored tool call ID
+			}
+			chatBody.Messages = append(chatBody.Messages, toolResponseMsg)
+			// Clear the stored tool call ID after using it
+			lastToolCallID = ""
+			// Trigger the assistant to continue processing with the error message
+			chatRound("", cfg.AssistantRole, tv, false, false)
 			return
 		}
 		lastToolCall.Args = openAIToolMap
@@ -483,8 +503,18 @@ func findCall(msg, toolCall string, tv *tview.TextView) {
 		prefix := "__tool_call__\n"
 		suffix := "\n__tool_call__"
 		jsStr = strings.TrimSuffix(strings.TrimPrefix(jsStr, prefix), suffix)
-		if err := json.Unmarshal([]byte(jsStr), &fc); err != nil {
-			logger.Error("failed to unmarshal tool call", "error", err, "json_string", jsStr)
+		// HTML-decode the JSON string to handle encoded characters like &lt; -> <=
+		decodedJsStr := html.UnescapeString(jsStr)
+		if err := json.Unmarshal([]byte(decodedJsStr), &fc); err != nil {
+			logger.Error("failed to unmarshal tool call", "error", err, "json_string", decodedJsStr)
+			// Send error response to LLM so it can retry or handle the error
+			toolResponseMsg := models.RoleMsg{
+				Role:    cfg.ToolRole,
+				Content: fmt.Sprintf("Error processing tool call: %v. Please check the JSON format and try again.", err),
+			}
+			chatBody.Messages = append(chatBody.Messages, toolResponseMsg)
+			// Trigger the assistant to continue processing with the error message
+			chatRound("", cfg.AssistantRole, tv, false, false)
 			return
 		}
 	}
@@ -492,14 +522,38 @@ func findCall(msg, toolCall string, tv *tview.TextView) {
 	f, ok := fnMap[fc.Name]
 	if !ok {
 		m := fc.Name + " is not implemented"
-		chatRound(m, cfg.ToolRole, tv, false, false)
+		// Create tool response message with the proper tool_call_id
+		toolResponseMsg := models.RoleMsg{
+			Role:       cfg.ToolRole,
+			Content:    m,
+			ToolCallID: lastToolCallID, // Use the stored tool call ID
+		}
+		chatBody.Messages = append(chatBody.Messages, toolResponseMsg)
+		// Clear the stored tool call ID after using it
+		lastToolCallID = ""
+
+		// Trigger the assistant to continue processing with the new tool response
+		// by calling chatRound with empty content to continue the assistant's response
+		chatRound("", cfg.AssistantRole, tv, false, false)
 		return
 	}
 	resp := f(fc.Args)
-	toolMsg := fmt.Sprintf("tool response: %+v", string(resp))
+	toolMsg := string(resp) // Remove the "tool response: " prefix and %+v formatting
+	logger.Info("llm used tool call", "tool_resp", toolMsg, "tool_attrs", fc)
 	fmt.Fprintf(tv, "%s[-:-:b](%d) <%s>: [-:-:-]\n%s\n",
 		"\n", len(chatBody.Messages), cfg.ToolRole, toolMsg)
-	chatRound(toolMsg, cfg.ToolRole, tv, false, false)
+	// Create tool response message with the proper tool_call_id
+	toolResponseMsg := models.RoleMsg{
+		Role:       cfg.ToolRole,
+		Content:    toolMsg,
+		ToolCallID: lastToolCallID, // Use the stored tool call ID
+	}
+	chatBody.Messages = append(chatBody.Messages, toolResponseMsg)
+	// Clear the stored tool call ID after using it
+	lastToolCallID = ""
+	// Trigger the assistant to continue processing with the new tool response
+	// by calling chatRound with empty content to continue the assistant's response
+	chatRound("", cfg.AssistantRole, tv, false, false)
 }
 
 func chatToTextSlice(showSys bool) []string {

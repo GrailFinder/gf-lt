@@ -209,8 +209,17 @@ func makeStatusLine() string {
 	} else {
 		imageInfo = ""
 	}
+
+	// Add shell mode status to status line
+	var shellModeInfo string
+	if shellMode {
+		shellModeInfo = " | [green:-:b]SHELL MODE[-:-:-]"
+	} else {
+		shellModeInfo = ""
+	}
+
 	statusLine := fmt.Sprintf(indexLineCompletion, botRespMode, cfg.AssistantRole, activeChatName,
 		cfg.ToolUse, chatBody.Model, cfg.SkipLLMResp, cfg.CurrentAPI, cfg.ThinkUse, logLevel.Level(),
 		isRecording, persona, botPersona, injectRole)
-	return statusLine + imageInfo
+	return statusLine + imageInfo + shellModeInfo
 }
