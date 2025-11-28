@@ -8,6 +8,7 @@ import (
 	_ "image/jpeg"
 	_ "image/png"
 	"os"
+	"os/exec"
 	"path"
 	"slices"
 	"strconv"
@@ -78,6 +79,7 @@ var (
 [yellow]Ctrl+y[white]: list loaded RAG files (view and manage loaded files)
 [yellow]Ctrl+q[white]: cycle through mentioned chars in chat, to pick persona to send next msg as
 [yellow]Ctrl+x[white]: cycle through mentioned chars in chat, to pick persona to send next msg as (for llm)
+[yellow]Alt+1[white]: toggle shell mode (execute commands locally)
 
 === scrolling chat window (some keys similar to vim) ===
 [yellow]arrows up/down and j/k[white]: scroll up and down
@@ -205,6 +207,102 @@ func makePropsForm(props map[string]float32) *tview.Form {
 	}
 	form.SetBorder(true).SetTitle("Enter some data").SetTitleAlign(tview.AlignLeft)
 	return form
+}
+
+func toggleShellMode() {
+	shellMode = !shellMode
+	if shellMode {
+		// Update input placeholder to indicate shell mode
+		textArea.SetPlaceholder("SHELL MODE: Enter command and press <Esc> to execute")
+	} else {
+		// Reset to normal mode
+		textArea.SetPlaceholder("input is multiline; press <Enter> to start the next line;\npress <Esc> to send the message. Alt+1 to exit shell mode")
+	}
+	updateStatusLine()
+}
+
+func executeCommandAndDisplay(cmdText string) {
+	// Parse the command (split by spaces, but handle quoted arguments)
+	cmdParts := parseCommand(cmdText)
+	if len(cmdParts) == 0 {
+		fmt.Fprintf(textView, "\n[red]Error: No command provided[-:-:-]\n")
+		textView.ScrollToEnd()
+		colorText()
+		return
+	}
+
+	command := cmdParts[0]
+	args := []string{}
+	if len(cmdParts) > 1 {
+		args = cmdParts[1:]
+	}
+
+	// Create the command execution
+	cmd := exec.Command(command, args...)
+
+	// Execute the command and get output
+	output, err := cmd.CombinedOutput()
+
+	// Add the command being executed to the chat
+	fmt.Fprintf(textView, "\n[yellow]$ %s[-:-:-]\n", cmdText)
+
+	if err != nil {
+		// Include both output and error
+		fmt.Fprintf(textView, "[red]Error: %s[-:-:-]\n", err.Error())
+		if len(output) > 0 {
+			fmt.Fprintf(textView, "[red]%s[-:-:-]\n", string(output))
+		}
+	} else {
+		// Only output if successful
+		if len(output) > 0 {
+			fmt.Fprintf(textView, "[green]%s[-:-:-]\n", string(output))
+		} else {
+			fmt.Fprintf(textView, "[green]Command executed successfully (no output)[-:-:-]\n")
+		}
+	}
+
+	// Scroll to end and update colors
+	textView.ScrollToEnd()
+	colorText()
+}
+
+// parseCommand splits command string handling quotes properly
+func parseCommand(cmd string) []string {
+	var args []string
+	var current string
+	var inQuotes bool
+	var quoteChar rune
+
+	for _, r := range cmd {
+		switch r {
+		case '"', '\'':
+			if inQuotes {
+				if r == quoteChar {
+					inQuotes = false
+				} else {
+					current += string(r)
+				}
+			} else {
+				inQuotes = true
+				quoteChar = r
+			}
+		case ' ', '\t':
+			if inQuotes {
+				current += string(r)
+			} else if current != "" {
+				args = append(args, current)
+				current = ""
+			}
+		default:
+			current += string(r)
+		}
+	}
+
+	if current != "" {
+		args = append(args, current)
+	}
+
+	return args
 }
 
 func init() {
@@ -800,46 +898,59 @@ func init() {
 			pages.AddPage(RAGLoadedPage, chatLoadedRAGTable, true, true)
 			return nil
 		}
+		if event.Key() == tcell.KeyRune && event.Modifiers() == tcell.ModAlt && event.Rune() == '1' {
+			// Toggle shell mode: when enabled, commands are executed locally instead of sent to LLM
+			toggleShellMode()
+			return nil
+		}
 		// cannot send msg in editMode or botRespMode
 		if event.Key() == tcell.KeyEscape && !editMode && !botRespMode {
-			// read all text into buffer
 			msgText := textArea.GetText()
-			nl := "\n"
-			prevText := textView.GetText(true)
-			persona := cfg.UserRole
-			// strings.LastIndex()
-			// newline is not needed is prev msg ends with one
-			if strings.HasSuffix(prevText, nl) {
-				nl = ""
-			}
-			if msgText != "" {
-				// as what char user sends msg?
-				if cfg.WriteNextMsgAs != "" {
-					persona = cfg.WriteNextMsgAs
+
+			if shellMode && msgText != "" {
+				// In shell mode, execute command instead of sending to LLM
+				executeCommandAndDisplay(msgText)
+				textArea.SetText("", true) // Clear the input area
+				return nil
+			} else if !shellMode {
+				// Normal mode - send to LLM
+				nl := "\n"
+				prevText := textView.GetText(true)
+				persona := cfg.UserRole
+				// strings.LastIndex()
+				// newline is not needed is prev msg ends with one
+				if strings.HasSuffix(prevText, nl) {
+					nl = ""
 				}
-				// check if plain text
-				if !injectRole {
-					matches := roleRE.FindStringSubmatch(msgText)
-					if len(matches) > 1 {
-						persona = matches[1]
-						msgText = strings.TrimLeft(msgText[len(matches[0]):], " ")
+				if msgText != "" {
+					// as what char user sends msg?
+					if cfg.WriteNextMsgAs != "" {
+						persona = cfg.WriteNextMsgAs
 					}
+					// check if plain text
+					if !injectRole {
+						matches := roleRE.FindStringSubmatch(msgText)
+						if len(matches) > 1 {
+							persona = matches[1]
+							msgText = strings.TrimLeft(msgText[len(matches[0]):], " ")
+						}
+					}
+					// add user icon before user msg
+					fmt.Fprintf(textView, "%s[-:-:b](%d) <%s>: [-:-:-]\n%s\n",
+						nl, len(chatBody.Messages), persona, msgText)
+					textArea.SetText("", true)
+					textView.ScrollToEnd()
+					colorText()
 				}
-				// add user icon before user msg
-				fmt.Fprintf(textView, "%s[-:-:b](%d) <%s>: [-:-:-]\n%s\n",
-					nl, len(chatBody.Messages), persona, msgText)
-				textArea.SetText("", true)
-				textView.ScrollToEnd()
-				colorText()
+				go chatRound(msgText, persona, textView, false, false)
+				// Also clear any image attachment after sending the message
+				go func() {
+					// Wait a short moment for the message to be processed, then clear the image attachment
+					// This allows the image to be sent with the current message if it was attached
+					// But clears it for the next message
+					ClearImageAttachment()
+				}()
 			}
-			go chatRound(msgText, persona, textView, false, false)
-			// Also clear any image attachment after sending the message
-			go func() {
-				// Wait a short moment for the message to be processed, then clear the image attachment
-				// This allows the image to be sent with the current message if it was attached
-				// But clears it for the next message
-				ClearImageAttachment()
-			}()
 			return nil
 		}
 		if event.Key() == tcell.KeyPgUp || event.Key() == tcell.KeyPgDn {
