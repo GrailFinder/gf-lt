@@ -31,6 +31,7 @@ var (
 	defaultImage    = "sysprompts/llama.png"
 	indexPickWindow *tview.InputField
 	renameWindow    *tview.InputField
+	searchWindow    *tview.InputField
 	fullscreenMode  bool
 	// pages
 	historyPage    = "historyPage"
@@ -46,6 +47,11 @@ var (
 	imgPage        = "imgPage"
 	filePickerPage = "filePicker"
 	exportDir      = "chat_exports"
+
+	// For overlay search functionality
+	searchField    *tview.InputField
+	isSearching    bool
+	searchPageName = "searchOverlay"
 	// help text
 	helpText = `
 [yellow]Esc[white]: send msg
@@ -86,6 +92,9 @@ var (
 === scrolling chat window (some keys similar to vim) ===
 [yellow]arrows up/down and j/k[white]: scroll up and down
 [yellow]gg/G[white]: jump to the begging / end of the chat
+[yellow]/[white]: start searching for text
+[yellow]n[white]: go to next search result
+[yellow]N[white]: go to previous search result
 
 === status line ===
 %s
@@ -307,6 +316,346 @@ func parseCommand(cmd string) []string {
 	return args
 }
 
+// Global variables for search state
+var searchResults []int
+var searchResultLengths []int // To store the length of each match in the formatted string
+var searchIndex int
+var searchText string
+
+// stripTags creates a plain text version of a tview formatted string and a mapping
+// from plain text indices to formatted text indices.
+func stripTags(formatted string) (string, []int) {
+	var plain strings.Builder
+	// The mapping will store the byte index in the formatted string for each byte in the plain string.
+	mapping := make([]int, 0, len(formatted))
+
+	i := 0
+	for i < len(formatted) {
+		if formatted[i] != '[' {
+			mapping = append(mapping, i)
+			plain.WriteByte(formatted[i])
+			i++
+			continue
+		}
+
+		// We are at a '['
+		if i+1 < len(formatted) && formatted[i+1] == '[' { // Escaped '[['
+			mapping = append(mapping, i)
+			plain.WriteByte('[')
+			i += 2
+			continue
+		}
+
+		// It's a tag. Find its end.
+		end := -1
+		// Region tags are of the form ["..."]
+		if i+1 < len(formatted) && formatted[i+1] == '"' {
+			// Find `"]`
+			for j := i + 2; j < len(formatted)-1; j++ {
+				if formatted[j] == '"' && formatted[j+1] == ']' {
+					end = j + 1
+					break
+				}
+			}
+		} else {
+			// Color/attr tag [...]
+			closeBracket := strings.IndexRune(formatted[i:], ']')
+			if closeBracket != -1 {
+				end = i + closeBracket
+			}
+		}
+
+		if end == -1 {
+			// Unterminated tag. Treat as literal.
+			mapping = append(mapping, i)
+			plain.WriteByte(formatted[i])
+			i++
+		} else {
+			// Skip tag
+			i = end + 1
+		}
+	}
+	return plain.String(), mapping
+}
+
+// performSearch searches for the given term in the textView content and highlights matches
+func performSearch(term string) {
+	searchText = term
+	if searchText == "" {
+		searchResults = nil
+		searchResultLengths = nil
+		// Re-render text without highlights
+		textView.SetText(chatToText(cfg.ShowSys))
+		colorText()
+		return
+	}
+
+	// Get formatted text
+	formattedText := textView.GetText(true)
+	plainText, mapping := stripTags(formattedText)
+
+	// Find all occurrences of the search term in plain text
+	plainSearchResults := []int{}
+
+	start := 0
+	for {
+		// Use case-insensitive search
+		index := strings.Index(strings.ToLower(plainText[start:]), strings.ToLower(searchText))
+		if index == -1 {
+			break
+		}
+
+		absoluteIndex := start + index
+		plainSearchResults = append(plainSearchResults, absoluteIndex)
+		start = absoluteIndex + len(searchText) // Advance past the last match
+	}
+
+	if len(plainSearchResults) > 0 {
+		searchResults = make([]int, len(plainSearchResults))
+		searchResultLengths = make([]int, len(plainSearchResults))
+
+		for i, p_start := range plainSearchResults {
+			p_end_exclusive := p_start + len(searchText)
+
+			f_start := mapping[p_start]
+			var f_end_exclusive int
+			if p_end_exclusive < len(mapping) {
+				f_end_exclusive = mapping[p_end_exclusive]
+			} else {
+				// Reached the end of the text
+				f_end_exclusive = len(formattedText)
+			}
+
+			searchResults[i] = f_start
+			searchResultLengths[i] = f_end_exclusive - f_start
+		}
+
+		searchIndex = 0
+		highlightCurrentMatch()
+	} else {
+		// No matches found
+		searchResults = nil
+		searchResultLengths = nil
+		notification := fmt.Sprintf("Pattern not found: %s", term)
+		if err := notifyUser("search", notification); err != nil {
+			logger.Error("failed to send notification", "error", err)
+		}
+	}
+}
+
+// highlightCurrentMatch highlights the current search match and scrolls to it
+func highlightCurrentMatch() {
+	if len(searchResults) == 0 || searchIndex >= len(searchResults) {
+		return
+	}
+
+	// Get the stored formatted text
+	formattedText := textView.GetText(true)
+
+	// For tview to properly support highlighting and scrolling, we need to work with its region system
+	// Instead of just applying highlights, we need to add region tags to the text
+	highlightedText := addRegionTags(formattedText, searchResults, searchResultLengths, searchIndex, searchText)
+
+	// Update the text view with the text that includes region tags
+	textView.SetText(highlightedText)
+
+	// Highlight the current region and scroll to it
+	// Need to identify which position in the results array corresponds to the current match
+	// The region ID will be search_<position>_<index>
+	currentRegion := fmt.Sprintf("search_%d_%d", searchResults[searchIndex], searchIndex)
+	textView.Highlight(currentRegion).ScrollToHighlight()
+
+	// Send notification about which match we're at
+	notification := fmt.Sprintf("Match %d of %d", searchIndex+1, len(searchResults))
+	if err := notifyUser("search", notification); err != nil {
+		logger.Error("failed to send notification", "error", err)
+	}
+}
+
+// applyAllHighlights applies highlighting to all search matches in the text
+func applyAllHighlights(text string, positions []int, currentIdx int, searchTerm string) string {
+	if len(positions) == 0 {
+		return text
+	}
+
+	// For performance and to avoid freezing, use a simpler approach just highlighting the positions
+	// that were found in the initial search (even if not perfectly mapped to formatted text)
+	var result strings.Builder
+
+	// For simplicity and to prevent freezing, don't do complex recalculations
+	// Instead, we'll just highlight based on the initial search results
+	lastEnd := 0
+
+	// Since positions come from plain text search, they may not align with formatted text
+	// For robustness, only process positions that are within bounds
+	for i, pos := range positions {
+		// Only process if within text bounds
+		if pos >= len(text) {
+			continue
+		}
+
+		endPos := pos + len(searchTerm)
+		if endPos > len(text) {
+			continue
+		}
+
+		// Check if the actual text matches the search term (case insensitive)
+		actualText := text[pos:endPos]
+		if strings.ToLower(actualText) != strings.ToLower(searchTerm) {
+			continue // Skip if the text doesn't actually match at this position
+		}
+
+		// Add text before this match
+		if pos > lastEnd {
+			result.WriteString(text[lastEnd:pos])
+		}
+
+		// Highlight this match
+		highlight := `[gold:red:u]`  // All matches - gold on red
+		if i == currentIdx {
+			highlight = `[yellow:blue:b]`  // Current match - yellow on blue bold
+		}
+		result.WriteString(highlight)
+		result.WriteString(actualText)
+		result.WriteString(`[-:-:-]`)  // Reset formatting
+
+		lastEnd = endPos
+	}
+
+	// Add the rest of the text after the last processed match
+	if lastEnd < len(text) {
+		result.WriteString(text[lastEnd:])
+	}
+
+	return result.String()
+}
+
+// showSearchBar shows the search input field as an overlay
+func showSearchBar() {
+	isSearching = true
+	// Create a temporary flex to combine search and main content
+	updatedFlex := tview.NewFlex().SetDirection(tview.FlexRow).
+		AddItem(searchField, 3, 0, true).  // Search field at top
+		AddItem(flex, 0, 1, false)  // Main flex layout below
+
+	// Add the search overlay as a page
+	pages.AddPage(searchPageName, updatedFlex, true, true)
+	app.SetFocus(searchField)
+}
+
+// hideSearchBar hides the search input field
+func hideSearchBar() {
+	isSearching = false
+	pages.RemovePage(searchPageName)
+	// Return focus to the text view
+	app.SetFocus(textView)
+	// Clear the search field
+	searchField.SetText("")
+}
+
+// addRegionTags adds region tags to search matches in the text for tview highlighting
+func addRegionTags(text string, positions []int, lengths []int, currentIdx int, searchTerm string) string {
+	if len(positions) == 0 {
+		return text
+	}
+
+	var result strings.Builder
+	lastEnd := 0
+
+	for i, pos := range positions {
+		endPos := pos + lengths[i]
+
+		// Add text before this match
+		if pos > lastEnd {
+			result.WriteString(text[lastEnd:pos])
+		}
+
+		// The matched text, which may contain its own formatting tags
+		actualText := text[pos:endPos]
+
+		// Add region tag and highlighting for this match
+		// Use a unique region id that includes the match index to avoid conflicts
+		regionId := fmt.Sprintf("search_%d_%d", pos, i) // position + index to ensure uniqueness
+		var highlightStart, highlightEnd string
+		if i == currentIdx {
+			// Current match - use different highlighting
+			highlightStart = fmt.Sprintf(`["%s"][yellow:blue:b]`, regionId) // Current match with region and special highlight
+			highlightEnd = `[-:-:-][""]`                                    // Reset formatting and close region
+		} else {
+			// Other matches - use regular highlighting
+			highlightStart = fmt.Sprintf(`["%s"][gold:red:u]`, regionId) // Other matches with region and highlight
+			highlightEnd = `[-:-:-][""]`                                 // Reset formatting and close region
+		}
+
+		result.WriteString(highlightStart)
+		result.WriteString(actualText)
+		result.WriteString(highlightEnd)
+
+		lastEnd = endPos
+	}
+
+	// Add the rest of the text after the last processed match
+	if lastEnd < len(text) {
+		result.WriteString(text[lastEnd:])
+	}
+
+	return result.String()
+}
+
+// insertHighlightAtPosition inserts highlight tags around a specific position in the text
+func insertHighlightAtPosition(originalText string, pos int, length int) string {
+	if pos < 0 || pos >= len(originalText) || pos+length > len(originalText) {
+		return originalText
+	}
+
+	// Insert highlight tags around the match
+	var result strings.Builder
+	result.WriteString(originalText[:pos])
+	result.WriteString(`[gold:red:u]`)  // Highlight with gold text on red background and underline
+	result.WriteString(originalText[pos : pos+length])
+	result.WriteString(`[-]`)  // Reset to default formatting
+	result.WriteString(originalText[pos+length:])
+
+	return result.String()
+}
+
+// highlightTextWithRegions adds region tags to highlight search matches
+func highlightTextWithRegions(originalText string, matchStart int, matchLength int) string {
+	// For now, we'll return the original text and use tview's highlight system differently
+	// The highlighting will be applied via the textView.Highlight() method
+	return originalText
+}
+
+// searchNext finds the next occurrence of the search term
+func searchNext() {
+	if len(searchResults) == 0 {
+		if err := notifyUser("search", "No search results to navigate"); err != nil {
+			logger.Error("failed to send notification", "error", err)
+		}
+		return
+	}
+
+	searchIndex = (searchIndex + 1) % len(searchResults)
+	highlightCurrentMatch()
+}
+
+// searchPrev finds the previous occurrence of the search term
+func searchPrev() {
+	if len(searchResults) == 0 {
+		if err := notifyUser("search", "No search results to navigate"); err != nil {
+			logger.Error("failed to send notification", "error", err)
+		}
+		return
+	}
+
+	if searchIndex == 0 {
+		searchIndex = len(searchResults) - 1
+	} else {
+		searchIndex--
+	}
+	highlightCurrentMatch()
+}
+
 func init() {
 	tview.Styles = colorschemes["default"]
 	app = tview.NewApplication()
@@ -320,16 +669,65 @@ func init() {
 		SetChangedFunc(func() {
 			app.Draw()
 		})
+
+	flex = tview.NewFlex().SetDirection(tview.FlexRow).
+		AddItem(textView, 0, 40, false).
+		AddItem(textArea, 0, 10, true). // Restore original height
+		AddItem(position, 0, 2, false)
 	// textView.SetBorder(true).SetTitle("chat")
 	textView.SetDoneFunc(func(key tcell.Key) {
-		currentSelection := textView.GetHighlights()
 		if key == tcell.KeyEnter {
-			if len(currentSelection) > 0 {
-				textView.Highlight()
+			if len(searchResults) > 0 { // Check if a search is active
+				hideSearchBar()        // Hide the search bar if visible
+				searchResults = nil    // Clear search results
+				searchResultLengths = nil // Clear search result lengths
+				textView.SetText(chatToText(cfg.ShowSys)) // Reset text without search regions
+				colorText()            // Apply normal chat coloring
 			} else {
-				textView.Highlight("0").ScrollToHighlight()
+				// Original logic if no search is active
+				currentSelection := textView.GetHighlights()
+				if len(currentSelection) > 0 {
+					textView.Highlight()
+				} else {
+					textView.Highlight("0").ScrollToHighlight()
+				}
 			}
 		}
+	})
+	textView.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		// Handle vim-like navigation in TextView
+		switch event.Key() {
+		case tcell.KeyRune:
+			switch event.Rune() {
+			case 'j':
+				// For line down
+				return event
+			case 'k':
+				// For line up
+				return event
+			case 'g':
+				// Go to beginning
+				textView.ScrollToBeginning()
+				return nil
+			case 'G':
+				// Go to end
+				textView.ScrollToEnd()
+				return nil
+			case '/':
+				// Search functionality - show search bar
+				showSearchBar()
+				return nil
+			case 'n':
+				// Next search result
+				searchNext()
+				return nil
+			case 'N':
+				// Previous search result
+				searchPrev()
+				return nil
+			}
+		}
+		return event
 	})
 	focusSwitcher[textArea] = textView
 	focusSwitcher[textView] = textArea
@@ -339,6 +737,7 @@ func init() {
 	position.SetChangedFunc(func() {
 		app.Draw()
 	})
+	// Initially set up flex without search bar
 	flex = tview.NewFlex().SetDirection(tview.FlexRow).
 		AddItem(textView, 0, 40, false).
 		AddItem(textArea, 0, 10, true). // Restore original height
@@ -459,6 +858,24 @@ func init() {
 		}
 		return event
 	})
+	//
+	searchField = tview.NewInputField().
+		SetPlaceholder("Search... (Enter: search, Esc: cancel)").
+		SetDoneFunc(func(key tcell.Key) {
+			if key == tcell.KeyEnter {
+				term := searchField.GetText()
+				if term != "" {
+					performSearch(term)
+					// Keep focus on textView after search
+					app.SetFocus(textView)
+				}
+				hideSearchBar()
+			} else if key == tcell.KeyEscape {
+				hideSearchBar()
+			}
+		})
+	searchField.SetBorder(true).SetTitle("Search")
+	// Note: Initially hide the search field (handled by not showing it in the layout)
 	//
 	helpView = tview.NewTextView().SetDynamicColors(true).
 		SetText(fmt.Sprintf(helpText, makeStatusLine())).
@@ -986,6 +1403,8 @@ func init() {
 			app.SetFocus(focusSwitcher[currentF])
 			return nil
 		}
+
+
 		if isASCII(string(event.Rune())) && !botRespMode {
 			return event
 		}
