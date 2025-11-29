@@ -860,18 +860,24 @@ func init() {
 	})
 	//
 	searchField = tview.NewInputField().
-		SetPlaceholder("Search... (Enter: search, Esc: cancel)").
+		SetPlaceholder("Search... (Enter: search)").
 		SetDoneFunc(func(key tcell.Key) {
 			if key == tcell.KeyEnter {
 				term := searchField.GetText()
-				if term != "" {
+				if term == "" {
+					// If the search term is empty, cancel the search
+					hideSearchBar()
+					searchResults = nil
+					searchResultLengths = nil
+					textView.SetText(chatToText(cfg.ShowSys))
+					colorText()
+					return
+				} else {
 					performSearch(term)
 					// Keep focus on textView after search
 					app.SetFocus(textView)
+					hideSearchBar()
 				}
-				hideSearchBar()
-			} else if key == tcell.KeyEscape {
-				hideSearchBar()
 			}
 		})
 	searchField.SetBorder(true).SetTitle("Search")
