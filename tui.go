@@ -389,50 +389,23 @@ func performSearch(term string) {
 		colorText()
 		return
 	}
-
-	// Get formatted text
+	// Get formatted text and search directly in it to avoid mapping issues
 	formattedText := textView.GetText(true)
-	plainText, mapping := stripTags(formattedText)
-
-	// Find all occurrences of the search term in plain text
-	plainSearchResults := []int{}
-
-	start := 0
+	searchTermLower := strings.ToLower(searchText)
+	formattedTextLower := strings.ToLower(formattedText)
+	// Find all occurrences of the search term in the formatted text directly
+	formattedSearchResults := []int{}
+	searchStart := 0
 	for {
-		// Use case-insensitive search
-		index := strings.Index(strings.ToLower(plainText[start:]), strings.ToLower(searchText))
-		if index == -1 {
+		pos := strings.Index(formattedTextLower[searchStart:], searchTermLower)
+		if pos == -1 {
 			break
 		}
-
-		absoluteIndex := start + index
-		plainSearchResults = append(plainSearchResults, absoluteIndex)
-		start = absoluteIndex + len(searchText) // Advance past the last match
+		absolutePos := searchStart + pos
+		formattedSearchResults = append(formattedSearchResults, absolutePos)
+		searchStart = absolutePos + len(searchText)
 	}
-
-	if len(plainSearchResults) > 0 {
-		searchResults = make([]int, len(plainSearchResults))
-		searchResultLengths = make([]int, len(plainSearchResults))
-
-		for i, p_start := range plainSearchResults {
-			p_end_exclusive := p_start + len(searchText)
-
-			f_start := mapping[p_start]
-			var f_end_exclusive int
-			if p_end_exclusive < len(mapping) {
-				f_end_exclusive = mapping[p_end_exclusive]
-			} else {
-				// Reached the end of the text
-				f_end_exclusive = len(formattedText)
-			}
-
-			searchResults[i] = f_start
-			searchResultLengths[i] = f_end_exclusive - f_start
-		}
-
-		searchIndex = 0
-		highlightCurrentMatch()
-	} else {
+	if len(formattedSearchResults) == 0 {
 		// No matches found
 		searchResults = nil
 		searchResultLengths = nil
@@ -440,7 +413,17 @@ func performSearch(term string) {
 		if err := notifyUser("search", notification); err != nil {
 			logger.Error("failed to send notification", "error", err)
 		}
+		return
 	}
+	// Store the formatted text positions and lengths for accurate highlighting
+	searchResults = formattedSearchResults
+	// Create lengths array - all matches have the same length as the search term
+	searchResultLengths = make([]int, len(formattedSearchResults))
+	for i := range searchResultLengths {
+		searchResultLengths[i] = len(searchText)
+	}
+	searchIndex = 0
+	highlightCurrentMatch()
 }
 
 // highlightCurrentMatch highlights the current search match and scrolls to it
@@ -511,13 +494,13 @@ func applyAllHighlights(text string, positions []int, currentIdx int, searchTerm
 		}
 
 		// Highlight this match
-		highlight := `[gold:red:u]`  // All matches - gold on red
+		highlight := `[gold:red:u]` // All matches - gold on red
 		if i == currentIdx {
-			highlight = `[yellow:blue:b]`  // Current match - yellow on blue bold
+			highlight = `[yellow:blue:b]` // Current match - yellow on blue bold
 		}
 		result.WriteString(highlight)
 		result.WriteString(actualText)
-		result.WriteString(`[-:-:-]`)  // Reset formatting
+		result.WriteString(`[-:-:-]`) // Reset formatting
 
 		lastEnd = endPos
 	}
@@ -535,8 +518,8 @@ func showSearchBar() {
 	isSearching = true
 	// Create a temporary flex to combine search and main content
 	updatedFlex := tview.NewFlex().SetDirection(tview.FlexRow).
-		AddItem(searchField, 3, 0, true).  // Search field at top
-		AddItem(flex, 0, 1, false)  // Main flex layout below
+		AddItem(searchField, 3, 0, true). // Search field at top
+		AddItem(flex, 0, 1, false)        // Main flex layout below
 
 	// Add the search overlay as a page
 	pages.AddPage(searchPageName, updatedFlex, true, true)
@@ -611,9 +594,9 @@ func insertHighlightAtPosition(originalText string, pos int, length int) string 
 	// Insert highlight tags around the match
 	var result strings.Builder
 	result.WriteString(originalText[:pos])
-	result.WriteString(`[gold:red:u]`)  // Highlight with gold text on red background and underline
+	result.WriteString(`[gold:red:u]`) // Highlight with gold text on red background and underline
 	result.WriteString(originalText[pos : pos+length])
-	result.WriteString(`[-]`)  // Reset to default formatting
+	result.WriteString(`[-]`) // Reset to default formatting
 	result.WriteString(originalText[pos+length:])
 
 	return result.String()
@@ -665,10 +648,7 @@ func init() {
 	textArea.SetBorder(true).SetTitle("input")
 	textView = tview.NewTextView().
 		SetDynamicColors(true).
-		SetRegions(true).
-		SetChangedFunc(func() {
-			app.Draw()
-		})
+		SetRegions(true)
 
 	flex = tview.NewFlex().SetDirection(tview.FlexRow).
 		AddItem(textView, 0, 40, false).
@@ -678,11 +658,11 @@ func init() {
 	textView.SetDoneFunc(func(key tcell.Key) {
 		if key == tcell.KeyEnter {
 			if len(searchResults) > 0 { // Check if a search is active
-				hideSearchBar()        // Hide the search bar if visible
-				searchResults = nil    // Clear search results
-				searchResultLengths = nil // Clear search result lengths
+				hideSearchBar()                           // Hide the search bar if visible
+				searchResults = nil                       // Clear search results
+				searchResultLengths = nil                 // Clear search result lengths
 				textView.SetText(chatToText(cfg.ShowSys)) // Reset text without search regions
-				colorText()            // Apply normal chat coloring
+				colorText()                               // Apply normal chat coloring
 			} else {
 				// Original logic if no search is active
 				currentSelection := textView.GetHighlights()
@@ -734,9 +714,6 @@ func init() {
 	position = tview.NewTextView().
 		SetDynamicColors(true).
 		SetTextAlign(tview.AlignCenter)
-	position.SetChangedFunc(func() {
-		app.Draw()
-	})
 	// Initially set up flex without search bar
 	flex = tview.NewFlex().SetDirection(tview.FlexRow).
 		AddItem(textView, 0, 40, false).
@@ -1409,7 +1386,6 @@ func init() {
 			app.SetFocus(focusSwitcher[currentF])
 			return nil
 		}
-
 
 		if isASCII(string(event.Rune())) && !botRespMode {
 			return event
