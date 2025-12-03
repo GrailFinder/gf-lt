@@ -772,6 +772,14 @@ func init() {
 				logger.Error("failed to load chat history", "error", err)
 				return nil
 			}
+			// Check if there are no chats for this agent
+			if len(chatList) == 0 {
+				notification := fmt.Sprintf("no chats found for agent: %s", cfg.AssistantRole)
+				if err := notifyUser("info", notification); err != nil {
+					logger.Error("failed to send notification", "error", err)
+				}
+				return nil
+			}
 			chatMap := make(map[string]models.Chat)
 			// nameList := make([]string, len(chatList))
 			for _, chat := range chatList {
