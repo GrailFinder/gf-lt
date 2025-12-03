@@ -10,7 +10,6 @@ import (
 	"os"
 	"os/exec"
 	"path"
-	"slices"
 	"strconv"
 	"strings"
 
@@ -154,69 +153,6 @@ Press Enter to go back
 		},
 	}
 )
-
-func makePropsForm(props map[string]float32) *tview.Form {
-	// https://github.com/rivo/tview/commit/0a18dea458148770d212d348f656988df75ff341
-	// no way to close a form by a key press; a shame.
-	modelList := []string{chatBody.Model, "deepseek-chat", "deepseek-reasoner"}
-	modelList = append(modelList, ORFreeModels...)
-	form := tview.NewForm().
-		AddTextView("Notes", "Props for llamacpp completion call", 40, 2, true, false).
-		AddCheckbox("Insert <think> (/completion only)", cfg.ThinkUse, func(checked bool) {
-			cfg.ThinkUse = checked
-		}).AddCheckbox("RAG use", cfg.RAGEnabled, func(checked bool) {
-		cfg.RAGEnabled = checked
-	}).AddCheckbox("Inject role", injectRole, func(checked bool) {
-		injectRole = checked
-	}).AddDropDown("Set log level (Enter): ", []string{"Debug", "Info", "Warn"}, 1,
-		func(option string, optionIndex int) {
-			setLogLevel(option)
-		}).AddDropDown("Select an api: ", slices.Insert(cfg.ApiLinks, 0, cfg.CurrentAPI), 0,
-		func(option string, optionIndex int) {
-			cfg.CurrentAPI = option
-		}).AddDropDown("Select a model: ", modelList, 0,
-		func(option string, optionIndex int) {
-			chatBody.Model = option
-		}).AddDropDown("Write next message as: ", listRolesWithUser(), 0,
-		func(option string, optionIndex int) {
-			cfg.WriteNextMsgAs = option
-		}).AddInputField("new char to write msg as: ", "", 32, tview.InputFieldMaxLength(32),
-		func(text string) {
-			if text != "" {
-				cfg.WriteNextMsgAs = text
-			}
-		}).AddInputField("username: ", cfg.UserRole, 32, tview.InputFieldMaxLength(32), func(text string) {
-		if text != "" {
-			renameUser(cfg.UserRole, text)
-			cfg.UserRole = text
-		}
-	}).
-		AddButton("Quit", func() {
-			pages.RemovePage(propsPage)
-		})
-	form.AddButton("Save", func() {
-		defer updateStatusLine()
-		defer pages.RemovePage(propsPage)
-		for pn := range props {
-			propField, ok := form.GetFormItemByLabel(pn).(*tview.InputField)
-			if !ok {
-				logger.Warn("failed to convert to inputfield", "prop_name", pn)
-				continue
-			}
-			val, err := strconv.ParseFloat(propField.GetText(), 32)
-			if err != nil {
-				logger.Warn("failed parse to float", "value", propField.GetText())
-				continue
-			}
-			props[pn] = float32(val)
-		}
-	})
-	for propName, value := range props {
-		form.AddInputField(propName, fmt.Sprintf("%v", value), 20, tview.InputFieldFloat, nil)
-	}
-	form.SetBorder(true).SetTitle("Enter some data").SetTitleAlign(tview.AlignLeft)
-	return form
-}
 
 func toggleShellMode() {
 	shellMode = !shellMode
@@ -774,7 +710,7 @@ func init() {
 			}
 			// Check if there are no chats for this agent
 			if len(chatList) == 0 {
-				notification := fmt.Sprintf("no chats found for agent: %s", cfg.AssistantRole)
+				notification := "no chats found for agent: " + cfg.AssistantRole
 				if err := notifyUser("info", notification); err != nil {
 					logger.Error("failed to send notification", "error", err)
 				}
