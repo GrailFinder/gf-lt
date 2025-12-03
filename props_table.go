@@ -11,10 +11,10 @@ import (
 
 // Define constants for cell types
 const (
-	CellTypeCheckbox    = "checkbox"
-	CellTypeDropdown    = "dropdown"
-	CellTypeInput       = "input"
-	CellTypeHeader      = "header"
+	CellTypeCheckbox  = "checkbox"
+	CellTypeDropdown  = "dropdown"
+	CellTypeInput     = "input"
+	CellTypeHeader    = "header"
 	CellTypeListPopup = "listpopup"
 )
 
@@ -31,7 +31,8 @@ func makePropsTable(props map[string]float32) *tview.Table {
 	// Create a new table
 	table := tview.NewTable().
 		SetBorders(true).
-		SetSelectable(true, false) // Allow row selection but not column selection
+		SetSelectable(true, false).
+		SetSelectedStyle(tcell.StyleDefault.Background(tcell.ColorDarkCyan).Foreground(tcell.ColorWhite)) // Allow row selection but not column selection
 
 	table.SetTitle("Properties Configuration (Press 'x' to exit)").
 		SetTitleAlign(tview.AlignLeft)
@@ -67,7 +68,7 @@ func makePropsTable(props map[string]float32) *tview.Table {
 		}
 
 		valueCell := tview.NewTableCell(valueText).
-			SetTextColor(tcell.ColorGreen).
+			SetTextColor(tcell.ColorYellow).
 			SetAlign(tview.AlignCenter)
 		table.SetCell(row, 1, valueCell)
 
@@ -80,8 +81,6 @@ func makePropsTable(props map[string]float32) *tview.Table {
 		row++
 	}
 
-
-
 	// Helper function to add a dropdown-like row, that opens a list popup
 	addListPopupRow := func(label string, options []string, initialValue string, onChange func(string)) {
 		table.SetCell(row, 0,
@@ -91,7 +90,7 @@ func makePropsTable(props map[string]float32) *tview.Table {
 				SetSelectable(false))
 
 		valueCell := tview.NewTableCell(initialValue).
-			SetTextColor(tcell.ColorGreen).
+			SetTextColor(tcell.ColorYellow).
 			SetAlign(tview.AlignCenter)
 		table.SetCell(row, 1, valueCell)
 
@@ -114,7 +113,7 @@ func makePropsTable(props map[string]float32) *tview.Table {
 				SetSelectable(false))
 
 		valueCell := tview.NewTableCell(initialValue).
-			SetTextColor(tcell.ColorGreen).
+			SetTextColor(tcell.ColorYellow).
 			SetAlign(tview.AlignCenter)
 		table.SetCell(row, 1, valueCell)
 
@@ -313,13 +312,13 @@ func makePropsTable(props map[string]float32) *tview.Table {
 				// Create a simple modal with the input field
 				modalFlex := tview.NewFlex().
 					SetDirection(tview.FlexRow).
-					AddItem(tview.NewBox(), 0, 1, false).  // Spacer
+					AddItem(tview.NewBox(), 0, 1, false). // Spacer
 					AddItem(tview.NewFlex().
-						AddItem(tview.NewBox(), 0, 1, false).  // Spacer
+						AddItem(tview.NewBox(), 0, 1, false). // Spacer
 						AddItem(inputFld, 30, 1, true).       // Input field
-						AddItem(tview.NewBox(), 0, 1, false),   // Spacer
-					0, 1, true).
-					AddItem(tview.NewBox(), 0, 1, false)  // Spacer
+						AddItem(tview.NewBox(), 0, 1, false), // Spacer
+										0, 1, true).
+					AddItem(tview.NewBox(), 0, 1, false) // Spacer
 
 				// Add modal page and make it visible
 				pages.AddPage("editModal", modalFlex, true, true)
@@ -339,3 +338,4 @@ func makePropsTable(props map[string]float32) *tview.Table {
 
 	return table
 }
+
