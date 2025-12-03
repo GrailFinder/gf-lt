@@ -49,7 +49,7 @@ func makeChatTable(chatMap map[string]models.Chat) *tview.Table {
 		}
 	}
 	chatActTable.Select(0, 0).SetFixed(1, 1).SetDoneFunc(func(key tcell.Key) {
-		if key == tcell.KeyEsc || key == tcell.KeyF1 {
+		if key == tcell.KeyEsc || key == tcell.KeyF1 || key == tcell.Key('x') {
 			pages.RemovePage(historyPage)
 			return
 		}
@@ -165,6 +165,14 @@ func makeChatTable(chatMap map[string]models.Chat) *tview.Table {
 		default:
 			return
 		}
+	})
+	// Add input capture to handle 'x' key for closing the table
+	chatActTable.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		if event.Key() == tcell.KeyRune && event.Rune() == 'x' {
+			pages.RemovePage(historyPage)
+			return nil
+		}
+		return event
 	})
 	return chatActTable
 }
@@ -441,7 +449,7 @@ func makeAgentTable(agentList []string) *tview.Table {
 		}
 	}
 	chatActTable.Select(0, 0).SetFixed(1, 1).SetDoneFunc(func(key tcell.Key) {
-		if key == tcell.KeyEsc || key == tcell.KeyF1 {
+		if key == tcell.KeyEsc || key == tcell.KeyF1 || key == tcell.Key('x') {
 			pages.RemovePage(agentPage)
 			return
 		}
@@ -493,6 +501,14 @@ func makeAgentTable(agentList []string) *tview.Table {
 			return
 		}
 	})
+	// Add input capture to handle 'x' key for closing the table
+	chatActTable.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		if event.Key() == tcell.KeyRune && event.Rune() == 'x' {
+			pages.RemovePage(agentPage)
+			return nil
+		}
+		return event
+	})
 	return chatActTable
 }
 
@@ -522,8 +538,8 @@ func makeCodeBlockTable(codeBlocks []string) *tview.Table {
 		}
 	}
 	table.Select(0, 0).SetFixed(1, 1).SetDoneFunc(func(key tcell.Key) {
-		if key == tcell.KeyEsc || key == tcell.KeyF1 {
-			pages.RemovePage(agentPage)
+		if key == tcell.KeyEsc || key == tcell.KeyF1 || key == tcell.Key('x') {
+			pages.RemovePage(codeBlockPage)
 			return
 		}
 		if key == tcell.KeyEnter {
@@ -553,6 +569,14 @@ func makeCodeBlockTable(codeBlocks []string) *tview.Table {
 			return
 		}
 	})
+	// Add input capture to handle 'x' key for closing the table
+	table.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		if event.Key() == tcell.KeyRune && event.Rune() == 'x' {
+			pages.RemovePage(codeBlockPage)
+			return nil
+		}
+		return event
+	})
 	return table
 }
 
@@ -578,7 +602,7 @@ func makeImportChatTable(filenames []string) *tview.Table {
 		}
 	}
 	chatActTable.Select(0, 0).SetFixed(1, 1).SetDoneFunc(func(key tcell.Key) {
-		if key == tcell.KeyEsc || key == tcell.KeyF1 {
+		if key == tcell.KeyEsc || key == tcell.KeyF1 || key == tcell.Key('x') {
 			pages.RemovePage(historyPage)
 			return
 		}
@@ -628,6 +652,14 @@ func makeImportChatTable(filenames []string) *tview.Table {
 			pages.RemovePage(historyPage)
 			return
 		}
+	})
+	// Add input capture to handle 'x' key for closing the table
+	chatActTable.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		if event.Key() == tcell.KeyRune && event.Rune() == 'x' {
+			pages.RemovePage(historyPage)
+			return nil
+		}
+		return event
 	})
 	return chatActTable
 }
