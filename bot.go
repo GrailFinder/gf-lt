@@ -32,6 +32,8 @@ var (
 	cfg                 *config.Config
 	logger              *slog.Logger
 	logLevel            = new(slog.LevelVar)
+)
+var (
 	activeChatName      string
 	chunkChan           = make(chan string, 10)
 	openAIToolChan      = make(chan string, 10)
@@ -64,6 +66,22 @@ var (
 		"meta-llama/llama-3.3-70b-instruct:free",
 	}
 )
+
+// GetLogLevel returns the current log level as a string
+func GetLogLevel() string {
+	level := logLevel.Level()
+	switch level {
+	case slog.LevelDebug:
+		return "Debug"
+	case slog.LevelInfo:
+		return "Info"
+	case slog.LevelWarn:
+		return "Warn"
+	default:
+		// For any other values, return "Info" as default
+		return "Info"
+	}
+}
 
 func createClient(connectTimeout time.Duration) *http.Client {
 	// Custom transport with connection timeout

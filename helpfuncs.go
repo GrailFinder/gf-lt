@@ -152,10 +152,16 @@ func setLogLevel(sl string) {
 
 func listRolesWithUser() []string {
 	roles := chatBody.ListRoles()
-	if !strInSlice(cfg.UserRole, roles) {
-		roles = append(roles, cfg.UserRole)
+	// Remove user role if it exists in the list (to avoid duplicates and ensure it's at position 0)
+	filteredRoles := make([]string, 0, len(roles))
+	for _, role := range roles {
+		if role != cfg.UserRole {
+			filteredRoles = append(filteredRoles, role)
+		}
 	}
-	return roles
+	// Prepend user role to the beginning of the list
+	result := append([]string{cfg.UserRole}, filteredRoles...)
+	return result
 }
 
 func loadImage() {

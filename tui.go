@@ -912,8 +912,8 @@ func init() {
 			return nil
 		}
 		if event.Key() == tcell.KeyCtrlP {
-			propsForm := makePropsForm(defaultLCPProps)
-			pages.AddPage(propsPage, propsForm, true, true)
+			propsTable := makePropsTable(defaultLCPProps)
+			pages.AddPage(propsPage, propsTable, true, true)
 			return nil
 		}
 		if event.Key() == tcell.KeyCtrlN {
