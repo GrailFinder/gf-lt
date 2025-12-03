@@ -11,10 +11,11 @@ import (
 
 // Define constants for cell types
 const (
-	CellTypeCheckbox = "checkbox"
-	CellTypeDropdown = "dropdown"
-	CellTypeInput    = "input"
-	CellTypeHeader   = "header"
+	CellTypeCheckbox    = "checkbox"
+	CellTypeDropdown    = "dropdown"
+	CellTypeInput       = "input"
+	CellTypeHeader      = "header"
+	CellTypeListPopup = "listpopup"
 )
 
 // CellData holds additional data for each cell
@@ -79,8 +80,10 @@ func makePropsTable(props map[string]float32) *tview.Table {
 		row++
 	}
 
-	// Helper function to add a dropdown-like row
-	addDropdownRow := func(label string, options []string, initialValue string, onChange func(string)) {
+
+
+	// Helper function to add a dropdown-like row, that opens a list popup
+	addListPopupRow := func(label string, options []string, initialValue string, onChange func(string)) {
 		table.SetCell(row, 0,
 			tview.NewTableCell(label).
 				SetTextColor(tcell.ColorWhite).
@@ -93,9 +96,9 @@ func makePropsTable(props map[string]float32) *tview.Table {
 		table.SetCell(row, 1, valueCell)
 
 		// Store cell data
-		cellID := fmt.Sprintf("dropdown_%d", row)
+		cellID := fmt.Sprintf("listpopup_%d", row)
 		cellData[cellID] = &CellData{
-			Type:     CellTypeDropdown,
+			Type:     CellTypeListPopup,
 			Options:  options,
 			OnChange: onChange,
 		}
@@ -139,25 +142,25 @@ func makePropsTable(props map[string]float32) *tview.Table {
 
 	// Add dropdowns
 	logLevels := []string{"Debug", "Info", "Warn"}
-	addDropdownRow("Set log level", logLevels, GetLogLevel(), func(option string) {
+	addListPopupRow("Set log level", logLevels, GetLogLevel(), func(option string) {
 		setLogLevel(option)
 	})
 
 	// Prepare API links dropdown - insert current API at the beginning
 	apiLinks := slices.Insert(cfg.ApiLinks, 0, cfg.CurrentAPI)
-	addDropdownRow("Select an api", apiLinks, cfg.CurrentAPI, func(option string) {
+	addListPopupRow("Select an api", apiLinks, cfg.CurrentAPI, func(option string) {
 		cfg.CurrentAPI = option
 	})
 
 	// Prepare model list dropdown
 	modelList := []string{chatBody.Model, "deepseek-chat", "deepseek-reasoner"}
 	modelList = append(modelList, ORFreeModels...)
-	addDropdownRow("Select a model", modelList, chatBody.Model, func(option string) {
+	addListPopupRow("Select a model", modelList, chatBody.Model, func(option string) {
 		chatBody.Model = option
 	})
 
 	// Role selection dropdown
-	addDropdownRow("Write next message as", listRolesWithUser(), cfg.WriteNextMsgAs, func(option string) {
+	addListPopupRow("Write next message as", listRolesWithUser(), cfg.WriteNextMsgAs, func(option string) {
 		cfg.WriteNextMsgAs = option
 	})
 
@@ -238,6 +241,52 @@ func makePropsTable(props map[string]float32) *tview.Table {
 
 				onChange(newValue)
 				cell.SetText(newValue)
+			}
+			return
+		}
+
+		// Check for listpopup
+		listPopupCellID := fmt.Sprintf("listpopup_%d", selectedRow)
+		if cellData[listPopupCellID] != nil && cellData[listPopupCellID].Type == CellTypeListPopup {
+			data := cellData[listPopupCellID]
+			if onChange, ok := data.OnChange.(func(string)); ok && data.Options != nil {
+				// Create a list primitive
+				apiList := tview.NewList().ShowSecondaryText(false)
+				apiList.SetTitle("Select an API").SetBorder(true)
+				for i, api := range data.Options {
+					if api == cell.Text {
+						apiList.SetCurrentItem(i)
+					}
+					apiList.AddItem(api, "", 0, nil)
+				}
+
+				apiList.SetSelectedFunc(func(index int, mainText string, secondaryText string, shortcut rune) {
+					onChange(mainText)
+					cell.SetText(mainText)
+					pages.RemovePage("apiListPopup")
+				})
+
+				apiList.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+					if event.Key() == tcell.KeyEscape {
+						pages.RemovePage("apiListPopup")
+						return nil
+					}
+					return event
+				})
+
+				modal := func(p tview.Primitive, width, height int) tview.Primitive {
+					return tview.NewFlex().
+						AddItem(nil, 0, 1, false).
+						AddItem(tview.NewFlex().SetDirection(tview.FlexRow).
+							AddItem(nil, 0, 1, false).
+							AddItem(p, height, 1, true).
+							AddItem(nil, 0, 1, false), width, 1, true).
+						AddItem(nil, 0, 1, false)
+				}
+
+				// Add modal page and make it visible
+				pages.AddPage("apiListPopup", modal(apiList, 80, 20), true, true)
+				app.SetFocus(apiList)
 			}
 			return
 		}
