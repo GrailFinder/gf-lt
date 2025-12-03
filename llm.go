@@ -30,15 +30,15 @@ type ChunkParser interface {
 }
 
 func choseChunkParser() {
-	chunkParser = LlamaCPPeer{}
+	chunkParser = LCPCompletion{}
 	switch cfg.CurrentAPI {
 	case "http://localhost:8080/completion":
-		chunkParser = LlamaCPPeer{}
-		logger.Debug("chosen llamacppeer", "link", cfg.CurrentAPI)
+		chunkParser = LCPCompletion{}
+		logger.Debug("chosen lcpcompletion", "link", cfg.CurrentAPI)
 		return
 	case "http://localhost:8080/v1/chat/completions":
-		chunkParser = OpenAIer{}
-		logger.Debug("chosen openair", "link", cfg.CurrentAPI)
+		chunkParser = LCPChat{}
+		logger.Debug("chosen lcpchat", "link", cfg.CurrentAPI)
 		return
 	case "https://api.deepseek.com/beta/completions":
 		chunkParser = DeepSeekerCompletion{}
@@ -57,13 +57,13 @@ func choseChunkParser() {
 		logger.Debug("chosen openrouterchat", "link", cfg.CurrentAPI)
 		return
 	default:
-		chunkParser = LlamaCPPeer{}
+		chunkParser = LCPCompletion{}
 	}
 }
 
-type LlamaCPPeer struct {
+type LCPCompletion struct {
 }
-type OpenAIer struct {
+type LCPChat struct {
 }
 type DeepSeekerCompletion struct {
 }
@@ -76,12 +76,12 @@ type OpenRouterChat struct {
 	Model string
 }
 
-func (lcp LlamaCPPeer) GetToken() string {
+func (lcp LCPCompletion) GetToken() string {
 	return ""
 }
 
-func (lcp LlamaCPPeer) FormMsg(msg, role string, resume bool) (io.Reader, error) {
-	logger.Debug("formmsg llamacppeer", "link", cfg.CurrentAPI)
+func (lcp LCPCompletion) FormMsg(msg, role string, resume bool) (io.Reader, error) {
+	logger.Debug("formmsg lcpcompletion", "link", cfg.CurrentAPI)
 	if msg != "" { // otherwise let the bot to continue
 		newMsg := models.RoleMsg{Role: role, Content: msg}
 		chatBody.Messages = append(chatBody.Messages, newMsg)
@@ -129,7 +129,7 @@ func (lcp LlamaCPPeer) FormMsg(msg, role string, resume bool) (io.Reader, error)
 	return bytes.NewReader(data), nil
 }
 
-func (lcp LlamaCPPeer) ParseChunk(data []byte) (*models.TextChunk, error) {
+func (lcp LCPCompletion) ParseChunk(data []byte) (*models.TextChunk, error) {
 	llmchunk := models.LlamaCPPResp{}
 	resp := &models.TextChunk{}
 	if err := json.Unmarshal(data, &llmchunk); err != nil {
@@ -146,11 +146,11 @@ func (lcp LlamaCPPeer) ParseChunk(data []byte) (*models.TextChunk, error) {
 	return resp, nil
 }
 
-func (op OpenAIer) GetToken() string {
+func (op LCPChat) GetToken() string {
 	return ""
 }
 
-func (op OpenAIer) ParseChunk(data []byte) (*models.TextChunk, error) {
+func (op LCPChat) ParseChunk(data []byte) (*models.TextChunk, error) {
 	llmchunk := models.LLMRespChunk{}
 	if err := json.Unmarshal(data, &llmchunk); err != nil {
 		logger.Error("failed to decode", "error", err, "line", string(data))
@@ -181,13 +181,11 @@ func (op OpenAIer) ParseChunk(data []byte) (*models.TextChunk, error) {
 	return resp, nil
 }
 
-func (op OpenAIer) FormMsg(msg, role string, resume bool) (io.Reader, error) {
-	logger.Debug("formmsg openaier", "link", cfg.CurrentAPI)
-
+func (op LCPChat) FormMsg(msg, role string, resume bool) (io.Reader, error) {
+	logger.Debug("formmsg lcpchat", "link", cfg.CurrentAPI)
 	// Capture the image attachment path at the beginning to avoid race conditions
 	// with API rotation that might clear the global variable
 	localImageAttachmentPath := imageAttachmentPath
-
 	if msg != "" { // otherwise let the bot continue
 		// Create the message with support for multimodal content
 		var newMsg models.RoleMsg
@@ -225,8 +223,21 @@ func (op OpenAIer) FormMsg(msg, role string, resume bool) (io.Reader, error) {
 			chatBody.Messages = append(chatBody.Messages, ragMsg)
 		}
 	}
+	// openai /v1/chat does not support custom roles; needs to be user, assistant, system
+	bodyCopy := &models.ChatBody{
+		Messages: make([]models.RoleMsg, len(chatBody.Messages)),
+		Model:    chatBody.Model,
+		Stream:   chatBody.Stream,
+	}
+	for i, msg := range chatBody.Messages {
+		if msg.Role == cfg.UserRole {
+			bodyCopy.Messages[i].Role = "user"
+		} else {
+			bodyCopy.Messages[i] = msg
+		}
+	}
 	req := models.OpenAIReq{
-		ChatBody: chatBody,
+		ChatBody: bodyCopy,
 		Tools:    nil,
 	}
 	if cfg.ToolUse && !resume && role != cfg.ToolRole {
@@ -362,19 +373,14 @@ func (ds DeepSeekerChat) FormMsg(msg, role string, resume bool) (io.Reader, erro
 			chatBody.Messages = append(chatBody.Messages, ragMsg)
 		}
 	}
-	// Create copy of chat body with standardized user role
-	// modifiedBody := *chatBody
 	bodyCopy := &models.ChatBody{
 		Messages: make([]models.RoleMsg, len(chatBody.Messages)),
 		Model:    chatBody.Model,
 		Stream:   chatBody.Stream,
 	}
-	// modifiedBody.Messages = make([]models.RoleMsg, len(chatBody.Messages))
 	for i, msg := range chatBody.Messages {
-		logger.Debug("checking roles", "#", i, "role", msg.Role)
 		if msg.Role == cfg.UserRole || i == 1 {
 			bodyCopy.Messages[i].Role = "user"
-			logger.Debug("replaced role in body", "#", i)
 		} else {
 			bodyCopy.Messages[i] = msg
 		}
@@ -471,8 +477,7 @@ func (or OpenRouterChat) ParseChunk(data []byte) (*models.TextChunk, error) {
 	resp := &models.TextChunk{
 		Chunk: llmchunk.Choices[len(llmchunk.Choices)-1].Delta.Content,
 	}
-
-	// Handle tool calls similar to OpenAIer
+	// Handle tool calls similar to LCPChat
 	if len(llmchunk.Choices[len(llmchunk.Choices)-1].Delta.ToolCalls) > 0 {
 		toolCall := llmchunk.Choices[len(llmchunk.Choices)-1].Delta.ToolCalls[0]
 		resp.ToolChunk = toolCall.Function.Arguments
@@ -486,7 +491,6 @@ func (or OpenRouterChat) ParseChunk(data []byte) (*models.TextChunk, error) {
 	if resp.ToolChunk != "" {
 		resp.ToolResp = true
 	}
-
 	if llmchunk.Choices[len(llmchunk.Choices)-1].FinishReason == "stop" {
 		if resp.Chunk != "" {
 			logger.Error("text inside of finish llmchunk", "chunk", llmchunk)
@@ -563,6 +567,5 @@ func (or OpenRouterChat) FormMsg(msg, role string, resume bool) (io.Reader, erro
 		logger.Error("failed to form a msg", "error", err)
 		return nil, err
 	}
-
 	return bytes.NewReader(data), nil
 }
