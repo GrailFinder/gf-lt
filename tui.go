@@ -312,8 +312,6 @@ var searchIndex int
 var searchText string
 var originalTextForSearch string
 
-
-
 // performSearch searches for the given term in the textView content and highlights matches
 func performSearch(term string) {
 	searchText = term
@@ -388,8 +386,6 @@ func highlightCurrentMatch() {
 	}
 }
 
-
-
 // showSearchBar shows the search input field as an overlay
 func showSearchBar() {
 	// Create a temporary flex to combine search and main content
@@ -451,9 +447,6 @@ func addRegionTags(text string, positions []int, lengths []int, currentIdx int, 
 	return result.String()
 }
 
-
-
-
 // searchNext finds the next occurrence of the search term
 func searchNext() {
 	if len(searchResults) == 0 {
@@ -491,7 +484,10 @@ func init() {
 	textArea.SetBorder(true).SetTitle("input")
 	textView = tview.NewTextView().
 		SetDynamicColors(true).
-		SetRegions(true)
+		SetRegions(true).
+		SetChangedFunc(func() {
+			app.Draw()
+		})
 	//
 	flex = tview.NewFlex().SetDirection(tview.FlexRow).
 		AddItem(textView, 0, 40, false).
