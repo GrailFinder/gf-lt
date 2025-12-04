@@ -293,10 +293,10 @@ func makePropsTable(props map[string]float32) *tview.Table {
 	table.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		if event.Key() == tcell.KeyRune && event.Rune() == 'x' {
 			pages.RemovePage(propsPage)
+			updateStatusLine()
 			return nil
 		}
 		return event
 	})
 	return table
 }
-
