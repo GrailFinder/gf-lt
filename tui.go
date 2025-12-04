@@ -57,13 +57,13 @@ var (
 [yellow]F2[white]: regen last
 [yellow]F3[white]: delete last msg
 [yellow]F4[white]: edit msg
-[yellow]F5[white]: toggle system
+[yellow]F5[white]: toggle fullscreen for input/chat window
 [yellow]F6[white]: interrupt bot resp
 [yellow]F7[white]: copy last msg to clipboard (linux xclip)
 [yellow]F8[white]: copy n msg to clipboard (linux xclip)
 [yellow]F9[white]: table to copy from; with all code blocks
 [yellow]F10[white]: switch if LLM will respond on this message (for user to write multiple messages in a row)
-[yellow]F11[white]: import chat file
+[yellow]F11[white]: import json chat file
 [yellow]F12[white]: show this help page
 [yellow]Ctrl+w[white]: resume generation on the last msg
 [yellow]Ctrl+s[white]: load new char/agent
@@ -73,7 +73,7 @@ var (
 [yellow]Ctrl+o[white]: open image file picker
 [yellow]Ctrl+p[white]: props edit form (min-p, dry, etc.)
 [yellow]Ctrl+v[white]: switch between /completion and /chat api (if provided in config)
-[yellow]Ctrl+r[white]: start/stop recording from your microphone (needs stt server)
+[yellow]Ctrl+r[white]: start/stop recording from your microphone (needs stt server or whisper binary)
 [yellow]Ctrl+t[white]: remove thinking (<think>) and tool messages from context (delete from chat)
 [yellow]Ctrl+l[white]: rotate through free OpenRouter models (if openrouter api) or update connected model name (llamacpp)
 [yellow]Ctrl+k[white]: switch tool use (recommend tool use to llm after user msg)
@@ -83,7 +83,7 @@ var (
 [yellow]Ctrl+y[white]: list loaded RAG files (view and manage loaded files)
 [yellow]Ctrl+q[white]: cycle through mentioned chars in chat, to pick persona to send next msg as
 [yellow]Ctrl+x[white]: cycle through mentioned chars in chat, to pick persona to send next msg as (for llm)
-[yellow]Alt+5[white]: toggle fullscreen for input/chat window
+[yellow]Alt+5[white]: toggle system and tool messages display
 [yellow]Alt+1[white]: toggle shell mode (execute commands locally)
 
 === scrolling chat window (some keys similar to vim) ===
@@ -684,30 +684,10 @@ func init() {
 	}
 	app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		if event.Key() == tcell.KeyRune && event.Rune() == '5' && event.Modifiers()&tcell.ModAlt != 0 {
-			fullscreenMode = !fullscreenMode
-			focused := app.GetFocus()
-			if fullscreenMode {
-				if focused == textArea || focused == textView {
-					flex.Clear()
-					flex.AddItem(focused, 0, 1, true)
-				} else {
-					// if focus is not on textarea or textview, cancel fullscreen
-					fullscreenMode = false
-				}
-			} else {
-				// focused is the fullscreened widget here
-				flex.Clear().
-					AddItem(textView, 0, 40, false).
-					AddItem(textArea, 0, 10, false).
-					AddItem(position, 0, 2, false)
-
-				if focused == textView {
-					app.SetFocus(textView)
-				} else { // default to textArea
-					app.SetFocus(textArea)
-				}
-			}
-			return nil
+			// switch cfg.ShowSys
+			cfg.ShowSys = !cfg.ShowSys
+			textView.SetText(chatToText(cfg.ShowSys))
+			colorText()
 		}
 		if event.Key() == tcell.KeyF1 {
 			// chatList, err := loadHistoryChats()
@@ -768,10 +748,31 @@ func init() {
 			return nil
 		}
 		if event.Key() == tcell.KeyF5 {
-			// switch cfg.ShowSys
-			cfg.ShowSys = !cfg.ShowSys
-			textView.SetText(chatToText(cfg.ShowSys))
-			colorText()
+			// toggle fullscreen
+			fullscreenMode = !fullscreenMode
+			focused := app.GetFocus()
+			if fullscreenMode {
+				if focused == textArea || focused == textView {
+					flex.Clear()
+					flex.AddItem(focused, 0, 1, true)
+				} else {
+					// if focus is not on textarea or textview, cancel fullscreen
+					fullscreenMode = false
+				}
+			} else {
+				// focused is the fullscreened widget here
+				flex.Clear().
+					AddItem(textView, 0, 40, false).
+					AddItem(textArea, 0, 10, false).
+					AddItem(position, 0, 2, false)
+
+				if focused == textView {
+					app.SetFocus(textView)
+				} else { // default to textArea
+					app.SetFocus(textArea)
+				}
+			}
+			return nil
 		}
 		if event.Key() == tcell.KeyF6 {
 			interruptResp = true
