@@ -93,10 +93,13 @@ var (
 [yellow]n[white]: go to next search result
 [yellow]N[white]: go to previous search result
 
+=== tables (chat history, agent pick, file pick, properties) ===
+[yellow]x[white]: to exit the table page
+
 === status line ===
 %s
 
-Press Enter to go back
+Press <Enter> or 'x' to return
 `
 	colorschemes = map[string]tview.Theme{
 		"default": tview.Theme{
@@ -644,8 +647,13 @@ func init() {
 		})
 	helpView.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		switch event.Key() {
-		case tcell.KeyEsc, tcell.KeyEnter:
+		case tcell.KeyEnter:
 			return event
+		default:
+			if event.Key() == tcell.KeyRune && event.Rune() == 'x' {
+				pages.RemovePage(helpPage)
+				return nil
+			}
 		}
 		return nil
 	})
