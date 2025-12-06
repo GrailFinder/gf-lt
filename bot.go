@@ -285,6 +285,9 @@ func sendMsgToLLM(body io.Reader) {
 		if err != nil {
 			logger.Error("error parsing response body", "error", err,
 				"line", string(line), "url", cfg.CurrentAPI)
+			if err := notifyUser("LLM Response Error", "Failed to parse LLM response: "+err.Error()); err != nil {
+				logger.Error("failed to notify user", "error", err)
+			}
 			streamDone <- true
 			break
 		}
