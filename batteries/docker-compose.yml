@@ -1,7 +1,7 @@
 services:
   # Whisper.cpp STT service
   whisper:
-    image: ghcr.io/ggml-org/whisper.cpp:main
+    image: ghcr.io/ggml-org/whisper.cpp:main-cuda
     container_name: whisper-stt
     ports:
       - "8081:8081"
@@ -10,7 +10,7 @@ services:
       - ./audio:/app/audio
     working_dir: /app
     entrypoint: ""
-    command: ["./build/bin/whisper-server", "-m", "/app/models/ggml-tiny.en.bin", "-t", "4", "-p", "1", "--port", "8081", "--host", "0.0.0.0"]
+    command: ["./build/bin/whisper-server", "-m", "/app/models/ggml-large-v3-turbo-q5_0", "-t", "4", "-p", "1", "--port", "8081", "--host", "0.0.0.0"]
     environment:
       - WHISPER_LOG_LEVEL=3
     # Restart policy in case the service fails
