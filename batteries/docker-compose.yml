@@ -6,15 +6,15 @@ services:
     ports:
       - "8081:8081"
     volumes:
-      - ./models:/app/models
-      - ./audio:/app/audio
+      - ./whisper.cpp/models:/app/models
     working_dir: /app
     entrypoint: ""
-    command: ["./build/bin/whisper-server", "-m", "/app/models/ggml-large-v3-turbo-q5_0", "-t", "4", "-p", "1", "--port", "8081", "--host", "0.0.0.0"]
+    command: ["./build/bin/whisper-server", "-m", "/app/models/ggml-large-v3-turbo.bin", "-t", "4", "-p", "1", "--port", "8081", "--host", "0.0.0.0"]
     environment:
       - WHISPER_LOG_LEVEL=3
     # Restart policy in case the service fails
     restart: unless-stopped
+
 
   # Kokoro-FastAPI TTS service
   kokoro-tts:

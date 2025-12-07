@@ -22,8 +22,6 @@ build-whisper: ## Build whisper.cpp from source in batteries directory
 		git clone https://github.com/ggml-org/whisper.cpp.git batteries/whisper.cpp; \
 	fi
 	cd batteries/whisper.cpp && make build
-	@echo "Creating symlink to whisper-cli binary..."
-	@ln -sf batteries/whisper.cpp/build/bin/whisper-cli ./whisper-cli
 	@echo "Whisper binary built successfully!"
 
 download-whisper-model: ## Download Whisper model for STT in batteries directory
@@ -32,9 +30,7 @@ download-whisper-model: ## Download Whisper model for STT in batteries directory
 		echo "Please run 'make setup-whisper' first to clone the repository."; \
 		exit 1; \
 	fi
-	@cd batteries/whisper.cpp && make tiny.en
-	@echo "Creating symlink to Whisper model..."
-	@ln -sf batteries/whisper.cpp/models/ggml-tiny.en.bin ./ggml-model.bin
+	@cd batteries/whisper.cpp && make large-v3-turbo
 	@echo "Whisper model downloaded successfully!"
 
 # Docker targets for STT/TTS services (in batteries directory)
