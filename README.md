@@ -64,3 +64,12 @@ Ctrl+x: cycle through mentioned chars in chat, to pick persona to send next msg 
 cp config.example.toml config.toml
 ```
 set values as you need them to be.
+
+#### setting up STT/TTS services
+For speech-to-text (STT) and text-to-speech (TTS) functionality:
+1. The project uses Whisper.cpp for STT and Kokoro for TTS
+2. Docker Compose automatically downloads the required Whisper model on first run
+3. To start the services: `make docker-up`
+4. To stop the services: `make docker-down`
+5. The STT service runs on http://localhost:8081
+6. The TTS service runs on http://localhost:8880

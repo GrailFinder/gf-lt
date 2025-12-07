@@ -36,6 +36,7 @@ download-whisper-model: ## Download Whisper model for STT in batteries directory
 # Docker targets for STT/TTS services (in batteries directory)
 docker-up: ## Start Docker Compose services for STT and TTS from batteries directory
 	@echo "Starting Docker services for STT (whisper) and TTS (kokoro)..."
+	@echo "Note: The Whisper model will be downloaded automatically inside the container on first run"
 	docker-compose -f batteries/docker-compose.yml up -d
 	@echo "Docker services started. STT available at http://localhost:8081, TTS available at http://localhost:8880"
 
@@ -51,3 +52,4 @@ docker-logs: ## View logs from Docker services in batteries directory
 # Convenience target to setup everything
 setup-complete: setup-whisper docker-up
 	@echo "Complete setup finished! STT and TTS services are running."
+	@echo "Note: Docker services will download the Whisper model automatically if not present."
