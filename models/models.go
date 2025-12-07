@@ -230,6 +230,38 @@ func NewMultimodalMsg(role string, contentParts []interface{}) RoleMsg {
 	}
 }
 
+// HasContent returns true if the message has either string content or structured content parts
+func (m RoleMsg) HasContent() bool {
+	if m.Content != "" {
+		return true
+	}
+	if m.hasContentParts && len(m.ContentParts) > 0 {
+		return true
+	}
+	return false
+}
+
+// IsContentParts returns true if the message uses structured content parts
+func (m RoleMsg) IsContentParts() bool {
+	return m.hasContentParts
+}
+
+// GetContentParts returns the content parts of the message
+func (m RoleMsg) GetContentParts() []interface{} {
+	return m.ContentParts
+}
+
+// Copy creates a copy of the RoleMsg with all fields
+func (m RoleMsg) Copy() RoleMsg {
+	return RoleMsg{
+		Role:            m.Role,
+		Content:         m.Content,
+		ContentParts:    m.ContentParts,
+		ToolCallID:      m.ToolCallID,
+		hasContentParts: m.hasContentParts,
+	}
+}
+
 // AddTextPart adds a text content part to the message
 func (m *RoleMsg) AddTextPart(text string) {
 	if !m.hasContentParts {

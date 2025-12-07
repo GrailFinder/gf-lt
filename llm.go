@@ -236,6 +236,8 @@ func (op LCPChat) FormMsg(msg, role string, resume bool) (io.Reader, error) {
 			bodyCopy.Messages[i] = msg
 		}
 	}
+	// Clean null/empty messages to prevent API issues
+	bodyCopy.Messages = cleanNullMessages(bodyCopy.Messages)
 	req := models.OpenAIReq{
 		ChatBody: bodyCopy,
 		Tools:    nil,
@@ -385,6 +387,8 @@ func (ds DeepSeekerChat) FormMsg(msg, role string, resume bool) (io.Reader, erro
 			bodyCopy.Messages[i] = msg
 		}
 	}
+	// Clean null/empty messages to prevent API issues
+	bodyCopy.Messages = cleanNullMessages(bodyCopy.Messages)
 	dsBody := models.NewDSChatReq(*bodyCopy)
 	data, err := json.Marshal(dsBody)
 	if err != nil {

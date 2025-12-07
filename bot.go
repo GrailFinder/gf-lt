@@ -67,6 +67,80 @@ var (
 	}
 )
 
+// cleanNullMessages removes messages with null or empty content to prevent API issues
+func cleanNullMessages(messages []models.RoleMsg) []models.RoleMsg {
+	cleaned := make([]models.RoleMsg, 0, len(messages))
+	for _, msg := range messages {
+		// Include message if it has content or if it's a tool response (which might have tool_call_id)
+		if msg.HasContent() || msg.ToolCallID != "" {
+			cleaned = append(cleaned, msg)
+		}
+	}
+	return consolidateConsecutiveAssistantMessages(cleaned)
+}
+
+// consolidateConsecutiveAssistantMessages merges consecutive assistant messages into a single message
+func consolidateConsecutiveAssistantMessages(messages []models.RoleMsg) []models.RoleMsg {
+	if len(messages) == 0 {
+		return messages
+	}
+
+	consolidated := make([]models.RoleMsg, 0, len(messages))
+	currentAssistantMsg := models.RoleMsg{}
+	isBuildingAssistantMsg := false
+
+	for i := 0; i < len(messages); i++ {
+		msg := messages[i]
+
+		if msg.Role == cfg.AssistantRole || msg.Role == cfg.WriteNextMsgAsCompletionAgent {
+			// If this is an assistant message, start or continue building
+			if !isBuildingAssistantMsg {
+				// Start accumulating assistant message
+				currentAssistantMsg = msg.Copy()
+				isBuildingAssistantMsg = true
+			} else {
+				// Continue accumulating - append content to the current assistant message
+				if currentAssistantMsg.IsContentParts() || msg.IsContentParts() {
+					// Handle structured content
+					if !currentAssistantMsg.IsContentParts() {
+						// Convert existing content to content parts
+						currentAssistantMsg = models.NewMultimodalMsg(currentAssistantMsg.Role, []interface{}{models.TextContentPart{Type: "text", Text: currentAssistantMsg.Content}})
+						currentAssistantMsg.ToolCallID = msg.ToolCallID
+					}
+					if msg.IsContentParts() {
+						currentAssistantMsg.ContentParts = append(currentAssistantMsg.ContentParts, msg.GetContentParts()...)
+					} else if msg.Content != "" {
+						currentAssistantMsg.AddTextPart(msg.Content)
+					}
+				} else {
+					// Simple string content
+					if currentAssistantMsg.Content != "" {
+						currentAssistantMsg.Content += "\n" + msg.Content
+					} else {
+						currentAssistantMsg.Content = msg.Content
+					}
+				}
+			}
+		} else {
+			// This is not an assistant message
+			// If we were building an assistant message, add it to the result
+			if isBuildingAssistantMsg {
+				consolidated = append(consolidated, currentAssistantMsg)
+				isBuildingAssistantMsg = false
+			}
+			// Add the non-assistant message
+			consolidated = append(consolidated, msg)
+		}
+	}
+
+	// Don't forget the last assistant message if we were building one
+	if isBuildingAssistantMsg {
+		consolidated = append(consolidated, currentAssistantMsg)
+	}
+
+	return consolidated
+}
+
 // GetLogLevel returns the current log level as a string
 func GetLogLevel() string {
 	level := logLevel.Level()
@@ -481,6 +555,10 @@ out:
 			Role: botPersona, Content: respText.String(),
 		})
 	}
+
+	// Clean null/empty messages to prevent API issues with endpoints like llama.cpp jinja template
+	cleanChatBody()
+
 	colorText()
 	updateStatusLine()
 	// bot msg is done;
@@ -490,6 +568,15 @@ out:
 		logger.Warn("failed to update storage", "error", err, "name", activeChatName)
 	}
 	findCall(respText.String(), toolResp.String(), tv)
+}
+
+// cleanChatBody removes messages with null or empty content to prevent API issues
+func cleanChatBody() {
+	if chatBody != nil && chatBody.Messages != nil {
+		originalLen := len(chatBody.Messages)
+		chatBody.Messages = cleanNullMessages(chatBody.Messages)
+		logger.Debug("cleaned chat body", "original_len", originalLen, "new_len", len(chatBody.Messages))
+	}
 }
 
 func findCall(msg, toolCall string, tv *tview.TextView) {
