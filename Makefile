@@ -21,7 +21,7 @@ build-whisper: ## Build whisper.cpp from source in batteries directory
 		echo "Cloning whisper.cpp repository to batteries directory..."; \
 		git clone https://github.com/ggml-org/whisper.cpp.git batteries/whisper.cpp; \
 	fi
-	cd batteries/whisper.cpp && make build
+	cd batteries/whisper.cpp && cmake -B build -DGGML_CUDA=ON -DWHISPER_SDL2=ON; cmake --build build --config Release -j 8
 	@echo "Whisper binary built successfully!"
 
 download-whisper-model: ## Download Whisper model for STT in batteries directory
@@ -34,22 +34,46 @@ download-whisper-model: ## Download Whisper model for STT in batteries directory
 	@echo "Whisper model downloaded successfully!"
 
 # Docker targets for STT/TTS services (in batteries directory)
-docker-up: ## Start Docker Compose services for STT and TTS from batteries directory
+docker-up: ## Start all Docker Compose services for STT and TTS from batteries directory
 	@echo "Starting Docker services for STT (whisper) and TTS (kokoro)..."
 	@echo "Note: The Whisper model will be downloaded automatically inside the container on first run"
 	docker-compose -f batteries/docker-compose.yml up -d
 	@echo "Docker services started. STT available at http://localhost:8081, TTS available at http://localhost:8880"
 
-docker-down: ## Stop Docker Compose services from batteries directory
+docker-up-whisper: ## Start only the Whisper STT service
+	@echo "Starting Whisper STT service only..."
+	@echo "Note: The Whisper model will be downloaded automatically inside the container on first run"
+	docker-compose -f batteries/docker-compose.yml up -d whisper
+	@echo "Whisper STT service started. Available at http://localhost:8081"
+
+docker-up-kokoro: ## Start only the Kokoro TTS service
+	@echo "Starting Kokoro TTS service only..."
+	docker-compose -f batteries/docker-compose.yml up -d kokoro-tts
+	@echo "Kokoro TTS service started. Available at http://localhost:8880"
+
+docker-down: ## Stop all Docker Compose services from batteries directory
 	@echo "Stopping Docker services..."
 	docker-compose -f batteries/docker-compose.yml down
 	@echo "Docker services stopped"
 
-docker-logs: ## View logs from Docker services in batteries directory
+docker-down-whisper: ## Stop only the Whisper STT service
+	@echo "Stopping Whisper STT service..."
+	docker-compose -f batteries/docker-compose.yml down whisper
+	@echo "Whisper STT service stopped"
+
+docker-down-kokoro: ## Stop only the Kokoro TTS service
+	@echo "Stopping Kokoro TTS service..."
+	docker-compose -f batteries/docker-compose.yml down kokoro-tts
+	@echo "Kokoro TTS service stopped"
+
+docker-logs: ## View logs from all Docker services in batteries directory
 	@echo "Displaying logs from Docker services..."
 	docker-compose -f batteries/docker-compose.yml logs -f
 
-# Convenience target to setup everything
-setup-complete: setup-whisper docker-up
-	@echo "Complete setup finished! STT and TTS services are running."
-	@echo "Note: Docker services will download the Whisper model automatically if not present."
+docker-logs-whisper: ## View logs from Whisper STT service only
+	@echo "Displaying logs from Whisper STT service..."
+	docker-compose -f batteries/docker-compose.yml logs -f whisper
+
+docker-logs-kokoro: ## View logs from Kokoro TTS service only
+	@echo "Displaying logs from Kokoro TTS service..."
+	docker-compose -f batteries/docker-compose.yml logs -f kokoro-tts

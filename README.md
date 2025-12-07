@@ -69,7 +69,14 @@ set values as you need them to be.
 For speech-to-text (STT) and text-to-speech (TTS) functionality:
 1. The project uses Whisper.cpp for STT and Kokoro for TTS
 2. Docker Compose automatically downloads the required Whisper model on first run
-3. To start the services: `make docker-up`
-4. To stop the services: `make docker-down`
-5. The STT service runs on http://localhost:8081
-6. The TTS service runs on http://localhost:8880
+3. To start all services: `make docker-up`
+4. To start only STT service: `make docker-up-whisper`
+5. To start only TTS service: `make docker-up-kokoro`
+6. To stop all services: `make docker-down`
+7. To stop only STT service: `make docker-down-whisper`
+8. To stop only TTS service: `make docker-down-kokoro`
+9. To view all service logs: `make docker-logs`
+10. To view only STT service logs: `make docker-logs-whisper`
+11. To view only TTS service logs: `make docker-logs-kokoro`
+12. The STT service runs on http://localhost:8081
+13. The TTS service runs on http://localhost:8880
