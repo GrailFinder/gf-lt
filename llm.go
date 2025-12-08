@@ -568,6 +568,8 @@ func (or OpenRouterChat) FormMsg(msg, role string, resume bool) (io.Reader, erro
 			bodyCopy.Messages[i].Role = "user"
 		}
 	}
+	// Clean null/empty messages to prevent API issues
+	bodyCopy.Messages = cleanNullMessages(bodyCopy.Messages)
 	orBody := models.NewOpenRouterChatReq(*bodyCopy, defaultLCPProps)
 	if cfg.ToolUse && !resume && role != cfg.ToolRole {
 		orBody.Tools = baseTools // set tools to use
