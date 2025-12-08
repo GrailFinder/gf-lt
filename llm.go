@@ -211,6 +211,8 @@ func (op LCPChat) FormMsg(msg, role string, resume bool) (io.Reader, error) {
 			newMsg = models.NewRoleMsg(role, msg)
 		}
 		chatBody.Messages = append(chatBody.Messages, newMsg)
+		logger.Debug("LCPChat FormMsg: added message to chatBody", "role", newMsg.Role, "content_len", len(newMsg.Content), "message_count_after_add", len(chatBody.Messages))
+
 		// if rag - add as system message to avoid conflicts with tool usage
 		if cfg.RAGEnabled {
 			ragResp, err := chatRagUse(newMsg.Content)
@@ -221,6 +223,7 @@ func (op LCPChat) FormMsg(msg, role string, resume bool) (io.Reader, error) {
 			// Use system role for RAG context to avoid conflicts with tool usage
 			ragMsg := models.RoleMsg{Role: "system", Content: RAGMsg + ragResp}
 			chatBody.Messages = append(chatBody.Messages, ragMsg)
+			logger.Debug("LCPChat FormMsg: added RAG message to chatBody", "role", ragMsg.Role, "rag_content_len", len(ragMsg.Content), "message_count_after_rag", len(chatBody.Messages))
 		}
 	}
 	// openai /v1/chat does not support custom roles; needs to be user, assistant, system
@@ -231,6 +234,7 @@ func (op LCPChat) FormMsg(msg, role string, resume bool) (io.Reader, error) {
 	}
 	for i, msg := range chatBody.Messages {
 		if msg.Role == cfg.UserRole {
+			bodyCopy.Messages[i] = msg
 			bodyCopy.Messages[i].Role = "user"
 		} else {
 			bodyCopy.Messages[i] = msg
@@ -382,6 +386,7 @@ func (ds DeepSeekerChat) FormMsg(msg, role string, resume bool) (io.Reader, erro
 	}
 	for i, msg := range chatBody.Messages {
 		if msg.Role == cfg.UserRole || i == 1 {
+			bodyCopy.Messages[i] = msg
 			bodyCopy.Messages[i].Role = "user"
 		} else {
 			bodyCopy.Messages[i] = msg
@@ -559,6 +564,7 @@ func (or OpenRouterChat) FormMsg(msg, role string, resume bool) (io.Reader, erro
 		bodyCopy.Messages[i] = msg
 		// Standardize role if it's a user role
 		if bodyCopy.Messages[i].Role == cfg.UserRole {
+			bodyCopy.Messages[i] = msg
 			bodyCopy.Messages[i].Role = "user"
 		}
 	}

@@ -48,7 +48,7 @@ type KokoroOrator struct {
 
 func (o *KokoroOrator) stoproutine() {
 	<-TTSDoneChan
-	o.logger.Info("orator got done signal")
+	o.logger.Debug("orator got done signal")
 	o.Stop()
 	// drain the channel
 	for len(TTSTextChan) > 0 {
@@ -72,7 +72,7 @@ func (o *KokoroOrator) readroutine() {
 			}
 			text := o.textBuffer.String()
 			sentences := tokenizer.Tokenize(text)
-			o.logger.Info("adding chunk", "chunk", chunk, "text", text, "sen-len", len(sentences))
+			o.logger.Debug("adding chunk", "chunk", chunk, "text", text, "sen-len", len(sentences))
 			for i, sentence := range sentences {
 				if i == len(sentences)-1 { // last sentence
 					o.textBuffer.Reset()
@@ -83,13 +83,13 @@ func (o *KokoroOrator) readroutine() {
 					}
 					continue // if only one (often incomplete) sentence; wait for next chunk
 				}
-				o.logger.Info("calling Speak with sentence", "sent", sentence.Text)
+				o.logger.Debug("calling Speak with sentence", "sent", sentence.Text)
 				if err := o.Speak(sentence.Text); err != nil {
 					o.logger.Error("tts failed", "sentence", sentence.Text, "error", err)
 				}
 			}
 		case <-TTSFlushChan:
-			o.logger.Info("got flushchan signal start")
+			o.logger.Debug("got flushchan signal start")
 			// lln is done get the whole message out
 			if len(TTSTextChan) > 0 { // otherwise might get stuck
 				for chunk := range TTSTextChan {
@@ -110,7 +110,7 @@ func (o *KokoroOrator) readroutine() {
 			remaining := o.textBuffer.String()
 			o.textBuffer.Reset()
 			if remaining != "" {
-				o.logger.Info("calling Speak with remainder", "rem", remaining)
+				o.logger.Debug("calling Speak with remainder", "rem", remaining)
 				if err := o.Speak(remaining); err != nil {
 					o.logger.Error("tts failed", "sentence", remaining, "error", err)
 				}
@@ -171,7 +171,7 @@ func (o *KokoroOrator) requestSound(text string) (io.ReadCloser, error) {
 }
 
 func (o *KokoroOrator) Speak(text string) error {
-	o.logger.Info("fn: Speak is called", "text-len", len(text))
+	o.logger.Debug("fn: Speak is called", "text-len", len(text))
 	body, err := o.requestSound(text)
 	if err != nil {
 		o.logger.Error("request failed", "error", err)
@@ -202,7 +202,7 @@ func (o *KokoroOrator) Speak(text string) error {
 
 func (o *KokoroOrator) Stop() {
 	// speaker.Clear()
-	o.logger.Info("attempted to stop orator", "orator", o)
+	o.logger.Debug("attempted to stop orator", "orator", o)
 	speaker.Lock()
 	defer speaker.Unlock()
 	if o.currentStream != nil {

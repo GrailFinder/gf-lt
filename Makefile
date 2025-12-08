@@ -30,7 +30,7 @@ download-whisper-model: ## Download Whisper model for STT in batteries directory
 		echo "Please run 'make setup-whisper' first to clone the repository."; \
 		exit 1; \
 	fi
-	@cd batteries/whisper.cpp && make large-v3-turbo
+	@cd batteries/whisper.cpp && bash ./models/download-ggml-model.sh large-v3-turbo-q5_0
 	@echo "Whisper model downloaded successfully!"
 
 # Docker targets for STT/TTS services (in batteries directory)

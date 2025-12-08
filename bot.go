@@ -74,6 +74,9 @@ func cleanNullMessages(messages []models.RoleMsg) []models.RoleMsg {
 		// Include message if it has content or if it's a tool response (which might have tool_call_id)
 		if msg.HasContent() || msg.ToolCallID != "" {
 			cleaned = append(cleaned, msg)
+		} else {
+			// Log filtered messages for debugging
+			logger.Warn("filtering out message during cleaning", "role", msg.Role, "content", msg.Content, "tool_call_id", msg.ToolCallID, "has_content", msg.HasContent())
 		}
 	}
 	return consolidateConsecutiveAssistantMessages(cleaned)
@@ -103,9 +106,12 @@ func consolidateConsecutiveAssistantMessages(messages []models.RoleMsg) []models
 				if currentAssistantMsg.IsContentParts() || msg.IsContentParts() {
 					// Handle structured content
 					if !currentAssistantMsg.IsContentParts() {
+						// Preserve the original ToolCallID before conversion
+						originalToolCallID := currentAssistantMsg.ToolCallID
 						// Convert existing content to content parts
 						currentAssistantMsg = models.NewMultimodalMsg(currentAssistantMsg.Role, []interface{}{models.TextContentPart{Type: "text", Text: currentAssistantMsg.Content}})
-						currentAssistantMsg.ToolCallID = msg.ToolCallID
+						// Restore the original ToolCallID to preserve tool call linking
+						currentAssistantMsg.ToolCallID = originalToolCallID
 					}
 					if msg.IsContentParts() {
 						currentAssistantMsg.ContentParts = append(currentAssistantMsg.ContentParts, msg.GetContentParts()...)
@@ -119,6 +125,7 @@ func consolidateConsecutiveAssistantMessages(messages []models.RoleMsg) []models
 					} else {
 						currentAssistantMsg.Content = msg.Content
 					}
+					// ToolCallID is already preserved since we're not creating a new message object when just concatenating content
 				}
 			}
 		} else {
@@ -556,8 +563,18 @@ out:
 		})
 	}
 
+	logger.Debug("chatRound: before cleanChatBody", "messages_before_clean", len(chatBody.Messages))
+	for i, msg := range chatBody.Messages {
+		logger.Debug("chatRound: before cleaning", "index", i, "role", msg.Role, "content_len", len(msg.Content), "has_content", msg.HasContent(), "tool_call_id", msg.ToolCallID)
+	}
+
 	// Clean null/empty messages to prevent API issues with endpoints like llama.cpp jinja template
 	cleanChatBody()
+
+	logger.Debug("chatRound: after cleanChatBody", "messages_after_clean", len(chatBody.Messages))
+	for i, msg := range chatBody.Messages {
+		logger.Debug("chatRound: after cleaning", "index", i, "role", msg.Role, "content_len", len(msg.Content), "has_content", msg.HasContent(), "tool_call_id", msg.ToolCallID)
+	}
 
 	colorText()
 	updateStatusLine()
@@ -574,8 +591,17 @@ out:
 func cleanChatBody() {
 	if chatBody != nil && chatBody.Messages != nil {
 		originalLen := len(chatBody.Messages)
+		logger.Debug("cleanChatBody: before cleaning", "message_count", originalLen)
+		for i, msg := range chatBody.Messages {
+			logger.Debug("cleanChatBody: before clean", "index", i, "role", msg.Role, "content_len", len(msg.Content), "has_content", msg.HasContent(), "tool_call_id", msg.ToolCallID)
+		}
+
 		chatBody.Messages = cleanNullMessages(chatBody.Messages)
-		logger.Debug("cleaned chat body", "original_len", originalLen, "new_len", len(chatBody.Messages))
+
+		logger.Debug("cleanChatBody: after cleaning", "original_len", originalLen, "new_len", len(chatBody.Messages))
+		for i, msg := range chatBody.Messages {
+			logger.Debug("cleanChatBody: after clean", "index", i, "role", msg.Role, "content_len", len(msg.Content), "has_content", msg.HasContent(), "tool_call_id", msg.ToolCallID)
+		}
 	}
 }
 
@@ -621,6 +647,7 @@ func findCall(msg, toolCall string, tv *tview.TextView) {
 				Content: fmt.Sprintf("Error processing tool call: %v. Please check the JSON format and try again.", err),
 			}
 			chatBody.Messages = append(chatBody.Messages, toolResponseMsg)
+			logger.Debug("findCall: added tool error response", "role", toolResponseMsg.Role, "content_len", len(toolResponseMsg.Content), "message_count_after_add", len(chatBody.Messages))
 			// Trigger the assistant to continue processing with the error message
 			chatRound("", cfg.AssistantRole, tv, false, false)
 			return
@@ -637,6 +664,7 @@ func findCall(msg, toolCall string, tv *tview.TextView) {
 			ToolCallID: lastToolCallID, // Use the stored tool call ID
 		}
 		chatBody.Messages = append(chatBody.Messages, toolResponseMsg)
+		logger.Debug("findCall: added tool not implemented response", "role", toolResponseMsg.Role, "content_len", len(toolResponseMsg.Content), "tool_call_id", toolResponseMsg.ToolCallID, "message_count_after_add", len(chatBody.Messages))
 		// Clear the stored tool call ID after using it
 		lastToolCallID = ""
 
@@ -657,6 +685,7 @@ func findCall(msg, toolCall string, tv *tview.TextView) {
 		ToolCallID: lastToolCallID, // Use the stored tool call ID
 	}
 	chatBody.Messages = append(chatBody.Messages, toolResponseMsg)
+	logger.Debug("findCall: added actual tool response", "role", toolResponseMsg.Role, "content_len", len(toolResponseMsg.Content), "tool_call_id", toolResponseMsg.ToolCallID, "message_count_after_add", len(chatBody.Messages))
 	// Clear the stored tool call ID after using it
 	lastToolCallID = ""
 	// Trigger the assistant to continue processing with the new tool response
