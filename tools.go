@@ -90,7 +90,7 @@ Your current tools:
 {
 "name":"execute_command",
 "args": ["command", "args"],
-"when_to_use": "when asked to execute a system command; args is optional"
+"when_to_use": "when asked to execute a system command; args is optional; allowed commands: grep, sed, awk, find, cat, head, tail, sort, uniq, wc, ls, echo, cut, tr, cp, mv, rm, mkdir, rmdir, pwd, df, free, ps, top, du, whoami, date, uname"
 }
 ]
 </tools>
@@ -100,6 +100,14 @@ __tool_call__
 {
 "name":"recall",
 "args": {"topic": "Adam's number"}
+}
+__tool_call__
+</example_request>
+<example_request>
+__tool_call__
+{
+"name":"execute_command",
+"args": {"command": "ls", "args": "-la /home"}
 }
 __tool_call__
 </example_request>
@@ -784,6 +792,14 @@ func isCommandAllowed(command string) bool {
 		"mkdir": true,
 		"rmdir": true,
 		"pwd":   true,
+		"df":    true,
+		"free":  true,
+		"ps":    true,
+		"top":   true,
+		"du":    true,
+		"whoami": true,
+		"date":  true,
+		"uname": true,
 	}
 	return allowedCommands[command]
 }
@@ -1045,14 +1061,14 @@ var baseTools = []models.Tool{
 		Type: "function",
 		Function: models.ToolFunc{
 			Name:        "execute_command",
-			Description: "Execute a shell command safely. Use when you need to run system commands like grep sed awk find cat head tail sort uniq wc ls echo cut tr cp mv rm mkdir rmdir pwd",
+			Description: "Execute a shell command safely. Use when you need to run system commands like grep sed awk find cat head tail sort uniq wc ls echo cut tr cp mv rm mkdir rmdir pwd df free ps top du whoami date uname",
 			Parameters: models.ToolFuncParams{
 				Type:     "object",
 				Required: []string{"command"},
 				Properties: map[string]models.ToolArgProps{
 					"command": models.ToolArgProps{
 						Type:        "string",
-						Description: "command to execute (only commands from whitelist are allowed: grep sed awk find cat head tail sort uniq wc ls echo cut tr cp mv rm mkdir rmdir pwd",
+						Description: "command to execute (only commands from whitelist are allowed: grep sed awk find cat head tail sort uniq wc ls echo cut tr cp mv rm mkdir rmdir pwd df free ps top du whoami date uname",
 					},
 					"args": models.ToolArgProps{
 						Type:        "string",

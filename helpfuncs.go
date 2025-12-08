@@ -118,7 +118,7 @@ func renameUser(oldname, newname string) {
 			if role == cfg.AssistantRole {
 				continue
 			}
-			if role == cfg.ToolRole {
+			if role == "tool" {
 				continue
 			}
 			if role == "system" {
