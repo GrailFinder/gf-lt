@@ -121,6 +121,9 @@ func makePropsTable(props map[string]float32) *tview.Table {
 	addCheckboxRow("Inject role", injectRole, func(checked bool) {
 		injectRole = checked
 	})
+	addCheckboxRow("TTS Enabled", cfg.TTS_ENABLED, func(checked bool) {
+		cfg.TTS_ENABLED = checked
+	})
 	// Add dropdowns
 	logLevels := []string{"Debug", "Info", "Warn"}
 	addListPopupRow("Set log level", logLevels, GetLogLevel(), func(option string) {
