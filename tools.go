@@ -543,6 +543,225 @@ func executeCommand(args map[string]string) []byte {
 
 // Helper functions for command execution
 
+// Todo structure
+type TodoItem struct {
+	ID     string `json:"id"`
+	Task   string `json:"task"`
+	Status string `json:"status"` // "pending", "in_progress", "completed"
+}
+
+type TodoList struct {
+	Items []TodoItem `json:"items"`
+}
+
+// Global todo list storage
+var globalTodoList = TodoList{
+	Items: []TodoItem{},
+}
+
+func getTodoList() TodoList {
+	return globalTodoList
+}
+
+func setTodoList(todoList TodoList) {
+	globalTodoList = todoList
+}
+
+// Todo Management Tools
+func todoCreate(args map[string]string) []byte {
+	task, ok := args["task"]
+	if !ok || task == "" {
+		msg := "task not provided to todo_create tool"
+		logger.Error(msg)
+		return []byte(msg)
+	}
+
+	// Generate simple ID
+	id := fmt.Sprintf("todo_%d", len(globalTodoList.Items)+1)
+
+	newItem := TodoItem{
+		ID:     id,
+		Task:   task,
+		Status: "pending",
+	}
+
+	globalTodoList.Items = append(globalTodoList.Items, newItem)
+
+	result := map[string]string{
+		"message": "todo created successfully",
+		"id":      id,
+		"task":    task,
+		"status":  "pending",
+	}
+
+	jsonResult, err := json.Marshal(result)
+	if err != nil {
+		msg := "failed to marshal result; error: " + err.Error()
+		logger.Error(msg)
+		return []byte(msg)
+	}
+
+	return jsonResult
+}
+
+func todoRead(args map[string]string) []byte {
+	id, ok := args["id"]
+	if ok && id != "" {
+		// Find specific todo by ID
+		for _, item := range globalTodoList.Items {
+			if item.ID == id {
+				result := map[string]interface{}{
+					"todo": item,
+				}
+				jsonResult, err := json.Marshal(result)
+				if err != nil {
+					msg := "failed to marshal result; error: " + err.Error()
+					logger.Error(msg)
+					return []byte(msg)
+				}
+				return jsonResult
+			}
+		}
+		// ID not found
+		result := map[string]string{
+			"error": fmt.Sprintf("todo with id %s not found", id),
+		}
+		jsonResult, err := json.Marshal(result)
+		if err != nil {
+			msg := "failed to marshal result; error: " + err.Error()
+			logger.Error(msg)
+			return []byte(msg)
+		}
+		return jsonResult
+	}
+
+	// Return all todos if no ID specified
+	result := map[string]interface{}{
+		"todos": globalTodoList.Items,
+	}
+	jsonResult, err := json.Marshal(result)
+	if err != nil {
+		msg := "failed to marshal result; error: " + err.Error()
+		logger.Error(msg)
+		return []byte(msg)
+	}
+
+	return jsonResult
+}
+
+func todoUpdate(args map[string]string) []byte {
+	id, ok := args["id"]
+	if !ok || id == "" {
+		msg := "id not provided to todo_update tool"
+		logger.Error(msg)
+		return []byte(msg)
+	}
+
+	task, taskOk := args["task"]
+	status, statusOk := args["status"]
+
+	if !taskOk && !statusOk {
+		msg := "neither task nor status provided to todo_update tool"
+		logger.Error(msg)
+		return []byte(msg)
+	}
+
+	// Find and update the todo
+	for i, item := range globalTodoList.Items {
+		if item.ID == id {
+			if taskOk {
+				globalTodoList.Items[i].Task = task
+			}
+			if statusOk {
+				// Validate status
+				if status == "pending" || status == "in_progress" || status == "completed" {
+					globalTodoList.Items[i].Status = status
+				} else {
+					result := map[string]string{
+						"error": "status must be one of: pending, in_progress, completed",
+					}
+					jsonResult, err := json.Marshal(result)
+					if err != nil {
+						msg := "failed to marshal result; error: " + err.Error()
+						logger.Error(msg)
+						return []byte(msg)
+					}
+					return jsonResult
+				}
+			}
+
+			result := map[string]string{
+				"message": "todo updated successfully",
+				"id":      id,
+			}
+
+			jsonResult, err := json.Marshal(result)
+			if err != nil {
+				msg := "failed to marshal result; error: " + err.Error()
+				logger.Error(msg)
+				return []byte(msg)
+			}
+
+			return jsonResult
+		}
+	}
+
+	// ID not found
+	result := map[string]string{
+		"error": fmt.Sprintf("todo with id %s not found", id),
+	}
+	jsonResult, err := json.Marshal(result)
+	if err != nil {
+		msg := "failed to marshal result; error: " + err.Error()
+		logger.Error(msg)
+		return []byte(msg)
+	}
+	return jsonResult
+}
+
+func todoDelete(args map[string]string) []byte {
+	id, ok := args["id"]
+	if !ok || id == "" {
+		msg := "id not provided to todo_delete tool"
+		logger.Error(msg)
+		return []byte(msg)
+	}
+
+	// Find and remove the todo
+	for i, item := range globalTodoList.Items {
+		if item.ID == id {
+			// Remove item from slice
+			globalTodoList.Items = append(globalTodoList.Items[:i], globalTodoList.Items[i+1:]...)
+
+			result := map[string]string{
+				"message": "todo deleted successfully",
+				"id":      id,
+			}
+
+			jsonResult, err := json.Marshal(result)
+			if err != nil {
+				msg := "failed to marshal result; error: " + err.Error()
+				logger.Error(msg)
+				return []byte(msg)
+			}
+
+			return jsonResult
+		}
+	}
+
+	// ID not found
+	result := map[string]string{
+		"error": fmt.Sprintf("todo with id %s not found", id),
+	}
+	jsonResult, err := json.Marshal(result)
+	if err != nil {
+		msg := "failed to marshal result; error: " + err.Error()
+		logger.Error(msg)
+		return []byte(msg)
+	}
+	return jsonResult
+}
+
 func isCommandAllowed(command string) bool {
 	allowedCommands := map[string]bool{
 		"grep":  true,
@@ -584,6 +803,10 @@ var fnMap = map[string]fnSig{
 	"file_copy":       fileCopy,
 	"file_list":       fileList,
 	"execute_command": executeCommand,
+	"todo_create":     todoCreate,
+	"todo_read":       todoRead,
+	"todo_update":     todoUpdate,
+	"todo_delete":     todoDelete,
 }
 
 // openai style def
@@ -834,6 +1057,86 @@ var baseTools = []models.Tool{
 					"args": models.ToolArgProps{
 						Type:        "string",
 						Description: "command arguments as a single string (e.g., '-la {path}')",
+					},
+				},
+			},
+		},
+	},
+	// todo_create
+	models.Tool{
+		Type: "function",
+		Function: models.ToolFunc{
+			Name:        "todo_create",
+			Description: "Create a new todo item with a task. Returns the created todo with its ID.",
+			Parameters: models.ToolFuncParams{
+				Type:     "object",
+				Required: []string{"task"},
+				Properties: map[string]models.ToolArgProps{
+					"task": models.ToolArgProps{
+						Type:        "string",
+						Description: "the task description to add to the todo list",
+					},
+				},
+			},
+		},
+	},
+	// todo_read
+	models.Tool{
+		Type: "function",
+		Function: models.ToolFunc{
+			Name:        "todo_read",
+			Description: "Read todo items. Without ID returns all todos, with ID returns specific todo.",
+			Parameters: models.ToolFuncParams{
+				Type:     "object",
+				Required: []string{},
+				Properties: map[string]models.ToolArgProps{
+					"id": models.ToolArgProps{
+						Type:        "string",
+						Description: "optional id of the specific todo item to read",
+					},
+				},
+			},
+		},
+	},
+	// todo_update
+	models.Tool{
+		Type: "function",
+		Function: models.ToolFunc{
+			Name:        "todo_update",
+			Description: "Update a todo item by ID with new task or status. Status must be one of: pending, in_progress, completed.",
+			Parameters: models.ToolFuncParams{
+				Type:     "object",
+				Required: []string{"id"},
+				Properties: map[string]models.ToolArgProps{
+					"id": models.ToolArgProps{
+						Type:        "string",
+						Description: "id of the todo item to update",
+					},
+					"task": models.ToolArgProps{
+						Type:        "string",
+						Description: "new task description (optional)",
+					},
+					"status": models.ToolArgProps{
+						Type:        "string",
+						Description: "new status for the todo: pending, in_progress, or completed (optional)",
+					},
+				},
+			},
+		},
+	},
+	// todo_delete
+	models.Tool{
+		Type: "function",
+		Function: models.ToolFunc{
+			Name:        "todo_delete",
+			Description: "Delete a todo item by ID. Returns success message.",
+			Parameters: models.ToolFuncParams{
+				Type:     "object",
+				Required: []string{"id"},
+				Properties: map[string]models.ToolArgProps{
+					"id": models.ToolArgProps{
+						Type:        "string",
+						Description: "id of the todo item to delete",
 					},
 				},
 			},
