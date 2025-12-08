@@ -26,12 +26,12 @@ import (
 )
 
 var (
-	httpClient          = &http.Client{}
-	cluedoState         *extra.CluedoRoundInfo // Current game state
-	playerOrder         []string               // Turn order tracking
-	cfg                 *config.Config
-	logger              *slog.Logger
-	logLevel            = new(slog.LevelVar)
+	httpClient  = &http.Client{}
+	cluedoState *extra.CluedoRoundInfo // Current game state
+	playerOrder []string               // Turn order tracking
+	cfg         *config.Config
+	logger      *slog.Logger
+	logLevel    = new(slog.LevelVar)
 )
 var (
 	activeChatName      string
@@ -547,7 +547,7 @@ out:
 			if cfg.TTS_ENABLED {
 				// audioStream.TextChan <- chunk
 				extra.TTSFlushChan <- true
-				logger.Info("sending flushchan signal")
+				logger.Debug("sending flushchan signal")
 			}
 			break out
 		}
