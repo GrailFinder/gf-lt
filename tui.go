@@ -718,6 +718,12 @@ func init() {
 		}
 		if event.Key() == tcell.KeyF2 {
 			// regen last msg
+			if len(chatBody.Messages) == 0 {
+				if err := notifyUser("info", "no messages to regenerate"); err != nil {
+					logger.Error("failed to send notification", "error", err)
+				}
+				return nil
+			}
 			chatBody.Messages = chatBody.Messages[:len(chatBody.Messages)-1]
 			// there is no case where user msg is regenerated
 			// lastRole := chatBody.Messages[len(chatBody.Messages)-1].Role
@@ -734,6 +740,12 @@ func init() {
 				logger.Debug("deleting assistant icon", "icon", assistantIcon)
 				textView.SetText(strings.TrimSuffix(text, assistantIcon))
 				colorText()
+				return nil
+			}
+			if len(chatBody.Messages) == 0 {
+				if err := notifyUser("info", "no messages to delete"); err != nil {
+					logger.Error("failed to send notification", "error", err)
+				}
 				return nil
 			}
 			chatBody.Messages = chatBody.Messages[:len(chatBody.Messages)-1]
