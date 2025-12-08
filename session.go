@@ -33,6 +33,10 @@ func exportChat() error {
 	if err != nil {
 		return err
 	}
+	// Ensure the export directory exists
+	if err := os.MkdirAll(exportDir, 0755); err != nil {
+		return fmt.Errorf("failed to create export directory %s: %w", exportDir, err)
+	}
 	fp := path.Join(exportDir, activeChatName+".json")
 	return os.WriteFile(fp, data, 0666)
 }
