@@ -440,13 +440,14 @@ type LLMModels struct {
 
 type LlamaCPPReq struct {
 	Stream bool `json:"stream"`
-	// Messages      []RoleMsg `json:"messages"`
-	Prompt        string   `json:"prompt"`
-	Temperature   float32  `json:"temperature"`
-	DryMultiplier float32  `json:"dry_multiplier"`
-	Stop          []string `json:"stop"`
-	MinP          float32  `json:"min_p"`
-	NPredict      int32    `json:"n_predict"`
+	// For multimodal requests, prompt should be an object with prompt_string and multimodal_data
+	// For regular requests, prompt is a string
+	Prompt          interface{} `json:"prompt"`  // Can be string or object with prompt_string and multimodal_data
+	Temperature     float32     `json:"temperature"`
+	DryMultiplier   float32     `json:"dry_multiplier"`
+	Stop            []string    `json:"stop"`
+	MinP            float32     `json:"min_p"`
+	NPredict        int32       `json:"n_predict"`
 	// MaxTokens        int     `json:"max_tokens"`
 	// DryBase          float64 `json:"dry_base"`
 	// DryAllowedLength int     `json:"dry_allowed_length"`
@@ -466,17 +467,37 @@ type LlamaCPPReq struct {
 	// Samplers         string  `json:"samplers"`
 }
 
-func NewLCPReq(prompt string, props map[string]float32, stopStrings []string) LlamaCPPReq {
+type PromptObject struct {
+	PromptString   string   `json:"prompt_string"`
+	MultimodalData []string `json:"multimodal_data,omitempty"`
+	// Alternative field name used by some llama.cpp implementations
+	ImageData      []string `json:"image_data,omitempty"` // For compatibility
+}
+
+func NewLCPReq(prompt string, multimodalData []string, props map[string]float32, stopStrings []string) LlamaCPPReq {
+	var finalPrompt interface{}
+
+	if len(multimodalData) > 0 {
+		// When multimodal data is present, use the object format as per Python example:
+		// { "prompt": { "prompt_string": "...", "multimodal_data": [...] } }
+		finalPrompt = PromptObject{
+			PromptString:   prompt,
+			MultimodalData: multimodalData,
+			ImageData:      multimodalData, // Also populate for compatibility with different llama.cpp versions
+		}
+	} else {
+		// When no multimodal data, use plain string
+		finalPrompt = prompt
+	}
+
 	return LlamaCPPReq{
-		Stream: true,
-		Prompt: prompt,
-		// Temperature:   0.8,
-		// DryMultiplier: 0.5,
+		Stream:        true,
+		Prompt:        finalPrompt,
 		Temperature:   props["temperature"],
 		DryMultiplier: props["dry_multiplier"],
+		Stop:          stopStrings,
 		MinP:          props["min_p"],
 		NPredict:      int32(props["n_predict"]),
-		Stop:          stopStrings,
 	}
 }
 

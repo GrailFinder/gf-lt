@@ -6,6 +6,7 @@ import (
 	"gf-lt/models"
 	"io"
 	"strings"
+	"fmt"
 )
 
 var imageAttachmentPath string // Global variable to track image attachment for next message
@@ -82,6 +83,26 @@ func (lcp LCPCompletion) GetToken() string {
 
 func (lcp LCPCompletion) FormMsg(msg, role string, resume bool) (io.Reader, error) {
 	logger.Debug("formmsg lcpcompletion", "link", cfg.CurrentAPI)
+	localImageAttachmentPath := imageAttachmentPath
+	var multimodalData []string
+
+	if localImageAttachmentPath != "" {
+		imageURL, err := models.CreateImageURLFromPath(localImageAttachmentPath)
+		if err != nil {
+			logger.Error("failed to create image URL from path for completion", "error", err, "path", localImageAttachmentPath)
+			return nil, err
+		}
+		// Extract base64 part from data URL (e.g., "data:image/jpeg;base64,...")
+		parts := strings.SplitN(imageURL, ",", 2)
+		if len(parts) == 2 {
+			multimodalData = append(multimodalData, parts[1])
+		} else {
+			logger.Error("invalid image data URL format", "url", imageURL)
+			return nil, fmt.Errorf("invalid image data URL format")
+		}
+		imageAttachmentPath = "" // Clear the attachment after use
+	}
+
 	if msg != "" { // otherwise let the bot to continue
 		newMsg := models.RoleMsg{Role: role, Content: msg}
 		chatBody.Messages = append(chatBody.Messages, newMsg)
@@ -118,9 +139,18 @@ func (lcp LCPCompletion) FormMsg(msg, role string, resume bool) (io.Reader, erro
 	if cfg.ThinkUse && !cfg.ToolUse {
 		prompt += "<think>"
 	}
+	// Add multimodal media markers to the prompt text when multimodal data is present
+	// This is required by llama.cpp multimodal models so they know where to insert media
+	if len(multimodalData) > 0 {
+		// Add a media marker for each item in the multimodal data
+		for range multimodalData {
+			prompt += " <__media__>"  // llama.cpp default multimodal marker
+		}
+	}
+
 	logger.Debug("checking prompt for /completion", "tool_use", cfg.ToolUse,
-		"msg", msg, "resume", resume, "prompt", prompt)
-	payload := models.NewLCPReq(prompt, defaultLCPProps, chatBody.MakeStopSlice())
+		"msg", msg, "resume", resume, "prompt", prompt, "multimodal_data_count", len(multimodalData))
+	payload := models.NewLCPReq(prompt, multimodalData, defaultLCPProps, chatBody.MakeStopSlice())
 	data, err := json.Marshal(payload)
 	if err != nil {
 		logger.Error("failed to form a msg", "error", err)

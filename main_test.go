@@ -3,6 +3,7 @@ package main
 import (
 	"gf-lt/models"
 	"fmt"
+	"gf-lt/config"
 	"strings"
 	"testing"
 )
@@ -25,17 +26,17 @@ func TestRemoveThinking(t *testing.T) {
 		},
 	}
 	for i, tc := range cases {
-		t.Run(fmt.Sprintf("run_%d", i), func(t *testing.T) {
-			mNum := len(tc.cb.Messages)
-			removeThinking(tc.cb)
-			if len(tc.cb.Messages) != mNum-int(tc.toolMsgs) {
-				t.Error("failed to delete tools msg", tc.cb.Messages, cfg.ToolRole)
-			}
-			for _, msg := range tc.cb.Messages {
-				if strings.Contains(msg.Content, "<think>") {
-					t.Errorf("msg contains think tag; msg: %s\n", msg.Content)
-				}
-			}
-		})
-	}
+					t.Run(fmt.Sprintf("run_%d", i), func(t *testing.T) {
+						cfg = &config.Config{ToolRole: "tool"} // Initialize cfg.ToolRole for test
+						mNum := len(tc.cb.Messages)
+						removeThinking(tc.cb)
+						if len(tc.cb.Messages) != mNum-int(tc.toolMsgs) {
+							t.Errorf("failed to delete tools msg %v; expected %d, got %d", tc.cb.Messages, mNum-int(tc.toolMsgs), len(tc.cb.Messages))
+						}
+						for _, msg := range tc.cb.Messages {
+							if strings.Contains(msg.Content, "<think>") {
+								t.Errorf("msg contains think tag; msg: %s\n", msg.Content)
+							}
+						}
+					})	}
 }
