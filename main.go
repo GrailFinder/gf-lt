@@ -11,6 +11,7 @@ import (
 var (
 	botRespMode     = false
 	editMode        = false
+	roleEditMode    = false
 	injectRole      = true
 	selectedIndex   = int(-1)
 	currentAPIIndex = 0 // Index to track current API in ApiLinks slice

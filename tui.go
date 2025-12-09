@@ -30,11 +30,13 @@ var (
 	defaultImage    = "sysprompts/llama.png"
 	indexPickWindow *tview.InputField
 	renameWindow    *tview.InputField
+	roleEditWindow  *tview.InputField
 	fullscreenMode  bool
 	// pages
 	historyPage    = "historyPage"
 	agentPage      = "agentPage"
 	editMsgPage    = "editMsgPage"
+	roleEditPage   = "roleEditPage"
 	indexPage      = "indexPage"
 	helpPage       = "helpPage"
 	renamePage     = "renamePage"
@@ -57,6 +59,7 @@ var (
 [yellow]F2[white]: regen last
 [yellow]F3[white]: delete last msg
 [yellow]F4[white]: edit msg
+[yellow]Alt+4[white]: edit msg role
 [yellow]F5[white]: toggle fullscreen for input/chat window
 [yellow]F6[white]: interrupt bot resp
 [yellow]F7[white]: copy last msg to clipboard (linux xclip)
@@ -555,6 +558,30 @@ func init() {
 			// colorText()
 			// updateStatusLine()
 		})
+
+	roleEditWindow = tview.NewInputField().
+		SetLabel("Enter new role: ").
+		SetPlaceholder("e.g., user, assistant, system, tool").
+		SetDoneFunc(func(key tcell.Key) {
+			if key == tcell.KeyEnter {
+				newRole := roleEditWindow.GetText()
+				if newRole == "" {
+					if err := notifyUser("edit", "no role provided"); err != nil {
+						logger.Error("failed to send notification", "error", err)
+					}
+					pages.RemovePage(roleEditPage)
+					return
+				}
+				if selectedIndex >= 0 && selectedIndex < len(chatBody.Messages) {
+					chatBody.Messages[selectedIndex].Role = newRole
+					textView.SetText(chatToText(cfg.ShowSys))
+					colorText()
+					pages.RemovePage(roleEditPage)
+				}
+			} else if key == tcell.KeyEscape {
+				pages.RemovePage(roleEditPage)
+			}
+		})
 	indexPickWindow.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		switch event.Key() {
 		case tcell.KeyBackspace:
@@ -591,12 +618,17 @@ func init() {
 				return nil
 			}
 			m := chatBody.Messages[selectedIndex]
-			if editMode {
+			if roleEditMode {
+				hideIndexBar() // Hide overlay first
+				// Set the current role as the default text in the input field
+				roleEditWindow.SetText(m.Role)
+				pages.AddPage(roleEditPage, roleEditWindow, true, true)
+				roleEditMode = false // Reset the flag
+			} else if editMode {
 				hideIndexBar() // Hide overlay first
 				pages.AddPage(editMsgPage, editArea, true, true)
 				editArea.SetText(m.Content, true)
-			}
-			if !editMode {
+			} else {
 				if err := copyToClipboard(m.Content); err != nil {
 					logger.Error("failed to copy to clipboard", "error", err)
 				}
@@ -785,6 +817,14 @@ func init() {
 			// edit msg - show index input as overlay at top
 			editMode = true
 			showIndexBar()
+			return nil
+		}
+		if event.Key() == tcell.KeyRune && event.Modifiers() == tcell.ModAlt && event.Rune() == '4' {
+			// edit msg role - show index input as overlay at top
+			editMode = false // Reset edit mode to false to handle role editing
+			showIndexBar()
+			// Set a flag to indicate we're in role edit mode
+			roleEditMode = true
 			return nil
 		}
 		if event.Key() == tcell.KeyF5 {
