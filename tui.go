@@ -346,6 +346,30 @@ func hideSearchBar() {
 	searchField.SetText("")
 }
 
+// Global variables for index overlay functionality
+var indexPageName = "indexOverlay"
+
+// showIndexBar shows the index input field as an overlay at the top
+func showIndexBar() {
+	// Create a temporary flex to combine index input and main content
+	updatedFlex := tview.NewFlex().SetDirection(tview.FlexRow).
+		AddItem(indexPickWindow, 3, 0, true). // Index field at top
+		AddItem(flex, 0, 1, false)            // Main flex layout below
+
+	// Add the index overlay as a page
+	pages.AddPage(indexPageName, updatedFlex, true, true)
+	app.SetFocus(indexPickWindow)
+}
+
+// hideIndexBar hides the index input field
+func hideIndexBar() {
+	pages.RemovePage(indexPageName)
+	// Return focus to the text view
+	app.SetFocus(textView)
+	// Clear the index field
+	indexPickWindow.SetText("")
+}
+
 // addRegionTags adds region tags to search matches in the text for tview highlighting
 func addRegionTags(text string, positions []int, lengths []int, currentIdx int, searchTerm string) string {
 	if len(positions) == 0 {
@@ -527,8 +551,7 @@ func init() {
 		SetFieldWidth(4).
 		SetAcceptanceFunc(tview.InputFieldInteger).
 		SetDoneFunc(func(key tcell.Key) {
-			defer indexPickWindow.SetText("")
-			pages.RemovePage(indexPage)
+			hideIndexBar()
 			// colorText()
 			// updateStatusLine()
 		})
@@ -536,6 +559,10 @@ func init() {
 		switch event.Key() {
 		case tcell.KeyBackspace:
 			return event
+		case tcell.KeyEscape:
+			// Hide the index overlay when Escape is pressed
+			hideIndexBar()
+			return nil
 		case tcell.KeyEnter:
 			si := indexPickWindow.GetText()
 			siInt, err := strconv.Atoi(si)
@@ -547,8 +574,8 @@ func init() {
 				if err := copyToClipboard(textArea.GetText()); err != nil {
 					logger.Error("failed to copy to clipboard", "error", err)
 				}
-				pages.RemovePage(indexPage)
-				return event
+				hideIndexBar() // Hide overlay instead of removing page directly
+				return nil
 			}
 			selectedIndex = siInt
 			if len(chatBody.Messages)-1 < selectedIndex || selectedIndex < 0 {
@@ -560,16 +587,16 @@ func init() {
 				if err := copyToClipboard(textArea.GetText()); err != nil {
 					logger.Error("failed to copy to clipboard", "error", err)
 				}
-				pages.RemovePage(indexPage)
-				return event
+				hideIndexBar() // Hide overlay instead of removing page directly
+				return nil
 			}
 			m := chatBody.Messages[selectedIndex]
-			if editMode && event.Key() == tcell.KeyEnter {
-				pages.RemovePage(indexPage)
+			if editMode {
+				hideIndexBar() // Hide overlay first
 				pages.AddPage(editMsgPage, editArea, true, true)
 				editArea.SetText(m.Content, true)
 			}
-			if !editMode && event.Key() == tcell.KeyEnter {
+			if !editMode {
 				if err := copyToClipboard(m.Content); err != nil {
 					logger.Error("failed to copy to clipboard", "error", err)
 				}
@@ -578,8 +605,9 @@ func init() {
 				if err := notifyUser("copied", notification); err != nil {
 					logger.Error("failed to send notification", "error", err)
 				}
+				hideIndexBar() // Hide overlay after copying
 			}
-			return event
+			return nil
 		default:
 			return event
 		}
@@ -754,9 +782,9 @@ func init() {
 			return nil
 		}
 		if event.Key() == tcell.KeyF4 {
-			// edit msg
+			// edit msg - show index input as overlay at top
 			editMode = true
-			pages.AddPage(indexPage, indexPickWindow, true, true)
+			showIndexBar()
 			return nil
 		}
 		if event.Key() == tcell.KeyF5 {
@@ -808,7 +836,7 @@ func init() {
 		if event.Key() == tcell.KeyF8 {
 			// copy msg to clipboard
 			editMode = false
-			pages.AddPage(indexPage, indexPickWindow, true, true)
+			showIndexBar()
 			return nil
 		}
 		if event.Key() == tcell.KeyF9 {
