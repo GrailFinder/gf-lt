@@ -69,17 +69,18 @@ var (
 
 // cleanNullMessages removes messages with null or empty content to prevent API issues
 func cleanNullMessages(messages []models.RoleMsg) []models.RoleMsg {
-	cleaned := make([]models.RoleMsg, 0, len(messages))
-	for _, msg := range messages {
-		// Include message if it has content or if it's a tool response (which might have tool_call_id)
-		if msg.HasContent() || msg.ToolCallID != "" {
-			cleaned = append(cleaned, msg)
-		} else {
-			// Log filtered messages for debugging
-			logger.Warn("filtering out message during cleaning", "role", msg.Role, "content", msg.Content, "tool_call_id", msg.ToolCallID, "has_content", msg.HasContent())
-		}
-	}
-	return consolidateConsecutiveAssistantMessages(cleaned)
+	// // deletes tool calls which we don't want for now
+	// cleaned := make([]models.RoleMsg, 0, len(messages))
+	// for _, msg := range messages {
+	// 	// is there a sense for this check at all?
+	// 	if msg.HasContent() || msg.ToolCallID != "" || msg.Role == cfg.AssistantRole || msg.Role == cfg.WriteNextMsgAsCompletionAgent {
+	// 		cleaned = append(cleaned, msg)
+	// 	} else {
+	// 		// Log filtered messages for debugging
+	// 		logger.Warn("filtering out message during cleaning", "role", msg.Role, "content", msg.Content, "tool_call_id", msg.ToolCallID, "has_content", msg.HasContent())
+	// 	}
+	// }
+	return consolidateConsecutiveAssistantMessages(messages)
 }
 
 // consolidateConsecutiveAssistantMessages merges consecutive assistant messages into a single message
@@ -568,7 +569,7 @@ out:
 		logger.Debug("chatRound: before cleaning", "index", i, "role", msg.Role, "content_len", len(msg.Content), "has_content", msg.HasContent(), "tool_call_id", msg.ToolCallID)
 	}
 
-	// Clean null/empty messages to prevent API issues with endpoints like llama.cpp jinja template
+	// // Clean null/empty messages to prevent API issues with endpoints like llama.cpp jinja template
 	cleanChatBody()
 
 	logger.Debug("chatRound: after cleanChatBody", "messages_after_clean", len(chatBody.Messages))
