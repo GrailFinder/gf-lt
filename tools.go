@@ -171,6 +171,30 @@ func websearch(args map[string]string) []byte {
 	return data
 }
 
+// retrieves url content (text)
+func readURL(args map[string]string) []byte {
+	// make http request return bytes
+	link, ok := args["url"]
+	if !ok || link == "" {
+		msg := "linknot provided to read_url tool"
+		logger.Error(msg)
+		return []byte(msg)
+	}
+	resp, err := extra.WebSearcher.RetrieveFromLink(context.Background(), link)
+	if err != nil {
+		msg := "search tool failed; error: " + err.Error()
+		logger.Error(msg)
+		return []byte(msg)
+	}
+	data, err := json.Marshal(resp)
+	if err != nil {
+		msg := "failed to marshal search result; error: " + err.Error()
+		logger.Error(msg)
+		return []byte(msg)
+	}
+	return data
+}
+
 /*
 consider cases:
 - append mode (treat it like a journal appendix)
@@ -811,6 +835,7 @@ var fnMap = map[string]fnSig{
 	"recall_topics":   recallTopics,
 	"memorise":        memorise,
 	"websearch":       websearch,
+	"read_url":        readURL,
 	"file_create":     fileCreate,
 	"file_read":       fileRead,
 	"file_write":      fileWrite,
@@ -844,6 +869,24 @@ var baseTools = []models.Tool{
 					"limit": models.ToolArgProps{
 						Type:        "string",
 						Description: "limit of the website results",
+					},
+				},
+			},
+		},
+	},
+	// read_url
+	models.Tool{
+		Type: "function",
+		Function: models.ToolFunc{
+			Name:        "read_url",
+			Description: "Retrieves text content of given link.",
+			Parameters: models.ToolFuncParams{
+				Type:     "object",
+				Required: []string{"url"},
+				Properties: map[string]models.ToolArgProps{
+					"url": models.ToolArgProps{
+						Type:        "string",
+						Description: "link to the webpage to read text from",
 					},
 				},
 			},
