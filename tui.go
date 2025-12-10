@@ -59,7 +59,6 @@ var (
 [yellow]F2[white]: regen last
 [yellow]F3[white]: delete last msg
 [yellow]F4[white]: edit msg
-[yellow]Alt+4[white]: edit msg role
 [yellow]F5[white]: toggle fullscreen for input/chat window
 [yellow]F6[white]: interrupt bot resp
 [yellow]F7[white]: copy last msg to clipboard (linux xclip)
@@ -86,8 +85,9 @@ var (
 [yellow]Ctrl+y[white]: list loaded RAG files (view and manage loaded files)
 [yellow]Ctrl+q[white]: cycle through mentioned chars in chat, to pick persona to send next msg as
 [yellow]Ctrl+x[white]: cycle through mentioned chars in chat, to pick persona to send next msg as (for llm)
-[yellow]Alt+5[white]: toggle system and tool messages display
 [yellow]Alt+1[white]: toggle shell mode (execute commands locally)
+[yellow]Alt+4[white]: edit msg role
+[yellow]Alt+5[white]: toggle system and tool messages display
 
 === scrolling chat window (some keys similar to vim) ===
 [yellow]arrows up/down and j/k[white]: scroll up and down

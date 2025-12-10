@@ -53,6 +53,11 @@ Your current tools:
 "when_to_use": "when asked to search the web for information; limit is optional (default 3)"
 },
 {
+"name":"read_url",
+"args": ["url"],
+"when_to_use": "when asked to get content for spicific webpage or url"
+},
+{
 "name":"file_create",
 "args": ["path", "content"],
 "when_to_use": "when asked to create a new file with optional content"
@@ -176,7 +181,7 @@ func readURL(args map[string]string) []byte {
 	// make http request return bytes
 	link, ok := args["url"]
 	if !ok || link == "" {
-		msg := "linknot provided to read_url tool"
+		msg := "link not provided to read_url tool"
 		logger.Error(msg)
 		return []byte(msg)
 	}
