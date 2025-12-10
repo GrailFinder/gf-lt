@@ -429,13 +429,11 @@ func chatRagUse(qText string) (string, error) {
 			logger.Error("failed to get embs", "error", err, "index", i, "question", q)
 			continue
 		}
-
 		// Create EmbeddingResp struct for the search
 		embeddingResp := &models.EmbeddingResp{
 			Embedding: emb,
 			Index:     0, // Not used in search but required for the struct
 		}
-
 		vecs, err := ragger.SearchEmb(embeddingResp)
 		if err != nil {
 			logger.Error("failed to query embs", "error", err, "index", i, "question", q)
