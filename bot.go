@@ -412,8 +412,10 @@ func sendMsgToLLM(body io.Reader) {
 }
 
 func chatRagUse(qText string) (string, error) {
+	logger.Debug("Starting RAG query", "original_query", qText)
 	tokenizer, err := english.NewSentenceTokenizer(nil)
 	if err != nil {
+		logger.Error("failed to create sentence tokenizer", "error", err)
 		return "", err
 	}
 	// this where llm should find the questions in text and ask them
@@ -421,14 +423,24 @@ func chatRagUse(qText string) (string, error) {
 	questions := make([]string, len(questionsS))
 	for i, q := range questionsS {
 		questions[i] = q.Text
+		logger.Debug("RAG question extracted", "index", i, "question", q.Text)
 	}
+
+	if len(questions) == 0 {
+		logger.Warn("No questions extracted from query text", "query", qText)
+		return "No related results from RAG vector storage.", nil
+	}
+
 	respVecs := []models.VectorRow{}
 	for i, q := range questions {
+		logger.Debug("Processing RAG question", "index", i, "question", q)
 		emb, err := ragger.LineToVector(q)
 		if err != nil {
-			logger.Error("failed to get embs", "error", err, "index", i, "question", q)
+			logger.Error("failed to get embeddings for RAG", "error", err, "index", i, "question", q)
 			continue
 		}
+		logger.Debug("Got embeddings for question", "index", i, "question_len", len(q), "embedding_len", len(emb))
+
 		// Create EmbeddingResp struct for the search
 		embeddingResp := &models.EmbeddingResp{
 			Embedding: emb,
@@ -436,21 +448,29 @@ func chatRagUse(qText string) (string, error) {
 		}
 		vecs, err := ragger.SearchEmb(embeddingResp)
 		if err != nil {
-			logger.Error("failed to query embs", "error", err, "index", i, "question", q)
+			logger.Error("failed to query embeddings in RAG", "error", err, "index", i, "question", q)
 			continue
 		}
+		logger.Debug("RAG search returned vectors", "index", i, "question", q, "vector_count", len(vecs))
 		respVecs = append(respVecs, vecs...)
 	}
+
 	// get raw text
 	resps := []string{}
-	logger.Debug("rag query resp", "vecs len", len(respVecs))
+	logger.Debug("RAG query final results", "total_vecs_found", len(respVecs))
 	for _, rv := range respVecs {
 		resps = append(resps, rv.RawText)
+		logger.Debug("RAG result", "slug", rv.Slug, "filename", rv.FileName, "raw_text_len", len(rv.RawText))
 	}
+
 	if len(resps) == 0 {
+		logger.Info("No RAG results found for query", "original_query", qText, "question_count", len(questions))
 		return "No related results from RAG vector storage.", nil
 	}
-	return strings.Join(resps, "\n"), nil
+
+	result := strings.Join(resps, "\n")
+	logger.Debug("RAG query completed", "result_len", len(result), "response_count", len(resps))
+	return result, nil
 }
 
 func roleToIcon(role string) string {
