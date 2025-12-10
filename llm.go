@@ -186,19 +186,32 @@ func (op LCPChat) ParseChunk(data []byte) (*models.TextChunk, error) {
 		logger.Error("failed to decode", "error", err, "line", string(data))
 		return nil, err
 	}
+
+	// Handle multiple choices safely
+	if len(llmchunk.Choices) == 0 {
+		logger.Warn("LCPChat ParseChunk: no choices in response", "data", string(data))
+		return &models.TextChunk{Finished: true}, nil
+	}
+
 	resp := &models.TextChunk{
 		Chunk: llmchunk.Choices[len(llmchunk.Choices)-1].Delta.Content,
 	}
-	if len(llmchunk.Choices[len(llmchunk.Choices)-1].Delta.ToolCalls) > 0 {
-		toolCall := llmchunk.Choices[len(llmchunk.Choices)-1].Delta.ToolCalls[0]
-		resp.ToolChunk = toolCall.Function.Arguments
-		fname := toolCall.Function.Name
-		if fname != "" {
-			resp.FuncName = fname
+
+	// Check for tool calls in all choices, not just the last one
+	for _, choice := range llmchunk.Choices {
+		if len(choice.Delta.ToolCalls) > 0 {
+			toolCall := choice.Delta.ToolCalls[0]
+			resp.ToolChunk = toolCall.Function.Arguments
+			fname := toolCall.Function.Name
+			if fname != "" {
+				resp.FuncName = fname
+			}
+			// Capture the tool call ID if available
+			resp.ToolID = toolCall.ID
+			break // Process only the first tool call
 		}
-		// Capture the tool call ID if available
-		resp.ToolID = toolCall.ID
 	}
+
 	if llmchunk.Choices[len(llmchunk.Choices)-1].FinishReason == "stop" {
 		if resp.Chunk != "" {
 			logger.Error("text inside of finish llmchunk", "chunk", llmchunk)

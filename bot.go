@@ -629,6 +629,13 @@ func findCall(msg, toolCall string, tv *tview.TextView) {
 		}
 		lastToolCall.Args = openAIToolMap
 		fc = lastToolCall
+		// Ensure lastToolCallID is set if it's available in the tool call
+		if lastToolCallID == "" && len(openAIToolMap) > 0 {
+			// Attempt to extract ID from the parsed tool call if not already set
+			if id, exists := openAIToolMap["id"]; exists {
+				lastToolCallID = id
+			}
+		}
 	} else {
 		jsStr := toolCallRE.FindString(msg)
 		if jsStr == "" {
