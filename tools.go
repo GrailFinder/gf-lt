@@ -596,13 +596,6 @@ var globalTodoList = TodoList{
 	Items: []TodoItem{},
 }
 
-func getTodoList() TodoList {
-	return globalTodoList
-}
-
-func setTodoList(todoList TodoList) {
-	globalTodoList = todoList
-}
 
 // Todo Management Tools
 func todoCreate(args map[string]string) []byte {

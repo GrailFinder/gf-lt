@@ -37,7 +37,6 @@ var (
 	agentPage      = "agentPage"
 	editMsgPage    = "editMsgPage"
 	roleEditPage   = "roleEditPage"
-	indexPage      = "indexPage"
 	helpPage       = "helpPage"
 	renamePage     = "renamePage"
 	RAGPage        = "RAGPage"
@@ -563,7 +562,8 @@ func init() {
 		SetLabel("Enter new role: ").
 		SetPlaceholder("e.g., user, assistant, system, tool").
 		SetDoneFunc(func(key tcell.Key) {
-			if key == tcell.KeyEnter {
+			switch key {
+			case tcell.KeyEnter:
 				newRole := roleEditWindow.GetText()
 				if newRole == "" {
 					if err := notifyUser("edit", "no role provided"); err != nil {
@@ -578,7 +578,7 @@ func init() {
 					colorText()
 					pages.RemovePage(roleEditPage)
 				}
-			} else if key == tcell.KeyEscape {
+			case tcell.KeyEscape:
 				pages.RemovePage(roleEditPage)
 			}
 		})

@@ -3,10 +3,10 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"gf-lt/models"
 	"io"
 	"strings"
-	"fmt"
 )
 
 var imageAttachmentPath string // Global variable to track image attachment for next message
@@ -98,7 +98,7 @@ func (lcp LCPCompletion) FormMsg(msg, role string, resume bool) (io.Reader, erro
 			multimodalData = append(multimodalData, parts[1])
 		} else {
 			logger.Error("invalid image data URL format", "url", imageURL)
-			return nil, fmt.Errorf("invalid image data URL format")
+			return nil, errors.New("invalid image data URL format")
 		}
 		imageAttachmentPath = "" // Clear the attachment after use
 	}
@@ -143,9 +143,12 @@ func (lcp LCPCompletion) FormMsg(msg, role string, resume bool) (io.Reader, erro
 	// This is required by llama.cpp multimodal models so they know where to insert media
 	if len(multimodalData) > 0 {
 		// Add a media marker for each item in the multimodal data
+		var sb strings.Builder
+		sb.WriteString(prompt)
 		for range multimodalData {
-			prompt += " <__media__>"  // llama.cpp default multimodal marker
+			sb.WriteString(" <__media__>")  // llama.cpp default multimodal marker
 		}
+		prompt = sb.String()
 	}
 
 	logger.Debug("checking prompt for /completion", "tool_use", cfg.ToolUse,
