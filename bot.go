@@ -191,7 +191,11 @@ func fetchLCPModelName() *models.LLMModels {
 	//nolint
 	resp, err := httpClient.Get(cfg.FetchModelNameAPI)
 	if err != nil {
+		chatBody.Model = "disconnected"
 		logger.Warn("failed to get model", "link", cfg.FetchModelNameAPI, "error", err)
+		if err := notifyUser("error", "request failed "+cfg.FetchModelNameAPI); err != nil {
+			logger.Debug("failed to notify user", "error", err, "fn", "fetchLCPModelName")
+		}
 		return nil
 	}
 	defer resp.Body.Close()
