@@ -961,11 +961,16 @@ func init() {
 				}
 				updateStatusLine()
 			} else {
-				// For non-OpenRouter APIs, use the old logic
-				go func() {
-					fetchLCPModelName() // blocks
-					updateStatusLine()
-				}()
+				if len(LocalModels) > 0 {
+					currentLocalModelIndex = (currentLocalModelIndex + 1) % len(LocalModels)
+					chatBody.Model = LocalModels[currentLocalModelIndex]
+				}
+				updateStatusLine()
+				// // For non-OpenRouter APIs, use the old logic
+				// go func() {
+				// 	fetchLCPModelName() // blocks
+				// 	updateStatusLine()
+				// }()
 			}
 			return nil
 		}

@@ -89,10 +89,10 @@ type ImageContentPart struct {
 
 // RoleMsg represents a message with content that can be either a simple string or structured content parts
 type RoleMsg struct {
-	Role          string          `json:"role"`
-	Content       string          `json:"-"`
-	ContentParts  []interface{}   `json:"-"`
-	ToolCallID    string          `json:"tool_call_id,omitempty"`  // For tool response messages
+	Role            string        `json:"role"`
+	Content         string        `json:"-"`
+	ContentParts    []interface{} `json:"-"`
+	ToolCallID      string        `json:"tool_call_id,omitempty"` // For tool response messages
 	hasContentParts bool          // Flag to indicate which content type to marshal
 }
 
@@ -215,8 +215,8 @@ func (m RoleMsg) ToPrompt() string {
 // NewRoleMsg creates a simple RoleMsg with string content
 func NewRoleMsg(role, content string) RoleMsg {
 	return RoleMsg{
-		Role:        role,
-		Content:     content,
+		Role:            role,
+		Content:         content,
 		hasContentParts: false,
 	}
 }
@@ -420,34 +420,35 @@ type OpenAIReq struct {
 
 // ===
 
-type LLMModels struct {
-	Object string `json:"object"`
-	Data   []struct {
-		ID      string `json:"id"`
-		Object  string `json:"object"`
-		Created int    `json:"created"`
-		OwnedBy string `json:"owned_by"`
-		Meta    struct {
-			VocabType int   `json:"vocab_type"`
-			NVocab    int   `json:"n_vocab"`
-			NCtxTrain int   `json:"n_ctx_train"`
-			NEmbd     int   `json:"n_embd"`
-			NParams   int64 `json:"n_params"`
-			Size      int64 `json:"size"`
-		} `json:"meta"`
-	} `json:"data"`
-}
+// type LLMModels struct {
+// 	Object string `json:"object"`
+// 	Data   []struct {
+// 		ID      string `json:"id"`
+// 		Object  string `json:"object"`
+// 		Created int    `json:"created"`
+// 		OwnedBy string `json:"owned_by"`
+// 		Meta    struct {
+// 			VocabType int   `json:"vocab_type"`
+// 			NVocab    int   `json:"n_vocab"`
+// 			NCtxTrain int   `json:"n_ctx_train"`
+// 			NEmbd     int   `json:"n_embd"`
+// 			NParams   int64 `json:"n_params"`
+// 			Size      int64 `json:"size"`
+// 		} `json:"meta"`
+// 	} `json:"data"`
+// }
 
 type LlamaCPPReq struct {
-	Stream bool `json:"stream"`
+	Model  string `json:"model"`
+	Stream bool   `json:"stream"`
 	// For multimodal requests, prompt should be an object with prompt_string and multimodal_data
 	// For regular requests, prompt is a string
-	Prompt          interface{} `json:"prompt"`  // Can be string or object with prompt_string and multimodal_data
-	Temperature     float32     `json:"temperature"`
-	DryMultiplier   float32     `json:"dry_multiplier"`
-	Stop            []string    `json:"stop"`
-	MinP            float32     `json:"min_p"`
-	NPredict        int32       `json:"n_predict"`
+	Prompt        interface{} `json:"prompt"` // Can be string or object with prompt_string and multimodal_data
+	Temperature   float32     `json:"temperature"`
+	DryMultiplier float32     `json:"dry_multiplier"`
+	Stop          []string    `json:"stop"`
+	MinP          float32     `json:"min_p"`
+	NPredict      int32       `json:"n_predict"`
 	// MaxTokens        int     `json:"max_tokens"`
 	// DryBase          float64 `json:"dry_base"`
 	// DryAllowedLength int     `json:"dry_allowed_length"`
@@ -471,12 +472,11 @@ type PromptObject struct {
 	PromptString   string   `json:"prompt_string"`
 	MultimodalData []string `json:"multimodal_data,omitempty"`
 	// Alternative field name used by some llama.cpp implementations
-	ImageData      []string `json:"image_data,omitempty"` // For compatibility
+	ImageData []string `json:"image_data,omitempty"` // For compatibility
 }
 
-func NewLCPReq(prompt string, multimodalData []string, props map[string]float32, stopStrings []string) LlamaCPPReq {
+func NewLCPReq(prompt, model string, multimodalData []string, props map[string]float32, stopStrings []string) LlamaCPPReq {
 	var finalPrompt interface{}
-
 	if len(multimodalData) > 0 {
 		// When multimodal data is present, use the object format as per Python example:
 		// { "prompt": { "prompt_string": "...", "multimodal_data": [...] } }
@@ -489,8 +489,8 @@ func NewLCPReq(prompt string, multimodalData []string, props map[string]float32,
 		// When no multimodal data, use plain string
 		finalPrompt = prompt
 	}
-
 	return LlamaCPPReq{
+		Model:         model,
 		Stream:        true,
 		Prompt:        finalPrompt,
 		Temperature:   props["temperature"],
@@ -504,4 +504,28 @@ func NewLCPReq(prompt string, multimodalData []string, props map[string]float32,
 type LlamaCPPResp struct {
 	Content string `json:"content"`
 	Stop    bool   `json:"stop"`
+}
+
+type LCPModels struct {
+	Data []struct {
+		ID      string `json:"id"`
+		Object  string `json:"object"`
+		OwnedBy string `json:"owned_by"`
+		Created int    `json:"created"`
+		InCache bool   `json:"in_cache"`
+		Path    string `json:"path"`
+		Status  struct {
+			Value string   `json:"value"`
+			Args  []string `json:"args"`
+		} `json:"status"`
+	} `json:"data"`
+	Object string `json:"object"`
+}
+
+func (lcp *LCPModels) ListModels() []string {
+	resp := []string{}
+	for _, model := range lcp.Data {
+		resp = append(resp, model.ID)
+	}
+	return resp
 }

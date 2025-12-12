@@ -157,7 +157,7 @@ func (lcp LCPCompletion) FormMsg(msg, role string, resume bool) (io.Reader, erro
 
 	logger.Debug("checking prompt for /completion", "tool_use", cfg.ToolUse,
 		"msg", msg, "resume", resume, "prompt", prompt, "multimodal_data_count", len(multimodalData))
-	payload := models.NewLCPReq(prompt, multimodalData, defaultLCPProps, chatBody.MakeStopSlice())
+	payload := models.NewLCPReq(prompt, chatBody.Model, multimodalData, defaultLCPProps, chatBody.MakeStopSlice())
 	data, err := json.Marshal(payload)
 	if err != nil {
 		logger.Error("failed to form a msg", "error", err)

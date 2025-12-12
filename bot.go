@@ -65,6 +65,7 @@ var (
 		"google/gemma-3-27b-it:free",
 		"meta-llama/llama-3.3-70b-instruct:free",
 	}
+	LocalModels = []string{}
 )
 
 // cleanNullMessages removes messages with null or empty content to prevent API issues
@@ -187,7 +188,7 @@ func createClient(connectTimeout time.Duration) *http.Client {
 	}
 }
 
-func fetchLCPModelName() *models.LLMModels {
+func fetchLCPModelName() *models.LCPModels {
 	//nolint
 	resp, err := httpClient.Get(cfg.FetchModelNameAPI)
 	if err != nil {
@@ -199,7 +200,7 @@ func fetchLCPModelName() *models.LLMModels {
 		return nil
 	}
 	defer resp.Body.Close()
-	llmModel := models.LLMModels{}
+	llmModel := models.LCPModels{}
 	if err := json.NewDecoder(resp.Body).Decode(&llmModel); err != nil {
 		logger.Warn("failed to decode resp", "link", cfg.FetchModelNameAPI, "error", err)
 		return nil
@@ -253,6 +254,24 @@ func fetchORModels(free bool) ([]string, error) {
 	}
 	freeModels := data.ListModels(free)
 	return freeModels, nil
+}
+
+func fetchLCPModels() ([]string, error) {
+	resp, err := http.Get(cfg.FetchModelNameAPI)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		err := fmt.Errorf("failed to fetch or models; status: %s", resp.Status)
+		return nil, err
+	}
+	data := &models.LCPModels{}
+	if err := json.NewDecoder(resp.Body).Decode(data); err != nil {
+		return nil, err
+	}
+	localModels := data.ListModels()
+	return localModels, nil
 }
 
 func sendMsgToLLM(body io.Reader) {
@@ -869,6 +888,12 @@ func init() {
 			}
 		}()
 	}
+	go func() {
+		LocalModels, err = fetchLCPModels()
+		if err != nil {
+			logger.Error("failed to fetch llama.cpp models", "error", err)
+		}
+	}()
 	choseChunkParser()
 	httpClient = createClient(time.Second * 15)
 	if cfg.TTS_ENABLED {
