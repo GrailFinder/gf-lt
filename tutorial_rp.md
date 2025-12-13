@@ -42,3 +42,23 @@ then press `x` to close the table.
 
 
 #### choosing LLM provider and model
+supported backends: llama.cpp, openrouter and deepseek.
+for openrouter and deepseek you will need a token.
+set it in config.toml or set envvar
+```
+sed -i "/OpenRouterToken/s/=.*/= \"{YOUR_OPENROUTER_TOKEN}\"/" config.toml
+sed -i "/DeepSeekToken/s/=.*/= \"{YOUR_DEEPSEEK_TOKEN}\"/" config.toml
+# or set envvar
+export OPENROUTER_API_KEY={YOUR_OPENROUTER_TOKEN}
+export DEEPSEEK_API_KEY={YOUR_DEEPSEEK_TOKEN}
+```
+
+in case you're running llama.cpp here is an example of starting llama.cpp
+```
+./build/bin/llama-server -c 16384 -ngl 99 --models-dir ./models --models-max 1 --models-preset ./models/config.ini
+```
+
+<b>after changing config.toml or envvar you need to restart the program.</b>
+
+#### sending messages
+messages are send by pressing `Esc` button
