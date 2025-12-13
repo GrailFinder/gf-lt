@@ -1,6 +1,8 @@
 package config
 
 import (
+	"os"
+
 	"github.com/BurntSushi/toml"
 )
 
@@ -84,6 +86,13 @@ func LoadConfig(fn string) (*Config, error) {
 		config.OpenRouterCompletionAPI: config.OpenRouterChatAPI,
 		config.OpenRouterChatAPI:       config.ChatAPI,
 	}
+	// check env if keys not in config
+	if config.OpenRouterToken == "" {
+		config.OpenRouterToken = os.Getenv("OPENROUTER_API_KEY")
+	}
+	if config.DeepSeekToken == "" {
+		config.DeepSeekToken = os.Getenv("DEEPSEEK_API_KEY")
+	}
 	// Build ApiLinks slice with only non-empty API links
 	// Only include DeepSeek APIs if DeepSeekToken is provided
 	if config.DeepSeekToken != "" {
@@ -94,7 +103,6 @@ func LoadConfig(fn string) (*Config, error) {
 			config.ApiLinks = append(config.ApiLinks, config.DeepSeekCompletionAPI)
 		}
 	}
-
 	// Only include OpenRouter APIs if OpenRouterToken is provided
 	if config.OpenRouterToken != "" {
 		if config.OpenRouterChatAPI != "" {
@@ -104,7 +112,6 @@ func LoadConfig(fn string) (*Config, error) {
 			config.ApiLinks = append(config.ApiLinks, config.OpenRouterCompletionAPI)
 		}
 	}
-
 	// Always include basic APIs
 	if config.ChatAPI != "" {
 		config.ApiLinks = append(config.ApiLinks, config.ChatAPI)
