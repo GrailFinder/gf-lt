@@ -841,15 +841,6 @@ func updateModelLists() {
 	}
 }
 
-func updateModelListsTicker() {
-	updateModelLists() // run on the start
-	ticker := time.NewTicker(time.Minute * 1)
-	for {
-		<-ticker.C
-		updateModelLists()
-	}
-}
-
 func init() {
 	var err error
 	cfg, err = config.LoadConfig("config.toml")
@@ -910,5 +901,5 @@ func init() {
 	if cfg.STT_ENABLED {
 		asr = extra.NewSTT(logger, cfg)
 	}
-	go updateModelListsTicker()
+	go updateModelLists()
 }

@@ -140,9 +140,7 @@ func makePropsTable(props map[string]float32) *tview.Table {
 		}
 		return LocalModels
 	}
-
 	var modelRowIndex int // will be set before model row is added
-
 	// Prepare API links dropdown - insert current API at the beginning
 	apiLinks := slices.Insert(cfg.ApiLinks, 0, cfg.CurrentAPI)
 	addListPopupRow("Select an api", apiLinks, cfg.CurrentAPI, func(option string) {
@@ -169,7 +167,6 @@ func makePropsTable(props map[string]float32) *tview.Table {
 			}
 		}
 	})
-
 	// Prepare model list dropdown
 	modelRowIndex = row
 	modelCellID = fmt.Sprintf("listpopup_%d", modelRowIndex)
@@ -276,7 +273,7 @@ func makePropsTable(props map[string]float32) *tview.Table {
 				// Handle nil options
 				if data.Options == nil {
 					logger.Error("options list is nil for", "label", label)
-					if err := notifyUser("Configuration error", "Options list is nil for " + label); err != nil {
+					if err := notifyUser("Configuration error", "Options list is nil for "+label); err != nil {
 						logger.Error("failed to send notification", "error", err)
 					}
 					return
