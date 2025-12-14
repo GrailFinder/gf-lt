@@ -130,21 +130,48 @@ func makePropsTable(props map[string]float32) *tview.Table {
 	addListPopupRow("Set log level", logLevels, GetLogLevel(), func(option string) {
 		setLogLevel(option)
 	})
+	// Helper function to get model list for a given API
+	getModelListForAPI := func(api string) []string {
+		var list []string
+		if strings.Contains(api, "api.deepseek.com/") {
+			list = []string{chatBody.Model, "deepseek-chat", "deepseek-reasoner"}
+		} else if strings.Contains(api, "openrouter.ai") {
+			list = ORFreeModels
+		} else {
+			list = LocalModels
+		}
+		// Ensure current chatBody.Model is in the list
+		if len(list) > 0 && !slices.Contains(list, chatBody.Model) {
+			list = slices.Insert(list, 0, chatBody.Model)
+		}
+		return list
+	}
+
+	var modelRowIndex int // will be set before model row is added
+
 	// Prepare API links dropdown - insert current API at the beginning
 	apiLinks := slices.Insert(cfg.ApiLinks, 0, cfg.CurrentAPI)
 	addListPopupRow("Select an api", apiLinks, cfg.CurrentAPI, func(option string) {
 		cfg.CurrentAPI = option
+		// Update model list based on new API
+		newModelList := getModelListForAPI(cfg.CurrentAPI)
+		modelCellID := fmt.Sprintf("listpopup_%d", modelRowIndex)
+		if data := cellData[modelCellID]; data != nil {
+			data.Options = newModelList
+		}
+		// Ensure chatBody.Model is in the new list; if not, set to first available model
+		if len(newModelList) > 0 && !slices.Contains(newModelList, chatBody.Model) {
+			chatBody.Model = newModelList[0]
+			// Update the displayed cell text
+			if cell := table.GetCell(modelRowIndex, 1); cell != nil {
+				cell.SetText(chatBody.Model)
+			}
+		}
 	})
-	var modelList []string
-	// INFO: modelList is chosen based on current api link
-	if strings.Contains(cfg.CurrentAPI, "api.deepseek.com/") {
-		modelList = []string{chatBody.Model, "deepseek-chat", "deepseek-reasoner"}
-	} else if strings.Contains(cfg.CurrentAPI, "opentouter.ai") {
-		modelList = ORFreeModels
-	} else { // would match on localhost but what if llama.cpp served non localy?
-		modelList = LocalModels
-	}
+
 	// Prepare model list dropdown
+	modelRowIndex = row
+	modelList := getModelListForAPI(cfg.CurrentAPI)
 	addListPopupRow("Select a model", modelList, chatBody.Model, func(option string) {
 		chatBody.Model = option
 	})
