@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"slices"
 	"strconv"
+	"strings"
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
@@ -134,9 +135,16 @@ func makePropsTable(props map[string]float32) *tview.Table {
 	addListPopupRow("Select an api", apiLinks, cfg.CurrentAPI, func(option string) {
 		cfg.CurrentAPI = option
 	})
+	var modelList []string
+	// INFO: modelList is chosen based on current api link
+	if strings.Contains(cfg.CurrentAPI, "api.deepseek.com/") {
+		modelList = []string{chatBody.Model, "deepseek-chat", "deepseek-reasoner"}
+	} else if strings.Contains(cfg.CurrentAPI, "opentouter.ai") {
+		modelList = ORFreeModels
+	} else { // would match on localhost but what if llama.cpp served non localy?
+		modelList = LocalModels
+	}
 	// Prepare model list dropdown
-	modelList := []string{chatBody.Model, "deepseek-chat", "deepseek-reasoner"}
-	modelList = append(modelList, ORFreeModels...)
 	addListPopupRow("Select a model", modelList, chatBody.Model, func(option string) {
 		chatBody.Model = option
 	})

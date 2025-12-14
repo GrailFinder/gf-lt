@@ -826,6 +826,30 @@ func charToStart(agentName string) bool {
 	return true
 }
 
+func updateModelLists() {
+	var err error
+	if cfg.OpenRouterToken != "" {
+		ORFreeModels, err = fetchORModels(true)
+		if err != nil {
+			logger.Warn("failed to fetch or models", "error", err)
+		}
+	}
+	// if llama.cpp started after gf-lt?
+	LocalModels, err = fetchLCPModels()
+	if err != nil {
+		logger.Warn("failed to fetch llama.cpp models", "error", err)
+	}
+}
+
+func updateModelListsTicker() {
+	updateModelLists() // run on the start
+	ticker := time.NewTicker(time.Minute * 1)
+	for {
+		<-ticker.C
+		updateModelLists()
+	}
+}
+
 func init() {
 	var err error
 	cfg, err = config.LoadConfig("config.toml")
@@ -878,22 +902,6 @@ func init() {
 		playerOrder = []string{cfg.UserRole, cfg.AssistantRole, cfg.CluedoRole2}
 		cluedoState = extra.CluedoPrepCards(playerOrder)
 	}
-	if cfg.OpenRouterToken != "" {
-		go func() {
-			ORModels, err := fetchORModels(true)
-			if err != nil {
-				logger.Error("failed to fetch or models", "error", err)
-			} else {
-				ORFreeModels = ORModels
-			}
-		}()
-	}
-	go func() {
-		LocalModels, err = fetchLCPModels()
-		if err != nil {
-			logger.Error("failed to fetch llama.cpp models", "error", err)
-		}
-	}()
 	choseChunkParser()
 	httpClient = createClient(time.Second * 15)
 	if cfg.TTS_ENABLED {
@@ -902,4 +910,5 @@ func init() {
 	if cfg.STT_ENABLED {
 		asr = extra.NewSTT(logger, cfg)
 	}
+	go updateModelListsTicker()
 }
