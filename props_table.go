@@ -50,6 +50,7 @@ func makePropsTable(props map[string]float32) *tview.Table {
 	row++
 	// Store cell data for later use in selection functions
 	cellData := make(map[string]*CellData)
+	var modelCellID string // will be set for the model selection row
 	// Helper function to add a checkbox-like row
 	addCheckboxRow := func(label string, initialValue bool, onChange func(bool)) {
 		table.SetCell(row, 0,
@@ -148,22 +149,30 @@ func makePropsTable(props map[string]float32) *tview.Table {
 		cfg.CurrentAPI = option
 		// Update model list based on new API
 		newModelList := getModelListForAPI(cfg.CurrentAPI)
-		modelCellID := fmt.Sprintf("listpopup_%d", modelRowIndex)
-		if data := cellData[modelCellID]; data != nil {
-			data.Options = newModelList
+		if modelCellID != "" {
+			if data := cellData[modelCellID]; data != nil {
+				data.Options = newModelList
+			}
 		}
 		// Ensure chatBody.Model is in the new list; if not, set to first available model
 		if len(newModelList) > 0 && !slices.Contains(newModelList, chatBody.Model) {
 			chatBody.Model = newModelList[0]
-			// Update the displayed cell text
-			if cell := table.GetCell(modelRowIndex, 1); cell != nil {
-				cell.SetText(chatBody.Model)
+			// Update the displayed cell text - need to find model row
+			// Search for model row by label
+			for r := 0; r < table.GetRowCount(); r++ {
+				if cell := table.GetCell(r, 0); cell != nil && cell.Text == "Select a model" {
+					if valueCell := table.GetCell(r, 1); valueCell != nil {
+						valueCell.SetText(chatBody.Model)
+					}
+					break
+				}
 			}
 		}
 	})
 
 	// Prepare model list dropdown
 	modelRowIndex = row
+	modelCellID = fmt.Sprintf("listpopup_%d", modelRowIndex)
 	modelList := getModelListForAPI(cfg.CurrentAPI)
 	addListPopupRow("Select a model", modelList, chatBody.Model, func(option string) {
 		chatBody.Model = option
@@ -248,17 +257,45 @@ func makePropsTable(props map[string]float32) *tview.Table {
 		listPopupCellID := fmt.Sprintf("listpopup_%d", selectedRow)
 		if cellData[listPopupCellID] != nil && cellData[listPopupCellID].Type == CellTypeListPopup {
 			data := cellData[listPopupCellID]
-			if onChange, ok := data.OnChange.(func(string)); ok && data.Options != nil {
+			if onChange, ok := data.OnChange.(func(string)); ok {
+				// Get label for context
+				labelCell := table.GetCell(selectedRow, 0)
+				label := "item"
+				if labelCell != nil {
+					label = labelCell.Text
+				}
+
+				// For model selection, always compute fresh options from current API
+				if label == "Select a model" {
+					freshOptions := getModelListForAPI(cfg.CurrentAPI)
+					data.Options = freshOptions
+					// Also update the cell data map
+					cellData[listPopupCellID].Options = freshOptions
+				}
+
+				// Handle nil options
+				if data.Options == nil {
+					logger.Error("options list is nil for", "label", label)
+					if err := notifyUser("Configuration error", "Options list is nil for " + label); err != nil {
+						logger.Error("failed to send notification", "error", err)
+					}
+					return
+				}
+
 				// Check for empty options list
 				if len(data.Options) == 0 {
-					// Get label for context
-					labelCell := table.GetCell(selectedRow, 0)
-					label := "item"
-					if labelCell != nil {
-						label = labelCell.Text
+					logger.Warn("empty options list for", "label", label, "api", cfg.CurrentAPI, "localModelsLen", len(LocalModels), "orModelsLen", len(ORFreeModels))
+					message := "No options available for " + label
+					if label == "Select a model" {
+						if strings.Contains(cfg.CurrentAPI, "openrouter.ai") {
+							message = "No OpenRouter models available. Check token and connection."
+						} else if strings.Contains(cfg.CurrentAPI, "api.deepseek.com") {
+							message = "DeepSeek models should be available. Please report bug."
+						} else {
+							message = "No llama.cpp models loaded. Ensure llama.cpp server is running with models."
+						}
 					}
-					logger.Warn("empty options list for", "label", label)
-					if err := notifyUser("Empty list", "No options available for " + label); err != nil {
+					if err := notifyUser("Empty list", message); err != nil {
 						logger.Error("failed to send notification", "error", err)
 					}
 					return
@@ -266,7 +303,7 @@ func makePropsTable(props map[string]float32) *tview.Table {
 				// Create a list primitive
 				apiList := tview.NewList().ShowSecondaryText(false).
 					SetSelectedBackgroundColor(tcell.ColorGray)
-				apiList.SetTitle("Select an API").SetBorder(true)
+				apiList.SetTitle("Select " + label).SetBorder(true)
 				for i, api := range data.Options {
 					if api == cell.Text {
 						apiList.SetCurrentItem(i)
