@@ -132,19 +132,12 @@ func makePropsTable(props map[string]float32) *tview.Table {
 	})
 	// Helper function to get model list for a given API
 	getModelListForAPI := func(api string) []string {
-		var list []string
 		if strings.Contains(api, "api.deepseek.com/") {
-			list = []string{chatBody.Model, "deepseek-chat", "deepseek-reasoner"}
+			return []string{"deepseek-chat", "deepseek-reasoner"}
 		} else if strings.Contains(api, "openrouter.ai") {
-			list = ORFreeModels
-		} else {
-			list = LocalModels
+			return ORFreeModels
 		}
-		// Ensure current chatBody.Model is in the list
-		if len(list) > 0 && !slices.Contains(list, chatBody.Model) {
-			list = slices.Insert(list, 0, chatBody.Model)
-		}
-		return list
+		return LocalModels
 	}
 
 	var modelRowIndex int // will be set before model row is added
@@ -256,6 +249,20 @@ func makePropsTable(props map[string]float32) *tview.Table {
 		if cellData[listPopupCellID] != nil && cellData[listPopupCellID].Type == CellTypeListPopup {
 			data := cellData[listPopupCellID]
 			if onChange, ok := data.OnChange.(func(string)); ok && data.Options != nil {
+				// Check for empty options list
+				if len(data.Options) == 0 {
+					// Get label for context
+					labelCell := table.GetCell(selectedRow, 0)
+					label := "item"
+					if labelCell != nil {
+						label = labelCell.Text
+					}
+					logger.Warn("empty options list for", "label", label)
+					if err := notifyUser("Empty list", "No options available for " + label); err != nil {
+						logger.Error("failed to send notification", "error", err)
+					}
+					return
+				}
 				// Create a list primitive
 				apiList := tview.NewList().ShowSecondaryText(false).
 					SetSelectedBackgroundColor(tcell.ColorGray)
