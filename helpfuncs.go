@@ -63,7 +63,7 @@ func colorText() {
 }
 
 func updateStatusLine() {
-	position.SetText(makeStatusLine())
+	statusLineWidget.SetText(makeStatusLine())
 	helpView.SetText(fmt.Sprintf(helpText, makeStatusLine()))
 }
 
