@@ -141,8 +141,14 @@ func makePropsTable(props map[string]float32) *tview.Table {
 		return LocalModels
 	}
 	var modelRowIndex int // will be set before model row is added
-	// Prepare API links dropdown - insert current API at the beginning
-	apiLinks := slices.Insert(cfg.ApiLinks, 0, cfg.CurrentAPI)
+	// Prepare API links dropdown - ensure current API is first, avoid duplicates
+	apiLinks := make([]string, 0, len(cfg.ApiLinks)+1)
+	apiLinks = append(apiLinks, cfg.CurrentAPI)
+	for _, api := range cfg.ApiLinks {
+		if api != cfg.CurrentAPI {
+			apiLinks = append(apiLinks, api)
+		}
+	}
 	addListPopupRow("Select an api", apiLinks, cfg.CurrentAPI, func(option string) {
 		cfg.CurrentAPI = option
 		// Update model list based on new API
