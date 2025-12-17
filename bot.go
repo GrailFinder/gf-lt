@@ -16,6 +16,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"path"
 	"strings"
@@ -186,6 +187,58 @@ func createClient(connectTimeout time.Duration) *http.Client {
 		Transport: transport,
 		Timeout:   0, // No overall timeout (for streaming)
 	}
+}
+
+func warmUpModel() {
+	u, err := url.Parse(cfg.CurrentAPI)
+	if err != nil {
+		return
+	}
+	host := u.Hostname()
+	if host != "localhost" && host != "127.0.0.1" && host != "::1" {
+		return
+	}
+	go func() {
+		var data []byte
+		var err error
+		if strings.HasSuffix(cfg.CurrentAPI, "/completion") {
+			// Old completion endpoint
+			req := models.NewLCPReq(".", chatBody.Model, nil, map[string]float32{
+				"temperature":    0.8,
+				"dry_multiplier": 0.0,
+				"min_p":          0.05,
+				"n_predict":      0,
+			}, []string{})
+			req.Stream = false
+			data, err = json.Marshal(req)
+		} else if strings.Contains(cfg.CurrentAPI, "/v1/chat/completions") {
+			// OpenAI-compatible chat endpoint
+			req := models.OpenAIReq{
+				ChatBody: &models.ChatBody{
+					Model: chatBody.Model,
+					Messages: []models.RoleMsg{
+						{Role: "system", Content: "."},
+					},
+					Stream: false,
+				},
+				Tools: nil,
+			}
+			data, err = json.Marshal(req)
+		} else {
+			// Unknown local endpoint, skip
+			return
+		}
+		if err != nil {
+			logger.Debug("failed to marshal warmup request", "error", err)
+			return
+		}
+		resp, err := httpClient.Post(cfg.CurrentAPI, "application/json", bytes.NewReader(data))
+		if err != nil {
+			logger.Debug("warmup request failed", "error", err)
+			return
+		}
+		resp.Body.Close()
+	}()
 }
 
 func fetchLCPModelName() *models.LCPModels {
@@ -894,7 +947,7 @@ func init() {
 		cluedoState = extra.CluedoPrepCards(playerOrder)
 	}
 	choseChunkParser()
-	httpClient = createClient(time.Second * 15)
+	httpClient = createClient(time.Second * 90)
 	if cfg.TTS_ENABLED {
 		orator = extra.NewOrator(logger, cfg)
 	}

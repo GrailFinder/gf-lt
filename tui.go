@@ -89,6 +89,7 @@ var (
 [yellow]Alt+4[white]: edit msg role
 [yellow]Alt+5[white]: toggle system and tool messages display
 [yellow]Alt+6[white]: toggle status line visibility
+[yellow]Alt+9[white]: warm up (load) selected llama.cpp model
 
 === scrolling chat window (some keys similar to vim) ===
 [yellow]arrows up/down and j/k[white]: scroll up and down
@@ -1233,6 +1234,14 @@ func init() {
 		if event.Key() == tcell.KeyRune && event.Modifiers() == tcell.ModAlt && event.Rune() == '1' {
 			// Toggle shell mode: when enabled, commands are executed locally instead of sent to LLM
 			toggleShellMode()
+			return nil
+		}
+		if event.Key() == tcell.KeyRune && event.Modifiers() == tcell.ModAlt && event.Rune() == '9' {
+			// Warm up (load) the currently selected model
+			go warmUpModel()
+			if err := notifyUser("model warmup", "loading model: "+chatBody.Model); err != nil {
+				logger.Debug("failed to notify user", "error", err)
+			}
 			return nil
 		}
 		// cannot send msg in editMode or botRespMode
