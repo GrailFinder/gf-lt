@@ -327,12 +327,11 @@ func fetchLCPModels() ([]string, error) {
 	return localModels, nil
 }
 
+// sendMsgToLLM expects streaming resp
 func sendMsgToLLM(body io.Reader) {
 	choseChunkParser()
-
 	var req *http.Request
 	var err error
-
 	// Capture and log the request body for debugging
 	if _, ok := body.(*io.LimitedReader); ok {
 		// If it's a LimitedReader, we need to handle it differently
@@ -379,7 +378,6 @@ func sendMsgToLLM(body io.Reader) {
 				return
 			}
 		}
-
 		req.Header.Add("Accept", "application/json")
 		req.Header.Add("Content-Type", "application/json")
 		req.Header.Add("Authorization", "Bearer "+chunkParser.GetToken())
