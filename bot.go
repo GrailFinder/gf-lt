@@ -756,7 +756,7 @@ func findCall(msg, toolCall string, tv *tview.TextView) {
 		}
 	}
 	// call a func
-	f, ok := fnMap[fc.Name]
+	_, ok := fnMap[fc.Name]
 	if !ok {
 		m := fc.Name + " is not implemented"
 		// Create tool response message with the proper tool_call_id
@@ -775,7 +775,7 @@ func findCall(msg, toolCall string, tv *tview.TextView) {
 		chatRound("", cfg.AssistantRole, tv, false, false)
 		return
 	}
-	resp := f(fc.Args)
+	resp := callToolWithAgent(fc.Name, fc.Args)
 	toolMsg := string(resp) // Remove the "tool response: " prefix and %+v formatting
 	logger.Info("llm used tool call", "tool_resp", toolMsg, "tool_attrs", fc)
 	fmt.Fprintf(tv, "%s[-:-:b](%d) <%s>: [-:-:-]\n%s\n",

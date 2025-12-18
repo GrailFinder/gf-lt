@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"gf-lt/agent"
 	"gf-lt/extra"
 	"gf-lt/models"
 	"io"
@@ -846,6 +847,29 @@ var fnMap = map[string]fnSig{
 	"todo_read":       todoRead,
 	"todo_update":     todoUpdate,
 	"todo_delete":     todoDelete,
+}
+
+// callToolWithAgent calls the tool and applies any registered agent.
+func callToolWithAgent(name string, args map[string]string) []byte {
+	f, ok := fnMap[name]
+	if !ok {
+		return []byte(fmt.Sprintf("tool %s not found", name))
+	}
+	raw := f(args)
+	if a := agent.Get(name); a != nil {
+		return a.Process(args, raw)
+	}
+	return raw
+}
+
+// registerDefaultAgents registers default agents for formatting.
+func registerDefaultAgents() {
+	agent.Register("websearch", agent.DefaultFormatter("websearch"))
+	agent.Register("read_url", agent.DefaultFormatter("read_url"))
+}
+
+func init() {
+	registerDefaultAgents()
 }
 
 // openai style def
