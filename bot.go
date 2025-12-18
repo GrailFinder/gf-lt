@@ -330,59 +330,19 @@ func fetchLCPModels() ([]string, error) {
 // sendMsgToLLM expects streaming resp
 func sendMsgToLLM(body io.Reader) {
 	choseChunkParser()
-	var req *http.Request
-	var err error
-	// Capture and log the request body for debugging
-	if _, ok := body.(*io.LimitedReader); ok {
-		// If it's a LimitedReader, we need to handle it differently
-		logger.Debug("request body type is LimitedReader", "parser", chunkParser, "link", cfg.CurrentAPI)
-		req, err = http.NewRequest("POST", cfg.CurrentAPI, body)
-		if err != nil {
-			logger.Error("newreq error", "error", err)
-			if err := notifyUser("error", "apicall failed:"+err.Error()); err != nil {
-				logger.Error("failed to notify", "error", err)
-			}
-			streamDone <- true
-			return
+	req, err := http.NewRequest("POST", cfg.CurrentAPI, body)
+	if err != nil {
+		logger.Error("newreq error", "error", err)
+		if err := notifyUser("error", "apicall failed:"+err.Error()); err != nil {
+			logger.Error("failed to notify", "error", err)
 		}
-		req.Header.Add("Accept", "application/json")
-		req.Header.Add("Content-Type", "application/json")
-		req.Header.Add("Authorization", "Bearer "+chunkParser.GetToken())
-		req.Header.Set("Accept-Encoding", "gzip")
-	} else {
-		// For other reader types, capture and log the body content
-		bodyBytes, err := io.ReadAll(body)
-		if err != nil {
-			logger.Error("failed to read request body for logging", "error", err)
-			// Create request with original body if reading fails
-			req, err = http.NewRequest("POST", cfg.CurrentAPI, bytes.NewReader(bodyBytes))
-			if err != nil {
-				logger.Error("newreq error", "error", err)
-				if err := notifyUser("error", "apicall failed:"+err.Error()); err != nil {
-					logger.Error("failed to notify", "error", err)
-				}
-				streamDone <- true
-				return
-			}
-		} else {
-			// Log the request body for debugging
-			logger.Debug("sending request to API", "api", cfg.CurrentAPI, "body", string(bodyBytes))
-			// Create request with the captured body
-			req, err = http.NewRequest("POST", cfg.CurrentAPI, bytes.NewReader(bodyBytes))
-			if err != nil {
-				logger.Error("newreq error", "error", err)
-				if err := notifyUser("error", "apicall failed:"+err.Error()); err != nil {
-					logger.Error("failed to notify", "error", err)
-				}
-				streamDone <- true
-				return
-			}
-		}
-		req.Header.Add("Accept", "application/json")
-		req.Header.Add("Content-Type", "application/json")
-		req.Header.Add("Authorization", "Bearer "+chunkParser.GetToken())
-		req.Header.Set("Accept-Encoding", "gzip")
+		streamDone <- true
+		return
 	}
+	req.Header.Add("Accept", "application/json")
+	req.Header.Add("Content-Type", "application/json")
+	req.Header.Add("Authorization", "Bearer "+chunkParser.GetToken())
+	req.Header.Set("Accept-Encoding", "gzip")
 	// nolint
 	resp, err := httpClient.Do(req)
 	if err != nil {
