@@ -26,6 +26,10 @@ func NewAgentClient(cfg *config.Config, log slog.Logger, gt func() string) *Agen
 	}
 }
 
+func (ag *AgentClient) Log() *slog.Logger {
+	return &ag.log
+}
+
 func (ag *AgentClient) FormMsg(sysprompt, msg string) (io.Reader, error) {
 	agentConvo := []models.RoleMsg{
 		{Role: "system", Content: sysprompt},
