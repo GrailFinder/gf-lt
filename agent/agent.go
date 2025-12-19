@@ -33,3 +33,13 @@ func RegisterB(toolName string, a AgenterB) {
 func RegisterA(toolNames []string, a AgenterA) {
 	RegistryA[a] = toolNames
 }
+
+// Get returns the agent registered for the given tool name, or nil if none.
+func Get(toolName string) AgenterB {
+	return RegistryB[toolName]
+}
+
+// Register is a convenience wrapper for RegisterB.
+func Register(toolName string, a AgenterB) {
+	RegisterB(toolName, a)
+}

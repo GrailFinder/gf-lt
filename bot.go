@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"gf-lt/config"
 	"gf-lt/extra"
 	"gf-lt/models"
@@ -659,14 +660,75 @@ func cleanChatBody() {
 	}
 }
 
+// convertJSONToMapStringString unmarshals JSON into map[string]interface{} and converts all values to strings.
+func convertJSONToMapStringString(jsonStr string) (map[string]string, error) {
+	var raw map[string]interface{}
+	if err := json.Unmarshal([]byte(jsonStr), &raw); err != nil {
+		return nil, err
+	}
+	result := make(map[string]string, len(raw))
+	for k, v := range raw {
+		switch val := v.(type) {
+		case string:
+			result[k] = val
+		case float64:
+			result[k] = strconv.FormatFloat(val, 'f', -1, 64)
+		case int, int64, int32:
+			// json.Unmarshal converts numbers to float64, but handle other integer types if they appear
+			result[k] = fmt.Sprintf("%v", val)
+		case bool:
+			result[k] = strconv.FormatBool(val)
+		case nil:
+			result[k] = ""
+		default:
+			result[k] = fmt.Sprintf("%v", val)
+		}
+	}
+	return result, nil
+}
+
+// unmarshalFuncCall unmarshals a JSON tool call, converting numeric arguments to strings.
+func unmarshalFuncCall(jsonStr string) (*models.FuncCall, error) {
+	type tempFuncCall struct {
+		ID   string                 `json:"id,omitempty"`
+		Name string                 `json:"name"`
+		Args map[string]interface{} `json:"args"`
+	}
+	var temp tempFuncCall
+	if err := json.Unmarshal([]byte(jsonStr), &temp); err != nil {
+		return nil, err
+	}
+	fc := &models.FuncCall{
+		ID:   temp.ID,
+		Name: temp.Name,
+		Args: make(map[string]string, len(temp.Args)),
+	}
+	for k, v := range temp.Args {
+		switch val := v.(type) {
+		case string:
+			fc.Args[k] = val
+		case float64:
+			fc.Args[k] = strconv.FormatFloat(val, 'f', -1, 64)
+		case int, int64, int32:
+			fc.Args[k] = fmt.Sprintf("%v", val)
+		case bool:
+			fc.Args[k] = strconv.FormatBool(val)
+		case nil:
+			fc.Args[k] = ""
+		default:
+			fc.Args[k] = fmt.Sprintf("%v", val)
+		}
+	}
+	return fc, nil
+}
+
 func findCall(msg, toolCall string, tv *tview.TextView) {
 	fc := &models.FuncCall{}
 	if toolCall != "" {
 		// HTML-decode the tool call string to handle encoded characters like &lt; -> <=
 		decodedToolCall := html.UnescapeString(toolCall)
-		openAIToolMap := make(map[string]string)
-		// respect tool call
-		if err := json.Unmarshal([]byte(decodedToolCall), &openAIToolMap); err != nil {
+		openAIToolMap, err := convertJSONToMapStringString(decodedToolCall)
+		if err != nil {
 			logger.Error("failed to unmarshal openai tool call", "call", decodedToolCall, "error", err)
 			// Send error response to LLM so it can retry or handle the error
 			toolResponseMsg := models.RoleMsg{
@@ -700,7 +762,9 @@ func findCall(msg, toolCall string, tv *tview.TextView) {
 		jsStr = strings.TrimSuffix(strings.TrimPrefix(jsStr, prefix), suffix)
 		// HTML-decode the JSON string to handle encoded characters like &lt; -> <=
 		decodedJsStr := html.UnescapeString(jsStr)
-		if err := json.Unmarshal([]byte(decodedJsStr), &fc); err != nil {
+		var err error
+		fc, err = unmarshalFuncCall(decodedJsStr)
+		if err != nil {
 			logger.Error("failed to unmarshal tool call", "error", err, "json_string", decodedJsStr)
 			// Send error response to LLM so it can retry or handle the error
 			toolResponseMsg := models.RoleMsg{
