@@ -161,6 +161,7 @@ func makePropsTable(props map[string]float32) *tview.Table {
 		// Ensure chatBody.Model is in the new list; if not, set to first available model
 		if len(newModelList) > 0 && !slices.Contains(newModelList, chatBody.Model) {
 			chatBody.Model = newModelList[0]
+			cfg.CurrentModel = chatBody.Model
 			// Update the displayed cell text - need to find model row
 			// Search for model row by label
 			for r := 0; r < table.GetRowCount(); r++ {
@@ -179,6 +180,7 @@ func makePropsTable(props map[string]float32) *tview.Table {
 	modelList := getModelListForAPI(cfg.CurrentAPI)
 	addListPopupRow("Select a model", modelList, chatBody.Model, func(option string) {
 		chatBody.Model = option
+		cfg.CurrentModel = chatBody.Model
 	})
 	// Role selection dropdown
 	addListPopupRow("Write next message as", listRolesWithUser(), cfg.WriteNextMsgAs, func(option string) {

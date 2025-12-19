@@ -12,7 +12,7 @@ type Config struct {
 	ChatAPI           string `toml:"ChatAPI"`
 	CompletionAPI     string `toml:"CompletionAPI"`
 	CurrentAPI        string
-	CurrentProvider   string
+	CurrentModel      string `toml:"CurrentModel"`
 	APIMap            map[string]string
 	FetchModelNameAPI string `toml:"FetchModelNameAPI"`
 	//  ToolsAPI list?

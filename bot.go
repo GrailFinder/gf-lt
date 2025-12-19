@@ -263,6 +263,7 @@ func fetchLCPModelName() *models.LCPModels {
 		return nil
 	}
 	chatBody.Model = path.Base(llmModel.Data[0].ID)
+	cfg.CurrentModel = chatBody.Model
 	return &llmModel
 }
 

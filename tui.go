@@ -18,21 +18,21 @@ import (
 )
 
 var (
-	app             *tview.Application
-	pages           *tview.Pages
-	textArea        *tview.TextArea
-	editArea        *tview.TextArea
-	textView        *tview.TextView
+	app              *tview.Application
+	pages            *tview.Pages
+	textArea         *tview.TextArea
+	editArea         *tview.TextArea
+	textView         *tview.TextView
 	statusLineWidget *tview.TextView
-	helpView        *tview.TextView
-	flex            *tview.Flex
-	imgView         *tview.Image
-	defaultImage    = "sysprompts/llama.png"
-	indexPickWindow *tview.InputField
-	renameWindow    *tview.InputField
-	roleEditWindow  *tview.InputField
-	fullscreenMode  bool
-	positionVisible bool = true
+	helpView         *tview.TextView
+	flex             *tview.Flex
+	imgView          *tview.Image
+	defaultImage     = "sysprompts/llama.png"
+	indexPickWindow  *tview.InputField
+	renameWindow     *tview.InputField
+	roleEditWindow   *tview.InputField
+	fullscreenMode   bool
+	positionVisible  bool = true
 	// pages
 	historyPage    = "historyPage"
 	agentPage      = "agentPage"
@@ -984,12 +984,14 @@ func init() {
 				if len(ORFreeModels) > 0 {
 					currentORModelIndex = (currentORModelIndex + 1) % len(ORFreeModels)
 					chatBody.Model = ORFreeModels[currentORModelIndex]
+					cfg.CurrentModel = chatBody.Model
 				}
 				updateStatusLine()
 			} else {
 				if len(LocalModels) > 0 {
 					currentLocalModelIndex = (currentLocalModelIndex + 1) % len(LocalModels)
 					chatBody.Model = LocalModels[currentLocalModelIndex]
+					cfg.CurrentModel = chatBody.Model
 				}
 				updateStatusLine()
 				// // For non-OpenRouter APIs, use the old logic
