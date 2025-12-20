@@ -6,7 +6,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strconv"
 	"gf-lt/config"
 	"gf-lt/extra"
 	"gf-lt/models"
@@ -20,6 +19,7 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"strconv"
 	"strings"
 	"time"
 
@@ -86,19 +86,31 @@ func cleanNullMessages(messages []models.RoleMsg) []models.RoleMsg {
 	return consolidateConsecutiveAssistantMessages(messages)
 }
 
+func cleanToolCalls(messages []models.RoleMsg) []models.RoleMsg {
+	cleaned := make([]models.RoleMsg, 0, len(messages))
+	for i, msg := range messages {
+		// recognize the message as the tool call and remove it
+		if msg.ToolCallID == "" {
+			cleaned = append(cleaned, msg)
+		}
+		// tool call in last msg should stay
+		if i == len(messages)-1 {
+			cleaned = append(cleaned, msg)
+		}
+	}
+	return consolidateConsecutiveAssistantMessages(cleaned)
+}
+
 // consolidateConsecutiveAssistantMessages merges consecutive assistant messages into a single message
 func consolidateConsecutiveAssistantMessages(messages []models.RoleMsg) []models.RoleMsg {
 	if len(messages) == 0 {
 		return messages
 	}
-
 	consolidated := make([]models.RoleMsg, 0, len(messages))
 	currentAssistantMsg := models.RoleMsg{}
 	isBuildingAssistantMsg := false
-
 	for i := 0; i < len(messages); i++ {
 		msg := messages[i]
-
 		if msg.Role == cfg.AssistantRole || msg.Role == cfg.WriteNextMsgAsCompletionAgent {
 			// If this is an assistant message, start or continue building
 			if !isBuildingAssistantMsg {
@@ -143,12 +155,10 @@ func consolidateConsecutiveAssistantMessages(messages []models.RoleMsg) []models
 			consolidated = append(consolidated, msg)
 		}
 	}
-
 	// Don't forget the last assistant message if we were building one
 	if isBuildingAssistantMsg {
 		consolidated = append(consolidated, currentAssistantMsg)
 	}
-
 	return consolidated
 }
 
@@ -483,6 +493,7 @@ func sendMsgToLLM(body io.Reader) {
 			streamDone <- true
 			break
 		}
+		// // problem: this catches any mention of the word 'error'
 		// Handle error messages in response content
 		// example needed, since llm could use the word error in the normal msg
 		// if string(line) != "" && strings.Contains(strings.ToLower(string(line)), "error") {
@@ -691,20 +702,16 @@ out:
 			Role: botPersona, Content: respText.String(),
 		})
 	}
-
 	logger.Debug("chatRound: before cleanChatBody", "messages_before_clean", len(chatBody.Messages))
 	for i, msg := range chatBody.Messages {
 		logger.Debug("chatRound: before cleaning", "index", i, "role", msg.Role, "content_len", len(msg.Content), "has_content", msg.HasContent(), "tool_call_id", msg.ToolCallID)
 	}
-
 	// // Clean null/empty messages to prevent API issues with endpoints like llama.cpp jinja template
 	cleanChatBody()
-
 	logger.Debug("chatRound: after cleanChatBody", "messages_after_clean", len(chatBody.Messages))
 	for i, msg := range chatBody.Messages {
 		logger.Debug("chatRound: after cleaning", "index", i, "role", msg.Role, "content_len", len(msg.Content), "has_content", msg.HasContent(), "tool_call_id", msg.ToolCallID)
 	}
-
 	colorText()
 	updateStatusLine()
 	// bot msg is done;
@@ -718,19 +725,19 @@ out:
 
 // cleanChatBody removes messages with null or empty content to prevent API issues
 func cleanChatBody() {
-	if chatBody != nil && chatBody.Messages != nil {
-		originalLen := len(chatBody.Messages)
-		logger.Debug("cleanChatBody: before cleaning", "message_count", originalLen)
-		for i, msg := range chatBody.Messages {
-			logger.Debug("cleanChatBody: before clean", "index", i, "role", msg.Role, "content_len", len(msg.Content), "has_content", msg.HasContent(), "tool_call_id", msg.ToolCallID)
-		}
-
-		chatBody.Messages = cleanNullMessages(chatBody.Messages)
-
-		logger.Debug("cleanChatBody: after cleaning", "original_len", originalLen, "new_len", len(chatBody.Messages))
-		for i, msg := range chatBody.Messages {
-			logger.Debug("cleanChatBody: after clean", "index", i, "role", msg.Role, "content_len", len(msg.Content), "has_content", msg.HasContent(), "tool_call_id", msg.ToolCallID)
-		}
+	if chatBody == nil || chatBody.Messages == nil {
+		return
+	}
+	originalLen := len(chatBody.Messages)
+	logger.Debug("cleanChatBody: before cleaning", "message_count", originalLen)
+	for i, msg := range chatBody.Messages {
+		logger.Debug("cleanChatBody: before clean", "index", i, "role", msg.Role, "content_len", len(msg.Content), "has_content", msg.HasContent(), "tool_call_id", msg.ToolCallID)
+	}
+	chatBody.Messages = cleanToolCalls(chatBody.Messages)
+	chatBody.Messages = cleanNullMessages(chatBody.Messages)
+	logger.Debug("cleanChatBody: after cleaning", "original_len", originalLen, "new_len", len(chatBody.Messages))
+	for i, msg := range chatBody.Messages {
+		logger.Debug("cleanChatBody: after clean", "index", i, "role", msg.Role, "content_len", len(msg.Content), "has_content", msg.HasContent(), "tool_call_id", msg.ToolCallID)
 	}
 }
 
@@ -852,6 +859,14 @@ func findCall(msg, toolCall string, tv *tview.TextView) {
 			return
 		}
 	}
+	// we got here => last msg recognized as a tool call (correct or not)
+	// make sure it has ToolCallID
+	if chatBody.Messages[len(chatBody.Messages)-1].ToolCallID == "" {
+		chatBody.Messages[len(chatBody.Messages)-1].ToolCallID = randString(6)
+	}
+	if lastToolCallID == "" {
+		lastToolCallID = chatBody.Messages[len(chatBody.Messages)-1].ToolCallID
+	}
 	// call a func
 	_, ok := fnMap[fc.Name]
 	if !ok {
@@ -866,7 +881,6 @@ func findCall(msg, toolCall string, tv *tview.TextView) {
 		logger.Debug("findCall: added tool not implemented response", "role", toolResponseMsg.Role, "content_len", len(toolResponseMsg.Content), "tool_call_id", toolResponseMsg.ToolCallID, "message_count_after_add", len(chatBody.Messages))
 		// Clear the stored tool call ID after using it
 		lastToolCallID = ""
-
 		// Trigger the assistant to continue processing with the new tool response
 		// by calling chatRound with empty content to continue the assistant's response
 		chatRound("", cfg.AssistantRole, tv, false, false)
