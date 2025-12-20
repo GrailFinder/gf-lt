@@ -21,6 +21,7 @@ import (
 	"path"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/neurosnap/sentences/english"
@@ -52,6 +53,7 @@ var (
 	//nolint:unused // TTS_ENABLED conditionally uses this
 	orator          extra.Orator
 	asr             extra.STT
+	localModelsMu   sync.RWMutex
 	defaultLCPProps = map[string]float32{
 		"temperature":    0.8,
 		"dry_multiplier": 0.0,
@@ -1002,10 +1004,30 @@ func updateModelLists() {
 		}
 	}
 	// if llama.cpp started after gf-lt?
+	localModelsMu.Lock()
 	LocalModels, err = fetchLCPModels()
+	localModelsMu.Unlock()
 	if err != nil {
 		logger.Warn("failed to fetch llama.cpp models", "error", err)
 	}
+}
+
+func refreshLocalModelsIfEmpty() {
+	localModelsMu.RLock()
+	if len(LocalModels) > 0 {
+		localModelsMu.RUnlock()
+		return
+	}
+	localModelsMu.RUnlock()
+	// try to fetch
+	models, err := fetchLCPModels()
+	if err != nil {
+		logger.Warn("failed to fetch llama.cpp models", "error", err)
+		return
+	}
+	localModelsMu.Lock()
+	LocalModels = models
+	localModelsMu.Unlock()
 }
 
 func init() {

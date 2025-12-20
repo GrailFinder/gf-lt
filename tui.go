@@ -12,10 +12,13 @@ import (
 	"path"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 )
+
+var _ = sync.RWMutex{}
 
 var (
 	app              *tview.Application
@@ -988,11 +991,13 @@ func init() {
 				}
 				updateStatusLine()
 			} else {
+				localModelsMu.RLock()
 				if len(LocalModels) > 0 {
 					currentLocalModelIndex = (currentLocalModelIndex + 1) % len(LocalModels)
 					chatBody.Model = LocalModels[currentLocalModelIndex]
 					cfg.CurrentModel = chatBody.Model
 				}
+				localModelsMu.RUnlock()
 				updateStatusLine()
 				// // For non-OpenRouter APIs, use the old logic
 				// go func() {

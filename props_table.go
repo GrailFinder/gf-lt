@@ -5,10 +5,13 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 )
+
+var _ = sync.RWMutex{}
 
 // Define constants for cell types
 const (
@@ -138,6 +141,10 @@ func makePropsTable(props map[string]float32) *tview.Table {
 		} else if strings.Contains(api, "openrouter.ai") {
 			return ORFreeModels
 		}
+		// Assume local llama.cpp
+		refreshLocalModelsIfEmpty()
+		localModelsMu.RLock()
+		defer localModelsMu.RUnlock()
 		return LocalModels
 	}
 	var modelRowIndex int // will be set before model row is added
