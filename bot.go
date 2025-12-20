@@ -49,7 +49,6 @@ var (
 	ragger              *rag.RAG
 	chunkParser         ChunkParser
 	lastToolCall        *models.FuncCall
-	lastToolCallID      string // Store the ID of the most recent tool call
 	//nolint:unused // TTS_ENABLED conditionally uses this
 	orator          extra.Orator
 	asr             extra.STT
@@ -520,7 +519,7 @@ func sendMsgToLLM(body io.Reader) {
 		if chunk.FuncName != "" {
 			lastToolCall.Name = chunk.FuncName
 			// Store the tool call ID for the response
-			lastToolCallID = chunk.ToolID
+			lastToolCall.ID = chunk.ToolID
 		}
 	interrupt:
 		if interruptResp { // read bytes, so it would not get into beginning of the next req
@@ -811,26 +810,25 @@ func findCall(msg, toolCall string, tv *tview.TextView) {
 		openAIToolMap, err := convertJSONToMapStringString(decodedToolCall)
 		if err != nil {
 			logger.Error("failed to unmarshal openai tool call", "call", decodedToolCall, "error", err)
+			// Ensure lastToolCall.ID is set for the error response (already set from chunk)
 			// Send error response to LLM so it can retry or handle the error
 			toolResponseMsg := models.RoleMsg{
 				Role:       cfg.ToolRole,
 				Content:    fmt.Sprintf("Error processing tool call: %v. Please check the JSON format and try again.", err),
-				ToolCallID: lastToolCallID, // Use the stored tool call ID
+				ToolCallID: lastToolCall.ID, // Use the stored tool call ID
 			}
 			chatBody.Messages = append(chatBody.Messages, toolResponseMsg)
-			// Clear the stored tool call ID after using it
-			lastToolCallID = ""
+			// Clear the stored tool call ID after using it (no longer needed)
 			// Trigger the assistant to continue processing with the error message
 			chatRound("", cfg.AssistantRole, tv, false, false)
 			return
 		}
 		lastToolCall.Args = openAIToolMap
 		fc = lastToolCall
-		// Ensure lastToolCallID is set if it's available in the tool call
-		if lastToolCallID == "" && len(openAIToolMap) > 0 {
-			// Attempt to extract ID from the parsed tool call if not already set
+		// Set lastToolCall.ID from parsed tool call ID if available
+		if len(openAIToolMap) > 0 {
 			if id, exists := openAIToolMap["id"]; exists {
-				lastToolCallID = id
+				lastToolCall.ID = id
 			}
 		}
 	} else {
@@ -858,14 +856,19 @@ func findCall(msg, toolCall string, tv *tview.TextView) {
 			chatRound("", cfg.AssistantRole, tv, false, false)
 			return
 		}
+		// Update lastToolCall with parsed function call
+		lastToolCall.ID = fc.ID
+		lastToolCall.Name = fc.Name
+		lastToolCall.Args = fc.Args
 	}
 	// we got here => last msg recognized as a tool call (correct or not)
 	// make sure it has ToolCallID
 	if chatBody.Messages[len(chatBody.Messages)-1].ToolCallID == "" {
 		chatBody.Messages[len(chatBody.Messages)-1].ToolCallID = randString(6)
 	}
-	if lastToolCallID == "" {
-		lastToolCallID = chatBody.Messages[len(chatBody.Messages)-1].ToolCallID
+	// Ensure lastToolCall.ID is set, fallback to assistant message's ToolCallID
+	if lastToolCall.ID == "" {
+		lastToolCall.ID = chatBody.Messages[len(chatBody.Messages)-1].ToolCallID
 	}
 	// call a func
 	_, ok := fnMap[fc.Name]
@@ -875,12 +878,12 @@ func findCall(msg, toolCall string, tv *tview.TextView) {
 		toolResponseMsg := models.RoleMsg{
 			Role:       cfg.ToolRole,
 			Content:    m,
-			ToolCallID: lastToolCallID, // Use the stored tool call ID
+			ToolCallID: lastToolCall.ID, // Use the stored tool call ID
 		}
 		chatBody.Messages = append(chatBody.Messages, toolResponseMsg)
 		logger.Debug("findCall: added tool not implemented response", "role", toolResponseMsg.Role, "content_len", len(toolResponseMsg.Content), "tool_call_id", toolResponseMsg.ToolCallID, "message_count_after_add", len(chatBody.Messages))
 		// Clear the stored tool call ID after using it
-		lastToolCallID = ""
+		lastToolCall.ID = ""
 		// Trigger the assistant to continue processing with the new tool response
 		// by calling chatRound with empty content to continue the assistant's response
 		chatRound("", cfg.AssistantRole, tv, false, false)
@@ -895,12 +898,12 @@ func findCall(msg, toolCall string, tv *tview.TextView) {
 	toolResponseMsg := models.RoleMsg{
 		Role:       cfg.ToolRole,
 		Content:    toolMsg,
-		ToolCallID: lastToolCallID, // Use the stored tool call ID
+		ToolCallID: lastToolCall.ID, // Use the stored tool call ID
 	}
 	chatBody.Messages = append(chatBody.Messages, toolResponseMsg)
 	logger.Debug("findCall: added actual tool response", "role", toolResponseMsg.Role, "content_len", len(toolResponseMsg.Content), "tool_call_id", toolResponseMsg.ToolCallID, "message_count_after_add", len(chatBody.Messages))
 	// Clear the stored tool call ID after using it
-	lastToolCallID = ""
+	lastToolCall.ID = ""
 	// Trigger the assistant to continue processing with the new tool response
 	// by calling chatRound with empty content to continue the assistant's response
 	chatRound("", cfg.AssistantRole, tv, false, false)
