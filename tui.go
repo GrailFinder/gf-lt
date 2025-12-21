@@ -12,26 +12,30 @@ import (
 	"path"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 )
 
+var _ = sync.RWMutex{}
+
 var (
-	app             *tview.Application
-	pages           *tview.Pages
-	textArea        *tview.TextArea
-	editArea        *tview.TextArea
-	textView        *tview.TextView
-	position        *tview.TextView
-	helpView        *tview.TextView
-	flex            *tview.Flex
-	imgView         *tview.Image
-	defaultImage    = "sysprompts/llama.png"
-	indexPickWindow *tview.InputField
-	renameWindow    *tview.InputField
-	roleEditWindow  *tview.InputField
-	fullscreenMode  bool
+	app              *tview.Application
+	pages            *tview.Pages
+	textArea         *tview.TextArea
+	editArea         *tview.TextArea
+	textView         *tview.TextView
+	statusLineWidget *tview.TextView
+	helpView         *tview.TextView
+	flex             *tview.Flex
+	imgView          *tview.Image
+	defaultImage     = "sysprompts/llama.png"
+	indexPickWindow  *tview.InputField
+	renameWindow     *tview.InputField
+	roleEditWindow   *tview.InputField
+	fullscreenMode   bool
+	positionVisible  bool = true
 	// pages
 	historyPage    = "historyPage"
 	agentPage      = "agentPage"
@@ -87,6 +91,8 @@ var (
 [yellow]Alt+1[white]: toggle shell mode (execute commands locally)
 [yellow]Alt+4[white]: edit msg role
 [yellow]Alt+5[white]: toggle system and tool messages display
+[yellow]Alt+6[white]: toggle status line visibility
+[yellow]Alt+9[white]: warm up (load) selected llama.cpp model
 
 === scrolling chat window (some keys similar to vim) ===
 [yellow]arrows up/down and j/k[white]: scroll up and down
@@ -169,6 +175,26 @@ func toggleShellMode() {
 		textArea.SetPlaceholder("input is multiline; press <Enter> to start the next line;\npress <Esc> to send the message. Alt+1 to exit shell mode")
 	}
 	updateStatusLine()
+}
+
+func updateFlexLayout() {
+	if fullscreenMode {
+		// flex already contains only focused widget; do nothing
+		return
+	}
+	flex.Clear()
+	flex.AddItem(textView, 0, 40, false)
+	flex.AddItem(textArea, 0, 10, false)
+	if positionVisible {
+		flex.AddItem(statusLineWidget, 0, 2, false)
+	}
+	// Keep focus on currently focused widget
+	focused := app.GetFocus()
+	if focused == textView {
+		app.SetFocus(textView)
+	} else {
+		app.SetFocus(textArea)
+	}
 }
 
 func executeCommandAndDisplay(cmdText string) {
@@ -456,8 +482,10 @@ func init() {
 	//
 	flex = tview.NewFlex().SetDirection(tview.FlexRow).
 		AddItem(textView, 0, 40, false).
-		AddItem(textArea, 0, 10, true). // Restore original height
-		AddItem(position, 0, 2, false)
+		AddItem(textArea, 0, 10, true) // Restore original height
+	if positionVisible {
+		flex.AddItem(statusLineWidget, 0, 2, false)
+	}
 	// textView.SetBorder(true).SetTitle("chat")
 	textView.SetDoneFunc(func(key tcell.Key) {
 		if key == tcell.KeyEnter {
@@ -516,14 +544,16 @@ func init() {
 	})
 	focusSwitcher[textArea] = textView
 	focusSwitcher[textView] = textArea
-	position = tview.NewTextView().
+	statusLineWidget = tview.NewTextView().
 		SetDynamicColors(true).
 		SetTextAlign(tview.AlignCenter)
 	// Initially set up flex without search bar
 	flex = tview.NewFlex().SetDirection(tview.FlexRow).
 		AddItem(textView, 0, 40, false).
-		AddItem(textArea, 0, 10, true). // Restore original height
-		AddItem(position, 0, 2, false)
+		AddItem(textArea, 0, 10, true) // Restore original height
+	if positionVisible {
+		flex.AddItem(statusLineWidget, 0, 2, false)
+	}
 	editArea = tview.NewTextArea().
 		SetPlaceholder("Replace msg...")
 	editArea.SetBorder(true).SetTitle("input")
@@ -749,6 +779,14 @@ func init() {
 			textView.SetText(chatToText(cfg.ShowSys))
 			colorText()
 		}
+		if event.Key() == tcell.KeyRune && event.Rune() == '6' && event.Modifiers()&tcell.ModAlt != 0 {
+			// toggle status line visibility
+			if name, _ := pages.GetFrontPage(); name != "main" {
+				return event
+			}
+			positionVisible = !positionVisible
+			updateFlexLayout()
+		}
 		if event.Key() == tcell.KeyF1 {
 			// chatList, err := loadHistoryChats()
 			chatList, err := store.GetChatByChar(cfg.AssistantRole)
@@ -841,16 +879,7 @@ func init() {
 				}
 			} else {
 				// focused is the fullscreened widget here
-				flex.Clear().
-					AddItem(textView, 0, 40, false).
-					AddItem(textArea, 0, 10, false).
-					AddItem(position, 0, 2, false)
-
-				if focused == textView {
-					app.SetFocus(textView)
-				} else { // default to textArea
-					app.SetFocus(textArea)
-				}
+				updateFlexLayout()
 			}
 			return nil
 		}
@@ -958,13 +987,17 @@ func init() {
 				if len(ORFreeModels) > 0 {
 					currentORModelIndex = (currentORModelIndex + 1) % len(ORFreeModels)
 					chatBody.Model = ORFreeModels[currentORModelIndex]
+					cfg.CurrentModel = chatBody.Model
 				}
 				updateStatusLine()
 			} else {
+				localModelsMu.RLock()
 				if len(LocalModels) > 0 {
 					currentLocalModelIndex = (currentLocalModelIndex + 1) % len(LocalModels)
 					chatBody.Model = LocalModels[currentLocalModelIndex]
+					cfg.CurrentModel = chatBody.Model
 				}
+				localModelsMu.RUnlock()
 				updateStatusLine()
 				// // For non-OpenRouter APIs, use the old logic
 				// go func() {
@@ -1208,6 +1241,14 @@ func init() {
 		if event.Key() == tcell.KeyRune && event.Modifiers() == tcell.ModAlt && event.Rune() == '1' {
 			// Toggle shell mode: when enabled, commands are executed locally instead of sent to LLM
 			toggleShellMode()
+			return nil
+		}
+		if event.Key() == tcell.KeyRune && event.Modifiers() == tcell.ModAlt && event.Rune() == '9' {
+			// Warm up (load) the currently selected model
+			go warmUpModel()
+			if err := notifyUser("model warmup", "loading model: "+chatBody.Model); err != nil {
+				logger.Debug("failed to notify user", "error", err)
+			}
 			return nil
 		}
 		// cannot send msg in editMode or botRespMode

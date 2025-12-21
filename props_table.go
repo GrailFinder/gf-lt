@@ -5,10 +5,13 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 )
+
+var _ = sync.RWMutex{}
 
 // Define constants for cell types
 const (
@@ -50,6 +53,7 @@ func makePropsTable(props map[string]float32) *tview.Table {
 	row++
 	// Store cell data for later use in selection functions
 	cellData := make(map[string]*CellData)
+	var modelCellID string // will be set for the model selection row
 	// Helper function to add a checkbox-like row
 	addCheckboxRow := func(label string, initialValue bool, onChange func(bool)) {
 		table.SetCell(row, 0,
@@ -130,23 +134,60 @@ func makePropsTable(props map[string]float32) *tview.Table {
 	addListPopupRow("Set log level", logLevels, GetLogLevel(), func(option string) {
 		setLogLevel(option)
 	})
-	// Prepare API links dropdown - insert current API at the beginning
-	apiLinks := slices.Insert(cfg.ApiLinks, 0, cfg.CurrentAPI)
+	// Helper function to get model list for a given API
+	getModelListForAPI := func(api string) []string {
+		if strings.Contains(api, "api.deepseek.com/") {
+			return []string{"deepseek-chat", "deepseek-reasoner"}
+		} else if strings.Contains(api, "openrouter.ai") {
+			return ORFreeModels
+		}
+		// Assume local llama.cpp
+		refreshLocalModelsIfEmpty()
+		localModelsMu.RLock()
+		defer localModelsMu.RUnlock()
+		return LocalModels
+	}
+	var modelRowIndex int // will be set before model row is added
+	// Prepare API links dropdown - ensure current API is first, avoid duplicates
+	apiLinks := make([]string, 0, len(cfg.ApiLinks)+1)
+	apiLinks = append(apiLinks, cfg.CurrentAPI)
+	for _, api := range cfg.ApiLinks {
+		if api != cfg.CurrentAPI {
+			apiLinks = append(apiLinks, api)
+		}
+	}
 	addListPopupRow("Select an api", apiLinks, cfg.CurrentAPI, func(option string) {
 		cfg.CurrentAPI = option
+		// Update model list based on new API
+		newModelList := getModelListForAPI(cfg.CurrentAPI)
+		if modelCellID != "" {
+			if data := cellData[modelCellID]; data != nil {
+				data.Options = newModelList
+			}
+		}
+		// Ensure chatBody.Model is in the new list; if not, set to first available model
+		if len(newModelList) > 0 && !slices.Contains(newModelList, chatBody.Model) {
+			chatBody.Model = newModelList[0]
+			cfg.CurrentModel = chatBody.Model
+			// Update the displayed cell text - need to find model row
+			// Search for model row by label
+			for r := 0; r < table.GetRowCount(); r++ {
+				if cell := table.GetCell(r, 0); cell != nil && cell.Text == "Select a model" {
+					if valueCell := table.GetCell(r, 1); valueCell != nil {
+						valueCell.SetText(chatBody.Model)
+					}
+					break
+				}
+			}
+		}
 	})
-	var modelList []string
-	// INFO: modelList is chosen based on current api link
-	if strings.Contains(cfg.CurrentAPI, "api.deepseek.com/") {
-		modelList = []string{chatBody.Model, "deepseek-chat", "deepseek-reasoner"}
-	} else if strings.Contains(cfg.CurrentAPI, "opentouter.ai") {
-		modelList = ORFreeModels
-	} else { // would match on localhost but what if llama.cpp served non localy?
-		modelList = LocalModels
-	}
 	// Prepare model list dropdown
+	modelRowIndex = row
+	modelCellID = fmt.Sprintf("listpopup_%d", modelRowIndex)
+	modelList := getModelListForAPI(cfg.CurrentAPI)
 	addListPopupRow("Select a model", modelList, chatBody.Model, func(option string) {
 		chatBody.Model = option
+		cfg.CurrentModel = chatBody.Model
 	})
 	// Role selection dropdown
 	addListPopupRow("Write next message as", listRolesWithUser(), cfg.WriteNextMsgAs, func(option string) {
@@ -228,11 +269,53 @@ func makePropsTable(props map[string]float32) *tview.Table {
 		listPopupCellID := fmt.Sprintf("listpopup_%d", selectedRow)
 		if cellData[listPopupCellID] != nil && cellData[listPopupCellID].Type == CellTypeListPopup {
 			data := cellData[listPopupCellID]
-			if onChange, ok := data.OnChange.(func(string)); ok && data.Options != nil {
+			if onChange, ok := data.OnChange.(func(string)); ok {
+				// Get label for context
+				labelCell := table.GetCell(selectedRow, 0)
+				label := "item"
+				if labelCell != nil {
+					label = labelCell.Text
+				}
+
+				// For model selection, always compute fresh options from current API
+				if label == "Select a model" {
+					freshOptions := getModelListForAPI(cfg.CurrentAPI)
+					data.Options = freshOptions
+					// Also update the cell data map
+					cellData[listPopupCellID].Options = freshOptions
+				}
+
+				// Handle nil options
+				if data.Options == nil {
+					logger.Error("options list is nil for", "label", label)
+					if err := notifyUser("Configuration error", "Options list is nil for "+label); err != nil {
+						logger.Error("failed to send notification", "error", err)
+					}
+					return
+				}
+
+				// Check for empty options list
+				if len(data.Options) == 0 {
+					logger.Warn("empty options list for", "label", label, "api", cfg.CurrentAPI, "localModelsLen", len(LocalModels), "orModelsLen", len(ORFreeModels))
+					message := "No options available for " + label
+					if label == "Select a model" {
+						if strings.Contains(cfg.CurrentAPI, "openrouter.ai") {
+							message = "No OpenRouter models available. Check token and connection."
+						} else if strings.Contains(cfg.CurrentAPI, "api.deepseek.com") {
+							message = "DeepSeek models should be available. Please report bug."
+						} else {
+							message = "No llama.cpp models loaded. Ensure llama.cpp server is running with models."
+						}
+					}
+					if err := notifyUser("Empty list", message); err != nil {
+						logger.Error("failed to send notification", "error", err)
+					}
+					return
+				}
 				// Create a list primitive
 				apiList := tview.NewList().ShowSecondaryText(false).
 					SetSelectedBackgroundColor(tcell.ColorGray)
-				apiList.SetTitle("Select an API").SetBorder(true)
+				apiList.SetTitle("Select " + label).SetBorder(true)
 				for i, api := range data.Options {
 					if api == cell.Text {
 						apiList.SetCurrentItem(i)

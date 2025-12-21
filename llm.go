@@ -122,7 +122,7 @@ func (lcp LCPCompletion) FormMsg(msg, role string, resume bool) (io.Reader, erro
 			logger.Debug("RAG message added to chat body", "message_count", len(chatBody.Messages))
 		}
 	}
-	if cfg.ToolUse && !resume {
+	if cfg.ToolUse && !resume && role == cfg.UserRole {
 		// add to chat body
 		chatBody.Messages = append(chatBody.Messages, models.RoleMsg{Role: cfg.ToolRole, Content: toolSysMsg})
 	}
@@ -358,7 +358,7 @@ func (ds DeepSeekerCompletion) FormMsg(msg, role string, resume bool) (io.Reader
 			logger.Debug("DeepSeekerCompletion: RAG message added to chat body", "message_count", len(chatBody.Messages))
 		}
 	}
-	if cfg.ToolUse && !resume {
+	if cfg.ToolUse && !resume && role == cfg.UserRole {
 		// add to chat body
 		chatBody.Messages = append(chatBody.Messages, models.RoleMsg{Role: cfg.ToolRole, Content: toolSysMsg})
 	}
@@ -420,7 +420,7 @@ func (ds DeepSeekerChat) GetToken() string {
 
 func (ds DeepSeekerChat) FormMsg(msg, role string, resume bool) (io.Reader, error) {
 	logger.Debug("formmsg deepseekerchat", "link", cfg.CurrentAPI)
-	if cfg.ToolUse && !resume {
+	if cfg.ToolUse && !resume && role == cfg.UserRole {
 		// prompt += "\n" + cfg.ToolRole + ":\n" + toolSysMsg
 		// add to chat body
 		chatBody.Messages = append(chatBody.Messages, models.RoleMsg{Role: cfg.ToolRole, Content: toolSysMsg})
@@ -516,7 +516,7 @@ func (or OpenRouterCompletion) FormMsg(msg, role string, resume bool) (io.Reader
 			logger.Debug("RAG message added to chat body", "message_count", len(chatBody.Messages))
 		}
 	}
-	if cfg.ToolUse && !resume {
+	if cfg.ToolUse && !resume && role == cfg.UserRole {
 		// add to chat body
 		chatBody.Messages = append(chatBody.Messages, models.RoleMsg{Role: cfg.ToolRole, Content: toolSysMsg})
 	}

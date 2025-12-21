@@ -23,43 +23,92 @@ func makeChatTable(chatMap map[string]models.Chat) *tview.Table {
 		chatList[i] = name
 		i++
 	}
-	rows, cols := len(chatMap), len(actions)+2
+
+	// Add 1 extra row for header
+	rows, cols := len(chatMap)+1, len(actions)+4 // +2 for name, +2 for timestamps
 	chatActTable := tview.NewTable().
 		SetBorders(true)
-	for r := 0; r < rows; r++ {
+
+	// Add header row (row 0)
+	for c := 0; c < cols; c++ {
+		color := tcell.ColorWhite
+		headerText := ""
+		switch c {
+		case 0:
+			headerText = "Chat Name"
+		case 1:
+			headerText = "Preview"
+		case 2:
+			headerText = "Created At"
+		case 3:
+			headerText = "Updated At"
+		default:
+			headerText = actions[c-4]
+		}
+		chatActTable.SetCell(0, c,
+			tview.NewTableCell(headerText).
+				SetSelectable(false).
+				SetTextColor(color).
+				SetAlign(tview.AlignCenter).
+				SetAttributes(tcell.AttrBold))
+	}
+
+	// Add data rows (starting from row 1)
+	for r := 0; r < rows-1; r++ { // rows-1 because we added a header row
 		for c := 0; c < cols; c++ {
 			color := tcell.ColorWhite
 			switch c {
 			case 0:
-				chatActTable.SetCell(r, c,
+				chatActTable.SetCell(r+1, c, // +1 to account for header row
 					tview.NewTableCell(chatList[r]).
 						SetSelectable(false).
 						SetTextColor(color).
 						SetAlign(tview.AlignCenter))
 			case 1:
-				chatActTable.SetCell(r, c,
+				chatActTable.SetCell(r+1, c, // +1 to account for header row
 					tview.NewTableCell(chatMap[chatList[r]].Msgs[len(chatMap[chatList[r]].Msgs)-30:]).
 						SetSelectable(false).
 						SetTextColor(color).
 						SetAlign(tview.AlignCenter))
+			case 2:
+				// Created At column
+				chatActTable.SetCell(r+1, c, // +1 to account for header row
+					tview.NewTableCell(chatMap[chatList[r]].CreatedAt.Format("2006-01-02 15:04")).
+						SetSelectable(false).
+						SetTextColor(color).
+						SetAlign(tview.AlignCenter))
+			case 3:
+				// Updated At column
+				chatActTable.SetCell(r+1, c, // +1 to account for header row
+					tview.NewTableCell(chatMap[chatList[r]].UpdatedAt.Format("2006-01-02 15:04")).
+						SetSelectable(false).
+						SetTextColor(color).
+						SetAlign(tview.AlignCenter))
 			default:
-				chatActTable.SetCell(r, c,
-					tview.NewTableCell(actions[c-2]).
+				chatActTable.SetCell(r+1, c, // +1 to account for header row
+					tview.NewTableCell(actions[c-4]). // Adjusted offset to account for 2 new timestamp columns
 						SetTextColor(color).
 						SetAlign(tview.AlignCenter))
 			}
 		}
 	}
-	chatActTable.Select(0, 0).SetSelectable(true, true).SetFixed(1, 1).SetDoneFunc(func(key tcell.Key) {
+	chatActTable.Select(1, 0).SetSelectable(true, true).SetFixed(1, 1).SetDoneFunc(func(key tcell.Key) {
 		if key == tcell.KeyEsc || key == tcell.KeyF1 || key == tcell.Key('x') {
 			pages.RemovePage(historyPage)
 			return
 		}
 	}).SetSelectedFunc(func(row int, column int) {
+		// Skip header row (row 0) for selection
+		if row == 0 {
+			// If user clicks on header, just return without action
+			chatActTable.Select(1, column) // Move selection to first data row
+			return
+		}
+
 		tc := chatActTable.GetCell(row, column)
 		tc.SetTextColor(tcell.ColorRed)
 		chatActTable.SetSelectable(false, false)
-		selectedChat := chatList[row]
+		selectedChat := chatList[row-1] // -1 to account for header row
 		defer pages.RemovePage(historyPage)
 		switch tc.Text {
 		case "load":

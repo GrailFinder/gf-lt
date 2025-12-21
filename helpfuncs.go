@@ -8,7 +8,19 @@ import (
 	"os"
 	"path"
 	"strings"
+	"unicode"
+
+	"math/rand/v2"
 )
+
+func isASCII(s string) bool {
+	for i := 0; i < len(s); i++ {
+		if s[i] > unicode.MaxASCII {
+			return false
+		}
+	}
+	return true
+}
 
 func colorText() {
 	text := textView.GetText(false)
@@ -63,7 +75,7 @@ func colorText() {
 }
 
 func updateStatusLine() {
-	position.SetText(makeStatusLine())
+	statusLineWidget.SetText(makeStatusLine())
 	helpView.SetText(fmt.Sprintf(helpText, makeStatusLine()))
 }
 
@@ -228,4 +240,14 @@ func makeStatusLine() string {
 		cfg.ToolUse, chatBody.Model, cfg.SkipLLMResp, cfg.CurrentAPI, cfg.ThinkUse, logLevel.Level(),
 		isRecording, persona, botPersona, injectRole)
 	return statusLine + imageInfo + shellModeInfo
+}
+
+var letters = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
+
+func randString(n int) string {
+	b := make([]rune, n)
+	for i := range b {
+		b[i] = letters[rand.IntN(len(letters))]
+	}
+	return string(b)
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"gf-lt/agent"
 	"gf-lt/extra"
 	"gf-lt/models"
 	"io"
@@ -12,6 +13,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -125,7 +127,9 @@ under the topic: Adam's number is stored:
 </example_response>
 After that you are free to respond to the user.
 `
-	basicCard = &models.CharCard{
+	webSearchSysPrompt = `Summarize the web search results, extracting key information and presenting a concise answer. Provide sources and URLs where relevant.`
+	readURLSysPrompt   = `Extract and summarize the content from the webpage. Provide key information, main points, and any relevant details.`
+	basicCard          = &models.CharCard{
 		SysPrompt: basicSysMsg,
 		FirstMsg:  defaultFirstMsg,
 		Role:      "",
@@ -140,7 +144,42 @@ After that you are free to respond to the user.
 	// sysMap    = map[string]string{"basic_sys": basicSysMsg, "tool_sys": toolSysMsg}
 	sysMap    = map[string]*models.CharCard{"basic_sys": basicCard}
 	sysLabels = []string{"basic_sys"}
+
+	webAgentClient      *agent.AgentClient
+	webAgentClientOnce  sync.Once
+	webAgentsOnce       sync.Once
 )
+
+// getWebAgentClient returns a singleton AgentClient for web agents.
+func getWebAgentClient() *agent.AgentClient {
+	webAgentClientOnce.Do(func() {
+		if cfg == nil {
+			panic("cfg not initialized")
+		}
+		if logger == nil {
+			panic("logger not initialized")
+		}
+		getToken := func() string {
+			if chunkParser == nil {
+				return ""
+			}
+			return chunkParser.GetToken()
+		}
+		webAgentClient = agent.NewAgentClient(cfg, *logger, getToken)
+	})
+	return webAgentClient
+}
+
+// registerWebAgents registers WebAgentB instances for websearch and read_url tools.
+func registerWebAgents() {
+	webAgentsOnce.Do(func() {
+		client := getWebAgentClient()
+		// Register websearch agent
+		agent.Register("websearch", agent.NewWebAgentB(client, webSearchSysPrompt))
+		// Register read_url agent
+		agent.Register("read_url", agent.NewWebAgentB(client, readURLSysPrompt))
+	})
+}
 
 // web search (depends on extra server)
 func websearch(args map[string]string) []byte {
@@ -596,7 +635,6 @@ var globalTodoList = TodoList{
 	Items: []TodoItem{},
 }
 
-
 // Todo Management Tools
 func todoCreate(args map[string]string) []byte {
 	task, ok := args["task"]
@@ -846,6 +884,20 @@ var fnMap = map[string]fnSig{
 	"todo_read":       todoRead,
 	"todo_update":     todoUpdate,
 	"todo_delete":     todoDelete,
+}
+
+// callToolWithAgent calls the tool and applies any registered agent.
+func callToolWithAgent(name string, args map[string]string) []byte {
+	registerWebAgents()
+	f, ok := fnMap[name]
+	if !ok {
+		return []byte(fmt.Sprintf("tool %s not found", name))
+	}
+	raw := f(args)
+	if a := agent.Get(name); a != nil {
+		return a.Process(args, raw)
+	}
+	return raw
 }
 
 // openai style def
