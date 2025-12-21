@@ -42,6 +42,7 @@ then press `x` to close the table.
 
 
 #### choosing LLM provider and model
+now we need to pick API endpoint and model to converse with.
 supported backends: llama.cpp, openrouter and deepseek.
 for openrouter and deepseek you will need a token.
 set it in config.toml or set envvar
@@ -59,6 +60,13 @@ in case you're running llama.cpp here is an example of starting llama.cpp
 ```
 
 <b>after changing config.toml or envvar you need to restart the program.</b>
+
+for RP /completion endpoints are much better, since /chat endpoints swap any character name to either `user` or `assistant`;
+once you have desired API endpoint  
+(for example: http://localhost:8080/completion)  
+there are two ways to pick a model: 
+- `ctrl+l` allowes you to iterate through model list while in main window.
+- `ctrl+p` (opens props table) go to the `Select a model` row and press enter, list of available models would appear, pick any that you want, press `x` to exit the props table.
 
 #### sending messages
 messages are send by pressing `Esc` button

@@ -4,14 +4,10 @@ made with use of [tview](https://github.com/rivo/tview)
 
 #### has/supports
 - character card spec;
-- llama.cpp api, deepseek, openrouter (other ones were not tested);
-- showing images (not really, for now only if your char card is png it could show it);
-- tts/stt (if whisper.cpp server / fastapi tts server are provided);
+- API (/chat and /completion): llama.cpp, deepseek, openrouter;
+- tts/stt (run make commands to get deps);
 - image input;
-
-#### does not have/support
-- RAG; (RAG was implemented, but I found it unusable and then sql extention broke, so no RAG);
-- MCP; (agentic is implemented, but as a raw and predefined functions for llm to use. see [tools.go](https://github.com/GrailFinder/gf-lt/blob/master/tools.go));
+- function calls (function calls are implemented natively, to avoid calling outside sources);
 
 #### usage examples
 ![usage example](assets/ex01.png)
@@ -33,30 +29,47 @@ F1: manage chats
 F2: regen last
 F3: delete last msg
 F4: edit msg
-F5: toggle system
+F5: toggle fullscreen for input/chat window
 F6: interrupt bot resp
 F7: copy last msg to clipboard (linux xclip)
 F8: copy n msg to clipboard (linux xclip)
 F9: table to copy from; with all code blocks
 F10: switch if LLM will respond on this message (for user to write multiple messages in a row)
-F11: import chat file
+F11: import json chat file
 F12: show this help page
 Ctrl+w: resume generation on the last msg
 Ctrl+s: load new char/agent
 Ctrl+e: export chat to json file
 Ctrl+c: close programm
 Ctrl+n: start a new chat
-Ctrl+o: open file picker for img input
+Ctrl+o: open image file picker
 Ctrl+p: props edit form (min-p, dry, etc.)
 Ctrl+v: switch between /completion and /chat api (if provided in config)
-Ctrl+r: start/stop recording from your microphone (needs stt server)
+Ctrl+r: start/stop recording from your microphone (needs stt server or whisper binary)
 Ctrl+t: remove thinking (<think>) and tool messages from context (delete from chat)
-Ctrl+l: update connected model name (llamacpp)
+Ctrl+l: rotate through free OpenRouter models (if openrouter api) or update connected model name (llamacpp)
 Ctrl+k: switch tool use (recommend tool use to llm after user msg)
 Ctrl+j: if chat agent is char.png will show the image; then any key to return
 Ctrl+a: interrupt tts (needs tts server)
+Ctrl+g: open RAG file manager (load files for context retrieval)
+Ctrl+y: list loaded RAG files (view and manage loaded files)
 Ctrl+q: cycle through mentioned chars in chat, to pick persona to send next msg as
 Ctrl+x: cycle through mentioned chars in chat, to pick persona to send next msg as (for llm)
+Alt+1: toggle shell mode (execute commands locally)
+Alt+4: edit msg role
+Alt+5: toggle system and tool messages display
+
+=== scrolling chat window (some keys similar to vim) ===
+arrows up/down and j/k: scroll up and down
+gg/G: jump to the begging / end of the chat
+/: start searching for text
+n: go to next search result
+N: go to previous search result
+
+=== tables (chat history, agent pick, file pick, properties) ===
+x: to exit the table page
+
+trl+x: cycle through mentioned chars in chat, to pick persona to send next msg as (for llm)
 ```
 
 #### setting up config
