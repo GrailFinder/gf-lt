@@ -734,6 +734,8 @@ func cleanChatBody() {
 	for i, msg := range chatBody.Messages {
 		logger.Debug("cleanChatBody: before clean", "index", i, "role", msg.Role, "content_len", len(msg.Content), "has_content", msg.HasContent(), "tool_call_id", msg.ToolCallID)
 	}
+	// TODO: consider case where we keep tool requests
+	// /completion msg where part meant for user and other part tool call
 	chatBody.Messages = cleanToolCalls(chatBody.Messages)
 	chatBody.Messages = cleanNullMessages(chatBody.Messages)
 	logger.Debug("cleanChatBody: after cleaning", "original_len", originalLen, "new_len", len(chatBody.Messages))
@@ -925,7 +927,7 @@ func chatToTextSlice(showSys bool) []string {
 
 func chatToText(showSys bool) string {
 	s := chatToTextSlice(showSys)
-	return strings.Join(s, "")
+	return strings.Join(s, "\n")
 }
 
 func removeThinking(chatBody *models.ChatBody) {
