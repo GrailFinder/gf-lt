@@ -1254,7 +1254,6 @@ func init() {
 		// cannot send msg in editMode or botRespMode
 		if event.Key() == tcell.KeyEscape && !editMode && !botRespMode {
 			msgText := textArea.GetText()
-
 			if shellMode && msgText != "" {
 				// In shell mode, execute command instead of sending to LLM
 				executeCommandAndDisplay(msgText)
@@ -1262,7 +1261,7 @@ func init() {
 				return nil
 			} else if !shellMode {
 				// Normal mode - send to LLM
-				nl := "\n"
+				nl := "\n\n" // keep empty lines between messages
 				prevText := textView.GetText(true)
 				persona := cfg.UserRole
 				// strings.LastIndex()
