@@ -82,7 +82,7 @@ var (
 [yellow]Ctrl+t[white]: remove thinking (<think>) and tool messages from context (delete from chat)
 [yellow]Ctrl+l[white]: rotate through free OpenRouter models (if openrouter api) or update connected model name (llamacpp)
 [yellow]Ctrl+k[white]: switch tool use (recommend tool use to llm after user msg)
-[yellow]Ctrl+j[white]: if chat agent is char.png will show the image; then any key to return
+[yellow]Alt+8[white]: if chat agent is char.png will show the image; then any key to return
 [yellow]Ctrl+a[white]: interrupt tts (needs tts server)
 [yellow]Ctrl+g[white]: open RAG file manager (load files for context retrieval)
 [yellow]Ctrl+y[white]: list loaded RAG files (view and manage loaded files)
@@ -1064,7 +1064,7 @@ func init() {
 			updateStatusLine()
 			return nil
 		}
-		if event.Key() == tcell.KeyCtrlJ {
+		if event.Key() == tcell.KeyRune && event.Rune() == '8' && event.Modifiers()&tcell.ModAlt != 0 {
 			// show image - check for attached image first, then fall back to agent image
 			if lastImg != "" {
 				// Load the attached image
