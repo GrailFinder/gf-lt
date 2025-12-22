@@ -22,8 +22,7 @@ curl -L "https://raw.githubusercontent.com/SillyTavern/SillyTavern/refs/heads/re
 </pre>
 </details>
 
-having a card, you can start gf-lt and pres ctrl+s to open card selection table
-press `Enter` once to initiate a selection;
+having a card, you can start gf-lt and pres `ctrl+s` to open card selection table
 move against `load` button of seraphina card and press `Enter` again.
 if you want to exit without changing card, you can press enter anywhere but `load` button, or press `x`
 
@@ -43,7 +42,7 @@ then press `x` to close the table.
 
 #### choosing LLM provider and model
 now we need to pick API endpoint and model to converse with.
-supported backends: llama.cpp, openrouter and deepseek.
+supports backends: llama.cpp, openrouter and deepseek.
 for openrouter and deepseek you will need a token.
 set it in config.toml or set envvar
 ```
@@ -65,8 +64,70 @@ for RP /completion endpoints are much better, since /chat endpoints swap any cha
 once you have desired API endpoint  
 (for example: http://localhost:8080/completion)  
 there are two ways to pick a model: 
-- `ctrl+l` allowes you to iterate through model list while in main window.
+- `ctrl+l` allows you to iterate through model list while in main window.
 - `ctrl+p` (opens props table) go to the `Select a model` row and press enter, list of available models would appear, pick any that you want, press `x` to exit the props table.
 
+#### llama.cpp model preload
+llama.cpp supports swapping models, to load picked ones press `alt+9`
+
 #### sending messages
+type your message in the `input` widget; if it is not focused switch to it with pgup/pgdown or click your mouse on it.
 messages are send by pressing `Esc` button
+for ex.
+```
+I blink slowly, confused "W-where? What happened?"
+```
+
+#### editing messages
+press `f4` which'll prompt you to type index of the message you want to edit;
+let's remove this part from sysmsg (0)
+```
+Seraphina's voice holds a playful undertone, her eyes sparkling mischievously.
+```
+`mischievous` imply distance from authority and intent for the rule breaking, but Seraphina described as devoted deity.
+we can remove it or replace it with something less nonsensical.
+```
+Seraphina, altough elegant, speaks her mind without embellishments or subtleties. Some would call her naive, some would rather call her unchallenged.
+```
+when done, press `Esc` to return to main page.
+
+#### completion allowes for any number of chars
+so let us make up story of our character;
+let our character to be from high tech society who has mobile tablet device with AI called `HALL9000`, hunting certain target.
+type the message, but first press f10 to prevent llm response (since it responds as Seraphina for now)
+```
+I reach for my pocket and produce a small tablet shaped device. My mobile companion HALL9000. After making sure it is not broken I press my finger to the side
+"Wake up Hal. Are you functional? Do you know where we are?"
+```
+
+we need to write first message ourselves (or at least start one)
+there are two ways to write as a new char:
+- ctrl+p -> `New char to write msg as` -> Enter -> `HAL9000` -> `Enter` -> `x` ; status line at the bottom should now have `Writing as HALL9000 (ctrl+q)` -> your next message would be send as HALL9000.
+- ctrl+p -> `Inject role` switch to `No` -> `x`. gf-lt now won't inject your username in beginning of the message. It means you could write directly
+```
+HAL9000: Red eye appears on the screen for the moment analyzing the request.
+```
+`Esc`; now press `f10` to allow llm to write and press `ctrl+w` for it to continue the last message.
+- if you set `New chat to write msg as`; you can switch back to writing as your char by pressing ctrl+q to rotate through the character list.
+- if you went for `Inject role`: I advice to switch `Inject role` back to `Yes`. Otherwise you have to type `Charname:` in the beginning of each message.
+example of gen (copied with `f7` (copies last msg))
+```
+Red eye appears on the screen for the moment analyzing the request. After a few moments, it replies:
+"Affirmative. Location detected as Eldoria Forest, sector 7-B. This region has no records in my databases. My last known functional location was a human research facility."
+The screen flashes briefly as it calculates. "I am experiencing degraded functionality due to environmental interference. I will attempt to stabilize systems."
+*It emits a faint hum, and a holographic projection of a map flickers into existence, showing a dense forest with glowing markers.*
+```
+
+Once character name is in history we can switch who llm will respond as pressing `ctrl+x`.
+For now it should be rotating between HALL9000, `Username`, Seraphina, system.
+make status line to mention: `Bot will write as Seraphina (ctrl+x)`
+and press escape to see her reaction.
+
+#### image input
+if the model we run support image input we can Seraphina our target that we pursue
+press `ctrl+o` to open a filepicker (home directory for filepicker could be set in config.toml)
+and find an image file of our target
+```
+I say to Hal "Hal, show our target."
+An image appears on the screen. I show it to Seraphina. "Did you see that creature? I am looking for it."
+```
