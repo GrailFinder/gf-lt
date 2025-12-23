@@ -91,11 +91,8 @@ func cleanToolCalls(messages []models.RoleMsg) []models.RoleMsg {
 	cleaned := make([]models.RoleMsg, 0, len(messages))
 	for i, msg := range messages {
 		// recognize the message as the tool call and remove it
-		if msg.ToolCallID == "" {
-			cleaned = append(cleaned, msg)
-		}
 		// tool call in last msg should stay
-		if i == len(messages)-1 {
+		if msg.ToolCallID == "" || i == len(messages)-1 {
 			cleaned = append(cleaned, msg)
 		}
 	}
