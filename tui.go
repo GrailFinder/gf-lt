@@ -91,6 +91,7 @@ var (
 [yellow]Alt+1[white]: toggle shell mode (execute commands locally)
 [yellow]Alt+4[white]: edit msg role
 [yellow]Alt+5[white]: toggle system and tool messages display
+[yellow]Alt+3[white]: summarize chat history and start new chat with summary as tool response
 [yellow]Alt+6[white]: toggle status line visibility
 [yellow]Alt+9[white]: warm up (load) selected llama.cpp model
 
@@ -779,6 +780,10 @@ func init() {
 			textView.SetText(chatToText(cfg.ShowSys))
 			colorText()
 		}
+		if event.Key() == tcell.KeyRune && event.Rune() == '3' && event.Modifiers()&tcell.ModAlt != 0 {
+			go summarizeAndStartNewChat()
+			return nil
+		}
 		if event.Key() == tcell.KeyRune && event.Rune() == '6' && event.Modifiers()&tcell.ModAlt != 0 {
 			// toggle status line visibility
 			if name, _ := pages.GetFrontPage(); name != "main" {
@@ -826,7 +831,7 @@ func init() {
 			// there is no case where user msg is regenerated
 			// lastRole := chatBody.Messages[len(chatBody.Messages)-1].Role
 			textView.SetText(chatToText(cfg.ShowSys))
-			go chatRound("", cfg.UserRole, textView, true, false)
+			go chatRound("", cfg.UserRole, textView, true, false, false)
 			return nil
 		}
 		if event.Key() == tcell.KeyF3 && !botRespMode {
@@ -1129,7 +1134,7 @@ func init() {
 			// INFO: continue bot/text message
 			// without new role
 			lastRole := chatBody.Messages[len(chatBody.Messages)-1].Role
-			go chatRound("", lastRole, textView, false, true)
+			go chatRound("", lastRole, textView, false, true, false)
 			return nil
 		}
 		if event.Key() == tcell.KeyCtrlQ {
@@ -1289,7 +1294,7 @@ func init() {
 					textView.ScrollToEnd()
 					colorText()
 				}
-				go chatRound(msgText, persona, textView, false, false)
+				go chatRound(msgText, persona, textView, false, false, false)
 				// Also clear any image attachment after sending the message
 				go func() {
 					// Wait a short moment for the message to be processed, then clear the image attachment
