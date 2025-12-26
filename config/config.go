@@ -31,6 +31,7 @@ type Config struct {
 	WriteNextMsgAs                string
 	WriteNextMsgAsCompletionAgent string
 	SkipLLMResp                   bool
+	AutoCleanToolCallsFromCtx     bool   `toml:"AutoCleanToolCallsFromCtx"`
 	// embeddings
 	RAGEnabled bool   `toml:"RAGEnabled"`
 	EmbedURL   string `toml:"EmbedURL"`
