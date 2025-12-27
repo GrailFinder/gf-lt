@@ -69,7 +69,6 @@ var (
 		"meta-llama/llama-3.3-70b-instruct:free",
 	}
 	LocalModels = []string{}
-	lastSummary string
 )
 
 // cleanNullMessages removes messages with null or empty content to prevent API issues
@@ -627,22 +626,8 @@ func checkGame(role string, tv *tview.TextView) {
 	}
 }
 
-func chatRound(userMsg, role string, tv *tview.TextView, regen, resume, summaryMode bool) {
+func chatRound(userMsg, role string, tv *tview.TextView, regen, resume bool) {
 	botRespMode = true
-	if summaryMode {
-		// Save original messages
-		originalMessages := chatBody.Messages
-		defer func() { chatBody.Messages = originalMessages }()
-		// Build summary prompt messages
-		summaryMessages := []models.RoleMsg{}
-		// Add system instruction
-		summaryMessages = append(summaryMessages, models.RoleMsg{Role: "system", Content: "Please provide a concise summary of the following conversation. Focus on key points, decisions, and actions. Provide only the summary, no additional commentary."})
-		// Append all original messages (excluding system? keep them)
-		summaryMessages = append(summaryMessages, originalMessages...)
-		// Add a user message to trigger summary
-		summaryMessages = append(summaryMessages, models.RoleMsg{Role: cfg.UserRole, Content: "Summarize the conversation."})
-		chatBody.Messages = summaryMessages
-	}
 	botPersona := cfg.AssistantRole
 	if cfg.WriteNextMsgAsCompletionAgent != "" {
 		botPersona = cfg.WriteNextMsgAsCompletionAgent
@@ -672,7 +657,7 @@ func chatRound(userMsg, role string, tv *tview.TextView, regen, resume, summaryM
 	}
 	go sendMsgToLLM(reader)
 	logger.Debug("looking at vars in chatRound", "msg", userMsg, "regen", regen, "resume", resume)
-	if !summaryMode && !resume {
+	if !resume {
 		fmt.Fprintf(tv, "\n[-:-:b](%d) ", len(chatBody.Messages))
 		fmt.Fprint(tv, roleToIcon(botPersona))
 		fmt.Fprint(tv, "[-:-:-]\n")
@@ -719,9 +704,6 @@ out:
 			Role: botPersona, Content: respText.String(),
 		})
 	}
-	if summaryMode {
-		lastSummary = respText.String()
-	}
 	logger.Debug("chatRound: before cleanChatBody", "messages_before_clean", len(chatBody.Messages))
 	for i, msg := range chatBody.Messages {
 		logger.Debug("chatRound: before cleaning", "index", i, "role", msg.Role, "content_len", len(msg.Content), "has_content", msg.HasContent(), "tool_call_id", msg.ToolCallID)
@@ -732,19 +714,15 @@ out:
 	for i, msg := range chatBody.Messages {
 		logger.Debug("chatRound: after cleaning", "index", i, "role", msg.Role, "content_len", len(msg.Content), "has_content", msg.HasContent(), "tool_call_id", msg.ToolCallID)
 	}
-	if !summaryMode {
-		colorText()
-		updateStatusLine()
-	}
+	colorText()
+	updateStatusLine()
 	// bot msg is done;
 	// now check it for func call
 	// logChat(activeChatName, chatBody.Messages)
-	if !summaryMode {
-		if err := updateStorageChat(activeChatName, chatBody.Messages); err != nil {
-			logger.Warn("failed to update storage", "error", err, "name", activeChatName)
-		}
-		findCall(respText.String(), toolResp.String(), tv)
+	if err := updateStorageChat(activeChatName, chatBody.Messages); err != nil {
+		logger.Warn("failed to update storage", "error", err, "name", activeChatName)
 	}
+	findCall(respText.String(), toolResp.String(), tv)
 }
 
 // cleanChatBody removes messages with null or empty content to prevent API issues
@@ -847,7 +825,7 @@ func findCall(msg, toolCall string, tv *tview.TextView) {
 			chatBody.Messages = append(chatBody.Messages, toolResponseMsg)
 			// Clear the stored tool call ID after using it (no longer needed)
 			// Trigger the assistant to continue processing with the error message
-			chatRound("", cfg.AssistantRole, tv, false, false, false)
+			chatRound("", cfg.AssistantRole, tv, false, false)
 			return
 		}
 		lastToolCall.Args = openAIToolMap
@@ -880,7 +858,7 @@ func findCall(msg, toolCall string, tv *tview.TextView) {
 			chatBody.Messages = append(chatBody.Messages, toolResponseMsg)
 			logger.Debug("findCall: added tool error response", "role", toolResponseMsg.Role, "content_len", len(toolResponseMsg.Content), "message_count_after_add", len(chatBody.Messages))
 			// Trigger the assistant to continue processing with the error message
-			chatRound("", cfg.AssistantRole, tv, false, false, false)
+			chatRound("", cfg.AssistantRole, tv, false, false)
 			return
 		}
 		// Update lastToolCall with parsed function call
@@ -913,7 +891,7 @@ func findCall(msg, toolCall string, tv *tview.TextView) {
 		lastToolCall.ID = ""
 		// Trigger the assistant to continue processing with the new tool response
 		// by calling chatRound with empty content to continue the assistant's response
-		chatRound("", cfg.AssistantRole, tv, false, false, false)
+		chatRound("", cfg.AssistantRole, tv, false, false)
 		return
 	}
 	resp := callToolWithAgent(fc.Name, fc.Args)
@@ -933,7 +911,7 @@ func findCall(msg, toolCall string, tv *tview.TextView) {
 	lastToolCall.ID = ""
 	// Trigger the assistant to continue processing with the new tool response
 	// by calling chatRound with empty content to continue the assistant's response
-	chatRound("", cfg.AssistantRole, tv, false, false, false)
+	chatRound("", cfg.AssistantRole, tv, false, false)
 }
 
 func chatToTextSlice(showSys bool) []string {
@@ -1057,18 +1035,15 @@ func refreshLocalModelsIfEmpty() {
 
 func summarizeAndStartNewChat() {
 	if len(chatBody.Messages) == 0 {
-		notifyUser("info", "No chat history to summarize")
+		_ = notifyUser("info", "No chat history to summarize")
 		return
 	}
-	// Create a dummy TextView for the summary request (won't be displayed)
-	dummyTV := tview.NewTextView()
-	// Call chatRound with summaryMode true to generate summary
-	notifyUser("info", "Summarizing chat history...")
-	lastSummary = ""
-	chatRound("", cfg.UserRole, dummyTV, false, false, true)
-	summary := lastSummary
+	_ = notifyUser("info", "Summarizing chat history...")
+	// Call the summarize_chat tool via agent
+	summaryBytes := callToolWithAgent("summarize_chat", map[string]string{})
+	summary := string(summaryBytes)
 	if summary == "" {
-		notifyUser("error", "Failed to generate summary")
+		_ = notifyUser("error", "Failed to generate summary")
 		return
 	}
 	// Start a new chat
@@ -1087,7 +1062,7 @@ func summarizeAndStartNewChat() {
 	if err := updateStorageChat(activeChatName, chatBody.Messages); err != nil {
 		logger.Warn("failed to update storage after injecting summary", "error", err)
 	}
-	notifyUser("info", "Chat summarized and new chat started with summary as tool response")
+	_ = notifyUser("info", "Chat summarized and new chat started with summary as tool response")
 }
 
 func init() {
