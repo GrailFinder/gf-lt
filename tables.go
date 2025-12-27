@@ -23,12 +23,10 @@ func makeChatTable(chatMap map[string]models.Chat) *tview.Table {
 		chatList[i] = name
 		i++
 	}
-
 	// Add 1 extra row for header
 	rows, cols := len(chatMap)+1, len(actions)+4 // +2 for name, +2 for timestamps
 	chatActTable := tview.NewTable().
 		SetBorders(true)
-
 	// Add header row (row 0)
 	for c := 0; c < cols; c++ {
 		color := tcell.ColorWhite
@@ -52,7 +50,7 @@ func makeChatTable(chatMap map[string]models.Chat) *tview.Table {
 				SetAlign(tview.AlignCenter).
 				SetAttributes(tcell.AttrBold))
 	}
-
+	previewLen := 100
 	// Add data rows (starting from row 1)
 	for r := 0; r < rows-1; r++ { // rows-1 because we added a header row
 		for c := 0; c < cols; c++ {
@@ -65,8 +63,11 @@ func makeChatTable(chatMap map[string]models.Chat) *tview.Table {
 						SetTextColor(color).
 						SetAlign(tview.AlignCenter))
 			case 1:
+				if len(chatMap[chatList[r]].Msgs) < 100 {
+					previewLen = len(chatMap[chatList[r]].Msgs)
+				}
 				chatActTable.SetCell(r+1, c, // +1 to account for header row
-					tview.NewTableCell(chatMap[chatList[r]].Msgs[len(chatMap[chatList[r]].Msgs)-30:]).
+					tview.NewTableCell(chatMap[chatList[r]].Msgs[len(chatMap[chatList[r]].Msgs)-previewLen:]).
 						SetSelectable(false).
 						SetTextColor(color).
 						SetAlign(tview.AlignCenter))
@@ -87,8 +88,8 @@ func makeChatTable(chatMap map[string]models.Chat) *tview.Table {
 			default:
 				chatActTable.SetCell(r+1, c, // +1 to account for header row
 					tview.NewTableCell(actions[c-4]). // Adjusted offset to account for 2 new timestamp columns
-						SetTextColor(color).
-						SetAlign(tview.AlignCenter))
+										SetTextColor(color).
+										SetAlign(tview.AlignCenter))
 			}
 		}
 	}
@@ -104,7 +105,6 @@ func makeChatTable(chatMap map[string]models.Chat) *tview.Table {
 			chatActTable.Select(1, column) // Move selection to first data row
 			return
 		}
-
 		tc := chatActTable.GetCell(row, column)
 		tc.SetTextColor(tcell.ColorRed)
 		chatActTable.SetSelectable(false, false)
@@ -443,9 +443,7 @@ func makeLoadedRAGTable(fileList []string) *tview.Flex {
 			}
 			return
 		}
-
 		tc := fileTable.GetCell(row, column)
-
 		// Check if the selected row is the exit row (row 0) - do this first to avoid index issues
 		if row == 0 {
 			pages.RemovePage(RAGLoadedPage)
@@ -537,7 +535,6 @@ func makeAgentTable(agentList []string) *tview.Table {
 			}
 			return
 		}
-
 		tc := chatActTable.GetCell(row, column)
 		selected := agentList[row]
 		// notification := fmt.Sprintf("chat: %s; action: %s", selectedChat, tc.Text)
@@ -634,7 +631,6 @@ func makeCodeBlockTable(codeBlocks []string) *tview.Table {
 			}
 			return
 		}
-
 		tc := table.GetCell(row, column)
 		selected := codeBlocks[row]
 		// notification := fmt.Sprintf("chat: %s; action: %s", selectedChat, tc.Text)
@@ -706,7 +702,6 @@ func makeImportChatTable(filenames []string) *tview.Table {
 			}
 			return
 		}
-
 		tc := chatActTable.GetCell(row, column)
 		selected := filenames[row]
 		// notification := fmt.Sprintf("chat: %s; action: %s", selectedChat, tc.Text)

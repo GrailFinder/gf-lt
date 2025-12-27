@@ -13,6 +13,16 @@ var imageAttachmentPath string // Global variable to track image attachment for 
 var lastImg string             // for ctrl+j
 var RAGMsg = "Retrieved context for user's query:\n"
 
+// containsToolSysMsg checks if the toolSysMsg already exists in the chat body
+func containsToolSysMsg() bool {
+	for _, msg := range chatBody.Messages {
+		if msg.Role == cfg.ToolRole && msg.Content == toolSysMsg {
+			return true
+		}
+	}
+	return false
+}
+
 // SetImageAttachment sets an image to be attached to the next message sent to the LLM
 func SetImageAttachment(imagePath string) {
 	imageAttachmentPath = imagePath
@@ -122,7 +132,7 @@ func (lcp LCPCompletion) FormMsg(msg, role string, resume bool) (io.Reader, erro
 			logger.Debug("RAG message added to chat body", "message_count", len(chatBody.Messages))
 		}
 	}
-	if cfg.ToolUse && !resume && role == cfg.UserRole {
+	if cfg.ToolUse && !resume && role == cfg.UserRole && !containsToolSysMsg() {
 		// add to chat body
 		chatBody.Messages = append(chatBody.Messages, models.RoleMsg{Role: cfg.ToolRole, Content: toolSysMsg})
 	}
@@ -358,7 +368,7 @@ func (ds DeepSeekerCompletion) FormMsg(msg, role string, resume bool) (io.Reader
 			logger.Debug("DeepSeekerCompletion: RAG message added to chat body", "message_count", len(chatBody.Messages))
 		}
 	}
-	if cfg.ToolUse && !resume && role == cfg.UserRole {
+	if cfg.ToolUse && !resume && role == cfg.UserRole && !containsToolSysMsg() {
 		// add to chat body
 		chatBody.Messages = append(chatBody.Messages, models.RoleMsg{Role: cfg.ToolRole, Content: toolSysMsg})
 	}
@@ -420,11 +430,6 @@ func (ds DeepSeekerChat) GetToken() string {
 
 func (ds DeepSeekerChat) FormMsg(msg, role string, resume bool) (io.Reader, error) {
 	logger.Debug("formmsg deepseekerchat", "link", cfg.CurrentAPI)
-	if cfg.ToolUse && !resume && role == cfg.UserRole {
-		// prompt += "\n" + cfg.ToolRole + ":\n" + toolSysMsg
-		// add to chat body
-		chatBody.Messages = append(chatBody.Messages, models.RoleMsg{Role: cfg.ToolRole, Content: toolSysMsg})
-	}
 	if msg != "" { // otherwise let the bot continue
 		newMsg := models.RoleMsg{Role: role, Content: msg}
 		chatBody.Messages = append(chatBody.Messages, newMsg)
@@ -516,7 +521,7 @@ func (or OpenRouterCompletion) FormMsg(msg, role string, resume bool) (io.Reader
 			logger.Debug("RAG message added to chat body", "message_count", len(chatBody.Messages))
 		}
 	}
-	if cfg.ToolUse && !resume && role == cfg.UserRole {
+	if cfg.ToolUse && !resume && role == cfg.UserRole && !containsToolSysMsg() {
 		// add to chat body
 		chatBody.Messages = append(chatBody.Messages, models.RoleMsg{Role: cfg.ToolRole, Content: toolSysMsg})
 	}

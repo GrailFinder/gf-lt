@@ -88,6 +88,10 @@ func cleanNullMessages(messages []models.RoleMsg) []models.RoleMsg {
 }
 
 func cleanToolCalls(messages []models.RoleMsg) []models.RoleMsg {
+	// If AutoCleanToolCallsFromCtx is false, keep tool call messages in context
+	if cfg != nil && !cfg.AutoCleanToolCallsFromCtx {
+		return consolidateConsecutiveAssistantMessages(messages)
+	}
 	cleaned := make([]models.RoleMsg, 0, len(messages))
 	for i, msg := range messages {
 		// recognize the message as the tool call and remove it
@@ -731,7 +735,7 @@ func cleanChatBody() {
 	for i, msg := range chatBody.Messages {
 		logger.Debug("cleanChatBody: before clean", "index", i, "role", msg.Role, "content_len", len(msg.Content), "has_content", msg.HasContent(), "tool_call_id", msg.ToolCallID)
 	}
-	// TODO: consider case where we keep tool requests
+	// Tool request cleaning is now configurable via AutoCleanToolCallsFromCtx (default false)
 	// /completion msg where part meant for user and other part tool call
 	chatBody.Messages = cleanToolCalls(chatBody.Messages)
 	chatBody.Messages = cleanNullMessages(chatBody.Messages)
@@ -1027,6 +1031,38 @@ func refreshLocalModelsIfEmpty() {
 	localModelsMu.Lock()
 	LocalModels = models
 	localModelsMu.Unlock()
+}
+
+func summarizeAndStartNewChat() {
+	if len(chatBody.Messages) == 0 {
+		_ = notifyUser("info", "No chat history to summarize")
+		return
+	}
+	_ = notifyUser("info", "Summarizing chat history...")
+	// Call the summarize_chat tool via agent
+	summaryBytes := callToolWithAgent("summarize_chat", map[string]string{})
+	summary := string(summaryBytes)
+	if summary == "" {
+		_ = notifyUser("error", "Failed to generate summary")
+		return
+	}
+	// Start a new chat
+	startNewChat()
+	// Inject summary as a tool call response
+	toolMsg := models.RoleMsg{
+		Role:       cfg.ToolRole,
+		Content:    summary,
+		ToolCallID: "",
+	}
+	chatBody.Messages = append(chatBody.Messages, toolMsg)
+	// Update UI
+	textView.SetText(chatToText(cfg.ShowSys))
+	colorText()
+	// Update storage
+	if err := updateStorageChat(activeChatName, chatBody.Messages); err != nil {
+		logger.Warn("failed to update storage after injecting summary", "error", err)
+	}
+	_ = notifyUser("info", "Chat summarized and new chat started with summary as tool response")
 }
 
 func init() {

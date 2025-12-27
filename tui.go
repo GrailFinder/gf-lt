@@ -88,6 +88,7 @@ var (
 [yellow]Ctrl+q[white]: cycle through mentioned chars in chat, to pick persona to send next msg as
 [yellow]Ctrl+x[white]: cycle through mentioned chars in chat, to pick persona to send next msg as (for llm)
 [yellow]Alt+1[white]: toggle shell mode (execute commands locally)
+[yellow]Alt+3[white]: summarize chat history and start new chat with summary as tool response
 [yellow]Alt+4[white]: edit msg role
 [yellow]Alt+5[white]: toggle system and tool messages display
 [yellow]Alt+6[white]: toggle status line visibility
@@ -778,6 +779,10 @@ func init() {
 			cfg.ShowSys = !cfg.ShowSys
 			textView.SetText(chatToText(cfg.ShowSys))
 			colorText()
+		}
+		if event.Key() == tcell.KeyRune && event.Rune() == '3' && event.Modifiers()&tcell.ModAlt != 0 {
+			go summarizeAndStartNewChat()
+			return nil
 		}
 		if event.Key() == tcell.KeyRune && event.Rune() == '6' && event.Modifiers()&tcell.ModAlt != 0 {
 			// toggle status line visibility

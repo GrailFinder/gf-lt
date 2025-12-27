@@ -18,6 +18,7 @@ ToolRole = "tool"
 AssistantRole = "assistant"
 SysDir = "sysprompts"
 ChunkLimit = 100000
+# AutoCleanToolCallsFromCtx = false
 # rag settings
 RAGBatchSize = 1
 RAGWordLimit = 80

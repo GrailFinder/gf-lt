@@ -129,6 +129,7 @@ After that you are free to respond to the user.
 `
 	webSearchSysPrompt = `Summarize the web search results, extracting key information and presenting a concise answer. Provide sources and URLs where relevant.`
 	readURLSysPrompt   = `Extract and summarize the content from the webpage. Provide key information, main points, and any relevant details.`
+	summarySysPrompt   = `Please provide a concise summary of the following conversation. Focus on key points, decisions, and actions. Provide only the summary, no additional commentary.`
 	basicCard          = &models.CharCard{
 		SysPrompt: basicSysMsg,
 		FirstMsg:  defaultFirstMsg,
@@ -178,6 +179,8 @@ func registerWebAgents() {
 		agent.Register("websearch", agent.NewWebAgentB(client, webSearchSysPrompt))
 		// Register read_url agent
 		agent.Register("read_url", agent.NewWebAgentB(client, readURLSysPrompt))
+		// Register summarize_chat agent
+		agent.Register("summarize_chat", agent.NewWebAgentB(client, summarySysPrompt))
 	})
 }
 
@@ -864,6 +867,15 @@ func isCommandAllowed(command string) bool {
 	return allowedCommands[command]
 }
 
+func summarizeChat(args map[string]string) []byte {
+	if len(chatBody.Messages) == 0 {
+		return []byte("No chat history to summarize.")
+	}
+	// Format chat history for the agent
+	chatText := chatToText(true) // include system and tool messages
+	return []byte(chatText)
+}
+
 type fnSig func(map[string]string) []byte
 
 var fnMap = map[string]fnSig{
@@ -884,6 +896,7 @@ var fnMap = map[string]fnSig{
 	"todo_read":       todoRead,
 	"todo_update":     todoUpdate,
 	"todo_delete":     todoDelete,
+	"summarize_chat":  summarizeChat,
 }
 
 // callToolWithAgent calls the tool and applies any registered agent.
