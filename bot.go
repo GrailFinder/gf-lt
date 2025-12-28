@@ -677,7 +677,6 @@ out:
 			tv.ScrollToEnd()
 			// Send chunk to audio stream handler
 			if cfg.TTS_ENABLED {
-				// audioStream.TextChan <- chunk
 				extra.TTSTextChan <- chunk
 			}
 		case toolChunk := <-openAIToolChan:
@@ -685,11 +684,15 @@ out:
 			toolResp.WriteString(toolChunk)
 			tv.ScrollToEnd()
 		case <-streamDone:
-			botRespMode = false
-			if cfg.TTS_ENABLED {
-				// audioStream.TextChan <- chunk
-				extra.TTSFlushChan <- true
-				logger.Debug("sending flushchan signal")
+			// rrain any remaining chunks from chunkChan before exiting
+			for chunk := range chunkChan {
+				fmt.Fprint(tv, chunk)
+				respText.WriteString(chunk)
+				tv.ScrollToEnd()
+				// Send chunk to audio stream handler
+				if cfg.TTS_ENABLED {
+					extra.TTSTextChan <- chunk
+				}
 			}
 			break out
 		}
