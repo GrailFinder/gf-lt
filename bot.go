@@ -684,8 +684,9 @@ out:
 			toolResp.WriteString(toolChunk)
 			tv.ScrollToEnd()
 		case <-streamDone:
-			// rrain any remaining chunks from chunkChan before exiting
-			for chunk := range chunkChan {
+			// drain any remaining chunks from chunkChan before exiting
+			for len(chunkChan) > 0 {
+				chunk := <-chunkChan
 				fmt.Fprint(tv, chunk)
 				respText.WriteString(chunk)
 				tv.ScrollToEnd()
