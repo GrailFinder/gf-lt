@@ -1,15 +1,15 @@
-after ![installing](linktoinstruciton) 
-![setup your config](link)
+after ![installing](linktoinstruction)
+![set up your config](link)
 
-to rp we would need to make a card or to get it from the web.
-for this tutorial we are going to use default character from [ST](https://github.com/SillyTavern/SillyTavern/blob/release/default/content/default_Seraphina.png) Serhaphina.
+To roleplay, we would need to create a character card or get one from the web.
+For this tutorial, we are going to use the default character Seraphina from [SillyTavern (ST)](https://github.com/SillyTavern/SillyTavern/blob/release/default/content/default_Seraphina.png).
 
-download the card
+Download the card:
 ```
 curl -L "https://raw.githubusercontent.com/SillyTavern/SillyTavern/refs/heads/release/default/content/default_Seraphina.png" -o sysprompts/seraphina.png
 ```
 
-<details><summary>or make it yourself</sumary>
+<details><summary>or make it yourself</summary>
 <pre>
 ```
 {
@@ -22,95 +22,100 @@ curl -L "https://raw.githubusercontent.com/SillyTavern/SillyTavern/refs/heads/re
 </pre>
 </details>
 
-having a card, you can start gf-lt and pres `ctrl+s` to open card selection table
-move against `load` button of seraphina card and press `Enter` again.
-if you want to exit without changing card, you can press enter anywhere but `load` button, or press `x`
+Having a card, you can start gf-lt and press `Ctrl+S` to open the card selection table.
+Navigate to the `load` button of the Seraphina card and press `Enter`.
+If you want to exit without changing the card, you can press Enter anywhere except the `load` button, or press `x`.
 
-#### username changes
+#### Username changes
 
-by default your username is `user`
-one way you can set your default username in the `config.toml`
+By default, your username is `user`.
+One way you can set your default username is in the `config.toml`:
 ```
 sed -i "/UserRole/s/=.*/= \"Adam\"/" config.toml
 ```
 
-you also can change your name at any point by opening props table (`ctrl+p`)
-select cell with your current Username and press `Enter` to edit
-write your new username in input field and press `Enter`
-then press `x` to close the table.
+You can also change your name at any point by opening the properties table (`Ctrl+P`).
+Select the cell with your current username and press `Enter` to edit.
+Write your new username in the input field and press `Enter`.
+Then press `x` to close the table.
 
+#### Choosing LLM provider and model
 
-#### choosing LLM provider and model
-now we need to pick API endpoint and model to converse with.
-supports backends: llama.cpp, openrouter and deepseek.
-for openrouter and deepseek you will need a token.
-set it in config.toml or set envvar
+Now we need to pick an API endpoint and model to converse with.
+Supported backends include: llama.cpp, OpenRouter, and DeepSeek.
+For OpenRouter and DeepSeek, you will need a token.
+Set it in config.toml or set environment variables:
 ```
 sed -i "/OpenRouterToken/s/=.*/= \"{YOUR_OPENROUTER_TOKEN}\"/" config.toml
 sed -i "/DeepSeekToken/s/=.*/= \"{YOUR_DEEPSEEK_TOKEN}\"/" config.toml
-# or set envvar
+# or set environment variables
 export OPENROUTER_API_KEY={YOUR_OPENROUTER_TOKEN}
 export DEEPSEEK_API_KEY={YOUR_DEEPSEEK_TOKEN}
 ```
 
-in case you're running llama.cpp here is an example of starting llama.cpp
+In case you're running llama.cpp, here is an example of starting the llama.cpp server:
 ```
 ./build/bin/llama-server -c 16384 -ngl 99 --models-dir ./models --models-max 1 --models-preset ./models/config.ini
 ```
 
-<b>after changing config.toml or envvar you need to restart the program.</b>
+**After changing config.toml or environment variables, you need to restart the program.**
 
-for RP /completion endpoints are much better, since /chat endpoints swap any character name to either `user` or `assistant`;
-once you have desired API endpoint  
-(for example: http://localhost:8080/completion)  
-there are two ways to pick a model: 
-- `ctrl+l` allows you to iterate through model list while in main window.
-- `ctrl+p` (opens props table) go to the `Select a model` row and press enter, list of available models would appear, pick any that you want, press `x` to exit the props table.
+For roleplay, /completion endpoints are much better, since /chat endpoints swap any character name to either `user` or `assistant`.
+Once you have the desired API endpoint
+(for example: http://localhost:8080/completion),
+there are two ways to pick a model:
+- `Ctrl+L` allows you to iterate through the model list while in the main window.
+- `Ctrl+P` (opens the properties table). Go to the `Select a model` row and press Enter. A list of available models will appear; pick any that you want, then press `x` to exit the properties table.
 
-#### llama.cpp model preload
-llama.cpp supports swapping models, to load picked ones press `alt+9`
+#### Llama.cpp model preload
 
-#### sending messages
-type your message in the `input` widget; if it is not focused switch to it with pgup/pgdown or click your mouse on it.
-messages are send by pressing `Esc` button
-for ex.
+Llama.cpp supports swapping models. To load the picked ones, press `Alt+9`.
+
+#### Sending messages
+
+Type your message in the `input` widget. If it is not focused, switch to it with PgUp/PgDown or click your mouse on it.
+Messages are sent by pressing the `Esc` button.
+For example:
 ```
 I blink slowly, confused "W-where? What happened?"
 ```
 
-#### editing messages
-press `f4` which'll prompt you to type index of the message you want to edit;
-let's remove this part from sysmsg (0)
+#### Editing messages
+
+Press `F4`, which will prompt you to type the index of the message you want to edit.
+Let's remove this part from the system message (index 0):
 ```
 Seraphina's voice holds a playful undertone, her eyes sparkling mischievously.
 ```
-`mischievous` imply distance from authority and intent for the rule breaking, but Seraphina described as devoted deity.
-we can remove it or replace it with something less nonsensical.
+`mischievous` implies distance from authority and intent for rule-breaking, but Seraphina is described as a devoted deity.
+We can remove it or replace it with something less nonsensical.
 ```
-Seraphina, altough elegant, speaks her mind without embellishments or subtleties. Some would call her naive, some would rather call her unchallenged.
+Seraphina, although elegant, speaks her mind without embellishments or subtleties. Some would call her naive, some would rather call her unchallenged.
 ```
-when done, press `Esc` to return to main page.
+When done, press `Esc` to return to the main page.
 
-#### completion allowes for any number of chars
-so let us make up story of our character;
-let our character to be from high tech society who has mobile tablet device with AI called `HALL9000`, hunting certain target.
-type the message, but first press f10 to prevent llm response (since it responds as Seraphina for now)
+#### Completion allows for any number of characters
+
+So let's make up a story for our character:
+Let our character be from a high-tech society, possessing a mobile tablet device with an AI called `HALL9000`, hunting a certain target.
+Type the message, but first press `F10` to prevent the LLM response (since it responds as Seraphina for now):
 ```
 I reach for my pocket and produce a small tablet shaped device. My mobile companion HALL9000. After making sure it is not broken I press my finger to the side
 "Wake up Hal. Are you functional? Do you know where we are?"
 ```
 
-we need to write first message ourselves (or at least start one)
-there are two ways to write as a new char:
-- ctrl+p -> `New char to write msg as` -> Enter -> `HAL9000` -> `Enter` -> `x` ; status line at the bottom should now have `Writing as HALL9000 (ctrl+q)` -> your next message would be send as HALL9000.
-- ctrl+p -> `Inject role` switch to `No` -> `x`. gf-lt now won't inject your username in beginning of the message. It means you could write directly
+We need to write the first message ourselves (or at least start one).
+There are two ways to write as a new character:
+- `Ctrl+P` -> `New char to write msg as` -> Enter -> `HALL9000` -> Enter -> `x`. The status line at the bottom should now show `Writing as HALL9000 (ctrl+q)`. Your next message will be sent as HALL9000.
+- `Ctrl+P` -> `Inject role`, switch to `No` -> `x`. gf-lt now won't inject your username at the beginning of the message. This means you could write directly:
 ```
-HAL9000: Red eye appears on the screen for the moment analyzing the request.
+HALL9000: Red eye appears on the screen for the moment analyzing the request.
 ```
-`Esc`; now press `f10` to allow llm to write and press `ctrl+w` for it to continue the last message.
-- if you set `New chat to write msg as`; you can switch back to writing as your char by pressing ctrl+q to rotate through the character list.
-- if you went for `Inject role`: I advice to switch `Inject role` back to `Yes`. Otherwise you have to type `Charname:` in the beginning of each message.
-example of gen (copied with `f7` (copies last msg))
+Press `Esc`. Now press `F10` to allow the LLM to write, and press `Ctrl+W` for it to continue the last message.
+- If you set `New char to write msg as`, you can switch back to writing as your character by pressing `Ctrl+Q` to rotate through the character list.
+- If you went for `Inject role`: I advise switching `Inject role` back to `Yes`. Otherwise, you have to type `Charname:` at the beginning of each message.
+
+Example of generated text (copied with `F7`, which copies the last message):
 ```
 Red eye appears on the screen for the moment analyzing the request. After a few moments, it replies:
 "Affirmative. Location detected as Eldoria Forest, sector 7-B. This region has no records in my databases. My last known functional location was a human research facility."
@@ -118,59 +123,55 @@ The screen flashes briefly as it calculates. "I am experiencing degraded functio
 *It emits a faint hum, and a holographic projection of a map flickers into existence, showing a dense forest with glowing markers.*
 ```
 
-Once character name is in history we can switch who llm will respond as pressing `ctrl+x`.
-For now it should be rotating between HALL9000, `Username`, Seraphina, system.
-make status line to mention: `Bot will write as Seraphina (ctrl+x)`
-and press escape to see her reaction.
+Once the character name is in history, we can switch who the LLM will respond as by pressing `Ctrl+X`.
+For now, it should be rotating between HALL9000, `Username`, Seraphina, and system.
+Make the status line mention: `Bot will write as Seraphina (ctrl+x)`
+and press Escape to see her reaction.
 
-#### image input
-if the model we run support image input we can Seraphina our target that we pursue
-press `ctrl+o` to open a filepicker (home directory for filepicker could be set in config.toml)
-and find an image file of our target
+#### Image input
+
+If the model we run supports image input, we can show Seraphina our target that we pursue.
+Press `Ctrl+O` to open a file picker (the home directory for the file picker can be set in config.toml)
+and find an image file of our target:
 ```
 I say to Hal "Hal, show our target."
 An image appears on the screen. I show it to Seraphina. "Did you see that creature? I am looking for it."
 ```
 
-#### tts and stt
-I like to have whisper as a binary and kokoro as tts docker container;
-such setup would be
+#### TTS and STT
+
+I like to have Whisper as a binary and Kokoro as a TTS Docker container;
+such a setup would be:
 ```
 make setup-whisper
 make docker-up-kokoro
 sed -i "/STT_TYPE/s/=.*/= \"WHISPER_BINARY\"/" config.toml
 sed -i "/STT_ENABLED/s/=.*/= true/" config.toml
 ```
-if you prefer both to be containers
+If you prefer both to be containers:
 ```
 make docker-up
 sed -i "/STT_TYPE/s/=.*/= \"WHISPER_SERVER\"/" config.toml
 sed -i "/STT_ENABLED/s/=.*/= true/" config.toml
 ```
-you don't want TTS be enabled through config, since it'll try to read each llm message.
-instead, enable it when you want to use it `ctrl+p` cell named `TTS Enabled` switch to `Yes` -> `x` to exit.
+You don't want TTS to be enabled through config, since it'll try to read each LLM message.
+Instead, enable it when you want to use it: `Ctrl+P`, select the cell named `TTS Enabled`, switch to `Yes`, then press `x` to exit.
 
-with focus on the input widget press `ctrl+r` which will start recording from your mic. Say your text and press `ctrl+r` again to stop recording. Soon the audio should be transcribe and appear in the input widget. You're free to edit, delete or send it as is with `Esc`.
+With focus on the input widget, press `Ctrl+R` to start recording from your microphone. Say your text, then press `Ctrl+R` again to stop recording. Soon the audio should be transcribed and appear in the input widget. You're free to edit, delete, or send it as is with `Esc`.
 
-if you have enabled `TTS Enabled` then llm response should be read by kokoro tts.
+If you have enabled `TTS Enabled`, then the LLM response should be read by Kokoro TTS.
 
-#### chat management
-you can export your chat into a json file:  
-- `ctrl+e`
-it will create a json file: `chat_exports/{chatname}.json`
-- `f11`
-to import exported chat;
-- `f1`
-opens the chat table, chats are stored in sqlite database (gflt.db);
-chat table gives you number of options (load, delete, update, start new chat, move sys prompt into msg);
-- `ctrl+n`
-keybind for quick new chat start. It is a bit different from new chat from table, since it does not re-read the card, but instead takes first two messages from old chat. It might be important in cases where you changed the card or want to preserve updates that you've made in sysprompt or first message of old chat.
-- `ctrl+s`
-allowes you to pick a character card. chats are saved tied to character cards, by loading new card you now can act upon the chats of that card.
+#### Chat management
 
+You can export your chat into a JSON file:
+- `Ctrl+E`: It will create a JSON file: `chat_exports/{chatname}.json`
+- `F11`: To import an exported chat.
+- `F1`: Opens the chat table. Chats are stored in an SQLite database (gflt.db). The chat table gives you a number of options (load, delete, update, start new chat, move system prompt into a message).
+- `Ctrl+N`: Keybind for quick new chat start. This is a bit different from starting a new chat from the table, since it does not re-read the card, but instead takes the first two messages from the old chat. This might be important in cases where you changed the card or want to preserve updates that you've made in the system prompt or first message of the old chat.
+- `Ctrl+S`: Allows you to pick a character card. Chats are saved tied to character cards; by loading a new card you can now act upon the chats of that card.
 
-#### context fill
-when your chat goes for too long and fills all available context
-one option is to press
-- `alt+3`
-that will that start a new chat with the summary of previous one.
+#### Context fill
+
+When your chat goes on for too long and fills all available context,
+one option is to press:
+- `Alt+3`: This will start a new chat with a summary of the previous one.
