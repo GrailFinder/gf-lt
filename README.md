@@ -16,6 +16,7 @@ made with use of [tview](https://github.com/rivo/tview)
 (requires golang)
 clone the project
 ```
+git clone https://github.com/GrailFinder/gf-lt.git
 cd gf-lt
 make
 ```

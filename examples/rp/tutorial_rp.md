@@ -131,3 +131,46 @@ and find an image file of our target
 I say to Hal "Hal, show our target."
 An image appears on the screen. I show it to Seraphina. "Did you see that creature? I am looking for it."
 ```
+
+#### tts and stt
+I like to have whisper as a binary and kokoro as tts docker container;
+such setup would be
+```
+make setup-whisper
+make docker-up-kokoro
+sed -i "/STT_TYPE/s/=.*/= \"WHISPER_BINARY\"/" config.toml
+sed -i "/STT_ENABLED/s/=.*/= true/" config.toml
+```
+if you prefer both to be containers
+```
+make docker-up
+sed -i "/STT_TYPE/s/=.*/= \"WHISPER_SERVER\"/" config.toml
+sed -i "/STT_ENABLED/s/=.*/= true/" config.toml
+```
+you don't want TTS be enabled through config, since it'll try to read each llm message.
+instead, enable it when you want to use it `ctrl+p` cell named `TTS Enabled` switch to `Yes` -> `x` to exit.
+
+with focus on the input widget press `ctrl+r` which will start recording from your mic. Say your text and press `ctrl+r` again to stop recording. Soon the audio should be transcribe and appear in the input widget. You're free to edit, delete or send it as is with `Esc`.
+
+if you have enabled `TTS Enabled` then llm response should be read by kokoro tts.
+
+#### chat management
+you can export your chat into a json file:  
+- `ctrl+e`
+it will create a json file: `chat_exports/{chatname}.json`
+- `f11`
+to import exported chat;
+- `f1`
+opens the chat table, chats are stored in sqlite database (gflt.db);
+chat table gives you number of options (load, delete, update, start new chat, move sys prompt into msg);
+- `ctrl+n`
+keybind for quick new chat start. It is a bit different from new chat from table, since it does not re-read the card, but instead takes first two messages from old chat. It might be important in cases where you changed the card or want to preserve updates that you've made in sysprompt or first message of old chat.
+- `ctrl+s`
+allowes you to pick a character card. chats are saved tied to character cards, by loading new card you now can act upon the chats of that card.
+
+
+#### context fill
+when your chat goes for too long and fills all available context
+one option is to press
+- `alt+3`
+that will that start a new chat with the summary of previous one.

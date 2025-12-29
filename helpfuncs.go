@@ -235,7 +235,6 @@ func makeStatusLine() string {
 		shellModeInfo = ""
 	}
 	statusLine := fmt.Sprintf(indexLineCompletion, botRespMode, activeChatName,
-		cfg.ToolUse, chatBody.Model, cfg.SkipLLMResp, cfg.CurrentAPI, cfg.ThinkUse,
 		cfg.ToolUse, chatBody.Model, cfg.SkipLLMResp, cfg.CurrentAPI,
 		isRecording, persona, botPersona, injectRole)
 	return statusLine + imageInfo + shellModeInfo
