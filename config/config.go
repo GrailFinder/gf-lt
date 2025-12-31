@@ -28,6 +28,7 @@ type Config struct {
 	AssistantRole                 string `toml:"AssistantRole"`
 	SysDir                        string `toml:"SysDir"`
 	ChunkLimit                    uint32 `toml:"ChunkLimit"`
+	AutoScrollEnabled             bool   `toml:"AutoScrollEnabled"`
 	WriteNextMsgAs                string
 	WriteNextMsgAsCompletionAgent string
 	SkipLLMResp                   bool

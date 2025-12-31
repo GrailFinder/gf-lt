@@ -36,6 +36,7 @@ var (
 	roleEditWindow   *tview.InputField
 	fullscreenMode   bool
 	positionVisible  bool = true
+	scrollToEndEnabled bool = true
 	// pages
 	historyPage    = "historyPage"
 	agentPage      = "agentPage"
@@ -88,6 +89,7 @@ var (
 [yellow]Ctrl+q[white]: cycle through mentioned chars in chat, to pick persona to send next msg as
 [yellow]Ctrl+x[white]: cycle through mentioned chars in chat, to pick persona to send next msg as (for llm)
 [yellow]Alt+1[white]: toggle shell mode (execute commands locally)
+[yellow]Alt+2[white]: toggle auto-scrolling (for reading while LLM types)
 [yellow]Alt+3[white]: summarize chat history and start new chat with summary as tool response
 [yellow]Alt+4[white]: edit msg role
 [yellow]Alt+5[white]: toggle system and tool messages display
@@ -203,7 +205,9 @@ func executeCommandAndDisplay(cmdText string) {
 	cmdParts := parseCommand(cmdText)
 	if len(cmdParts) == 0 {
 		fmt.Fprintf(textView, "\n[red]Error: No command provided[-:-:-]\n")
-		textView.ScrollToEnd()
+		if scrollToEndEnabled {
+			textView.ScrollToEnd()
+		}
 		colorText()
 		return
 	}
@@ -233,7 +237,9 @@ func executeCommandAndDisplay(cmdText string) {
 		}
 	}
 	// Scroll to end and update colors
-	textView.ScrollToEnd()
+	if scrollToEndEnabled {
+		textView.ScrollToEnd()
+	}
 	colorText()
 }
 
@@ -767,7 +773,9 @@ func init() {
 	updateStatusLine()
 	textView.SetText(chatToText(cfg.ShowSys))
 	colorText()
-	textView.ScrollToEnd()
+	if scrollToEndEnabled {
+		textView.ScrollToEnd()
+	}
 	// init sysmap
 	_, err := initSysCards()
 	if err != nil {
@@ -791,6 +799,18 @@ func init() {
 			}
 			positionVisible = !positionVisible
 			updateFlexLayout()
+		}
+		if event.Key() == tcell.KeyRune && event.Rune() == '2' && event.Modifiers()&tcell.ModAlt != 0 {
+			// toggle auto-scrolling
+			scrollToEndEnabled = !scrollToEndEnabled
+			status := "disabled"
+			if scrollToEndEnabled {
+				status = "enabled"
+			}
+			if err := notifyUser("autoscroll", "Auto-scrolling "+status); err != nil {
+				logger.Error("failed to send notification", "error", err)
+			}
+			updateStatusLine()
 		}
 		if event.Key() == tcell.KeyF1 {
 			// chatList, err := loadHistoryChats()
@@ -1292,7 +1312,9 @@ func init() {
 					fmt.Fprintf(textView, "%s[-:-:b](%d) <%s>: [-:-:-]\n%s\n",
 						nl, len(chatBody.Messages), persona, msgText)
 					textArea.SetText("", true)
-					textView.ScrollToEnd()
+					if scrollToEndEnabled {
+						textView.ScrollToEnd()
+					}
 					colorText()
 				}
 				go chatRound(msgText, persona, textView, false, false)

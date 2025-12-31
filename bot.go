@@ -674,7 +674,9 @@ out:
 		case chunk := <-chunkChan:
 			fmt.Fprint(tv, chunk)
 			respText.WriteString(chunk)
-			tv.ScrollToEnd()
+			if scrollToEndEnabled {
+				tv.ScrollToEnd()
+			}
 			// Send chunk to audio stream handler
 			if cfg.TTS_ENABLED {
 				extra.TTSTextChan <- chunk
@@ -682,14 +684,18 @@ out:
 		case toolChunk := <-openAIToolChan:
 			fmt.Fprint(tv, toolChunk)
 			toolResp.WriteString(toolChunk)
-			tv.ScrollToEnd()
+			if scrollToEndEnabled {
+				tv.ScrollToEnd()
+			}
 		case <-streamDone:
 			// drain any remaining chunks from chunkChan before exiting
 			for len(chunkChan) > 0 {
 				chunk := <-chunkChan
 				fmt.Fprint(tv, chunk)
 				respText.WriteString(chunk)
-				tv.ScrollToEnd()
+				if scrollToEndEnabled {
+					tv.ScrollToEnd()
+				}
 				// Send chunk to audio stream handler
 				if cfg.TTS_ENABLED {
 					extra.TTSTextChan <- chunk
@@ -1130,5 +1136,7 @@ func init() {
 	if cfg.STT_ENABLED {
 		asr = extra.NewSTT(logger, cfg)
 	}
+	// Initialize scrollToEndEnabled based on config
+	scrollToEndEnabled = cfg.AutoScrollEnabled
 	go updateModelLists()
 }
