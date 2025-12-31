@@ -873,7 +873,8 @@ func findCall(msg, toolCall string, tv *tview.TextView) {
 	// we got here => last msg recognized as a tool call (correct or not)
 	// make sure it has ToolCallID
 	if chatBody.Messages[len(chatBody.Messages)-1].ToolCallID == "" {
-		chatBody.Messages[len(chatBody.Messages)-1].ToolCallID = randString(6)
+		// Tool call IDs should be alphanumeric strings with length 9!
+		chatBody.Messages[len(chatBody.Messages)-1].ToolCallID = randString(9)
 	}
 	// Ensure lastToolCall.ID is set, fallback to assistant message's ToolCallID
 	if lastToolCall.ID == "" {
