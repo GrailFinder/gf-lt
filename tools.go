@@ -71,8 +71,13 @@ Your current tools:
 },
 {
 "name":"file_write",
-"args": ["path", "content", "mode"],
-"when_to_use": "when asked to write content to a file; mode is optional (overwrite or append, default: overwrite)"
+"args": ["path", "content"],
+"when_to_use": "when needed to overwrite content to a file"
+},
+{
+"name":"file_write_append",
+"args": ["path", "content"],
+"when_to_use": "when asked to append content to a file; use sed to edit content"
 },
 {
 "name":"file_delete",
@@ -146,9 +151,9 @@ After that you are free to respond to the user.
 	sysMap    = map[string]*models.CharCard{"basic_sys": basicCard}
 	sysLabels = []string{"basic_sys"}
 
-	webAgentClient      *agent.AgentClient
-	webAgentClientOnce  sync.Once
-	webAgentsOnce       sync.Once
+	webAgentClient     *agent.AgentClient
+	webAgentClientOnce sync.Once
+	webAgentsOnce      sync.Once
 )
 
 // getWebAgentClient returns a singleton AgentClient for web agents.
@@ -359,36 +364,35 @@ func fileWrite(args map[string]string) []byte {
 		logger.Error(msg)
 		return []byte(msg)
 	}
-
 	content, ok := args["content"]
 	if !ok {
 		content = ""
 	}
-
-	mode, ok := args["mode"]
-	if !ok || mode == "" {
-		mode = "overwrite"
-	}
-
-	switch mode {
-	case "overwrite":
-		if err := writeStringToFile(path, content); err != nil {
-			msg := "failed to write to file; error: " + err.Error()
-			logger.Error(msg)
-			return []byte(msg)
-		}
-	case "append":
-		if err := appendStringToFile(path, content); err != nil {
-			msg := "failed to append to file; error: " + err.Error()
-			logger.Error(msg)
-			return []byte(msg)
-		}
-	default:
-		msg := "invalid mode; use 'overwrite' or 'append'"
+	if err := writeStringToFile(path, content); err != nil {
+		msg := "failed to write to file; error: " + err.Error()
 		logger.Error(msg)
 		return []byte(msg)
 	}
+	msg := "file written successfully at " + path
+	return []byte(msg)
+}
 
+func fileWriteAppend(args map[string]string) []byte {
+	path, ok := args["path"]
+	if !ok || path == "" {
+		msg := "path not provided to file_write_append tool"
+		logger.Error(msg)
+		return []byte(msg)
+	}
+	content, ok := args["content"]
+	if !ok {
+		content = ""
+	}
+	if err := appendStringToFile(path, content); err != nil {
+		msg := "failed to append to file; error: " + err.Error()
+		logger.Error(msg)
+		return []byte(msg)
+	}
 	msg := "file written successfully at " + path
 	return []byte(msg)
 }
@@ -879,24 +883,25 @@ func summarizeChat(args map[string]string) []byte {
 type fnSig func(map[string]string) []byte
 
 var fnMap = map[string]fnSig{
-	"recall":          recall,
-	"recall_topics":   recallTopics,
-	"memorise":        memorise,
-	"websearch":       websearch,
-	"read_url":        readURL,
-	"file_create":     fileCreate,
-	"file_read":       fileRead,
-	"file_write":      fileWrite,
-	"file_delete":     fileDelete,
-	"file_move":       fileMove,
-	"file_copy":       fileCopy,
-	"file_list":       fileList,
-	"execute_command": executeCommand,
-	"todo_create":     todoCreate,
-	"todo_read":       todoRead,
-	"todo_update":     todoUpdate,
-	"todo_delete":     todoDelete,
-	"summarize_chat":  summarizeChat,
+	"recall":            recall,
+	"recall_topics":     recallTopics,
+	"memorise":          memorise,
+	"websearch":         websearch,
+	"read_url":          readURL,
+	"file_create":       fileCreate,
+	"file_read":         fileRead,
+	"file_write":        fileWrite,
+	"file_write_append": fileWriteAppend,
+	"file_delete":       fileDelete,
+	"file_move":         fileMove,
+	"file_copy":         fileCopy,
+	"file_list":         fileList,
+	"execute_command":   executeCommand,
+	"todo_create":       todoCreate,
+	"todo_read":         todoRead,
+	"todo_update":       todoUpdate,
+	"todo_delete":       todoDelete,
+	"summarize_chat":    summarizeChat,
 }
 
 // callToolWithAgent calls the tool and applies any registered agent.
@@ -1056,7 +1061,7 @@ var baseTools = []models.Tool{
 		Type: "function",
 		Function: models.ToolFunc{
 			Name:        "file_write",
-			Description: "Write content to a file. Use when you want to create or modify a file (overwrite or append).",
+			Description: "Write content to a file. Will overwrite any content present.",
 			Parameters: models.ToolFuncParams{
 				Type:     "object",
 				Required: []string{"path", "content"},
@@ -1069,9 +1074,28 @@ var baseTools = []models.Tool{
 						Type:        "string",
 						Description: "content to write to the file",
 					},
-					"mode": models.ToolArgProps{
+				},
+			},
+		},
+	},
+
+	// file_write_append
+	models.Tool{
+		Type: "function",
+		Function: models.ToolFunc{
+			Name:        "file_write_append",
+			Description: "Append content to a file.",
+			Parameters: models.ToolFuncParams{
+				Type:     "object",
+				Required: []string{"path", "content"},
+				Properties: map[string]models.ToolArgProps{
+					"path": models.ToolArgProps{
 						Type:        "string",
-						Description: "write mode: 'overwrite' to replace entire file content, 'append' to add to the end (defaults to 'overwrite')",
+						Description: "path of the file to write to",
+					},
+					"content": models.ToolArgProps{
+						Type:        "string",
+						Description: "content to write to the file",
 					},
 				},
 			},

@@ -1259,6 +1259,7 @@ func init() {
 		// cannot send msg in editMode or botRespMode
 		if event.Key() == tcell.KeyEscape && !editMode && !botRespMode {
 			msgText := textArea.GetText()
+			// TODO: add shellmode command -> output to the chat history, or at least have an option
 			if shellMode && msgText != "" {
 				// In shell mode, execute command instead of sending to LLM
 				executeCommandAndDisplay(msgText)
