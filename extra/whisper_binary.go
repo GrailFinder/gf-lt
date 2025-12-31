@@ -48,6 +48,11 @@ func (w *WhisperBinary) StartRecording() error {
 	if w.recording {
 		return errors.New("recording is already in progress")
 	}
+	// If context is cancelled, create a new one for the next recording session
+	if w.ctx.Err() != nil {
+		w.logger.Debug("Context cancelled, creating new context")
+		w.ctx, w.cancel = context.WithCancel(context.Background())
+	}
 	// Temporarily redirect stderr to suppress ALSA warnings during PortAudio init
 	origStderr, errDup := syscall.Dup(syscall.Stderr)
 	if errDup != nil {
