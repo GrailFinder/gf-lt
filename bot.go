@@ -658,7 +658,7 @@ func chatRound(userMsg, role string, tv *tview.TextView, regen, resume bool) {
 	go sendMsgToLLM(reader)
 	logger.Debug("looking at vars in chatRound", "msg", userMsg, "regen", regen, "resume", resume)
 	if !resume {
-		fmt.Fprintf(tv, "\n[-:-:b](%d) ", len(chatBody.Messages))
+		fmt.Fprintf(tv, "\n\n[-:-:b](%d) ", len(chatBody.Messages))
 		fmt.Fprint(tv, roleToIcon(botPersona))
 		fmt.Fprint(tv, "[-:-:-]\n")
 		if cfg.ThinkUse && !strings.Contains(cfg.CurrentAPI, "v1") {
@@ -909,7 +909,7 @@ func findCall(msg, toolCall string, tv *tview.TextView) {
 	toolMsg := string(resp) // Remove the "tool response: " prefix and %+v formatting
 	logger.Info("llm used tool call", "tool_resp", toolMsg, "tool_attrs", fc)
 	fmt.Fprintf(tv, "%s[-:-:b](%d) <%s>: [-:-:-]\n%s\n",
-		"\n", len(chatBody.Messages), cfg.ToolRole, toolMsg)
+		"\n\n", len(chatBody.Messages), cfg.ToolRole, toolMsg)
 	// Create tool response message with the proper tool_call_id
 	toolResponseMsg := models.RoleMsg{
 		Role:       cfg.ToolRole,
