@@ -97,19 +97,19 @@ When done, press `Esc` to return to the main page.
 #### Completion allows for any number of characters
 
 So let's make up a story for our character:
-Let our character be from a high-tech society, possessing a mobile tablet device with an AI called `HALL9000`, hunting a certain target.
+Let our character be from a high-tech society, possessing a mobile tablet device with an AI called `HAL9000`, hunting a certain target.
 Type the message, but first press `F10` to prevent the LLM response (since it responds as Seraphina for now):
 ```
-I reach for my pocket and produce a small tablet shaped device. My mobile companion HALL9000. After making sure it is not broken I press my finger to the side
+I reach for my pocket and produce a small tablet shaped device. My mobile companion HAL9000. After making sure it is not broken I press my finger to the side
 "Wake up Hal. Are you functional? Do you know where we are?"
 ```
 
 We need to write the first message ourselves (or at least start one).
 There are two ways to write as a new character:
-- `Ctrl+P` -> `New char to write msg as` -> Enter -> `HALL9000` -> Enter -> `x`. The status line at the bottom should now show `Writing as HALL9000 (ctrl+q)`. Your next message will be sent as HALL9000.
+- `Ctrl+P` -> `New char to write msg as` -> Enter -> `HAL9000` -> Enter -> `x`. The status line at the bottom should now show `Writing as HAL9000 (ctrl+q)`. Your next message will be sent as HAL9000.
 - `Ctrl+P` -> `Inject role`, switch to `No` -> `x`. gf-lt now won't inject your username at the beginning of the message. This means you could write directly:
 ```
-HALL9000: Red eye appears on the screen for the moment analyzing the request.
+HAL9000: Red eye appears on the screen for the moment analyzing the request.
 ```
 Press `Esc`. Now press `F10` to allow the LLM to write, and press `Ctrl+W` for it to continue the last message.
 - If you set `New char to write msg as`, you can switch back to writing as your character by pressing `Ctrl+Q` to rotate through the character list.
@@ -124,7 +124,7 @@ The screen flashes briefly as it calculates. "I am experiencing degraded functio
 ```
 
 Once the character name is in history, we can switch who the LLM will respond as by pressing `Ctrl+X`.
-For now, it should be rotating between HALL9000, `Username`, Seraphina, and system.
+For now, it should be rotating between HAL9000, `Username`, Seraphina, and system.
 Make the status line mention: `Bot will write as Seraphina (ctrl+x)`
 and press Escape to see her reaction.
 

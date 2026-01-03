@@ -626,7 +626,7 @@ func chatRound(userMsg, role string, tv *tview.TextView, regen, resume bool) {
 	go sendMsgToLLM(reader)
 	logger.Debug("looking at vars in chatRound", "msg", userMsg, "regen", regen, "resume", resume)
 	if !resume {
-		fmt.Fprintf(tv, "\n\n[-:-:b](%d) ", len(chatBody.Messages))
+		fmt.Fprintf(tv, "\n[-:-:b](%d) ", len(chatBody.Messages))
 		fmt.Fprint(tv, roleToIcon(botPersona))
 		fmt.Fprint(tv, "[-:-:-]\n")
 		if cfg.ThinkUse && !strings.Contains(cfg.CurrentAPI, "v1") {
