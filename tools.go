@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"gf-lt/agent"
-	"gf-lt/extra"
 	"gf-lt/models"
 	"io"
 	"os"
@@ -15,6 +14,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/GrailFinder/searchagent/searcher"
 )
 
 var (
@@ -141,13 +142,6 @@ After that you are free to respond to the user.
 		Role:      "",
 		FilePath:  "",
 	}
-	// toolCard = &models.CharCard{
-	// 	SysPrompt: toolSysMsg,
-	// 	FirstMsg:  defaultFirstMsg,
-	// 	Role:      "",
-	// 	FilePath:  "",
-	// }
-	// sysMap    = map[string]string{"basic_sys": basicSysMsg, "tool_sys": toolSysMsg}
 	sysMap    = map[string]*models.CharCard{"basic_sys": basicCard}
 	sysLabels = []string{"basic_sys"}
 
@@ -155,6 +149,16 @@ After that you are free to respond to the user.
 	webAgentClientOnce sync.Once
 	webAgentsOnce      sync.Once
 )
+
+var WebSearcher searcher.WebSurfer
+
+func init() {
+	sa, err := searcher.NewWebSurfer(searcher.SearcherTypeScraper, "")
+	if err != nil {
+		panic("failed to init seachagent; error: " + err.Error())
+	}
+	WebSearcher = sa
+}
 
 // getWebAgentClient returns a singleton AgentClient for web agents.
 func getWebAgentClient() *agent.AgentClient {
@@ -208,7 +212,7 @@ func websearch(args map[string]string) []byte {
 			"limit_arg", limitS, "error", err)
 		limit = 3
 	}
-	resp, err := extra.WebSearcher.Search(context.Background(), query, limit)
+	resp, err := WebSearcher.Search(context.Background(), query, limit)
 	if err != nil {
 		msg := "search tool failed; error: " + err.Error()
 		logger.Error(msg)
@@ -232,7 +236,7 @@ func readURL(args map[string]string) []byte {
 		logger.Error(msg)
 		return []byte(msg)
 	}
-	resp, err := extra.WebSearcher.RetrieveFromLink(context.Background(), link)
+	resp, err := WebSearcher.RetrieveFromLink(context.Background(), link)
 	if err != nil {
 		msg := "search tool failed; error: " + err.Error()
 		logger.Error(msg)

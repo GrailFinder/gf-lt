@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"gf-lt/extra"
 	"gf-lt/models"
 	"image"
 	_ "image/jpeg"
@@ -1147,7 +1146,7 @@ func init() {
 			// textArea.SetText("pressed ctrl+A", true)
 			if cfg.TTS_ENABLED {
 				// audioStream.TextChan <- chunk
-				extra.TTSDoneChan <- true
+				TTSDoneChan <- true
 			}
 		}
 		if event.Key() == tcell.KeyCtrlW {

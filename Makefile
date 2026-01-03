@@ -1,10 +1,16 @@
-.PHONY: setconfig run lint setup-whisper build-whisper download-whisper-model docker-up docker-down docker-logs
+.PHONY: setconfig run lint setup-whisper build-whisper download-whisper-model docker-up docker-down docker-logs noextra-run noextra-server
 
 run: setconfig
 	go build -o gf-lt && ./gf-lt
 
 server: setconfig
 	go build -o gf-lt && ./gf-lt -port 3333
+
+noextra-run: setconfig
+	go build -tags '!extra' -o gf-lt && ./gf-lt
+
+noextra-server: setconfig
+	go build -tags '!extra' -o gf-lt && ./gf-lt -port 3333
 
 setconfig:
 	find config.toml &>/dev/null || cp config.example.toml config.toml

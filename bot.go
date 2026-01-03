@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"gf-lt/config"
-	"gf-lt/extra"
 	"gf-lt/models"
 	"gf-lt/rag"
 	"gf-lt/storage"
@@ -29,12 +28,10 @@ import (
 )
 
 var (
-	httpClient  = &http.Client{}
-	cluedoState *extra.CluedoRoundInfo // Current game state
-	playerOrder []string               // Turn order tracking
-	cfg         *config.Config
-	logger      *slog.Logger
-	logLevel    = new(slog.LevelVar)
+	httpClient = &http.Client{}
+	cfg        *config.Config
+	logger     *slog.Logger
+	logLevel   = new(slog.LevelVar)
 )
 var (
 	activeChatName      string
@@ -51,8 +48,8 @@ var (
 	chunkParser         ChunkParser
 	lastToolCall        *models.FuncCall
 	//nolint:unused // TTS_ENABLED conditionally uses this
-	orator          extra.Orator
-	asr             extra.STT
+	orator          Orator
+	asr             STT
 	localModelsMu   sync.RWMutex
 	defaultLCPProps = map[string]float32{
 		"temperature":    0.8,
@@ -600,32 +597,6 @@ func roleToIcon(role string) string {
 	return "<" + role + ">: "
 }
 
-// FIXME: it should not be here; move to extra
-func checkGame(role string, tv *tview.TextView) {
-	// Handle Cluedo game flow
-	// should go before form msg, since formmsg takes chatBody and makes ioreader out of it
-	// role is almost always user, unless it's regen or resume
-	// cannot get in this block, since cluedoState is nil;
-	if cfg.EnableCluedo {
-		// Initialize Cluedo game if needed
-		if cluedoState == nil {
-			playerOrder = []string{cfg.UserRole, cfg.AssistantRole, cfg.CluedoRole2}
-			cluedoState = extra.CluedoPrepCards(playerOrder)
-		}
-		// notifyUser("got in cluedo", "yay")
-		currentPlayer := playerOrder[0]
-		playerOrder = append(playerOrder[1:], currentPlayer) // Rotate turns
-		if role == cfg.UserRole {
-			fmt.Fprintf(tv, "Your (%s) cards: %s\n", currentPlayer, cluedoState.GetPlayerCards(currentPlayer))
-		} else {
-			chatBody.Messages = append(chatBody.Messages, models.RoleMsg{
-				Role:    cfg.ToolRole,
-				Content: cluedoState.GetPlayerCards(currentPlayer),
-			})
-		}
-	}
-}
-
 func chatRound(userMsg, role string, tv *tview.TextView, regen, resume bool) {
 	botRespMode = true
 	botPersona := cfg.AssistantRole
@@ -642,9 +613,6 @@ func chatRound(userMsg, role string, tv *tview.TextView, regen, resume bool) {
 			}
 			return
 		}
-	}
-	if !resume {
-		checkGame(role, tv)
 	}
 	choseChunkParser()
 	reader, err := chunkParser.FormMsg(userMsg, role, resume)
@@ -679,7 +647,7 @@ out:
 			}
 			// Send chunk to audio stream handler
 			if cfg.TTS_ENABLED {
-				extra.TTSTextChan <- chunk
+				TTSTextChan <- chunk
 			}
 		case toolChunk := <-openAIToolChan:
 			fmt.Fprint(tv, toolChunk)
@@ -698,7 +666,7 @@ out:
 				}
 				// Send chunk to audio stream handler
 				if cfg.TTS_ENABLED {
-					extra.TTSTextChan <- chunk
+					TTSTextChan <- chunk
 				}
 			}
 			break out
@@ -982,11 +950,6 @@ func addNewChat(chatName string) {
 func applyCharCard(cc *models.CharCard) {
 	cfg.AssistantRole = cc.Role
 	// FIXME: remove
-	// Initialize Cluedo if enabled and matching role
-	if cfg.EnableCluedo && cc.Role == "CluedoPlayer" {
-		playerOrder = []string{cfg.UserRole, cfg.AssistantRole, cfg.CluedoRole2}
-		cluedoState = extra.CluedoPrepCards(playerOrder)
-	}
 	history, err := loadAgentsLastChat(cfg.AssistantRole)
 	if err != nil {
 		// too much action for err != nil; loadAgentsLastChat needs to be split up
@@ -1123,18 +1086,13 @@ func init() {
 		Stream:   true,
 		Messages: lastChat,
 	}
-	// Initialize Cluedo if enabled and matching role
-	if cfg.EnableCluedo && cfg.AssistantRole == "CluedoPlayer" {
-		playerOrder = []string{cfg.UserRole, cfg.AssistantRole, cfg.CluedoRole2}
-		cluedoState = extra.CluedoPrepCards(playerOrder)
-	}
 	choseChunkParser()
 	httpClient = createClient(time.Second * 90)
 	if cfg.TTS_ENABLED {
-		orator = extra.NewOrator(logger, cfg)
+		orator = NewOrator(logger, cfg)
 	}
 	if cfg.STT_ENABLED {
-		asr = extra.NewSTT(logger, cfg)
+		asr = NewSTT(logger, cfg)
 	}
 	// Initialize scrollToEndEnabled based on config
 	scrollToEndEnabled = cfg.AutoScrollEnabled
