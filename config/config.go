@@ -7,18 +7,12 @@ import (
 )
 
 type Config struct {
-	EnableCluedo      bool   `toml:"EnableCluedo"` // Cluedo game mode toggle
-	CluedoRole2       string `toml:"CluedoRole2"`  // Secondary AI role name
-	ChatAPI           string `toml:"ChatAPI"`
-	CompletionAPI     string `toml:"CompletionAPI"`
-	CurrentAPI        string
-	CurrentModel      string `toml:"CurrentModel"`
-	APIMap            map[string]string
-	FetchModelNameAPI string `toml:"FetchModelNameAPI"`
-	//  ToolsAPI list?
-	SearchAPI      string `toml:"SearchAPI"`
-	SearchDescribe string `toml:"SearchDescribe"`
-	//
+	ChatAPI                       string `toml:"ChatAPI"`
+	CompletionAPI                 string `toml:"CompletionAPI"`
+	CurrentAPI                    string
+	CurrentModel                  string `toml:"CurrentModel"`
+	APIMap                        map[string]string
+	FetchModelNameAPI             string `toml:"FetchModelNameAPI"`
 	ShowSys                       bool   `toml:"ShowSys"`
 	LogFile                       string `toml:"LogFile"`
 	UserRole                      string `toml:"UserRole"`
@@ -32,7 +26,7 @@ type Config struct {
 	WriteNextMsgAs                string
 	WriteNextMsgAsCompletionAgent string
 	SkipLLMResp                   bool
-	AutoCleanToolCallsFromCtx     bool   `toml:"AutoCleanToolCallsFromCtx"`
+	AutoCleanToolCallsFromCtx     bool `toml:"AutoCleanToolCallsFromCtx"`
 	// embeddings
 	RAGEnabled bool   `toml:"RAGEnabled"`
 	EmbedURL   string `toml:"EmbedURL"`
