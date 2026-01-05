@@ -53,12 +53,22 @@ Your current tools:
 {
 "name":"websearch",
 "args": ["query", "limit"],
-"when_to_use": "when asked to search the web for information; limit is optional (default 3)"
+"when_to_use": "when asked to search the web for information; returns clean summary without html,css and other web elements; limit is optional (default 3)"
+},
+{
+"name":"websearch_raw",
+"args": ["query", "limit"],
+"when_to_use": "when asked to search the web for information; returns raw data as is without processing; limit is optional (default 3)"
 },
 {
 "name":"read_url",
 "args": ["url"],
-"when_to_use": "when asked to get content for spicific webpage or url"
+"when_to_use": "when asked to get content for specific webpage or url; returns clean summary without html,css and other web elements"
+},
+{
+"name":"read_url_raw",
+"args": ["url"],
+"when_to_use": "when asked to get content for specific webpage or url; returns raw data as is without processing"
 },
 {
 "name":"file_create",
@@ -227,6 +237,35 @@ func websearch(args map[string]string) []byte {
 	return data
 }
 
+// web search raw (returns raw data without processing)
+func websearchRaw(args map[string]string) []byte {
+	// make http request return bytes
+	query, ok := args["query"]
+	if !ok || query == "" {
+		msg := "query not provided to websearch_raw tool"
+		logger.Error(msg)
+		return []byte(msg)
+	}
+	limitS, ok := args["limit"]
+	if !ok || limitS == "" {
+		limitS = "3"
+	}
+	limit, err := strconv.Atoi(limitS)
+	if err != nil || limit == 0 {
+		logger.Warn("websearch_raw limit; passed bad value; setting to default (3)",
+			"limit_arg", limitS, "error", err)
+		limit = 3
+	}
+	resp, err := WebSearcher.Search(context.Background(), query, limit)
+	if err != nil {
+		msg := "search tool failed; error: " + err.Error()
+		logger.Error(msg)
+		return []byte(msg)
+	}
+	// Return raw response without any processing
+	return []byte(fmt.Sprintf("%+v", resp))
+}
+
 // retrieves url content (text)
 func readURL(args map[string]string) []byte {
 	// make http request return bytes
@@ -249,6 +288,25 @@ func readURL(args map[string]string) []byte {
 		return []byte(msg)
 	}
 	return data
+}
+
+// retrieves url content raw (returns raw content without processing)
+func readURLRaw(args map[string]string) []byte {
+	// make http request return bytes
+	link, ok := args["url"]
+	if !ok || link == "" {
+		msg := "link not provided to read_url_raw tool"
+		logger.Error(msg)
+		return []byte(msg)
+	}
+	resp, err := WebSearcher.RetrieveFromLink(context.Background(), link)
+	if err != nil {
+		msg := "search tool failed; error: " + err.Error()
+		logger.Error(msg)
+		return []byte(msg)
+	}
+	// Return raw response without any processing
+	return []byte(fmt.Sprintf("%+v", resp))
 }
 
 /*
@@ -891,7 +949,9 @@ var fnMap = map[string]fnSig{
 	"recall_topics":     recallTopics,
 	"memorise":          memorise,
 	"websearch":         websearch,
+	"websearch_raw":     websearchRaw,
 	"read_url":          readURL,
+	"read_url_raw":      readURLRaw,
 	"file_create":       fileCreate,
 	"file_read":         fileRead,
 	"file_write":        fileWrite,
@@ -951,7 +1011,47 @@ var baseTools = []models.Tool{
 		Type: "function",
 		Function: models.ToolFunc{
 			Name:        "read_url",
-			Description: "Retrieves text content of given link.",
+			Description: "Retrieves text content of given link, providing clean summary without html,css and other web elements.",
+			Parameters: models.ToolFuncParams{
+				Type:     "object",
+				Required: []string{"url"},
+				Properties: map[string]models.ToolArgProps{
+					"url": models.ToolArgProps{
+						Type:        "string",
+						Description: "link to the webpage to read text from",
+					},
+				},
+			},
+		},
+	},
+	// websearch_raw
+	models.Tool{
+		Type: "function",
+		Function: models.ToolFunc{
+			Name:        "websearch_raw",
+			Description: "Search web given query, returning raw data as is without processing. Use when you need the raw response data instead of a clean summary.",
+			Parameters: models.ToolFuncParams{
+				Type:     "object",
+				Required: []string{"query", "limit"},
+				Properties: map[string]models.ToolArgProps{
+					"query": models.ToolArgProps{
+						Type:        "string",
+						Description: "search query",
+					},
+					"limit": models.ToolArgProps{
+						Type:        "string",
+						Description: "limit of the website results",
+					},
+				},
+			},
+		},
+	},
+	// read_url_raw
+	models.Tool{
+		Type: "function",
+		Function: models.ToolFunc{
+			Name:        "read_url_raw",
+			Description: "Retrieves raw content of given link without processing. Use when you need the raw response data instead of a clean summary.",
 			Parameters: models.ToolFuncParams{
 				Type:     "object",
 				Required: []string{"url"},
