@@ -1,5 +1,5 @@
-after ![installing](linktoinstruction)
-![set up your config](config.md)
+after [installing](https://github.com/GrailFinder/gf-lt/tree/master?tab=readme-ov-file#how-to-install)
+[set up your config](config.md)
 
 To roleplay, we would need to create a character card or get one from the web.
 For this tutorial, we are going to use the default character Seraphina from [SillyTavern (ST)](https://github.com/SillyTavern/SillyTavern/blob/release/default/content/default_Seraphina.png).
