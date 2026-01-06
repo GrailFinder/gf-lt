@@ -19,10 +19,8 @@ This document explains how to set up and configure the application using the `co
 - **ChatAPI**: The endpoint for chat completions API. This is the primary API used for chat interactions.
 - **CompletionAPI**: The endpoint for completion API. Used as an alternative to the chat API.
 
-#### FetchModelNameAPI
-- **Type**: String
-- **Default**: `"http://localhost:8080/v1/models"`
-- **Description**: The endpoint to fetch available models from the API provider.
+#### FetchModelNameAPI (`"http://localhost:8080/v1/models"`)
+- The endpoint to fetch available models from the API provider.
 
 #### DeepSeek Settings
 - **DeepSeekChatAPI**: The endpoint for DeepSeek chat API. Default: `"https://api.deepseek.com/chat/completions"`
@@ -37,177 +35,115 @@ This document explains how to set up and configure the application using the `co
 
 ### Role Settings
 
-#### UserRole
-- **Type**: String
-- **Default**: `"user"`
-- **Description**: The role identifier for user messages in the conversation.
+#### UserRole (`"user"`)
+- The role identifier for user messages in the conversation.
 
-#### ToolRole
-- **Type**: String
-- **Default**: `"tool"`
-- **Description**: The role identifier for tool responses in the conversation.
+#### ToolRole (`"tool"`)
+- The role identifier for tool responses in the conversation.
 
-#### AssistantRole
-- **Type**: String
-- **Default**: `"assistant"`
-- **Description**: The role identifier for assistant responses in the conversation.
+#### AssistantRole (`"assistant"`)
+- The role identifier for assistant responses in the conversation.
 
 ### Display and Logging Settings
 
-#### ShowSys
-- **Type**: Boolean
-- **Default**: `true`
-- **Description**: Whether to show system and tool messages in the chat interface.
+#### ShowSys (`true`)
+- Whether to show system and tool messages in the chat interface.
 
-#### LogFile
-- **Type**: String
-- **Default**: `"log.txt"`
-- **Description**: The file path where application logs will be stored.
+#### LogFile (`"log.txt"`)
+- The file path where application logs will be stored.
 
-#### SysDir
-- **Type**: String
-- **Default**: `"sysprompts"`
-- **Description**: Directory containing system prompt templates (character cards).
+#### SysDir (`"sysprompts"`)
+- Directory containing system prompt templates (character cards).
 
 ### Content and Performance Settings
 
-#### ChunkLimit
-- **Type**: Integer
-- **Default**: `100000`
-- **Description**: Maximum size of text chunks to recieve per request from llm provider. Mainly exists to prevent infinite spam of random or repeated tokens when model starts hallucinating.
+#### ChunkLimit (`100000`)
+- Maximum size of text chunks to recieve per request from llm provider. Mainly exists to prevent infinite spam of random or repeated tokens when model starts hallucinating.
 
-#### AutoScrollEnabled
-- **Type**: Boolean
-- **Default**: `true`
-- **Description**: Whether to automatically scroll chat window while llm streams its repsonse.
+#### AutoScrollEnabled (`true`)
+- Whether to automatically scroll chat window while llm streams its repsonse.
 
-#### AutoCleanToolCallsFromCtx
-- **Type**: Boolean
-- **Default**: `false` (commented out)
-- **Description**: Whether to automatically clean tool calls from the conversation context to manage token usage.
+#### AutoCleanToolCallsFromCtx (`false`)
+- Whether to automatically clean tool calls from the conversation context to manage token usage.
 
 ### RAG (Retrieval Augmented Generation) Settings
 
-#### EmbedURL
-- **Type**: String
-- **Default**: `"http://localhost:8082/v1/embeddings"`
-- **Description**: The endpoint for embedding API, used for RAG (Retrieval Augmented Generation) functionality.
+#### EmbedURL (`"http://localhost:8082/v1/embeddings"`)
+- The endpoint for embedding API, used for RAG (Retrieval Augmented Generation) functionality.
 
-#### RAGEnabled
-- **Type**: Boolean
-- **Default**: Not set in example (false by default)
-- **Description**: Enable or disable RAG functionality for enhanced context retrieval.
+#### RAGEnabled (`false`)
+- Enable or disable RAG functionality for enhanced context retrieval.
 
-#### RAGBatchSize
-- **Type**: Integer
-- **Default**: `1`
-- **Description**: Number of documents to process in each RAG batch.
+#### RAGBatchSize (`1`)
+- Number of documents to process in each RAG batch.
 
-#### RAGWordLimit
-- **Type**: Integer
-- **Default**: `80`
-- **Description**: Maximum number of words to include in RAG context.
+#### RAGWordLimit (`80`)
+- Maximum number of words in a batch to tokenize and store.
 
-#### RAGWorkers
-- **Type**: Integer
-- **Default**: `2`
-- **Description**: Number of concurrent workers for RAG processing.
+#### RAGWorkers (`2`)
+- Number of concurrent workers for RAG processing.
 
-#### RAGDir
-- **Type**: String
-- **Default**: `"ragimport"`
-- **Description**: Directory containing documents for RAG processing.
+#### RAGDir (`"ragimport"`)
+- Directory containing documents for RAG processing.
 
-#### HFToken
-- **Type**: String
-- **Default**: Not set in example
-- **Description**: Hugging Face token for accessing models and embeddings. In case your embedding model is hosted on hf.
+#### HFToken (`""`)
+- Hugging Face token for accessing models and embeddings. In case your embedding model is hosted on hf.
 
 
 ### Text-to-Speech (TTS) Settings
 
-#### TTS_ENABLED
-- **Type**: Boolean
-- **Default**: `false`
-- **Description**: Enable or disable text-to-speech functionality.
+#### TTS_ENABLED (`false`)
+- Enable or disable text-to-speech functionality.
 
-#### TTS_URL
-- **Type**: String
-- **Default**: `"http://localhost:8880/v1/audio/speech"`
-- **Description**: The endpoint for TTS API.
+#### TTS_URL (`"http://localhost:8880/v1/audio/speech"`)
+- The endpoint for TTS API.
 
-#### TTS_SPEED
-- **Type**: Float
-- **Default**: `1.2`
-- **Description**: Playback speed for speech output (1.0 is normal speed).
+#### TTS_SPEED (`1.2`)
+- Playback speed for speech output (1.0 is normal speed).
 
 ### Speech-to-Text (STT) Settings
 
-#### STT_ENABLED
-- **Type**: Boolean
-- **Default**: `false`
-- **Description**: Enable or disable speech-to-text functionality.
+#### STT_ENABLED (`false`)
+- Enable or disable speech-to-text functionality.
 
-#### STT_TYPE
-- **Type**: String
-- **Default**: `"WHISPER_SERVER"`
-- **Description**: Type of STT engine to use. Options are `"WHISPER_SERVER"` or `"WHISPER_BINARY"`. Whisper server is used inside of docker continer, while binary can be local.
+#### STT_TYPE (`"WHISPER_SERVER"`)
+- Type of STT engine to use. Options are `"WHISPER_SERVER"` or `"WHISPER_BINARY"`. Whisper server is used inside of docker continer, while binary can be local.
 
-#### STT_URL
-- **Type**: String
-- **Default**: `"http://localhost:8081/inference"`
-- **Description**: The endpoint for STT API (used with WHISPER_SERVER).
+#### STT_URL (`"http://localhost:8081/inference"`)
+- The endpoint for STT API (used with WHISPER_SERVER).
 
-#### WhisperBinaryPath
-- **Type**: String
-- **Default**: `"./batteries/whisper.cpp/build/bin/whisper-cli"`
-- **Description**: Path to the whisper binary (used with WHISPER_BINARY mode).
+#### WhisperBinaryPath (`"./batteries/whisper.cpp/build/bin/whisper-cli"`)
+- Path to the whisper binary (used with WHISPER_BINARY mode).
 
-#### WhisperModelPath
-- **Type**: String
-- **Default**: `"./batteries/whisper.cpp/ggml-large-v3-turbo-q5_0.bin"`
-- **Description**: Path to the whisper model file (used with WHISPER_BINARY mode).
+#### WhisperModelPath (`"./batteries/whisper.cpp/ggml-large-v3-turbo-q5_0.bin"`)
+- Path to the whisper model file (used with WHISPER_BINARY mode).
 
-#### STT_LANG
-- **Type**: String
-- **Default**: `"en"`
-- **Description**: Language for speech recognition (used with WHISPER_BINARY mode).
+#### STT_LANG (`"en"`)
+- Language for speech recognition (used with WHISPER_BINARY mode).
 
-#### STT_SR
-- **Type**: Integer
-- **Default**: `16000`
-- **Description**: Sample rate for mic recording.
+#### STT_SR (`16000`)
+- Sample rate for mic recording.
 
 ### Database and File Settings
 
-#### DBPATH
-- **Type**: String
-- **Default**: `"gflt.db"`
-- **Description**: Path to the SQLite database file used for storing conversation history and other data.
+#### DBPATH (`"gflt.db"`)
+- Path to the SQLite database file used for storing conversation history and other data.
 
-#### FilePickerDir
-- **Type**: String
-- **Default**: `"."`
-- **Description**: Directory where the file (image) picker should start when selecting files.
+#### FilePickerDir (`"."`)
+- Directory where the file (image) picker should start when selecting files.
 
-#### FilePickerExts
-- **Type**: String
-- **Default**: `"png,jpg,jpeg,gif,webp"`
-- **Description**: Comma-separated list of allowed file extensions for the file picker.
+#### FilePickerExts (`"png,jpg,jpeg,gif,webp"`)
+- Comma-separated list of allowed file extensions for the file picker.
 
 ### Additional Features
 
 Those could be switched in program, but also bould be setup in config.
 
 #### ToolUse
-- **Type**: Boolean
-- **Default**: Not set in example (false by default)
-- **Description**: Enable or disable explanation of tools to llm, so it could use them.
+- Enable or disable explanation of tools to llm, so it could use them.
 
 #### ThinkUse
-- **Type**: Boolean
-- **Default**: Not set in example (false by default)
-- **Description**: Enable or disable insertion of <think> token at the beggining of llm resp.
+- Enable or disable insertion of <think> token at the beggining of llm resp.
 
 ## Environment Variables
 
