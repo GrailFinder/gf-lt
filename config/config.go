@@ -48,9 +48,11 @@ type Config struct {
 	OpenRouterToken         string `toml:"OpenRouterToken"`
 	OpenRouterModel         string `toml:"OpenRouterModel"`
 	// TTS
-	TTS_URL     string  `toml:"TTS_URL"`
-	TTS_ENABLED bool    `toml:"TTS_ENABLED"`
-	TTS_SPEED   float32 `toml:"TTS_SPEED"`
+	TTS_URL      string  `toml:"TTS_URL"`
+	TTS_ENABLED  bool    `toml:"TTS_ENABLED"`
+	TTS_SPEED    float32 `toml:"TTS_SPEED"`
+	TTS_PROVIDER string  `toml:"TTS_PROVIDER"`
+	TTS_LANGUAGE string  `toml:"TTS_LANGUAGE"`
 	// STT
 	STT_TYPE          string `toml:"STT_TYPE"` // WHISPER_SERVER, WHISPER_BINARY
 	STT_URL           string `toml:"STT_URL"`

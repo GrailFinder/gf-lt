@@ -12,9 +12,12 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
+	google_translate_tts "github.com/GrailFinder/google-translate-tts"
+	"github.com/GrailFinder/google-translate-tts/handlers"
 	"github.com/gopxl/beep/v2"
 	"github.com/gopxl/beep/v2/mp3"
 	"github.com/gopxl/beep/v2/speaker"
@@ -47,6 +50,14 @@ type KokoroOrator struct {
 	currentStream *beep.Ctrl // Added for playback control
 	textBuffer    strings.Builder
 	// textBuffer bytes.Buffer
+}
+
+// Google Translate TTS implementation
+type GoogleTranslateOrator struct {
+	logger        *slog.Logger
+	speech        *google_translate_tts.Speech
+	currentStream *beep.Ctrl
+	textBuffer    strings.Builder
 }
 
 func (o *KokoroOrator) stoproutine() {
@@ -123,18 +134,47 @@ func (o *KokoroOrator) readroutine() {
 }
 
 func NewOrator(log *slog.Logger, cfg *config.Config) Orator {
-	orator := &KokoroOrator{
-		logger:   log,
-		URL:      cfg.TTS_URL,
-		Format:   models.AFMP3,
-		Stream:   false,
-		Speed:    cfg.TTS_SPEED,
-		Language: "a",
-		Voice:    "af_bella(1)+af_sky(1)",
+	provider := cfg.TTS_PROVIDER
+	if provider == "" {
+		provider = "kokoro"
 	}
-	go orator.readroutine()
-	go orator.stoproutine()
-	return orator
+
+	switch strings.ToLower(provider) {
+	case "google", "google-translate", "google_translate":
+		language := cfg.TTS_LANGUAGE
+		if language == "" {
+			language = "en"
+		}
+
+		speech := &google_translate_tts.Speech{
+			Folder:   os.TempDir() + "/gf-lt-tts", // Temporary directory for caching
+			Language: language,
+			Proxy:    "", // Proxy not supported
+			Speed:    cfg.TTS_SPEED,
+			Handler:  &handlers.Beep{},
+		}
+
+		orator := &GoogleTranslateOrator{
+			logger: log,
+			speech: speech,
+		}
+		go orator.readroutine()
+		go orator.stoproutine()
+		return orator
+	default: // kokoro
+		orator := &KokoroOrator{
+			logger:   log,
+			URL:      cfg.TTS_URL,
+			Format:   models.AFMP3,
+			Stream:   false,
+			Speed:    cfg.TTS_SPEED,
+			Language: "a",
+			Voice:    "af_bella(1)+af_sky(1)",
+		}
+		go orator.readroutine()
+		go orator.stoproutine()
+		return orator
+	}
 }
 
 func (o *KokoroOrator) GetLogger() *slog.Logger {
@@ -211,5 +251,134 @@ func (o *KokoroOrator) Stop() {
 	if o.currentStream != nil {
 		// o.currentStream.Paused = true
 		o.currentStream.Streamer = nil
+	}
+}
+
+func (o *GoogleTranslateOrator) stoproutine() {
+	<-TTSDoneChan
+	o.logger.Debug("orator got done signal")
+	o.Stop()
+	// drain the channel
+	for len(TTSTextChan) > 0 {
+		<-TTSTextChan
+	}
+}
+
+func (o *GoogleTranslateOrator) readroutine() {
+	tokenizer, _ := english.NewSentenceTokenizer(nil)
+	for {
+		select {
+		case chunk := <-TTSTextChan:
+			_, err := o.textBuffer.WriteString(chunk)
+			if err != nil {
+				o.logger.Warn("failed to write to stringbuilder", "error", err)
+				continue
+			}
+			text := o.textBuffer.String()
+			sentences := tokenizer.Tokenize(text)
+			o.logger.Debug("adding chunk", "chunk", chunk, "text", text, "sen-len", len(sentences))
+			for i, sentence := range sentences {
+				if i == len(sentences)-1 { // last sentence
+					o.textBuffer.Reset()
+					_, err := o.textBuffer.WriteString(sentence.Text)
+					if err != nil {
+						o.logger.Warn("failed to write to stringbuilder", "error", err)
+						continue
+					}
+					continue // if only one (often incomplete) sentence; wait for next chunk
+				}
+				o.logger.Debug("calling Speak with sentence", "sent", sentence.Text)
+				if err := o.Speak(sentence.Text); err != nil {
+					o.logger.Error("tts failed", "sentence", sentence.Text, "error", err)
+				}
+			}
+		case <-TTSFlushChan:
+			o.logger.Debug("got flushchan signal start")
+			// lln is done get the whole message out
+			if len(TTSTextChan) > 0 { // otherwise might get stuck
+				for chunk := range TTSTextChan {
+					_, err := o.textBuffer.WriteString(chunk)
+					if err != nil {
+						o.logger.Warn("failed to write to stringbuilder", "error", err)
+						continue
+					}
+					if len(TTSTextChan) == 0 {
+						break
+					}
+				}
+			}
+			// INFO: if there is a lot of text it will take some time to make with tts at once
+			// to avoid this pause, it might be better to keep splitting on sentences
+			// but keepinig in mind that remainder could be ommited by tokenizer
+			// Flush remaining text
+			remaining := o.textBuffer.String()
+			o.textBuffer.Reset()
+			if remaining != "" {
+				o.logger.Debug("calling Speak with remainder", "rem", remaining)
+				if err := o.Speak(remaining); err != nil {
+					o.logger.Error("tts failed", "sentence", remaining, "error", err)
+				}
+			}
+		}
+	}
+}
+
+func (o *GoogleTranslateOrator) GetLogger() *slog.Logger {
+	return o.logger
+}
+
+func (o *GoogleTranslateOrator) Speak(text string) error {
+	o.logger.Debug("fn: Speak is called", "text-len", len(text))
+
+	// Generate MP3 data using google-translate-tts
+	reader, err := o.speech.GenerateSpeech(text)
+	if err != nil {
+		o.logger.Error("generate speech failed", "error", err)
+		return fmt.Errorf("generate speech failed: %w", err)
+	}
+
+	// Decode the mp3 audio from reader (wrap with NopCloser for io.ReadCloser)
+	streamer, format, err := mp3.Decode(io.NopCloser(reader))
+	if err != nil {
+		o.logger.Error("mp3 decode failed", "error", err)
+		return fmt.Errorf("mp3 decode failed: %w", err)
+	}
+	defer streamer.Close()
+
+	playbackStreamer := beep.Streamer(streamer)
+	speed := o.speech.Speed
+	if speed <= 0 {
+		speed = 1.0
+	}
+	if speed != 1.0 {
+		playbackStreamer = beep.ResampleRatio(3, float64(speed), streamer)
+	}
+
+	// Initialize speaker with the format's sample rate
+	if err := speaker.Init(format.SampleRate, format.SampleRate.N(time.Second/10)); err != nil {
+		o.logger.Debug("failed to init speaker", "error", err)
+	}
+
+	done := make(chan bool)
+	// Create controllable stream and store reference
+	o.currentStream = &beep.Ctrl{Streamer: beep.Seq(playbackStreamer, beep.Callback(func() {
+		close(done)
+		o.currentStream = nil
+	})), Paused: false}
+	speaker.Play(o.currentStream)
+	<-done // wait for playback to complete
+	return nil
+}
+
+func (o *GoogleTranslateOrator) Stop() {
+	o.logger.Debug("attempted to stop google translate orator")
+	speaker.Lock()
+	defer speaker.Unlock()
+	if o.currentStream != nil {
+		o.currentStream.Streamer = nil
+	}
+	// Also stop the speech handler if possible
+	if o.speech != nil {
+		_ = o.speech.Stop()
 	}
 }

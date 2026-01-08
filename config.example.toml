@@ -29,6 +29,8 @@ RAGDir = "ragimport"
 TTS_ENABLED = false
 TTS_URL = "http://localhost:8880/v1/audio/speech"
 TTS_SPEED = 1.2
+TTS_PROVIDER = "kokoro"
+TTS_LANGUAGE = "en"
 # extra stt
 STT_ENABLED = false
 STT_TYPE = "WHISPER_SERVER" # WHISPER_SERVER or WHISPER_BINARY
