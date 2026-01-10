@@ -4,7 +4,7 @@ go 1.25.1
 
 require (
 	github.com/BurntSushi/toml v1.5.0
-	github.com/GrailFinder/google-translate-tts v0.0.0-00010101000000-000000000000
+	github.com/GrailFinder/google-translate-tts v0.1.1
 	github.com/GrailFinder/searchagent v0.2.0
 	github.com/gdamore/tcell/v2 v2.13.2
 	github.com/glebarez/go-sqlite v1.22.0
@@ -41,5 +41,3 @@ require (
 	modernc.org/memory v1.11.0 // indirect
 	modernc.org/sqlite v1.40.1 // indirect
 )
-
-replace github.com/GrailFinder/google-translate-tts => /home/grail/projects/plays/goplays/google-translate-tts
