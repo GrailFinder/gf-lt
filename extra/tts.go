@@ -371,14 +371,12 @@ func (o *GoogleTranslateOrator) GetLogger() *slog.Logger {
 
 func (o *GoogleTranslateOrator) Speak(text string) error {
 	o.logger.Debug("fn: Speak is called", "text-len", len(text))
-
 	// Generate MP3 data using google-translate-tts
 	reader, err := o.speech.GenerateSpeech(text)
 	if err != nil {
 		o.logger.Error("generate speech failed", "error", err)
 		return fmt.Errorf("generate speech failed: %w", err)
 	}
-
 	// Decode the mp3 audio from reader (wrap with NopCloser for io.ReadCloser)
 	streamer, format, err := mp3.Decode(io.NopCloser(reader))
 	if err != nil {
@@ -386,7 +384,6 @@ func (o *GoogleTranslateOrator) Speak(text string) error {
 		return fmt.Errorf("mp3 decode failed: %w", err)
 	}
 	defer streamer.Close()
-
 	playbackStreamer := beep.Streamer(streamer)
 	speed := o.speech.Speed
 	if speed <= 0 {
@@ -395,12 +392,10 @@ func (o *GoogleTranslateOrator) Speak(text string) error {
 	if speed != 1.0 {
 		playbackStreamer = beep.ResampleRatio(3, float64(speed), streamer)
 	}
-
 	// Initialize speaker with the format's sample rate
 	if err := speaker.Init(format.SampleRate, format.SampleRate.N(time.Second/10)); err != nil {
 		o.logger.Debug("failed to init speaker", "error", err)
 	}
-
 	done := make(chan bool)
 	// Create controllable stream and store reference
 	o.currentStream = &beep.Ctrl{Streamer: beep.Seq(playbackStreamer, beep.Callback(func() {

@@ -664,10 +664,14 @@ out:
 				if scrollToEndEnabled {
 					tv.ScrollToEnd()
 				}
-				// Send chunk to audio stream handler
 				if cfg.TTS_ENABLED {
+					// Send chunk to audio stream handler
 					TTSTextChan <- chunk
 				}
+			}
+			if cfg.TTS_ENABLED {
+				// msg is done; flush it down
+				TTSFlushChan <- true
 			}
 			break out
 		}
