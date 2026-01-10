@@ -62,6 +62,8 @@ In case you're running llama.cpp, here is an example of starting the llama.cpp s
 
 **After changing config.toml or environment variables, you need to restart the program.**
 
+`Ctrl+C` to close the program and `make` to rebuild and start it again.
+
 For roleplay, /completion endpoints are much better, since /chat endpoints swap any character name to either `user` or `assistant`.
 Once you have the desired API endpoint
 (for example: http://localhost:8080/completion),
