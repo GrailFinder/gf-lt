@@ -13,6 +13,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"regexp"
 	"strings"
 	"time"
 
@@ -30,6 +31,44 @@ var (
 	TTSDoneChan  = make(chan bool, 1)
 	// endsWithPunctuation = regexp.MustCompile(`[;.!?]$`)
 )
+
+// cleanText removes markdown and special characters that are not suitable for TTS
+func cleanText(text string) string {
+	// Remove markdown-like characters that might interfere with TTS
+	text = strings.ReplaceAll(text, "*", "") // Bold/italic markers
+	text = strings.ReplaceAll(text, "#", "") // Headers
+	text = strings.ReplaceAll(text, "_", "") // Underline/italic markers
+	text = strings.ReplaceAll(text, "~", "") // Strikethrough markers
+	text = strings.ReplaceAll(text, "`", "") // Code markers
+	text = strings.ReplaceAll(text, "[", "") // Link brackets
+	text = strings.ReplaceAll(text, "]", "") // Link brackets
+	text = strings.ReplaceAll(text, "!", "") // Exclamation marks (if not punctuation)
+
+	// Remove HTML tags using regex
+	htmlTagRegex := regexp.MustCompile(`<[^>]*>`)
+	text = htmlTagRegex.ReplaceAllString(text, "")
+
+	// Split text into lines to handle table separators
+	lines := strings.Split(text, "\n")
+	var filteredLines []string
+
+	for _, line := range lines {
+		// Check if the line looks like a table separator (e.g., |----|, |===|, | - - - |)
+		// A table separator typically contains only |, -, =, and spaces
+		isTableSeparator := regexp.MustCompile(`^\s*\|\s*[-=\s]+\|\s*$`).MatchString(strings.TrimSpace(line))
+
+		if !isTableSeparator {
+			// If it's not a table separator, remove vertical bars but keep the content
+			processedLine := strings.ReplaceAll(line, "|", "")
+			filteredLines = append(filteredLines, processedLine)
+		}
+		// If it is a table separator, skip it (don't add to filteredLines)
+	}
+
+	text = strings.Join(filteredLines, "\n")
+	text = strings.TrimSpace(text) // Remove leading/trailing whitespace
+	return text
+}
 
 type Orator interface {
 	Speak(text string) error
@@ -97,9 +136,13 @@ func (o *KokoroOrator) readroutine() {
 					}
 					continue // if only one (often incomplete) sentence; wait for next chunk
 				}
-				o.logger.Debug("calling Speak with sentence", "sent", sentence.Text)
-				if err := o.Speak(sentence.Text); err != nil {
-					o.logger.Error("tts failed", "sentence", sentence.Text, "error", err)
+				cleanedText := cleanText(sentence.Text)
+				if cleanedText == "" {
+					continue // Skip empty text after cleaning
+				}
+				o.logger.Debug("calling Speak with sentence", "sent", cleanedText)
+				if err := o.Speak(cleanedText); err != nil {
+					o.logger.Error("tts failed", "sentence", cleanedText, "error", err)
 				}
 			}
 		case <-TTSFlushChan:
@@ -122,6 +165,7 @@ func (o *KokoroOrator) readroutine() {
 			// but keepinig in mind that remainder could be ommited by tokenizer
 			// Flush remaining text
 			remaining := o.textBuffer.String()
+			remaining = cleanText(remaining)
 			o.textBuffer.Reset()
 			if remaining != "" {
 				o.logger.Debug("calling Speak with remainder", "rem", remaining)
@@ -138,14 +182,12 @@ func NewOrator(log *slog.Logger, cfg *config.Config) Orator {
 	if provider == "" {
 		provider = "kokoro"
 	}
-
 	switch strings.ToLower(provider) {
 	case "google", "google-translate", "google_translate":
 		language := cfg.TTS_LANGUAGE
 		if language == "" {
 			language = "en"
 		}
-
 		speech := &google_translate_tts.Speech{
 			Folder:   os.TempDir() + "/gf-lt-tts", // Temporary directory for caching
 			Language: language,
@@ -153,7 +195,6 @@ func NewOrator(log *slog.Logger, cfg *config.Config) Orator {
 			Speed:    cfg.TTS_SPEED,
 			Handler:  &handlers.Beep{},
 		}
-
 		orator := &GoogleTranslateOrator{
 			logger: log,
 			speech: speech,
@@ -287,9 +328,13 @@ func (o *GoogleTranslateOrator) readroutine() {
 					}
 					continue // if only one (often incomplete) sentence; wait for next chunk
 				}
-				o.logger.Debug("calling Speak with sentence", "sent", sentence.Text)
-				if err := o.Speak(sentence.Text); err != nil {
-					o.logger.Error("tts failed", "sentence", sentence.Text, "error", err)
+				cleanedText := cleanText(sentence.Text)
+				if cleanedText == "" {
+					continue // Skip empty text after cleaning
+				}
+				o.logger.Debug("calling Speak with sentence", "sent", cleanedText)
+				if err := o.Speak(cleanedText); err != nil {
+					o.logger.Error("tts failed", "sentence", cleanedText, "error", err)
 				}
 			}
 		case <-TTSFlushChan:
@@ -307,11 +352,8 @@ func (o *GoogleTranslateOrator) readroutine() {
 					}
 				}
 			}
-			// INFO: if there is a lot of text it will take some time to make with tts at once
-			// to avoid this pause, it might be better to keep splitting on sentences
-			// but keepinig in mind that remainder could be ommited by tokenizer
-			// Flush remaining text
 			remaining := o.textBuffer.String()
+			remaining = cleanText(remaining)
 			o.textBuffer.Reset()
 			if remaining != "" {
 				o.logger.Debug("calling Speak with remainder", "rem", remaining)
