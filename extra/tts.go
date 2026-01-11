@@ -30,6 +30,7 @@ var (
 	TTSFlushChan = make(chan bool, 1)
 	TTSDoneChan  = make(chan bool, 1)
 	// endsWithPunctuation = regexp.MustCompile(`[;.!?]$`)
+	threeOrMoreDashesRE = regexp.MustCompile(`-{3,}`)
 )
 
 // cleanText removes markdown and special characters that are not suitable for TTS
@@ -43,20 +44,16 @@ func cleanText(text string) string {
 	text = strings.ReplaceAll(text, "[", "") // Link brackets
 	text = strings.ReplaceAll(text, "]", "") // Link brackets
 	text = strings.ReplaceAll(text, "!", "") // Exclamation marks (if not punctuation)
-
 	// Remove HTML tags using regex
 	htmlTagRegex := regexp.MustCompile(`<[^>]*>`)
 	text = htmlTagRegex.ReplaceAllString(text, "")
-
 	// Split text into lines to handle table separators
 	lines := strings.Split(text, "\n")
 	var filteredLines []string
-
 	for _, line := range lines {
 		// Check if the line looks like a table separator (e.g., |----|, |===|, | - - - |)
 		// A table separator typically contains only |, -, =, and spaces
 		isTableSeparator := regexp.MustCompile(`^\s*\|\s*[-=\s]+\|\s*$`).MatchString(strings.TrimSpace(line))
-
 		if !isTableSeparator {
 			// If it's not a table separator, remove vertical bars but keep the content
 			processedLine := strings.ReplaceAll(line, "|", "")
@@ -64,8 +61,8 @@ func cleanText(text string) string {
 		}
 		// If it is a table separator, skip it (don't add to filteredLines)
 	}
-
 	text = strings.Join(filteredLines, "\n")
+	text = threeOrMoreDashesRE.ReplaceAllString(text, "")
 	text = strings.TrimSpace(text) // Remove leading/trailing whitespace
 	return text
 }
@@ -89,6 +86,7 @@ type KokoroOrator struct {
 	currentStream *beep.Ctrl // Added for playback control
 	currentDone   chan bool
 	textBuffer    strings.Builder
+	interrupt     bool
 	// textBuffer bytes.Buffer
 }
 
@@ -99,6 +97,7 @@ type GoogleTranslateOrator struct {
 	currentStream *beep.Ctrl
 	currentDone   chan bool
 	textBuffer    strings.Builder
+	interrupt     bool
 }
 
 func (o *KokoroOrator) stoproutine() {
@@ -110,7 +109,9 @@ func (o *KokoroOrator) stoproutine() {
 		for len(TTSTextChan) > 0 {
 			<-TTSTextChan
 		}
+		o.textBuffer.Reset()
 		o.currentDone <- true
+		o.interrupt = true
 	}
 }
 
@@ -121,6 +122,7 @@ func (o *KokoroOrator) readroutine() {
 	for {
 		select {
 		case chunk := <-TTSTextChan:
+			o.interrupt = false
 			// sentenceBuf.WriteString(chunk)
 			// text := sentenceBuf.String()
 			_, err := o.textBuffer.WriteString(chunk)
@@ -175,6 +177,9 @@ func (o *KokoroOrator) readroutine() {
 			o.logger.Debug("calling Speak with remainder", "rem", remaining)
 			sentencesRem := tokenizer.Tokenize(remaining)
 			for _, rs := range sentencesRem { // to avoid dumping large volume of text
+				if o.interrupt {
+					break
+				}
 				if err := o.Speak(rs.Text); err != nil {
 					o.logger.Error("tts failed", "sentence", rs, "error", err)
 				}
@@ -307,11 +312,13 @@ func (o *GoogleTranslateOrator) stoproutine() {
 		<-TTSDoneChan
 		o.logger.Debug("orator got done signal")
 		o.Stop()
-		o.currentDone <- true
 		// drain the channel
 		for len(TTSTextChan) > 0 {
 			<-TTSTextChan
 		}
+		o.textBuffer.Reset()
+		o.currentDone <- true
+		o.interrupt = true
 	}
 }
 
@@ -320,6 +327,7 @@ func (o *GoogleTranslateOrator) readroutine() {
 	for {
 		select {
 		case chunk := <-TTSTextChan:
+			o.interrupt = false
 			_, err := o.textBuffer.WriteString(chunk)
 			if err != nil {
 				o.logger.Warn("failed to write to stringbuilder", "error", err)
@@ -371,6 +379,9 @@ func (o *GoogleTranslateOrator) readroutine() {
 			o.logger.Debug("calling Speak with remainder", "rem", remaining)
 			sentencesRem := tokenizer.Tokenize(remaining)
 			for _, rs := range sentencesRem { // to avoid dumping large volume of text
+				if o.interrupt {
+					break
+				}
 				if err := o.Speak(rs.Text); err != nil {
 					o.logger.Error("tts failed", "sentence", rs.Text, "error", err)
 				}
