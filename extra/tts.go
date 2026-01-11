@@ -165,17 +165,18 @@ func (o *KokoroOrator) readroutine() {
 					}
 				}
 			}
-			// INFO: if there is a lot of text it will take some time to make with tts at once
-			// to avoid this pause, it might be better to keep splitting on sentences
-			// but keepinig in mind that remainder could be ommited by tokenizer
-			// Flush remaining text
+			// flush remaining text
 			remaining := o.textBuffer.String()
 			remaining = cleanText(remaining)
 			o.textBuffer.Reset()
-			if remaining != "" {
-				o.logger.Debug("calling Speak with remainder", "rem", remaining)
-				if err := o.Speak(remaining); err != nil {
-					o.logger.Error("tts failed", "sentence", remaining, "error", err)
+			if remaining == "" {
+				continue
+			}
+			o.logger.Debug("calling Speak with remainder", "rem", remaining)
+			sentencesRem := tokenizer.Tokenize(remaining)
+			for _, rs := range sentencesRem { // to avoid dumping large volume of text
+				if err := o.Speak(rs.Text); err != nil {
+					o.logger.Error("tts failed", "sentence", rs, "error", err)
 				}
 			}
 		}
@@ -364,10 +365,14 @@ func (o *GoogleTranslateOrator) readroutine() {
 			remaining := o.textBuffer.String()
 			remaining = cleanText(remaining)
 			o.textBuffer.Reset()
-			if remaining != "" {
-				o.logger.Debug("calling Speak with remainder", "rem", remaining)
-				if err := o.Speak(remaining); err != nil {
-					o.logger.Error("tts failed", "sentence", remaining, "error", err)
+			if remaining == "" {
+				continue
+			}
+			o.logger.Debug("calling Speak with remainder", "rem", remaining)
+			sentencesRem := tokenizer.Tokenize(remaining)
+			for _, rs := range sentencesRem { // to avoid dumping large volume of text
+				if err := o.Speak(rs.Text); err != nil {
+					o.logger.Error("tts failed", "sentence", rs.Text, "error", err)
 				}
 			}
 		}

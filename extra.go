@@ -1,5 +1,4 @@
 //go:build extra
-// +build extra
 
 package main
 
