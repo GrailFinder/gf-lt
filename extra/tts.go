@@ -87,6 +87,7 @@ type KokoroOrator struct {
 	Language      string
 	Voice         string
 	currentStream *beep.Ctrl // Added for playback control
+	currentDone   chan bool
 	textBuffer    strings.Builder
 	// textBuffer bytes.Buffer
 }
@@ -96,16 +97,20 @@ type GoogleTranslateOrator struct {
 	logger        *slog.Logger
 	speech        *google_translate_tts.Speech
 	currentStream *beep.Ctrl
+	currentDone   chan bool
 	textBuffer    strings.Builder
 }
 
 func (o *KokoroOrator) stoproutine() {
-	<-TTSDoneChan
-	o.logger.Debug("orator got done signal")
-	o.Stop()
-	// drain the channel
-	for len(TTSTextChan) > 0 {
-		<-TTSTextChan
+	for {
+		<-TTSDoneChan
+		o.logger.Debug("orator got done signal")
+		o.Stop()
+		// drain the channel
+		for len(TTSTextChan) > 0 {
+			<-TTSTextChan
+		}
+		o.currentDone <- true
 	}
 }
 
@@ -274,13 +279,14 @@ func (o *KokoroOrator) Speak(text string) error {
 		o.logger.Debug("failed to init speaker", "error", err)
 	}
 	done := make(chan bool)
+	o.currentDone = done
 	// Create controllable stream and store reference
 	o.currentStream = &beep.Ctrl{Streamer: beep.Seq(streamer, beep.Callback(func() {
 		close(done)
 		o.currentStream = nil
 	})), Paused: false}
 	speaker.Play(o.currentStream)
-	<-done // we hang in this routine;
+	<-o.currentDone
 	return nil
 }
 
@@ -296,12 +302,15 @@ func (o *KokoroOrator) Stop() {
 }
 
 func (o *GoogleTranslateOrator) stoproutine() {
-	<-TTSDoneChan
-	o.logger.Debug("orator got done signal")
-	o.Stop()
-	// drain the channel
-	for len(TTSTextChan) > 0 {
-		<-TTSTextChan
+	for {
+		<-TTSDoneChan
+		o.logger.Debug("orator got done signal")
+		o.Stop()
+		o.currentDone <- true
+		// drain the channel
+		for len(TTSTextChan) > 0 {
+			<-TTSTextChan
+		}
 	}
 }
 
@@ -397,13 +406,14 @@ func (o *GoogleTranslateOrator) Speak(text string) error {
 		o.logger.Debug("failed to init speaker", "error", err)
 	}
 	done := make(chan bool)
+	o.currentDone = done
 	// Create controllable stream and store reference
 	o.currentStream = &beep.Ctrl{Streamer: beep.Seq(playbackStreamer, beep.Callback(func() {
 		close(done)
 		o.currentStream = nil
 	})), Paused: false}
 	speaker.Play(o.currentStream)
-	<-done // wait for playback to complete
+	<-o.currentDone // wait for playback to complete
 	return nil
 }
 
