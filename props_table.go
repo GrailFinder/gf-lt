@@ -132,6 +132,11 @@ func makePropsTable(props map[string]float32) *tview.Table {
 	addCheckboxRow("Auto clean tool calls from context", cfg.AutoCleanToolCallsFromCtx, func(checked bool) {
 		cfg.AutoCleanToolCallsFromCtx = checked
 	})
+	addCheckboxRow("Enable Mouse", cfg.EnableMouse, func(checked bool) {
+		cfg.EnableMouse = checked
+		// Reconfigure the app's mouse setting
+		app.EnableMouse(cfg.EnableMouse)
+	})
 	// Add dropdowns
 	logLevels := []string{"Debug", "Info", "Warn"}
 	addListPopupRow("Set log level", logLevels, GetLogLevel(), func(option string) {

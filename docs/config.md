@@ -145,6 +145,9 @@ This document explains how to set up and configure the application using the `co
 #### FilePickerExts (`"png,jpg,jpeg,gif,webp"`)
 - Comma-separated list of allowed file extensions for the file picker.
 
+#### EnableMouse (`false`)
+- Enable or disable mouse support in the UI. When set to `true`, allows clicking buttons and interacting with UI elements using the mouse, but prevents the terminal from handling mouse events normally (such as selecting and copying text). When set to `false`, enables default terminal behavior allowing you to select and copy text, but disables mouse interaction with UI elements.
+
 ### Additional Features
 
 Those could be switched in program, but also bould be setup in config.

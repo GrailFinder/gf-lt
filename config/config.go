@@ -64,6 +64,7 @@ type Config struct {
 	DBPATH            string `toml:"DBPATH"`
 	FilePickerDir     string `toml:"FilePickerDir"`
 	FilePickerExts    string `toml:"FilePickerExts"`
+	EnableMouse       bool   `toml:"EnableMouse"`
 }
 
 func LoadConfig(fn string) (*Config, error) {
