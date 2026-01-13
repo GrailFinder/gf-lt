@@ -110,7 +110,13 @@ func (o *KokoroOrator) stoproutine() {
 			<-TTSTextChan
 		}
 		o.textBuffer.Reset()
-		o.currentDone <- true
+		if o.currentDone != nil {
+			select {
+			case o.currentDone <- true:
+			default:
+				// Channel might be closed, ignore
+			}
+		}
 		o.interrupt = true
 	}
 }
@@ -317,7 +323,13 @@ func (o *GoogleTranslateOrator) stoproutine() {
 			<-TTSTextChan
 		}
 		o.textBuffer.Reset()
-		o.currentDone <- true
+		if o.currentDone != nil {
+			select {
+			case o.currentDone <- true:
+			default:
+				// Channel might be closed, ignore
+			}
+		}
 		o.interrupt = true
 	}
 }
