@@ -684,6 +684,12 @@ func executeCommand(args map[string]string) []byte {
 		return []byte(msg)
 	}
 
+	// Check if output is empty and return success message
+	if len(output) == 0 {
+		successMsg := fmt.Sprintf("command '%s %s' executed successfully and exited with code 0", command, strings.Join(cmdArgs, " "))
+		return []byte(successMsg)
+	}
+
 	return output
 }
 
