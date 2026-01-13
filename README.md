@@ -9,8 +9,8 @@ made with use of [tview](https://github.com/rivo/tview)
 - image input;
 - function calls (function calls are implemented natively, to avoid calling outside sources);
 
-#### usage examples
-![usage example](assets/ex01.png)
+#### how it looks
+![how it looks](assets/ex01.png)
 
 #### how to install
 (requires golang)
@@ -21,7 +21,12 @@ cd gf-lt
 make
 ```
 
-#### keybindings
+to run without tts/stt dependencies use
+```
+make noextra-run
+```
+
+#### keybinds
 while running you can press f12 for list of keys;
 ![keybinds](assets/helppage.png)
 
