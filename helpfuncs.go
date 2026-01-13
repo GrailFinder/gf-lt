@@ -62,6 +62,7 @@ func colorText() {
 	// Step 2: Apply other regex styles to the non-code parts
 	text = quotesRE.ReplaceAllString(text, `[orange::-]$1[-:-:-]`)
 	text = starRE.ReplaceAllString(text, `[turquoise::i]$1[-:-:-]`)
+	text = singleBacktickRE.ReplaceAllString(text, "`[pink::i]$1[-:-:-]`")
 	// text = thinkRE.ReplaceAllString(text, `[yellow::i]$1[-:-:-]`)
 	// Step 3: Restore the styled code blocks from placeholders
 	for i, cb := range codeBlocks {

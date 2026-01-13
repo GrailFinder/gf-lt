@@ -24,6 +24,7 @@ var (
 	starRE             = regexp.MustCompile(`(\*.*?\*)`)
 	thinkRE            = regexp.MustCompile(`(<think>\s*([\s\S]*?)</think>)`)
 	codeBlockRE        = regexp.MustCompile(`(?s)\x60{3}(?:.*?)\n(.*?)\n\s*\x60{3}\s*`)
+	singleBacktickRE    = regexp.MustCompile(`\x60([^\x60]*)\x60`)
 	roleRE             = regexp.MustCompile(`^(\w+):`)
 	rpDefenitionSysMsg = `
 For this roleplay immersion is at most importance.
