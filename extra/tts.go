@@ -191,10 +191,23 @@ func (o *KokoroOrator) readroutine() {
 func NewOrator(log *slog.Logger, cfg *config.Config) Orator {
 	provider := cfg.TTS_PROVIDER
 	if provider == "" {
-		provider = "kokoro"
+		provider = "google" // does not require local setup
 	}
 	switch strings.ToLower(provider) {
-	case "google", "google-translate", "google_translate":
+	case "kokoro": // kokoro
+		orator := &KokoroOrator{
+			logger:   log,
+			URL:      cfg.TTS_URL,
+			Format:   models.AFMP3,
+			Stream:   false,
+			Speed:    cfg.TTS_SPEED,
+			Language: "a",
+			Voice:    "af_bella(1)+af_sky(1)",
+		}
+		go orator.readroutine()
+		go orator.stoproutine()
+		return orator
+	default:
 		language := cfg.TTS_LANGUAGE
 		if language == "" {
 			language = "en"
@@ -209,19 +222,6 @@ func NewOrator(log *slog.Logger, cfg *config.Config) Orator {
 		orator := &GoogleTranslateOrator{
 			logger: log,
 			speech: speech,
-		}
-		go orator.readroutine()
-		go orator.stoproutine()
-		return orator
-	default: // kokoro
-		orator := &KokoroOrator{
-			logger:   log,
-			URL:      cfg.TTS_URL,
-			Format:   models.AFMP3,
-			Stream:   false,
-			Speed:    cfg.TTS_SPEED,
-			Language: "a",
-			Voice:    "af_bella(1)+af_sky(1)",
 		}
 		go orator.readroutine()
 		go orator.stoproutine()
