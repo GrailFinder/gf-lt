@@ -20,21 +20,21 @@ import (
 var _ = sync.RWMutex{}
 
 var (
-	app              *tview.Application
-	pages            *tview.Pages
-	textArea         *tview.TextArea
-	editArea         *tview.TextArea
-	textView         *tview.TextView
-	statusLineWidget *tview.TextView
-	helpView         *tview.TextView
-	flex             *tview.Flex
-	imgView          *tview.Image
-	defaultImage     = "sysprompts/llama.png"
-	indexPickWindow  *tview.InputField
-	renameWindow     *tview.InputField
-	roleEditWindow   *tview.InputField
-	fullscreenMode   bool
-	positionVisible  bool = true
+	app                *tview.Application
+	pages              *tview.Pages
+	textArea           *tview.TextArea
+	editArea           *tview.TextArea
+	textView           *tview.TextView
+	statusLineWidget   *tview.TextView
+	helpView           *tview.TextView
+	flex               *tview.Flex
+	imgView            *tview.Image
+	defaultImage       = "sysprompts/llama.png"
+	indexPickWindow    *tview.InputField
+	renameWindow       *tview.InputField
+	roleEditWindow     *tview.InputField
+	fullscreenMode     bool
+	positionVisible    bool = true
 	scrollToEndEnabled bool = true
 	// pages
 	historyPage    = "historyPage"
@@ -1293,6 +1293,8 @@ func init() {
 				// newline is not needed is prev msg ends with one
 				if strings.HasSuffix(prevText, nl) {
 					nl = ""
+				} else if strings.HasSuffix(prevText, "\n") {
+					nl = "\n" // only one newline, add another
 				}
 				if msgText != "" {
 					// as what char user sends msg?
