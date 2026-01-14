@@ -23,6 +23,15 @@ func makeChatTable(chatMap map[string]models.Chat) *tview.Table {
 		chatList[i] = name
 		i++
 	}
+	// Sort chatList by UpdatedAt field in descending order (most recent first)
+	for i := 0; i < len(chatList)-1; i++ {
+		for j := i + 1; j < len(chatList); j++ {
+			if chatMap[chatList[i]].UpdatedAt.Before(chatMap[chatList[j]].UpdatedAt) {
+				// Swap chatList[i] and chatList[j]
+				chatList[i], chatList[j] = chatList[j], chatList[i]
+			}
+		}
+	}
 	// Add 1 extra row for header
 	rows, cols := len(chatMap)+1, len(actions)+4 // +2 for name, +2 for timestamps
 	chatActTable := tview.NewTable().

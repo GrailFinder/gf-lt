@@ -8,6 +8,7 @@ import (
 	"os"
 	"path"
 	"strings"
+	"time"
 	"unicode"
 
 	"math/rand/v2"
@@ -111,10 +112,11 @@ func startNewChat() {
 	chatBody.Messages = chatBody.Messages[:2]
 	textView.SetText(chatToText(cfg.ShowSys))
 	newChat := &models.Chat{
-		ID:    id + 1,
-		Name:  fmt.Sprintf("%d_%s", id+1, cfg.AssistantRole),
-		Msgs:  string(defaultStarterBytes),
-		Agent: cfg.AssistantRole,
+		ID:        id + 1,
+		Name:      fmt.Sprintf("%d_%s", id+1, cfg.AssistantRole),
+		Msgs:      string(defaultStarterBytes),
+		Agent:     cfg.AssistantRole,
+		CreatedAt: time.Now(),
 	}
 	activeChatName = newChat.Name
 	chatMap[newChat.Name] = newChat

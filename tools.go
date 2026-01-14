@@ -24,7 +24,7 @@ var (
 	starRE             = regexp.MustCompile(`(\*.*?\*)`)
 	thinkRE            = regexp.MustCompile(`(<think>\s*([\s\S]*?)</think>)`)
 	codeBlockRE        = regexp.MustCompile(`(?s)\x60{3}(?:.*?)\n(.*?)\n\s*\x60{3}\s*`)
-	singleBacktickRE    = regexp.MustCompile(`\x60([^\x60]*)\x60`)
+	singleBacktickRE   = regexp.MustCompile(`\x60([^\x60]*)\x60`)
 	roleRE             = regexp.MustCompile(`^(\w+):`)
 	rpDefenitionSysMsg = `
 For this roleplay immersion is at most importance.
@@ -330,6 +330,7 @@ func memorise(args map[string]string) []byte {
 		Topic:     args["topic"],
 		Mind:      args["data"],
 		UpdatedAt: time.Now(),
+		CreatedAt: time.Now(),
 	}
 	if _, err := store.Memorise(memory); err != nil {
 		logger.Error("failed to save memory", "err", err, "memoory", memory)
