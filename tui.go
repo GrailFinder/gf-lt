@@ -221,20 +221,37 @@ func executeCommandAndDisplay(cmdText string) {
 	output, err := cmd.CombinedOutput()
 	// Add the command being executed to the chat
 	fmt.Fprintf(textView, "\n[yellow]$ %s[-:-:-]\n", cmdText)
+	var outputContent string
 	if err != nil {
 		// Include both output and error
-		fmt.Fprintf(textView, "[red]Error: %s[-:-:-]\n", err.Error())
+		errorMsg := "Error: " + err.Error()
+		fmt.Fprintf(textView, "[red]%s[-:-:-]\n", errorMsg)
 		if len(output) > 0 {
-			fmt.Fprintf(textView, "[red]%s[-:-:-]\n", string(output))
+			outputStr := string(output)
+			fmt.Fprintf(textView, "[red]%s[-:-:-]\n", outputStr)
+			outputContent = errorMsg + "\n" + outputStr
+		} else {
+			outputContent = errorMsg
 		}
 	} else {
 		// Only output if successful
 		if len(output) > 0 {
-			fmt.Fprintf(textView, "[green]%s[-:-:-]\n", string(output))
+			outputStr := string(output)
+			fmt.Fprintf(textView, "[green]%s[-:-:-]\n", outputStr)
+			outputContent = outputStr
 		} else {
-			fmt.Fprintf(textView, "[green]Command executed successfully (no output)[-:-:-]\n")
+			successMsg := "Command executed successfully (no output)"
+			fmt.Fprintf(textView, "[green]%s[-:-:-]\n", successMsg)
+			outputContent = successMsg
 		}
 	}
+	// Combine command and output in a single message for chat history
+	combinedContent := "$ " + cmdText + "\n\n" + outputContent
+	combinedMsg := models.RoleMsg{
+		Role:    cfg.ToolRole,
+		Content: combinedContent,
+	}
+	chatBody.Messages = append(chatBody.Messages, combinedMsg)
 	// Scroll to end and update colors
 	if scrollToEndEnabled {
 		textView.ScrollToEnd()
