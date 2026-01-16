@@ -61,10 +61,12 @@ type Config struct {
 	WhisperBinaryPath string `toml:"WhisperBinaryPath"`
 	WhisperModelPath  string `toml:"WhisperModelPath"`
 	STT_LANG          string `toml:"STT_LANG"`
-	DBPATH            string `toml:"DBPATH"`
-	FilePickerDir     string `toml:"FilePickerDir"`
-	FilePickerExts    string `toml:"FilePickerExts"`
-	EnableMouse       bool   `toml:"EnableMouse"`
+	DBPATH                         string `toml:"DBPATH"`
+	FilePickerDir                  string `toml:"FilePickerDir"`
+	FilePickerExts                 string `toml:"FilePickerExts"`
+	EnableMouse                    bool   `toml:"EnableMouse"`
+	CharSpecificContextEnabled     bool   `toml:"CharSpecificContextEnabled"`
+	CharSpecificContextTag         string `toml:"CharSpecificContextTag"`
 }
 
 func LoadConfig(fn string) (*Config, error) {

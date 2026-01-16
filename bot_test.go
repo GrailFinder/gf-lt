@@ -287,3 +287,321 @@ func TestConvertJSONToMapStringString(t *testing.T) {
 		})
 	}
 }
+
+func TestParseKnownToTag(t *testing.T) {
+	tests := []struct {
+		name           string
+		content        string
+		enabled        bool
+		tag            string
+		wantCleaned    string
+		wantKnownTo    []string
+	}{
+		{
+			name:           "feature disabled returns original",
+			content:        "Hello __known_to_chars__Alice__",
+			enabled:        false,
+			tag:            "__known_to_chars__",
+			wantCleaned:    "Hello __known_to_chars__Alice__",
+			wantKnownTo:    nil,
+		},
+		{
+			name:           "no tag returns original",
+			content:        "Hello Alice",
+			enabled:        true,
+			tag:            "__known_to_chars__",
+			wantCleaned:    "Hello Alice",
+			wantKnownTo:    nil,
+		},
+		{
+			name:           "single tag with one char",
+			content:        "Hello __known_to_chars__Alice__",
+			enabled:        true,
+			tag:            "__known_to_chars__",
+			wantCleaned:    "Hello",
+			wantKnownTo:    []string{"Alice"},
+		},
+		{
+			name:           "single tag with two chars",
+			content:        "Secret __known_to_chars__Alice,Bob__ message",
+			enabled:        true,
+			tag:            "__known_to_chars__",
+			wantCleaned:    "Secret  message",
+			wantKnownTo:    []string{"Alice", "Bob"},
+		},
+		{
+			name:           "tag at beginning",
+			content:        "__known_to_chars__Alice__ Hello",
+			enabled:        true,
+			tag:            "__known_to_chars__",
+			wantCleaned:    "Hello",
+			wantKnownTo:    []string{"Alice"},
+		},
+		{
+			name:           "tag at end",
+			content:        "Hello __known_to_chars__Alice__",
+			enabled:        true,
+			tag:            "__known_to_chars__",
+			wantCleaned:    "Hello",
+			wantKnownTo:    []string{"Alice"},
+		},
+		{
+			name:           "multiple tags",
+			content:        "First __known_to_chars__Alice__ then __known_to_chars__Bob__",
+			enabled:        true,
+			tag:            "__known_to_chars__",
+			wantCleaned:    "First  then",
+			wantKnownTo:    []string{"Alice", "Bob"},
+		},
+		{
+			name:           "custom tag",
+			content:        "Secret __secret__Alice,Bob__ message",
+			enabled:        true,
+			tag:            "__secret__",
+			wantCleaned:    "Secret  message",
+			wantKnownTo:    []string{"Alice", "Bob"},
+		},
+		{
+			name:           "empty list",
+			content:        "Secret __known_to_chars____",
+			enabled:        true,
+			tag:            "__known_to_chars__",
+			wantCleaned:    "Secret",
+			wantKnownTo:    nil,
+		},
+		{
+			name:           "whitespace around commas",
+			content:        "__known_to_chars__ Alice , Bob , Carl __",
+			enabled:        true,
+			tag:            "__known_to_chars__",
+			wantCleaned:    "",
+			wantKnownTo:    []string{"Alice", "Bob", "Carl"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Set up config
+			testCfg := &config.Config{
+				CharSpecificContextEnabled: tt.enabled,
+				CharSpecificContextTag:     tt.tag,
+			}
+			cfg = testCfg
+
+			cleaned, knownTo := parseKnownToTag(tt.content)
+
+			if cleaned != tt.wantCleaned {
+				t.Errorf("parseKnownToTag() cleaned = %q, want %q", cleaned, tt.wantCleaned)
+			}
+
+			if len(knownTo) != len(tt.wantKnownTo) {
+				t.Errorf("parseKnownToTag() knownTo length = %v, want %v", len(knownTo), len(tt.wantKnownTo))
+				t.Logf("got: %v", knownTo)
+				t.Logf("want: %v", tt.wantKnownTo)
+			} else {
+				for i, got := range knownTo {
+					if got != tt.wantKnownTo[i] {
+						t.Errorf("parseKnownToTag() knownTo[%d] = %q, want %q", i, got, tt.wantKnownTo[i])
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestProcessMessageTag(t *testing.T) {
+	tests := []struct {
+		name     string
+		msg      models.RoleMsg
+		enabled  bool
+		tag      string
+		wantMsg  models.RoleMsg
+	}{
+		{
+			name: "feature disabled returns unchanged",
+			msg: models.RoleMsg{
+				Role:    "Alice",
+				Content: "Secret __known_to_chars__Bob__",
+			},
+			enabled: false,
+			tag:     "__known_to_chars__",
+			wantMsg: models.RoleMsg{
+				Role:    "Alice",
+				Content: "Secret __known_to_chars__Bob__",
+				KnownTo: nil,
+			},
+		},
+		{
+			name: "no tag, no knownTo",
+			msg: models.RoleMsg{
+				Role:    "Alice",
+				Content: "Hello everyone",
+			},
+			enabled: true,
+			tag:     "__known_to_chars__",
+			wantMsg: models.RoleMsg{
+				Role:    "Alice",
+				Content: "Hello everyone",
+				KnownTo: []string{"Alice"},
+			},
+		},
+		{
+			name: "tag with Bob, adds Alice automatically",
+			msg: models.RoleMsg{
+				Role:    "Alice",
+				Content: "Secret __known_to_chars__Bob__",
+			},
+			enabled: true,
+			tag:     "__known_to_chars__",
+			wantMsg: models.RoleMsg{
+				Role:    "Alice",
+				Content: "Secret",
+				KnownTo: []string{"Bob", "Alice"},
+			},
+		},
+		{
+			name: "tag already includes sender",
+			msg: models.RoleMsg{
+				Role:    "Alice",
+				Content: "__known_to_chars__Alice,Bob__",
+			},
+			enabled: true,
+			tag:     "__known_to_chars__",
+			wantMsg: models.RoleMsg{
+				Role:    "Alice",
+				Content: "",
+				KnownTo: []string{"Alice", "Bob"},
+			},
+		},
+		{
+			name: "knownTo already set (from DB), tag still processed",
+			msg: models.RoleMsg{
+				Role:    "Alice",
+				Content: "Secret __known_to_chars__Bob__",
+				KnownTo: []string{"Alice"}, // from previous processing
+			},
+			enabled: true,
+			tag:     "__known_to_chars__",
+			wantMsg: models.RoleMsg{
+				Role:    "Alice",
+				Content: "Secret",
+				KnownTo: []string{"Bob", "Alice"},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			testCfg := &config.Config{
+				CharSpecificContextEnabled: tt.enabled,
+				CharSpecificContextTag:     tt.tag,
+			}
+			cfg = testCfg
+
+			got := processMessageTag(tt.msg)
+
+			if got.Content != tt.wantMsg.Content {
+				t.Errorf("processMessageTag() content = %q, want %q", got.Content, tt.wantMsg.Content)
+			}
+
+			if len(got.KnownTo) != len(tt.wantMsg.KnownTo) {
+				t.Errorf("processMessageTag() KnownTo length = %v, want %v", len(got.KnownTo), len(tt.wantMsg.KnownTo))
+				t.Logf("got: %v", got.KnownTo)
+				t.Logf("want: %v", tt.wantMsg.KnownTo)
+			} else {
+				// order may differ; check membership
+				for _, want := range tt.wantMsg.KnownTo {
+					found := false
+					for _, gotVal := range got.KnownTo {
+						if gotVal == want {
+							found = true
+							break
+						}
+					}
+					if !found {
+						t.Errorf("processMessageTag() missing KnownTo entry %q, got %v", want, got.KnownTo)
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestFilterMessagesForCharacter(t *testing.T) {
+	messages := []models.RoleMsg{
+		{Role: "system", Content: "System message", KnownTo: nil}, // visible to all
+		{Role: "Alice", Content: "Hello everyone", KnownTo: nil}, // visible to all
+		{Role: "Alice", Content: "Secret for Bob", KnownTo: []string{"Alice", "Bob"}},
+		{Role: "Bob", Content: "Reply to Alice", KnownTo: []string{"Alice", "Bob"}},
+		{Role: "Alice", Content: "Private to Carl", KnownTo: []string{"Alice", "Carl"}},
+		{Role: "Carl", Content: "Hi all", KnownTo: nil}, // visible to all
+	}
+
+	tests := []struct {
+		name      string
+		enabled   bool
+		character string
+		wantIndices []int // indices from original messages that should be included
+	}{
+		{
+			name:      "feature disabled returns all",
+			enabled:   false,
+			character: "Alice",
+			wantIndices: []int{0,1,2,3,4,5},
+		},
+		{
+			name:      "character empty returns all",
+			enabled:   true,
+			character: "",
+			wantIndices: []int{0,1,2,3,4,5},
+		},
+		{
+			name:      "Alice sees all including Carl-private",
+			enabled:   true,
+			character: "Alice",
+			wantIndices: []int{0,1,2,3,4,5},
+		},
+		{
+			name:      "Bob sees Alice-Bob secrets and all public",
+			enabled:   true,
+			character: "Bob",
+			wantIndices: []int{0,1,2,3,5},
+		},
+		{
+			name:      "Carl sees Alice-Carl secret and public",
+			enabled:   true,
+			character: "Carl",
+			wantIndices: []int{0,1,4,5},
+		},
+		{
+			name:      "David sees only public messages",
+			enabled:   true,
+			character: "David",
+			wantIndices: []int{0,1,5},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			testCfg := &config.Config{
+				CharSpecificContextEnabled: tt.enabled,
+				CharSpecificContextTag:     "__known_to_chars__",
+			}
+			cfg = testCfg
+
+			got := filterMessagesForCharacter(messages, tt.character)
+
+			if len(got) != len(tt.wantIndices) {
+				t.Errorf("filterMessagesForCharacter() returned %d messages, want %d", len(got), len(tt.wantIndices))
+				t.Logf("got: %v", got)
+				return
+			}
+
+			for i, idx := range tt.wantIndices {
+				if got[i].Content != messages[idx].Content {
+					t.Errorf("filterMessagesForCharacter() message %d content = %q, want %q", i, got[i].Content, messages[idx].Content)
+				}
+			}
+		})
+	}
+}

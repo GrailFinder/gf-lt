@@ -93,6 +93,7 @@ type RoleMsg struct {
 	Content         string        `json:"-"`
 	ContentParts    []interface{} `json:"-"`
 	ToolCallID      string        `json:"tool_call_id,omitempty"` // For tool response messages
+	KnownTo         []string      `json:"known_to,omitempty"`
 	hasContentParts bool          // Flag to indicate which content type to marshal
 }
 
@@ -104,10 +105,12 @@ func (m RoleMsg) MarshalJSON() ([]byte, error) {
 			Role       string        `json:"role"`
 			Content    []interface{} `json:"content"`
 			ToolCallID string        `json:"tool_call_id,omitempty"`
+			KnownTo    []string      `json:"known_to,omitempty"`
 		}{
 			Role:       m.Role,
 			Content:    m.ContentParts,
 			ToolCallID: m.ToolCallID,
+			KnownTo:    m.KnownTo,
 		}
 		return json.Marshal(aux)
 	} else {
@@ -116,10 +119,12 @@ func (m RoleMsg) MarshalJSON() ([]byte, error) {
 			Role       string `json:"role"`
 			Content    string `json:"content"`
 			ToolCallID string `json:"tool_call_id,omitempty"`
+			KnownTo    []string `json:"known_to,omitempty"`
 		}{
 			Role:       m.Role,
 			Content:    m.Content,
 			ToolCallID: m.ToolCallID,
+			KnownTo:    m.KnownTo,
 		}
 		return json.Marshal(aux)
 	}
@@ -132,11 +137,13 @@ func (m *RoleMsg) UnmarshalJSON(data []byte) error {
 		Role       string        `json:"role"`
 		Content    []interface{} `json:"content"`
 		ToolCallID string        `json:"tool_call_id,omitempty"`
+		KnownTo    []string      `json:"known_to,omitempty"`
 	}
 	if err := json.Unmarshal(data, &structured); err == nil && len(structured.Content) > 0 {
 		m.Role = structured.Role
 		m.ContentParts = structured.Content
 		m.ToolCallID = structured.ToolCallID
+		m.KnownTo = structured.KnownTo
 		m.hasContentParts = true
 		return nil
 	}
@@ -146,6 +153,7 @@ func (m *RoleMsg) UnmarshalJSON(data []byte) error {
 		Role       string `json:"role"`
 		Content    string `json:"content"`
 		ToolCallID string `json:"tool_call_id,omitempty"`
+		KnownTo    []string `json:"known_to,omitempty"`
 	}
 	if err := json.Unmarshal(data, &simple); err != nil {
 		return err
@@ -153,6 +161,7 @@ func (m *RoleMsg) UnmarshalJSON(data []byte) error {
 	m.Role = simple.Role
 	m.Content = simple.Content
 	m.ToolCallID = simple.ToolCallID
+	m.KnownTo = simple.KnownTo
 	m.hasContentParts = false
 	return nil
 }
@@ -363,7 +372,8 @@ func (cb *ChatBody) MakeStopSlice() []string {
 	for _, m := range cb.Messages {
 		namesMap[m.Role] = struct{}{}
 	}
-	ss := []string{"<|im_end|>"}
+	ss := make([]string, 0, 1+len(namesMap))
+	ss = append(ss, "<|im_end|>")
 	for k := range namesMap {
 		ss = append(ss, k+":\n")
 	}
@@ -523,7 +533,7 @@ type LCPModels struct {
 }
 
 func (lcp *LCPModels) ListModels() []string {
-	resp := []string{}
+	resp := make([]string, 0, len(lcp.Data))
 	for _, model := range lcp.Data {
 		resp = append(resp, model.ID)
 	}

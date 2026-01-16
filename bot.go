@@ -18,6 +18,7 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -67,6 +68,111 @@ var (
 	}
 	LocalModels = []string{}
 )
+
+// parseKnownToTag extracts known_to list from content using configured tag.
+// Returns cleaned content and list of character names.
+func parseKnownToTag(content string) (string, []string) {
+	if cfg == nil || !cfg.CharSpecificContextEnabled {
+		return content, nil
+	}
+	tag := cfg.CharSpecificContextTag
+	if tag == "" {
+		tag = "__known_to_chars__"
+	}
+	// Pattern: tag + list + "__"
+	pattern := regexp.QuoteMeta(tag) + `(.*?)__`
+	re := regexp.MustCompile(pattern)
+	matches := re.FindAllStringSubmatch(content, -1)
+	if len(matches) == 0 {
+		return content, nil
+	}
+	// There may be multiple tags; we combine all.
+	var knownTo []string
+	cleaned := content
+	for _, match := range matches {
+		if len(match) < 2 {
+			continue
+		}
+		// Remove the entire matched tag from content
+		cleaned = strings.Replace(cleaned, match[0], "", 1)
+
+		list := strings.TrimSpace(match[1])
+		if list == "" {
+			continue
+		}
+		parts := strings.Split(list, ",")
+		for _, p := range parts {
+			p = strings.TrimSpace(p)
+			if p != "" {
+				knownTo = append(knownTo, p)
+			}
+		}
+	}
+	// Also remove any leftover trailing "__" that might be orphaned? Not needed.
+	return strings.TrimSpace(cleaned), knownTo
+}
+
+// processMessageTag processes a message for known_to tag and sets KnownTo field.
+// It also ensures the sender's role is included in KnownTo.
+// If KnownTo already set (e.g., from DB), preserves it unless new tag found.
+func processMessageTag(msg models.RoleMsg) models.RoleMsg {
+	if cfg == nil || !cfg.CharSpecificContextEnabled {
+		return msg
+	}
+	// If KnownTo already set, assume tag already processed (content cleaned).
+	// However, we still check for new tags (maybe added later).
+	cleaned, knownTo := parseKnownToTag(msg.Content)
+	if cleaned != msg.Content {
+		msg.Content = cleaned
+	}
+	// If tag found, replace KnownTo with new list (merge with existing?)
+	// For simplicity, if knownTo is not nil, replace.
+	if knownTo != nil {
+		msg.KnownTo = knownTo
+	}
+	// Ensure sender role is in KnownTo
+	if msg.Role != "" {
+		senderAdded := false
+		for _, k := range msg.KnownTo {
+			if k == msg.Role {
+				senderAdded = true
+				break
+			}
+		}
+		if !senderAdded {
+			msg.KnownTo = append(msg.KnownTo, msg.Role)
+		}
+	}
+	return msg
+}
+
+// filterMessagesForCharacter returns messages visible to the specified character.
+// If CharSpecificContextEnabled is false, returns all messages.
+func filterMessagesForCharacter(messages []models.RoleMsg, character string) []models.RoleMsg {
+	if cfg == nil || !cfg.CharSpecificContextEnabled || character == "" {
+		return messages
+	}
+	filtered := make([]models.RoleMsg, 0, len(messages))
+	for _, msg := range messages {
+		// If KnownTo is nil or empty, message is visible to all
+		if len(msg.KnownTo) == 0 {
+			filtered = append(filtered, msg)
+			continue
+		}
+		// Check if character is in KnownTo list
+		found := false
+		for _, k := range msg.KnownTo {
+			if k == character {
+				found = true
+				break
+			}
+		}
+		if found {
+			filtered = append(filtered, msg)
+		}
+	}
+	return filtered
+}
 
 // cleanNullMessages removes messages with null or empty content to prevent API issues
 func cleanNullMessages(messages []models.RoleMsg) []models.RoleMsg {

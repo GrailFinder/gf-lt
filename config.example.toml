@@ -43,3 +43,5 @@ DBPATH = "gflt.db"
 FilePickerDir = "." # Directory where file picker should start
 FilePickerExts = "png,jpg,jpeg,gif,webp" # Comma-separated list of allowed file extensions for file picker
 EnableMouse = false # Enable mouse support in the UI
+CharSpecificContextEnabled = false
+CharSpecificContextTag = "__known_to_chars__"
