@@ -71,9 +71,9 @@ var (
 
 // parseKnownToTag extracts known_to list from content using configured tag.
 // Returns cleaned content and list of character names.
-func parseKnownToTag(content string) (string, []string) {
+func parseKnownToTag(content string) []string {
 	if cfg == nil || !cfg.CharSpecificContextEnabled {
-		return content, nil
+		return nil
 	}
 	tag := cfg.CharSpecificContextTag
 	if tag == "" {
@@ -84,17 +84,15 @@ func parseKnownToTag(content string) (string, []string) {
 	re := regexp.MustCompile(pattern)
 	matches := re.FindAllStringSubmatch(content, -1)
 	if len(matches) == 0 {
-		return content, nil
+		return nil
 	}
 	// There may be multiple tags; we combine all.
 	var knownTo []string
-	cleaned := content
 	for _, match := range matches {
 		if len(match) < 2 {
 			continue
 		}
 		// Remove the entire matched tag from content
-		cleaned = strings.Replace(cleaned, match[0], "", 1)
 		list := strings.TrimSpace(match[1])
 		if list == "" {
 			continue
@@ -108,7 +106,7 @@ func parseKnownToTag(content string) (string, []string) {
 		}
 	}
 	// Also remove any leftover trailing "__" that might be orphaned? Not needed.
-	return strings.TrimSpace(cleaned), knownTo
+	return knownTo
 }
 
 // processMessageTag processes a message for known_to tag and sets KnownTo field.
@@ -120,11 +118,8 @@ func processMessageTag(msg models.RoleMsg) models.RoleMsg {
 	}
 	// If KnownTo already set, assume tag already processed (content cleaned).
 	// However, we still check for new tags (maybe added later).
-	cleaned, knownTo := parseKnownToTag(msg.Content)
+	knownTo := parseKnownToTag(msg.Content)
 	logger.Info("processing tags", "msg", msg.Content, "known_to", knownTo)
-	if cleaned != msg.Content {
-		msg.Content = cleaned
-	}
 	// If tag found, replace KnownTo with new list (merge with existing?)
 	// For simplicity, if knownTo is not nil, replace.
 	if knownTo != nil {
@@ -789,10 +784,17 @@ out:
 	if resume {
 		chatBody.Messages[len(chatBody.Messages)-1].Content += respText.String()
 		// lastM.Content = lastM.Content + respText.String()
+		// Process the updated message to check for known_to tags in resumed response
+		updatedMsg := chatBody.Messages[len(chatBody.Messages)-1]
+		processedMsg := processMessageTag(updatedMsg)
+		chatBody.Messages[len(chatBody.Messages)-1] = processedMsg
 	} else {
-		chatBody.Messages = append(chatBody.Messages, models.RoleMsg{
+		newMsg := models.RoleMsg{
 			Role: botPersona, Content: respText.String(),
-		})
+		}
+		// Process the new message to check for known_to tags in LLM response
+		newMsg = processMessageTag(newMsg)
+		chatBody.Messages = append(chatBody.Messages, newMsg)
 	}
 	logger.Debug("chatRound: before cleanChatBody", "messages_before_clean", len(chatBody.Messages))
 	for i, msg := range chatBody.Messages {
