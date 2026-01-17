@@ -124,18 +124,19 @@ func processMessageTag(msg models.RoleMsg) models.RoleMsg {
 	// For simplicity, if knownTo is not nil, replace.
 	if knownTo != nil {
 		msg.KnownTo = knownTo
-	}
-	// Ensure sender role is in KnownTo
-	if msg.Role != "" {
-		senderAdded := false
-		for _, k := range msg.KnownTo {
-			if k == msg.Role {
-				senderAdded = true
-				break
+		// Only ensure sender role is in KnownTo if there was a tag
+		// This means the message is intended for specific characters
+		if msg.Role != "" {
+			senderAdded := false
+			for _, k := range msg.KnownTo {
+				if k == msg.Role {
+					senderAdded = true
+					break
+				}
 			}
-		}
-		if !senderAdded {
-			msg.KnownTo = append(msg.KnownTo, msg.Role)
+			if !senderAdded {
+				msg.KnownTo = append(msg.KnownTo, msg.Role)
+			}
 		}
 	}
 	return msg

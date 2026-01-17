@@ -93,6 +93,7 @@ var (
 [yellow]Alt+4[white]: edit msg role
 [yellow]Alt+5[white]: toggle system and tool messages display
 [yellow]Alt+6[white]: toggle status line visibility
+[yellow]Alt+7[white]: toggle role injection (inject role in messages)
 [yellow]Alt+8[white]: show char img or last picked img
 [yellow]Alt+9[white]: warm up (load) selected llama.cpp model
 
@@ -824,6 +825,18 @@ func init() {
 				status = "enabled"
 			}
 			if err := notifyUser("autoscroll", "Auto-scrolling "+status); err != nil {
+				logger.Error("failed to send notification", "error", err)
+			}
+			updateStatusLine()
+		}
+		// Handle Alt+7 to toggle injectRole
+		if event.Key() == tcell.KeyRune && event.Rune() == '7' && event.Modifiers()&tcell.ModAlt != 0 {
+			injectRole = !injectRole
+			status := "disabled"
+			if injectRole {
+				status = "enabled"
+			}
+			if err := notifyUser("injectRole", fmt.Sprintf("Role injection %s", status)); err != nil {
 				logger.Error("failed to send notification", "error", err)
 			}
 			updateStatusLine()

@@ -436,7 +436,7 @@ func TestProcessMessageTag(t *testing.T) {
 			wantMsg: models.RoleMsg{
 				Role:    "Alice",
 				Content: "Hello everyone",
-				KnownTo: []string{"Alice"},
+				KnownTo: nil,
 			},
 		},
 		{
