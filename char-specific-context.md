@@ -27,5 +27,10 @@ Bob: I also have a secret for you Alice __known_to_chars__Alice__
 tag can be anywhere in the message. Sender should be also included in KnownTo, so we should parse sender name and add them to KnownTo.
 
 also need to consider user case (as in human chatting with llm). User also can assume any char identity to write the message and ideally the same rules should affect user's chars.
+user has "Writing as {char}" (vars: persona and cfg.UserRole)
+on persona change we should update tui text view to have atual for that character chat history
 
 Again, this is not going to work with openais /v1/chat endpoint since it converts all characters to user/assistant; so it is completion only feature. It also might cause unwanted effects, so we better have an option in config to switch this context editing on/off.
+
+
+alternative approach to the tag string would be to have a judge agent to determine after each message what characters should hae access to it. but it means to make an additional call to llm after each msg.
