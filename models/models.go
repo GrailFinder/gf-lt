@@ -267,6 +267,7 @@ func (m RoleMsg) Copy() RoleMsg {
 		Content:         m.Content,
 		ContentParts:    m.ContentParts,
 		ToolCallID:      m.ToolCallID,
+		KnownTo:         m.KnownTo,
 		hasContentParts: m.hasContentParts,
 	}
 }

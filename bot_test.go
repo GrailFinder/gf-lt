@@ -608,3 +608,65 @@ func TestFilterMessagesForCharacter(t *testing.T) {
 		})
 	}
 }
+
+func TestRoleMsgCopyPreservesKnownTo(t *testing.T) {
+	// Test that the Copy() method preserves the KnownTo field
+	originalMsg := models.RoleMsg{
+		Role:    "Alice",
+		Content: "Test message",
+		KnownTo: []string{"Bob", "Charlie"},
+	}
+
+	copiedMsg := originalMsg.Copy()
+
+	if copiedMsg.Role != originalMsg.Role {
+		t.Errorf("Copy() failed to preserve Role: got %q, want %q", copiedMsg.Role, originalMsg.Role)
+	}
+	if copiedMsg.Content != originalMsg.Content {
+		t.Errorf("Copy() failed to preserve Content: got %q, want %q", copiedMsg.Content, originalMsg.Content)
+	}
+	if !reflect.DeepEqual(copiedMsg.KnownTo, originalMsg.KnownTo) {
+		t.Errorf("Copy() failed to preserve KnownTo: got %v, want %v", copiedMsg.KnownTo, originalMsg.KnownTo)
+	}
+	if copiedMsg.ToolCallID != originalMsg.ToolCallID {
+		t.Errorf("Copy() failed to preserve ToolCallID: got %q, want %q", copiedMsg.ToolCallID, originalMsg.ToolCallID)
+	}
+	if copiedMsg.IsContentParts() != originalMsg.IsContentParts() {
+		t.Errorf("Copy() failed to preserve hasContentParts flag")
+	}
+}
+
+func TestKnownToFieldPreservationScenario(t *testing.T) {
+	// Test the specific scenario from the log where KnownTo field was getting lost
+	originalMsg := models.RoleMsg{
+		Role:    "Alice",
+		Content: `Alice: "Okay, Bob. The word is... **'Ephemeral'**. (ooc: __known_to_chars__Bob__)"`,
+		KnownTo: []string{"Bob"}, // This was detected in the log
+	}
+
+	t.Logf("Original message - Role: %s, Content: %s, KnownTo: %v",
+		originalMsg.Role, originalMsg.Content, originalMsg.KnownTo)
+
+	// Simulate what happens when the message gets copied during processing
+	copiedMsg := originalMsg.Copy()
+
+	t.Logf("Copied message - Role: %s, Content: %s, KnownTo: %v",
+		copiedMsg.Role, copiedMsg.Content, copiedMsg.KnownTo)
+
+	// Check if KnownTo field survived the copy
+	if len(copiedMsg.KnownTo) == 0 {
+		t.Error("ERROR: KnownTo field was lost during copy!")
+	} else {
+		t.Log("SUCCESS: KnownTo field was preserved during copy!")
+	}
+
+	// Verify the content is the same
+	if copiedMsg.Content != originalMsg.Content {
+		t.Errorf("Content was changed during copy: got %s, want %s", copiedMsg.Content, originalMsg.Content)
+	}
+
+	// Verify the KnownTo slice is properly copied
+	if !reflect.DeepEqual(copiedMsg.KnownTo, originalMsg.KnownTo) {
+		t.Errorf("KnownTo was not properly copied: got %v, want %v", copiedMsg.KnownTo, originalMsg.KnownTo)
+	}
+}
