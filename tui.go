@@ -1202,7 +1202,7 @@ func init() {
 					}
 					cfg.WriteNextMsgAs = roles[i+1] // get next role
 					persona = cfg.WriteNextMsgAs
-					logger.Info("picked role", "roles", roles, "index", i+1)
+					// logger.Info("picked role", "roles", roles, "index", i+1)
 					break
 				}
 			}
@@ -1234,7 +1234,7 @@ func init() {
 					}
 					cfg.WriteNextMsgAsCompletionAgent = roles[i+1] // get next role
 					botPersona = cfg.WriteNextMsgAsCompletionAgent
-					logger.Info("picked role", "roles", roles, "index", i+1)
+					// logger.Info("picked role", "roles", roles, "index", i+1)
 					break
 				}
 			}

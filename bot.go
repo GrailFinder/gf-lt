@@ -119,7 +119,7 @@ func processMessageTag(msg models.RoleMsg) models.RoleMsg {
 	// If KnownTo already set, assume tag already processed (content cleaned).
 	// However, we still check for new tags (maybe added later).
 	knownTo := parseKnownToTag(msg.Content)
-	logger.Info("processing tags", "msg", msg.Content, "known_to", knownTo)
+	// logger.Info("processing tags", "msg", msg.Content, "known_to", knownTo)
 	// If tag found, replace KnownTo with new list (merge with existing?)
 	// For simplicity, if knownTo is not nil, replace.
 	if knownTo != nil {
@@ -149,8 +149,7 @@ func filterMessagesForCharacter(messages []models.RoleMsg, character string) []m
 		return messages
 	}
 	filtered := make([]models.RoleMsg, 0, len(messages))
-	for i, msg := range messages {
-		logger.Info("filtering messages", "character", character, "index", i, "known_to", msg.KnownTo)
+	for _, msg := range messages {
 		// If KnownTo is nil or empty, message is visible to all
 		// system msg cannot be filtered
 		if len(msg.KnownTo) == 0 || msg.Role == "system" {
