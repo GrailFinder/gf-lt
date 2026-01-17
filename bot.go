@@ -153,7 +153,8 @@ func filterMessagesForCharacter(messages []models.RoleMsg, character string) []m
 		return messages
 	}
 	filtered := make([]models.RoleMsg, 0, len(messages))
-	for _, msg := range messages {
+	for i, msg := range messages {
+		logger.Info("filtering messages", "character", character, "index", i, "known_to", msg.KnownTo)
 		// If KnownTo is nil or empty, message is visible to all
 		if len(msg.KnownTo) == 0 {
 			filtered = append(filtered, msg)
@@ -1003,9 +1004,9 @@ func findCall(msg, toolCall string, tv *tview.TextView) {
 	chatRound("", cfg.AssistantRole, tv, false, false)
 }
 
-func chatToTextSlice(showSys bool) []string {
-	resp := make([]string, len(chatBody.Messages))
-	for i, msg := range chatBody.Messages {
+func chatToTextSlice(messages []models.RoleMsg, showSys bool) []string {
+	resp := make([]string, len(messages))
+	for i, msg := range messages {
 		// INFO: skips system msg and tool msg
 		if !showSys && (msg.Role == cfg.ToolRole || msg.Role == "system") {
 			continue
@@ -1015,8 +1016,8 @@ func chatToTextSlice(showSys bool) []string {
 	return resp
 }
 
-func chatToText(showSys bool) string {
-	s := chatToTextSlice(showSys)
+func chatToText(messages []models.RoleMsg, showSys bool) string {
+	s := chatToTextSlice(messages, showSys)
 	return strings.Join(s, "\n")
 }
 
@@ -1140,7 +1141,7 @@ func summarizeAndStartNewChat() {
 	}
 	chatBody.Messages = append(chatBody.Messages, toolMsg)
 	// Update UI
-	textView.SetText(chatToText(cfg.ShowSys))
+	textView.SetText(chatToText(chatBody.Messages, cfg.ShowSys))
 	colorText()
 	// Update storage
 	if err := updateStorageChat(activeChatName, chatBody.Messages); err != nil {

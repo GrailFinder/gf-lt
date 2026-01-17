@@ -180,7 +180,6 @@ func (lcp LCPCompletion) FormMsg(msg, role string, resume bool) (io.Reader, erro
 		}
 		prompt = sb.String()
 	}
-
 	logger.Debug("checking prompt for /completion", "tool_use", cfg.ToolUse,
 		"msg", msg, "resume", resume, "prompt", prompt, "multimodal_data_count", len(multimodalData))
 	payload := models.NewLCPReq(prompt, chatBody.Model, multimodalData, defaultLCPProps, chatBody.MakeStopSlice())

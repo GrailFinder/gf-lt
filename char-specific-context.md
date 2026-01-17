@@ -34,3 +34,6 @@ Again, this is not going to work with openais /v1/chat endpoint since it convert
 
 
 alternative approach to the tag string would be to have a judge agent to determine after each message what characters should hae access to it. but it means to make an additional call to llm after each msg.
+
+
+need to update character card loader to support multiple characters

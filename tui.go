@@ -310,7 +310,7 @@ func performSearch(term string) {
 		searchResultLengths = nil
 		originalTextForSearch = ""
 		// Re-render text without highlights
-		textView.SetText(chatToText(cfg.ShowSys))
+		textView.SetText(chatToText(chatBody.Messages, cfg.ShowSys))
 		colorText()
 		return
 	}
@@ -517,8 +517,8 @@ func init() {
 				searchResults = nil       // Clear search results
 				searchResultLengths = nil // Clear search result lengths
 				originalTextForSearch = ""
-				textView.SetText(chatToText(cfg.ShowSys)) // Reset text without search regions
-				colorText()                               // Apply normal chat coloring
+				textView.SetText(chatToText(chatBody.Messages, cfg.ShowSys)) // Reset text without search regions
+				colorText()                                                  // Apply normal chat coloring
 			} else {
 				// Original logic if no search is active
 				currentSelection := textView.GetHighlights()
@@ -594,7 +594,7 @@ func init() {
 			}
 			chatBody.Messages[selectedIndex].Content = editedMsg
 			// change textarea
-			textView.SetText(chatToText(cfg.ShowSys))
+			textView.SetText(chatToText(chatBody.Messages, cfg.ShowSys))
 			pages.RemovePage(editMsgPage)
 			editMode = false
 			return nil
@@ -627,7 +627,7 @@ func init() {
 				}
 				if selectedIndex >= 0 && selectedIndex < len(chatBody.Messages) {
 					chatBody.Messages[selectedIndex].Role = newRole
-					textView.SetText(chatToText(cfg.ShowSys))
+					textView.SetText(chatToText(chatBody.Messages, cfg.ShowSys))
 					colorText()
 					pages.RemovePage(roleEditPage)
 				}
@@ -739,7 +739,7 @@ func init() {
 					searchResults = nil
 					searchResultLengths = nil
 					originalTextForSearch = ""
-					textView.SetText(chatToText(cfg.ShowSys))
+					textView.SetText(chatToText(chatBody.Messages, cfg.ShowSys))
 					colorText()
 					return
 				} else {
@@ -787,7 +787,7 @@ func init() {
 	//
 	textArea.SetMovedFunc(updateStatusLine)
 	updateStatusLine()
-	textView.SetText(chatToText(cfg.ShowSys))
+	textView.SetText(chatToText(chatBody.Messages, cfg.ShowSys))
 	colorText()
 	if scrollToEndEnabled {
 		textView.ScrollToEnd()
@@ -801,7 +801,7 @@ func init() {
 		if event.Key() == tcell.KeyRune && event.Rune() == '5' && event.Modifiers()&tcell.ModAlt != 0 {
 			// switch cfg.ShowSys
 			cfg.ShowSys = !cfg.ShowSys
-			textView.SetText(chatToText(cfg.ShowSys))
+			textView.SetText(chatToText(chatBody.Messages, cfg.ShowSys))
 			colorText()
 		}
 		if event.Key() == tcell.KeyRune && event.Rune() == '3' && event.Modifiers()&tcell.ModAlt != 0 {
@@ -866,7 +866,7 @@ func init() {
 			chatBody.Messages = chatBody.Messages[:len(chatBody.Messages)-1]
 			// there is no case where user msg is regenerated
 			// lastRole := chatBody.Messages[len(chatBody.Messages)-1].Role
-			textView.SetText(chatToText(cfg.ShowSys))
+			textView.SetText(chatToText(chatBody.Messages, cfg.ShowSys))
 			go chatRound("", cfg.UserRole, textView, true, false)
 			return nil
 		}
@@ -888,7 +888,7 @@ func init() {
 				return nil
 			}
 			chatBody.Messages = chatBody.Messages[:len(chatBody.Messages)-1]
-			textView.SetText(chatToText(cfg.ShowSys))
+			textView.SetText(chatToText(chatBody.Messages, cfg.ShowSys))
 			colorText()
 			return nil
 		}
@@ -1052,7 +1052,7 @@ func init() {
 			// clear context
 			// remove tools and thinking
 			removeThinking(chatBody)
-			textView.SetText(chatToText(cfg.ShowSys))
+			textView.SetText(chatToText(chatBody.Messages, cfg.ShowSys))
 			colorText()
 			return nil
 		}
@@ -1184,20 +1184,26 @@ func init() {
 				if strings.EqualFold(role, persona) {
 					if i == len(roles)-1 {
 						cfg.WriteNextMsgAs = roles[0] // reached last, get first
+						persona = cfg.WriteNextMsgAs
 						break
 					}
 					cfg.WriteNextMsgAs = roles[i+1] // get next role
+					persona = cfg.WriteNextMsgAs
 					logger.Info("picked role", "roles", roles, "index", i+1)
 					break
 				}
 			}
+			// role got switch, update textview with character specific context for user
+			filtered := filterMessagesForCharacter(chatBody.Messages, persona)
+			textView.SetText(chatToText(filtered, cfg.ShowSys))
 			updateStatusLine()
+			colorText()
 			return nil
 		}
 		if event.Key() == tcell.KeyCtrlX {
-			persona := cfg.AssistantRole
+			botPersona := cfg.AssistantRole
 			if cfg.WriteNextMsgAsCompletionAgent != "" {
-				persona = cfg.WriteNextMsgAsCompletionAgent
+				botPersona = cfg.WriteNextMsgAsCompletionAgent
 			}
 			roles := chatBody.ListRoles()
 			if len(roles) == 0 {
@@ -1207,12 +1213,14 @@ func init() {
 				roles = append(roles, cfg.AssistantRole)
 			}
 			for i, role := range roles {
-				if strings.EqualFold(role, persona) {
+				if strings.EqualFold(role, botPersona) {
 					if i == len(roles)-1 {
 						cfg.WriteNextMsgAsCompletionAgent = roles[0] // reached last, get first
+						botPersona = cfg.WriteNextMsgAsCompletionAgent
 						break
 					}
 					cfg.WriteNextMsgAsCompletionAgent = roles[i+1] // get next role
+					botPersona = cfg.WriteNextMsgAsCompletionAgent
 					logger.Info("picked role", "roles", roles, "index", i+1)
 					break
 				}
@@ -1295,7 +1303,6 @@ func init() {
 		// cannot send msg in editMode or botRespMode
 		if event.Key() == tcell.KeyEscape && !editMode && !botRespMode {
 			msgText := textArea.GetText()
-			// TODO: add shellmode command -> output to the chat history, or at least have an option
 			if shellMode && msgText != "" {
 				// In shell mode, execute command instead of sending to LLM
 				executeCommandAndDisplay(msgText)

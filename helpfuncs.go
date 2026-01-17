@@ -109,7 +109,7 @@ func startNewChat() {
 	}
 	// set chat body
 	chatBody.Messages = chatBody.Messages[:2]
-	textView.SetText(chatToText(cfg.ShowSys))
+	textView.SetText(chatToText(chatBody.Messages, cfg.ShowSys))
 	newChat := &models.Chat{
 		ID:    id + 1,
 		Name:  fmt.Sprintf("%d_%s", id+1, cfg.AssistantRole),

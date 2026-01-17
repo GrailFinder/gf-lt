@@ -119,7 +119,7 @@ func makeChatTable(chatMap map[string]models.Chat) *tview.Table {
 				return
 			}
 			chatBody.Messages = history
-			textView.SetText(chatToText(cfg.ShowSys))
+			textView.SetText(chatToText(chatBody.Messages, cfg.ShowSys))
 			activeChatName = selectedChat
 			pages.RemovePage(historyPage)
 			return
@@ -142,7 +142,7 @@ func makeChatTable(chatMap map[string]models.Chat) *tview.Table {
 			}
 			// load last chat
 			chatBody.Messages = loadOldChatOrGetNew()
-			textView.SetText(chatToText(cfg.ShowSys))
+			textView.SetText(chatToText(chatBody.Messages, cfg.ShowSys))
 			pages.RemovePage(historyPage)
 			return
 		case "update card":
@@ -175,7 +175,7 @@ func makeChatTable(chatMap map[string]models.Chat) *tview.Table {
 		case "move sysprompt onto 1st msg":
 			chatBody.Messages[1].Content = chatBody.Messages[0].Content + chatBody.Messages[1].Content
 			chatBody.Messages[0].Content = rpDefenitionSysMsg
-			textView.SetText(chatToText(cfg.ShowSys))
+			textView.SetText(chatToText(chatBody.Messages, cfg.ShowSys))
 			activeChatName = selectedChat
 			pages.RemovePage(historyPage)
 			return
@@ -546,7 +546,7 @@ func makeAgentTable(agentList []string) *tview.Table {
 				return
 			}
 			// replace textview
-			textView.SetText(chatToText(cfg.ShowSys))
+			textView.SetText(chatToText(chatBody.Messages, cfg.ShowSys))
 			colorText()
 			updateStatusLine()
 			// sysModal.ClearButtons()
@@ -715,7 +715,7 @@ func makeImportChatTable(filenames []string) *tview.Table {
 			colorText()
 			updateStatusLine()
 			// redraw the text in text area
-			textView.SetText(chatToText(cfg.ShowSys))
+			textView.SetText(chatToText(chatBody.Messages, cfg.ShowSys))
 			pages.RemovePage(historyPage)
 			app.SetFocus(textArea)
 			return

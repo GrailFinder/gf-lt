@@ -24,7 +24,7 @@ var (
 	starRE             = regexp.MustCompile(`(\*.*?\*)`)
 	thinkRE            = regexp.MustCompile(`(<think>\s*([\s\S]*?)</think>)`)
 	codeBlockRE        = regexp.MustCompile(`(?s)\x60{3}(?:.*?)\n(.*?)\n\s*\x60{3}\s*`)
-	singleBacktickRE    = regexp.MustCompile(`\x60([^\x60]*)\x60`)
+	singleBacktickRE   = regexp.MustCompile(`\x60([^\x60]*)\x60`)
 	roleRE             = regexp.MustCompile(`^(\w+):`)
 	rpDefenitionSysMsg = `
 For this roleplay immersion is at most importance.
@@ -945,7 +945,7 @@ func summarizeChat(args map[string]string) []byte {
 		return []byte("No chat history to summarize.")
 	}
 	// Format chat history for the agent
-	chatText := chatToText(true) // include system and tool messages
+	chatText := chatToText(chatBody.Messages, true) // include system and tool messages
 	return []byte(chatText)
 }
 
