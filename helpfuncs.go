@@ -164,7 +164,7 @@ func setLogLevel(sl string) {
 }
 
 func listRolesWithUser() []string {
-	roles := chatBody.ListRoles()
+	roles := listChatRoles()
 	// Remove user role if it exists in the list (to avoid duplicates and ensure it's at position 0)
 	filteredRoles := make([]string, 0, len(roles))
 	for _, role := range roles {
@@ -249,4 +249,27 @@ func randString(n int) string {
 		b[i] = letters[rand.IntN(len(letters))]
 	}
 	return string(b)
+}
+
+// set of roles within card definition and mention in chat history
+func listChatRoles() []string {
+	currentChat, ok := chatMap[activeChatName]
+	cbc := chatBody.ListRoles()
+	if !ok {
+		return cbc
+	}
+	currentCard, ok := sysMap[currentChat.Agent]
+	if !ok {
+		// log error
+		logger.Warn("failed to find current card in sysMap", "agent", currentChat.Agent, "sysMap", sysMap)
+		return cbc
+	}
+	charset := []string{}
+	for _, name := range currentCard.Characters {
+		if !strInSlice(name, cbc) {
+			charset = append(charset, name)
+		}
+	}
+	charset = append(charset, cbc...)
+	return charset
 }

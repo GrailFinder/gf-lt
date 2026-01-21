@@ -4,5 +4,6 @@
   "role2": "Bob",
   "role3": "Carl",
   "filepath": "sysprompts/alice_bob_carl.json",
+  "chars": ["Alice", "Bob", "Carl"],
   "first_msg": "Hey guys! Want to play Alias like game? I'll tell Bob a word and he needs to describe that word so Carl can guess what it was?"
 }

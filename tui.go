@@ -836,7 +836,7 @@ func init() {
 			if injectRole {
 				status = "enabled"
 			}
-			if err := notifyUser("injectRole", fmt.Sprintf("Role injection %s", status)); err != nil {
+			if err := notifyUser("injectRole", "Role injection "+status); err != nil {
 				logger.Error("failed to send notification", "error", err)
 			}
 			updateStatusLine()
@@ -1218,7 +1218,8 @@ func init() {
 			if cfg.WriteNextMsgAsCompletionAgent != "" {
 				botPersona = cfg.WriteNextMsgAsCompletionAgent
 			}
-			roles := chatBody.ListRoles()
+			// roles := chatBody.ListRoles()
+			roles := listChatRoles()
 			if len(roles) == 0 {
 				logger.Warn("empty roles in chat")
 			}
@@ -1229,11 +1230,9 @@ func init() {
 				if strings.EqualFold(role, botPersona) {
 					if i == len(roles)-1 {
 						cfg.WriteNextMsgAsCompletionAgent = roles[0] // reached last, get first
-						botPersona = cfg.WriteNextMsgAsCompletionAgent
 						break
 					}
 					cfg.WriteNextMsgAsCompletionAgent = roles[i+1] // get next role
-					botPersona = cfg.WriteNextMsgAsCompletionAgent
 					// logger.Info("picked role", "roles", roles, "index", i+1)
 					break
 				}

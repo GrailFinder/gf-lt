@@ -1063,7 +1063,6 @@ func addNewChat(chatName string) {
 
 func applyCharCard(cc *models.CharCard) {
 	cfg.AssistantRole = cc.Role
-	// FIXME: remove
 	history, err := loadAgentsLastChat(cfg.AssistantRole)
 	if err != nil {
 		// too much action for err != nil; loadAgentsLastChat needs to be split up
