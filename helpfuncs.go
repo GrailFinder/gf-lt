@@ -111,9 +111,11 @@ func startNewChat() {
 	chatBody.Messages = chatBody.Messages[:2]
 	textView.SetText(chatToText(chatBody.Messages, cfg.ShowSys))
 	newChat := &models.Chat{
-		ID:    id + 1,
-		Name:  fmt.Sprintf("%d_%s", id+1, cfg.AssistantRole),
-		Msgs:  string(defaultStarterBytes),
+		ID:   id + 1,
+		Name: fmt.Sprintf("%d_%s", id+1, cfg.AssistantRole),
+		// chat is written to db when we get first llm response (or any)
+		// actual chat history (messages) would be parsed then
+		Msgs:  "",
 		Agent: cfg.AssistantRole,
 	}
 	activeChatName = newChat.Name
@@ -235,9 +237,10 @@ func makeStatusLine() string {
 	} else {
 		shellModeInfo = ""
 	}
-	statusLine := fmt.Sprintf(indexLineCompletion, botRespMode, activeChatName,
-		cfg.ToolUse, chatBody.Model, cfg.SkipLLMResp, cfg.CurrentAPI,
-		isRecording, persona, botPersona, injectRole)
+	statusLine := fmt.Sprintf(indexLineCompletion, boolColors[botRespMode], botRespMode, activeChatName,
+		boolColors[cfg.ToolUse], cfg.ToolUse, chatBody.Model, boolColors[cfg.SkipLLMResp],
+		cfg.SkipLLMResp, cfg.CurrentAPI, boolColors[isRecording], isRecording, persona,
+		botPersona, boolColors[injectRole], injectRole)
 	return statusLine + imageInfo + shellModeInfo
 }
 
@@ -260,6 +263,9 @@ func listChatRoles() []string {
 	}
 	currentCard, ok := sysMap[currentChat.Agent]
 	if !ok {
+		// case which won't let to switch roles:
+		// started new chat (basic_sys or any other), at the start it yet be saved or have chatbody
+		// if it does not have a card or chars, it'll return an empty slice
 		// log error
 		logger.Warn("failed to find current card in sysMap", "agent", currentChat.Agent, "sysMap", sysMap)
 		return cbc

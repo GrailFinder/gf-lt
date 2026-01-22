@@ -35,19 +35,18 @@ var (
 	logLevel   = new(slog.LevelVar)
 )
 var (
-	activeChatName      string
-	chunkChan           = make(chan string, 10)
-	openAIToolChan      = make(chan string, 10)
-	streamDone          = make(chan bool, 1)
-	chatBody            *models.ChatBody
-	store               storage.FullRepo
-	defaultFirstMsg     = "Hello! What can I do for you?"
-	defaultStarter      = []models.RoleMsg{}
-	defaultStarterBytes = []byte{}
-	interruptResp       = false
-	ragger              *rag.RAG
-	chunkParser         ChunkParser
-	lastToolCall        *models.FuncCall
+	activeChatName  string
+	chunkChan       = make(chan string, 10)
+	openAIToolChan  = make(chan string, 10)
+	streamDone      = make(chan bool, 1)
+	chatBody        *models.ChatBody
+	store           storage.FullRepo
+	defaultFirstMsg = "Hello! What can I do for you?"
+	defaultStarter  = []models.RoleMsg{}
+	interruptResp   = false
+	ragger          *rag.RAG
+	chunkParser     ChunkParser
+	lastToolCall    *models.FuncCall
 	//nolint:unused // TTS_ENABLED conditionally uses this
 	orator          Orator
 	asr             STT
@@ -1168,11 +1167,6 @@ func init() {
 		os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		slog.Error("failed to open log file", "error", err, "filename", cfg.LogFile)
-		return
-	}
-	defaultStarterBytes, err = json.Marshal(defaultStarter)
-	if err != nil {
-		slog.Error("failed to marshal defaultStarter", "error", err)
 		return
 	}
 	// load cards

@@ -832,13 +832,6 @@ func init() {
 		// Handle Alt+7 to toggle injectRole
 		if event.Key() == tcell.KeyRune && event.Rune() == '7' && event.Modifiers()&tcell.ModAlt != 0 {
 			injectRole = !injectRole
-			status := "disabled"
-			if injectRole {
-				status = "enabled"
-			}
-			if err := notifyUser("injectRole", "Role injection "+status); err != nil {
-				logger.Error("failed to send notification", "error", err)
-			}
 			updateStatusLine()
 		}
 		if event.Key() == tcell.KeyF1 {
