@@ -813,7 +813,18 @@ out:
 	if err := updateStorageChat(activeChatName, chatBody.Messages); err != nil {
 		logger.Warn("failed to update storage", "error", err, "name", activeChatName)
 	}
+	// FIXME: recursive calls
 	findCall(respText.String(), toolResp.String(), tv)
+	// TODO: have a config attr
+	// Check if this message was sent privately to specific characters
+	// If so, trigger those characters to respond if that char is not controlled by user
+	// perhaps we should have narrator role to determine which char is next to act
+	if cfg.AutoTurn {
+		lastMsg := chatBody.Messages[len(chatBody.Messages)-1]
+		if len(lastMsg.KnownTo) > 0 {
+			triggerPrivateMessageResponses(lastMsg, tv)
+		}
+	}
 }
 
 // cleanChatBody removes messages with null or empty content to prevent API issues
@@ -1204,4 +1215,28 @@ func init() {
 	// Initialize scrollToEndEnabled based on config
 	scrollToEndEnabled = cfg.AutoScrollEnabled
 	go updateModelLists()
+}
+
+// triggerPrivateMessageResponses checks if a message was sent privately to specific characters
+// and triggers those non-user characters to respond
+func triggerPrivateMessageResponses(msg models.RoleMsg, tv *tview.TextView) {
+	if cfg == nil || !cfg.CharSpecificContextEnabled {
+		return
+	}
+	userCharacter := cfg.UserRole
+	if cfg.WriteNextMsgAs != "" {
+		userCharacter = cfg.WriteNextMsgAs
+	}
+	// Check each character in the KnownTo list
+	for _, recipient := range msg.KnownTo {
+		// Skip if this is the user character or the sender of the message
+		if recipient == cfg.UserRole || recipient == userCharacter || recipient == msg.Role || recipient == cfg.ToolRole {
+			continue
+		}
+		// Trigger the recipient character to respond by simulating a prompt
+		// that indicates it's their turn
+		triggerMsg := recipient + ":\n"
+		// Call chatRound with the trigger message to make the recipient respond
+		chatRound(triggerMsg, recipient, tv, false, false)
+	}
 }

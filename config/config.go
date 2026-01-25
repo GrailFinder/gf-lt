@@ -54,19 +54,20 @@ type Config struct {
 	TTS_PROVIDER string  `toml:"TTS_PROVIDER"`
 	TTS_LANGUAGE string  `toml:"TTS_LANGUAGE"`
 	// STT
-	STT_TYPE          string `toml:"STT_TYPE"` // WHISPER_SERVER, WHISPER_BINARY
-	STT_URL           string `toml:"STT_URL"`
-	STT_SR            int    `toml:"STT_SR"`
-	STT_ENABLED       bool   `toml:"STT_ENABLED"`
-	WhisperBinaryPath string `toml:"WhisperBinaryPath"`
-	WhisperModelPath  string `toml:"WhisperModelPath"`
-	STT_LANG          string `toml:"STT_LANG"`
-	DBPATH                         string `toml:"DBPATH"`
-	FilePickerDir                  string `toml:"FilePickerDir"`
-	FilePickerExts                 string `toml:"FilePickerExts"`
-	EnableMouse                    bool   `toml:"EnableMouse"`
-	CharSpecificContextEnabled     bool   `toml:"CharSpecificContextEnabled"`
-	CharSpecificContextTag         string `toml:"CharSpecificContextTag"`
+	STT_TYPE                   string `toml:"STT_TYPE"` // WHISPER_SERVER, WHISPER_BINARY
+	STT_URL                    string `toml:"STT_URL"`
+	STT_SR                     int    `toml:"STT_SR"`
+	STT_ENABLED                bool   `toml:"STT_ENABLED"`
+	WhisperBinaryPath          string `toml:"WhisperBinaryPath"`
+	WhisperModelPath           string `toml:"WhisperModelPath"`
+	STT_LANG                   string `toml:"STT_LANG"`
+	DBPATH                     string `toml:"DBPATH"`
+	FilePickerDir              string `toml:"FilePickerDir"`
+	FilePickerExts             string `toml:"FilePickerExts"`
+	EnableMouse                bool   `toml:"EnableMouse"`
+	CharSpecificContextEnabled bool   `toml:"CharSpecificContextEnabled"`
+	CharSpecificContextTag     string `toml:"CharSpecificContextTag"`
+	AutoTurn                   bool
 }
 
 func LoadConfig(fn string) (*Config, error) {
