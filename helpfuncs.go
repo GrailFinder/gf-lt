@@ -279,3 +279,16 @@ func listChatRoles() []string {
 	charset = append(charset, cbc...)
 	return charset
 }
+
+func deepseekModelValidator() error {
+	if cfg.CurrentAPI == cfg.DeepSeekChatAPI || cfg.CurrentAPI == cfg.DeepSeekCompletionAPI {
+		if chatBody.Model != "deepseek-chat" && chatBody.Model != "deepseek-reasoner" {
+			if err := notifyUser("bad request", "wrong deepseek model name"); err != nil {
+				logger.Warn("failed ot notify user", "error", err)
+				return err
+			}
+			return nil
+		}
+	}
+	return nil
+}

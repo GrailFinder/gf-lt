@@ -873,7 +873,8 @@ func init() {
 			// there is no case where user msg is regenerated
 			// lastRole := chatBody.Messages[len(chatBody.Messages)-1].Role
 			textView.SetText(chatToText(chatBody.Messages, cfg.ShowSys))
-			go chatRound("", cfg.UserRole, textView, true, false)
+			// go chatRound("", cfg.UserRole, textView, true, false)
+			chatRoundChan <- &models.ChatRoundReq{Role: cfg.UserRole}
 			return nil
 		}
 		if event.Key() == tcell.KeyF3 && !botRespMode {
@@ -1176,7 +1177,8 @@ func init() {
 			// INFO: continue bot/text message
 			// without new role
 			lastRole := chatBody.Messages[len(chatBody.Messages)-1].Role
-			go chatRound("", lastRole, textView, false, true)
+			// go chatRound("", lastRole, textView, false, true)
+			chatRoundChan <- &models.ChatRoundReq{Role: lastRole, Resume: true}
 			return nil
 		}
 		if event.Key() == tcell.KeyCtrlQ {
@@ -1347,7 +1349,8 @@ func init() {
 					}
 					colorText()
 				}
-				go chatRound(msgText, persona, textView, false, false)
+				// go chatRound(msgText, persona, textView, false, false)
+				chatRoundChan <- &models.ChatRoundReq{Role: persona, UserMsg: msgText}
 				// Also clear any image attachment after sending the message
 				go func() {
 					// Wait a short moment for the message to be processed, then clear the image attachment

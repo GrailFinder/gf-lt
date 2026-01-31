@@ -116,9 +116,9 @@ func (m RoleMsg) MarshalJSON() ([]byte, error) {
 	} else {
 		// Use simple content format
 		aux := struct {
-			Role       string `json:"role"`
-			Content    string `json:"content"`
-			ToolCallID string `json:"tool_call_id,omitempty"`
+			Role       string   `json:"role"`
+			Content    string   `json:"content"`
+			ToolCallID string   `json:"tool_call_id,omitempty"`
 			KnownTo    []string `json:"known_to,omitempty"`
 		}{
 			Role:       m.Role,
@@ -150,9 +150,9 @@ func (m *RoleMsg) UnmarshalJSON(data []byte) error {
 
 	// Otherwise, unmarshal as simple content format
 	var simple struct {
-		Role       string `json:"role"`
-		Content    string `json:"content"`
-		ToolCallID string `json:"tool_call_id,omitempty"`
+		Role       string   `json:"role"`
+		Content    string   `json:"content"`
+		ToolCallID string   `json:"tool_call_id,omitempty"`
 		KnownTo    []string `json:"known_to,omitempty"`
 	}
 	if err := json.Unmarshal(data, &simple); err != nil {
@@ -539,4 +539,11 @@ func (lcp *LCPModels) ListModels() []string {
 		resp = append(resp, model.ID)
 	}
 	return resp
+}
+
+type ChatRoundReq struct {
+	UserMsg string
+	Role    string
+	Regen   bool
+	Resume  bool
 }

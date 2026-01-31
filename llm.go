@@ -363,6 +363,9 @@ func (ds DeepSeekerCompletion) GetToken() string {
 
 func (ds DeepSeekerCompletion) FormMsg(msg, role string, resume bool) (io.Reader, error) {
 	logger.Debug("formmsg deepseekercompletion", "link", cfg.CurrentAPI)
+	if err := deepseekModelValidator(); err != nil {
+		return nil, err
+	}
 	if msg != "" { // otherwise let the bot to continue
 		newMsg := models.RoleMsg{Role: role, Content: msg}
 		newMsg = processMessageTag(newMsg)
@@ -445,6 +448,9 @@ func (ds DeepSeekerChat) GetToken() string {
 
 func (ds DeepSeekerChat) FormMsg(msg, role string, resume bool) (io.Reader, error) {
 	logger.Debug("formmsg deepseekerchat", "link", cfg.CurrentAPI)
+	if err := deepseekModelValidator(); err != nil {
+		return nil, err
+	}
 	if msg != "" { // otherwise let the bot continue
 		newMsg := models.RoleMsg{Role: role, Content: msg}
 		newMsg = processMessageTag(newMsg)
