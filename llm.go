@@ -13,6 +13,27 @@ var imageAttachmentPath string // Global variable to track image attachment for 
 var lastImg string             // for ctrl+j
 var RAGMsg = "Retrieved context for user's query:\n"
 
+// addPersonaSuffixToLastUserMessage adds the persona suffix to the last user message
+// to indicate to the assistant who it should reply as
+func addPersonaSuffixToLastUserMessage(messages []models.RoleMsg, persona string) []models.RoleMsg {
+	if len(messages) == 0 {
+		return messages
+	}
+
+	// Find the last user message to modify
+	for i := len(messages) - 1; i >= 0; i-- {
+		if messages[i].Role == cfg.UserRole || messages[i].Role == "user" {
+			// Create a copy of the message to avoid modifying the original
+			modifiedMsg := messages[i]
+			modifiedMsg.Content = modifiedMsg.Content + "\n" + persona + ":"
+			messages[i] = modifiedMsg
+			break
+		}
+	}
+
+	return messages
+}
+
 // containsToolSysMsg checks if the toolSysMsg already exists in the chat body
 func containsToolSysMsg() bool {
 	for _, msg := range chatBody.Messages {
@@ -307,7 +328,15 @@ func (op LCPChat) FormMsg(msg, role string, resume bool) (io.Reader, error) {
 		}
 	}
 	// openai /v1/chat does not support custom roles; needs to be user, assistant, system
-	filteredMessages, _ := filterMessagesForCurrentCharacter(chatBody.Messages)
+	filteredMessages, botPersona := filterMessagesForCurrentCharacter(chatBody.Messages)
+
+	// Add persona suffix to the last user message to indicate who the assistant should reply as
+	if !resume && cfg.WriteNextMsgAsCompletionAgent != "" {
+		filteredMessages = addPersonaSuffixToLastUserMessage(filteredMessages, cfg.WriteNextMsgAsCompletionAgent)
+	} else if !resume {
+		filteredMessages = addPersonaSuffixToLastUserMessage(filteredMessages, botPersona)
+	}
+
 	bodyCopy := &models.ChatBody{
 		Messages: make([]models.RoleMsg, len(filteredMessages)),
 		Model:    chatBody.Model,
@@ -473,7 +502,15 @@ func (ds DeepSeekerChat) FormMsg(msg, role string, resume bool) (io.Reader, erro
 			logger.Debug("RAG message added to chat body", "message_count", len(chatBody.Messages))
 		}
 	}
-	filteredMessages, _ := filterMessagesForCurrentCharacter(chatBody.Messages)
+	filteredMessages, botPersona := filterMessagesForCurrentCharacter(chatBody.Messages)
+
+	// Add persona suffix to the last user message to indicate who the assistant should reply as
+	if !resume && cfg.WriteNextMsgAsCompletionAgent != "" {
+		filteredMessages = addPersonaSuffixToLastUserMessage(filteredMessages, cfg.WriteNextMsgAsCompletionAgent)
+	} else if !resume {
+		filteredMessages = addPersonaSuffixToLastUserMessage(filteredMessages, botPersona)
+	}
+
 	bodyCopy := &models.ChatBody{
 		Messages: make([]models.RoleMsg, len(filteredMessages)),
 		Model:    chatBody.Model,
@@ -661,7 +698,15 @@ func (or OpenRouterChat) FormMsg(msg, role string, resume bool) (io.Reader, erro
 		}
 	}
 	// Create copy of chat body with standardized user role
-	filteredMessages, _ := filterMessagesForCurrentCharacter(chatBody.Messages)
+	filteredMessages, botPersona := filterMessagesForCurrentCharacter(chatBody.Messages)
+
+	// Add persona suffix to the last user message to indicate who the assistant should reply as
+	if !resume && cfg.WriteNextMsgAsCompletionAgent != "" {
+		filteredMessages = addPersonaSuffixToLastUserMessage(filteredMessages, cfg.WriteNextMsgAsCompletionAgent)
+	} else if !resume {
+		filteredMessages = addPersonaSuffixToLastUserMessage(filteredMessages, botPersona)
+	}
+
 	bodyCopy := &models.ChatBody{
 		Messages: make([]models.RoleMsg, len(filteredMessages)),
 		Model:    chatBody.Model,
