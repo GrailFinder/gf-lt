@@ -117,7 +117,7 @@ func TestConsolidateConsecutiveAssistantMessages(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := consolidateConsecutiveAssistantMessages(tt.input)
+			result := consolidateAssistantMessages(tt.input)
 
 			if len(result) != len(tt.expected) {
 				t.Errorf("Expected %d messages, got %d", len(tt.expected), len(result))

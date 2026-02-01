@@ -322,7 +322,7 @@ func (op LCPChat) FormMsg(msg, role string, resume bool) (io.Reader, error) {
 		}
 	}
 	// Clean null/empty messages to prevent API issues
-	bodyCopy.Messages = cleanNullMessages(bodyCopy.Messages)
+	bodyCopy.Messages = consolidateAssistantMessages(bodyCopy.Messages)
 	req := models.OpenAIReq{
 		ChatBody: bodyCopy,
 		Tools:    nil,
@@ -488,7 +488,7 @@ func (ds DeepSeekerChat) FormMsg(msg, role string, resume bool) (io.Reader, erro
 		}
 	}
 	// Clean null/empty messages to prevent API issues
-	bodyCopy.Messages = cleanNullMessages(bodyCopy.Messages)
+	bodyCopy.Messages = consolidateAssistantMessages(bodyCopy.Messages)
 	dsBody := models.NewDSChatReq(*bodyCopy)
 	data, err := json.Marshal(dsBody)
 	if err != nil {
@@ -676,7 +676,7 @@ func (or OpenRouterChat) FormMsg(msg, role string, resume bool) (io.Reader, erro
 		}
 	}
 	// Clean null/empty messages to prevent API issues
-	bodyCopy.Messages = cleanNullMessages(bodyCopy.Messages)
+	bodyCopy.Messages = consolidateAssistantMessages(bodyCopy.Messages)
 	orBody := models.NewOpenRouterChatReq(*bodyCopy, defaultLCPProps)
 	if cfg.ToolUse && !resume && role != cfg.ToolRole {
 		orBody.Tools = baseTools // set tools to use

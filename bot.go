@@ -169,26 +169,10 @@ func filterMessagesForCharacter(messages []models.RoleMsg, character string) []m
 	return filtered
 }
 
-// cleanNullMessages removes messages with null or empty content to prevent API issues
-func cleanNullMessages(messages []models.RoleMsg) []models.RoleMsg {
-	// // deletes tool calls which we don't want for now
-	// cleaned := make([]models.RoleMsg, 0, len(messages))
-	// for _, msg := range messages {
-	// 	// is there a sense for this check at all?
-	// 	if msg.HasContent() || msg.ToolCallID != "" || msg.Role == cfg.AssistantRole || msg.Role == cfg.WriteNextMsgAsCompletionAgent {
-	// 		cleaned = append(cleaned, msg)
-	// 	} else {
-	// 		// Log filtered messages for debugging
-	// 		logger.Warn("filtering out message during cleaning", "role", msg.Role, "content", msg.Content, "tool_call_id", msg.ToolCallID, "has_content", msg.HasContent())
-	// 	}
-	// }
-	return consolidateConsecutiveAssistantMessages(messages)
-}
-
 func cleanToolCalls(messages []models.RoleMsg) []models.RoleMsg {
 	// If AutoCleanToolCallsFromCtx is false, keep tool call messages in context
 	if cfg != nil && !cfg.AutoCleanToolCallsFromCtx {
-		return consolidateConsecutiveAssistantMessages(messages)
+		return consolidateAssistantMessages(messages)
 	}
 	cleaned := make([]models.RoleMsg, 0, len(messages))
 	for i, msg := range messages {
@@ -198,11 +182,11 @@ func cleanToolCalls(messages []models.RoleMsg) []models.RoleMsg {
 			cleaned = append(cleaned, msg)
 		}
 	}
-	return consolidateConsecutiveAssistantMessages(cleaned)
+	return consolidateAssistantMessages(cleaned)
 }
 
-// consolidateConsecutiveAssistantMessages merges consecutive assistant messages into a single message
-func consolidateConsecutiveAssistantMessages(messages []models.RoleMsg) []models.RoleMsg {
+// consolidateAssistantMessages merges consecutive assistant messages into a single message
+func consolidateAssistantMessages(messages []models.RoleMsg) []models.RoleMsg {
 	if len(messages) == 0 {
 		return messages
 	}
@@ -211,6 +195,7 @@ func consolidateConsecutiveAssistantMessages(messages []models.RoleMsg) []models
 	isBuildingAssistantMsg := false
 	for i := 0; i < len(messages); i++ {
 		msg := messages[i]
+		// what about the case with multiplpe assistant roles?
 		if msg.Role == cfg.AssistantRole || msg.Role == cfg.WriteNextMsgAsCompletionAgent {
 			// If this is an assistant message, start or continue building
 			if !isBuildingAssistantMsg {
@@ -824,7 +809,6 @@ out:
 	if findCall(respText.String(), toolResp.String()) {
 		return nil
 	}
-	// TODO: have a config attr
 	// Check if this message was sent privately to specific characters
 	// If so, trigger those characters to respond if that char is not controlled by user
 	// perhaps we should have narrator role to determine which char is next to act
@@ -850,7 +834,7 @@ func cleanChatBody() {
 	// Tool request cleaning is now configurable via AutoCleanToolCallsFromCtx (default false)
 	// /completion msg where part meant for user and other part tool call
 	chatBody.Messages = cleanToolCalls(chatBody.Messages)
-	chatBody.Messages = cleanNullMessages(chatBody.Messages)
+	chatBody.Messages = consolidateAssistantMessages(chatBody.Messages)
 	logger.Debug("cleanChatBody: after cleaning", "original_len", originalLen, "new_len", len(chatBody.Messages))
 	for i, msg := range chatBody.Messages {
 		logger.Debug("cleanChatBody: after clean", "index", i, "role", msg.Role, "content_len", len(msg.Content), "has_content", msg.HasContent(), "tool_call_id", msg.ToolCallID)
