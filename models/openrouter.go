@@ -145,9 +145,11 @@ func (orm *ORModels) ListModels(free bool) []string {
 	resp := []string{}
 	for _, model := range orm.Data {
 		if free {
-			if model.Pricing.Prompt == "0" && model.Pricing.Request == "0" &&
-				model.Pricing.Completion == "0" {
-				resp = append(resp, model.ID)
+			if model.Pricing.Prompt == "0" && model.Pricing.Completion == "0" {
+				// treat missing request as free
+				if model.Pricing.Request == "" || model.Pricing.Request == "0" {
+					resp = append(resp, model.ID)
+				}
 			}
 		} else {
 			resp = append(resp, model.ID)
