@@ -328,10 +328,10 @@ func (op LCPChat) FormMsg(msg, role string, resume bool) (io.Reader, error) {
 			logger.Debug("LCPChat: RAG message added to chat body", "role", ragMsg.Role, "rag_content_len", len(ragMsg.Content), "message_count_after_rag", len(chatBody.Messages))
 		}
 	}
-	// openai /v1/chat does not support custom roles; needs to be user, assistant, system
 	filteredMessages, botPersona := filterMessagesForCurrentCharacter(chatBody.Messages)
+	// openai /v1/chat does not support custom roles; needs to be user, assistant, system
 	// Add persona suffix to the last user message to indicate who the assistant should reply as
-	if !resume {
+	if cfg.AutoTurn && !resume {
 		filteredMessages = addPersonaSuffixToLastUserMessage(filteredMessages, botPersona)
 	}
 	bodyCopy := &models.ChatBody{
@@ -499,15 +499,12 @@ func (ds DeepSeekerChat) FormMsg(msg, role string, resume bool) (io.Reader, erro
 			logger.Debug("RAG message added to chat body", "message_count", len(chatBody.Messages))
 		}
 	}
+	// Create copy of chat body with standardized user role
 	filteredMessages, botPersona := filterMessagesForCurrentCharacter(chatBody.Messages)
-
 	// Add persona suffix to the last user message to indicate who the assistant should reply as
-	if !resume && cfg.WriteNextMsgAsCompletionAgent != "" {
-		filteredMessages = addPersonaSuffixToLastUserMessage(filteredMessages, cfg.WriteNextMsgAsCompletionAgent)
-	} else if !resume {
+	if cfg.AutoTurn && !resume {
 		filteredMessages = addPersonaSuffixToLastUserMessage(filteredMessages, botPersona)
 	}
-
 	bodyCopy := &models.ChatBody{
 		Messages: make([]models.RoleMsg, len(filteredMessages)),
 		Model:    chatBody.Model,
@@ -696,14 +693,10 @@ func (or OpenRouterChat) FormMsg(msg, role string, resume bool) (io.Reader, erro
 	}
 	// Create copy of chat body with standardized user role
 	filteredMessages, botPersona := filterMessagesForCurrentCharacter(chatBody.Messages)
-
 	// Add persona suffix to the last user message to indicate who the assistant should reply as
-	if !resume && cfg.WriteNextMsgAsCompletionAgent != "" {
-		filteredMessages = addPersonaSuffixToLastUserMessage(filteredMessages, cfg.WriteNextMsgAsCompletionAgent)
-	} else if !resume {
+	if cfg.AutoTurn && !resume {
 		filteredMessages = addPersonaSuffixToLastUserMessage(filteredMessages, botPersona)
 	}
-
 	bodyCopy := &models.ChatBody{
 		Messages: make([]models.RoleMsg, len(filteredMessages)),
 		Model:    chatBody.Model,
