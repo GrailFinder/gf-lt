@@ -195,8 +195,8 @@ func consolidateAssistantMessages(messages []models.RoleMsg) []models.RoleMsg {
 	isBuildingAssistantMsg := false
 	for i := 0; i < len(messages); i++ {
 		msg := messages[i]
-		// what about the case with multiplpe assistant roles?
-		if msg.Role == cfg.AssistantRole || msg.Role == cfg.WriteNextMsgAsCompletionAgent {
+		// assistant role only
+		if msg.Role == cfg.AssistantRole {
 			// If this is an assistant message, start or continue building
 			if !isBuildingAssistantMsg {
 				// Start accumulating assistant message

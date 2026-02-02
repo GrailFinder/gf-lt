@@ -19,18 +19,19 @@ func addPersonaSuffixToLastUserMessage(messages []models.RoleMsg, persona string
 	if len(messages) == 0 {
 		return messages
 	}
-
-	// Find the last user message to modify
-	for i := len(messages) - 1; i >= 0; i-- {
-		if messages[i].Role == cfg.UserRole || messages[i].Role == "user" {
-			// Create a copy of the message to avoid modifying the original
-			modifiedMsg := messages[i]
-			modifiedMsg.Content = modifiedMsg.Content + "\n" + persona + ":"
-			messages[i] = modifiedMsg
-			break
-		}
-	}
-
+	// // Find the last user message to modify
+	// for i := len(messages) - 1; i >= 0; i-- {
+	// 	if messages[i].Role == cfg.UserRole || messages[i].Role == "user" {
+	// 		// Create a copy of the message to avoid modifying the original
+	// 		modifiedMsg := messages[i]
+	// 		modifiedMsg.Content = modifiedMsg.Content + "\n" + persona + ":"
+	// 		messages[i] = modifiedMsg
+	// 		break
+	// 	}
+	// }
+	modifiedMsg := messages[len(messages)-1]
+	modifiedMsg.Content = modifiedMsg.Content + "\n" + persona + ":\n"
+	messages[len(messages)-1] = modifiedMsg
 	return messages
 }
 
@@ -329,14 +330,10 @@ func (op LCPChat) FormMsg(msg, role string, resume bool) (io.Reader, error) {
 	}
 	// openai /v1/chat does not support custom roles; needs to be user, assistant, system
 	filteredMessages, botPersona := filterMessagesForCurrentCharacter(chatBody.Messages)
-
 	// Add persona suffix to the last user message to indicate who the assistant should reply as
-	if !resume && cfg.WriteNextMsgAsCompletionAgent != "" {
-		filteredMessages = addPersonaSuffixToLastUserMessage(filteredMessages, cfg.WriteNextMsgAsCompletionAgent)
-	} else if !resume {
+	if !resume {
 		filteredMessages = addPersonaSuffixToLastUserMessage(filteredMessages, botPersona)
 	}
-
 	bodyCopy := &models.ChatBody{
 		Messages: make([]models.RoleMsg, len(filteredMessages)),
 		Model:    chatBody.Model,
