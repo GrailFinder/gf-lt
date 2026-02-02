@@ -137,6 +137,9 @@ func makePropsTable(props map[string]float32) *tview.Table {
 		// Reconfigure the app's mouse setting
 		app.EnableMouse(cfg.EnableMouse)
 	})
+	addCheckboxRow("Auto turn (for cards with many chars)", cfg.AutoTurn, func(checked bool) {
+		cfg.AutoTurn = checked
+	})
 	// Add dropdowns
 	logLevels := []string{"Debug", "Info", "Warn"}
 	addListPopupRow("Set log level", logLevels, GetLogLevel(), func(option string) {
