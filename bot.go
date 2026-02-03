@@ -1251,15 +1251,18 @@ func triggerPrivateMessageResponses(msg models.RoleMsg) {
 	}
 	// Check each character in the KnownTo list
 	for _, recipient := range msg.KnownTo {
-		// Skip if this is the user character or the sender of the message
-		if recipient == cfg.UserRole || recipient == userCharacter || recipient == msg.Role || recipient == cfg.ToolRole {
+		if recipient == msg.Role || recipient == cfg.ToolRole {
+			// weird cases, skip
 			continue
+		}
+		// Skip if this is the user character or the sender of the message
+		if recipient == cfg.UserRole || recipient == userCharacter {
+			return // user in known_to => users turn
 		}
 		// Trigger the recipient character to respond by simulating a prompt
 		// that indicates it's their turn
 		triggerMsg := recipient + ":\n"
 		// Call chatRound with the trigger message to make the recipient respond
-		// chatRound(triggerMsg, recipient, tv, false, false)
 		crr := &models.ChatRoundReq{
 			UserMsg: triggerMsg,
 			Role:    recipient,
