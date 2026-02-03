@@ -498,7 +498,6 @@ func monitorModelLoad(modelID string) {
 	}()
 }
 
-
 // extractDetailedErrorFromBytes extracts detailed error information from response body bytes
 func extractDetailedErrorFromBytes(body []byte, statusCode int) string {
 	// Try to parse as JSON to extract detailed error information
@@ -1352,9 +1351,10 @@ func triggerPrivateMessageResponses(msg models.RoleMsg) {
 			return // user in known_to => user's turn
 		}
 		// Trigger the recipient character to respond
+		triggerMsg := recipient + ":\n"
 		// Send empty message so LLM continues naturally from the conversation
 		crr := &models.ChatRoundReq{
-			UserMsg: "", // Empty message - LLM will continue the conversation
+			UserMsg: triggerMsg,
 			Role:    recipient,
 		}
 		chatRoundChan <- crr
