@@ -369,14 +369,22 @@ func (cb *ChatBody) ListRoles() []string {
 }
 
 func (cb *ChatBody) MakeStopSlice() []string {
-	namesMap := make(map[string]struct{})
-	for _, m := range cb.Messages {
-		namesMap[m.Role] = struct{}{}
-	}
-	ss := make([]string, 0, 1+len(namesMap))
-	ss = append(ss, "<|im_end|>")
-	for k := range namesMap {
-		ss = append(ss, k+":\n")
+	return cb.MakeStopSliceExcluding("", cb.ListRoles())
+}
+
+func (cb *ChatBody) MakeStopSliceExcluding(
+	excludeRole string, roleList []string,
+) []string {
+	ss := []string{}
+	for _, role := range roleList {
+		// Skip the excluded role (typically the current speaker)
+		if role == excludeRole {
+			continue
+		}
+		// Add multiple variations to catch different formatting
+		ss = append(ss, role+":\n") // Most common: role with newline
+		ss = append(ss, role+":")   // Role with colon but no newline
+		ss = append(ss, role+": ")  // Role with colon and space
 	}
 	return ss
 }

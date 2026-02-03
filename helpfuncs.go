@@ -22,6 +22,28 @@ func isASCII(s string) bool {
 	return true
 }
 
+// refreshChatDisplay updates the chat display based on current character view
+// It filters messages for the character the user is currently "writing as"
+// and updates the textView with the filtered conversation
+func refreshChatDisplay() {
+	// Determine which character's view to show
+	viewingAs := cfg.UserRole
+	if cfg.WriteNextMsgAs != "" {
+		viewingAs = cfg.WriteNextMsgAs
+	}
+	// Filter messages for this character
+	filteredMessages := filterMessagesForCharacter(chatBody.Messages, viewingAs)
+	displayText := chatToText(filteredMessages, cfg.ShowSys)
+	// Use QueueUpdate for thread-safe UI updates
+	app.QueueUpdate(func() {
+		textView.SetText(displayText)
+		colorText()
+		if scrollToEndEnabled {
+			textView.ScrollToEnd()
+		}
+	})
+}
+
 func colorText() {
 	text := textView.GetText(false)
 	quoteReplacer := strings.NewReplacer(

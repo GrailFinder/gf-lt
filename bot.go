@@ -498,6 +498,58 @@ func monitorModelLoad(modelID string) {
 	}()
 }
 
+
+// extractDetailedErrorFromBytes extracts detailed error information from response body bytes
+func extractDetailedErrorFromBytes(body []byte, statusCode int) string {
+	// Try to parse as JSON to extract detailed error information
+	var errorResponse map[string]interface{}
+	if err := json.Unmarshal(body, &errorResponse); err == nil {
+		// Check if it's an error response with detailed information
+		if errorData, ok := errorResponse["error"]; ok {
+			if errorMap, ok := errorData.(map[string]interface{}); ok {
+				var errorMsg string
+				if msg, ok := errorMap["message"]; ok {
+					errorMsg = fmt.Sprintf("%v", msg)
+				}
+
+				var details []string
+				if code, ok := errorMap["code"]; ok {
+					details = append(details, fmt.Sprintf("Code: %v", code))
+				}
+
+				if metadata, ok := errorMap["metadata"]; ok {
+					// Handle metadata which might contain raw error details
+					if metadataMap, ok := metadata.(map[string]interface{}); ok {
+						if raw, ok := metadataMap["raw"]; ok {
+							// Parse the raw error string if it's JSON
+							var rawError map[string]interface{}
+							if rawStr, ok := raw.(string); ok && json.Unmarshal([]byte(rawStr), &rawError) == nil {
+								if rawErrorData, ok := rawError["error"]; ok {
+									if rawErrorMap, ok := rawErrorData.(map[string]interface{}); ok {
+										if rawMsg, ok := rawErrorMap["message"]; ok {
+											return fmt.Sprintf("API Error: %s", rawMsg)
+										}
+									}
+								}
+							}
+						}
+					}
+					details = append(details, fmt.Sprintf("Metadata: %v", metadata))
+				}
+
+				if len(details) > 0 {
+					return fmt.Sprintf("API Error: %s (%s)", errorMsg, strings.Join(details, ", "))
+				}
+
+				return "API Error: " + errorMsg
+			}
+		}
+	}
+
+	// If not a structured error response, return the raw body with status
+	return fmt.Sprintf("HTTP Status: %d, Response Body: %s", statusCode, string(body))
+}
+
 // sendMsgToLLM expects streaming resp
 func sendMsgToLLM(body io.Reader) {
 	choseChunkParser()
@@ -524,6 +576,33 @@ func sendMsgToLLM(body io.Reader) {
 		streamDone <- true
 		return
 	}
+
+	// Check if the initial response is an error before starting to stream
+	if resp.StatusCode >= 400 {
+		// Read the response body to get detailed error information
+		bodyBytes, err := io.ReadAll(resp.Body)
+		if err != nil {
+			logger.Error("failed to read error response body", "error", err, "status_code", resp.StatusCode)
+			detailedError := fmt.Sprintf("HTTP Status: %d, Failed to read response body: %v", resp.StatusCode, err)
+			if err := notifyUser("API Error", detailedError); err != nil {
+				logger.Error("failed to notify", "error", err)
+			}
+			resp.Body.Close()
+			streamDone <- true
+			return
+		}
+
+		// Parse the error response for detailed information
+		detailedError := extractDetailedErrorFromBytes(bodyBytes, resp.StatusCode)
+		logger.Error("API returned error status", "status_code", resp.StatusCode, "detailed_error", detailedError)
+		if err := notifyUser("API Error", detailedError); err != nil {
+			logger.Error("failed to notify", "error", err)
+		}
+		resp.Body.Close()
+		streamDone <- true
+		return
+	}
+
 	defer resp.Body.Close()
 	reader := bufio.NewReader(resp.Body)
 	counter := uint32(0)
@@ -541,11 +620,23 @@ func sendMsgToLLM(body io.Reader) {
 		}
 		line, err := reader.ReadBytes('\n')
 		if err != nil {
-			logger.Error("error reading response body", "error", err, "line", string(line),
-				"user_role", cfg.UserRole, "parser", chunkParser, "link", cfg.CurrentAPI)
-			// if err.Error() != "EOF" {
-			if err := notifyUser("API error", err.Error()); err != nil {
-				logger.Error("failed to notify", "error", err)
+			// Check if this is an EOF error and if the response contains detailed error information
+			if err == io.EOF {
+				// For streaming responses, we may have already consumed the error body
+				// So we'll use the original status code to provide context
+				detailedError := fmt.Sprintf("Streaming connection closed unexpectedly (Status: %d). This may indicate an API error. Check your API provider and model settings.", resp.StatusCode)
+				logger.Error("error reading response body", "error", err, "detailed_error", detailedError,
+					"status_code", resp.StatusCode, "user_role", cfg.UserRole, "parser", chunkParser, "link", cfg.CurrentAPI)
+				if err := notifyUser("API Error", detailedError); err != nil {
+					logger.Error("failed to notify", "error", err)
+				}
+			} else {
+				logger.Error("error reading response body", "error", err, "line", string(line),
+					"user_role", cfg.UserRole, "parser", chunkParser, "link", cfg.CurrentAPI)
+				// if err.Error() != "EOF" {
+				if err := notifyUser("API error", err.Error()); err != nil {
+					logger.Error("failed to notify", "error", err)
+				}
 			}
 			streamDone <- true
 			break
@@ -798,7 +889,7 @@ out:
 	for i, msg := range chatBody.Messages {
 		logger.Debug("chatRound: after cleaning", "index", i, "role", msg.Role, "content_len", len(msg.Content), "has_content", msg.HasContent(), "tool_call_id", msg.ToolCallID)
 	}
-	colorText()
+	refreshChatDisplay()
 	updateStatusLine()
 	// bot msg is done;
 	// now check it for func call
@@ -1255,16 +1346,15 @@ func triggerPrivateMessageResponses(msg models.RoleMsg) {
 			// weird cases, skip
 			continue
 		}
-		// Skip if this is the user character or the sender of the message
+		// Skip if this is the user character (user handles their own turn)
+		// If user is in KnownTo, stop processing - it's the user's turn
 		if recipient == cfg.UserRole || recipient == userCharacter {
-			return // user in known_to => users turn
+			return // user in known_to => user's turn
 		}
-		// Trigger the recipient character to respond by simulating a prompt
-		// that indicates it's their turn
-		triggerMsg := recipient + ":\n"
-		// Call chatRound with the trigger message to make the recipient respond
+		// Trigger the recipient character to respond
+		// Send empty message so LLM continues naturally from the conversation
 		crr := &models.ChatRoundReq{
-			UserMsg: triggerMsg,
+			UserMsg: "", // Empty message - LLM will continue the conversation
 			Role:    recipient,
 		}
 		chatRoundChan <- crr
