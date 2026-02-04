@@ -1187,7 +1187,6 @@ func init() {
 				persona = cfg.WriteNextMsgAs
 			}
 			roles := listRolesWithUser()
-			logger.Info("list roles", "roles", roles)
 			for i, role := range roles {
 				if strings.EqualFold(role, persona) {
 					if i == len(roles)-1 {
@@ -1197,7 +1196,6 @@ func init() {
 					}
 					cfg.WriteNextMsgAs = roles[i+1] // get next role
 					persona = cfg.WriteNextMsgAs
-					// logger.Info("picked role", "roles", roles, "index", i+1)
 					break
 				}
 			}
@@ -1228,7 +1226,6 @@ func init() {
 						break
 					}
 					cfg.WriteNextMsgAsCompletionAgent = roles[i+1] // get next role
-					// logger.Info("picked role", "roles", roles, "index", i+1)
 					break
 				}
 			}

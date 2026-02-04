@@ -19,6 +19,7 @@ import (
 	"os"
 	"path"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -154,15 +155,8 @@ func filterMessagesForCharacter(messages []models.RoleMsg, character string) []m
 			filtered = append(filtered, msg)
 			continue
 		}
-		// Check if character is in KnownTo list
-		found := false
-		for _, k := range msg.KnownTo {
-			if k == character {
-				found = true
-				break
-			}
-		}
-		if found {
+		if slices.Contains(msg.KnownTo, character) {
+			// Check if character is in KnownTo lis
 			filtered = append(filtered, msg)
 		}
 	}

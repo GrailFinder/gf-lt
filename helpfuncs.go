@@ -7,6 +7,7 @@ import (
 	"image"
 	"os"
 	"path"
+	"slices"
 	"strings"
 	"unicode"
 
@@ -198,6 +199,7 @@ func listRolesWithUser() []string {
 	}
 	// Prepend user role to the beginning of the list
 	result := append([]string{cfg.UserRole}, filteredRoles...)
+	slices.Sort(result)
 	return result
 }
 
