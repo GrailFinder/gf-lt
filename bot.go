@@ -540,6 +540,8 @@ func extractDetailedErrorFromBytes(body []byte, statusCode int) string {
 // sendMsgToLLM expects streaming resp
 func sendMsgToLLM(body io.Reader) {
 	choseChunkParser()
+	// openrouter does not respect stop strings, so we have to cut the message ourselves
+	stopStrings := chatBody.MakeStopSliceExcluding("", listChatRoles())
 	req, err := http.NewRequest("POST", cfg.CurrentAPI, body)
 	if err != nil {
 		logger.Error("newreq error", "error", err)
@@ -678,6 +680,12 @@ func sendMsgToLLM(body io.Reader) {
 		}
 		// bot sends way too many \n
 		answerText = strings.ReplaceAll(chunk.Chunk, "\n\n", "\n")
+		// Accumulate text to check for stop strings that might span across chunks
+		// check if chunk is in stopstrings => stop
+		if slices.Contains(stopStrings, answerText) {
+			logger.Debug("Stop string detected and handled", "stop_string", answerText)
+			streamDone <- true
+		}
 		chunkChan <- answerText
 		openAIToolChan <- chunk.ToolChunk
 		if chunk.FuncName != "" {
