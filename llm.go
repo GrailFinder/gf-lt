@@ -207,7 +207,7 @@ func (lcp LCPCompletion) FormMsg(msg, role string, resume bool) (io.Reader, erro
 	logger.Debug("checking prompt for /completion", "tool_use", cfg.ToolUse,
 		"msg", msg, "resume", resume, "prompt", prompt, "multimodal_data_count", len(multimodalData))
 	payload := models.NewLCPReq(prompt, chatBody.Model, multimodalData,
-		defaultLCPProps, chatBody.MakeStopSliceExcluding(botPersona, listChatRoles()))
+		defaultLCPProps, chatBody.MakeStopSliceExcluding("", listChatRoles()))
 	data, err := json.Marshal(payload)
 	if err != nil {
 		logger.Error("failed to form a msg", "error", err)
@@ -444,7 +444,7 @@ func (ds DeepSeekerCompletion) FormMsg(msg, role string, resume bool) (io.Reader
 		"msg", msg, "resume", resume, "prompt", prompt)
 	payload := models.NewDSCompletionReq(prompt, chatBody.Model,
 		defaultLCPProps["temp"],
-		chatBody.MakeStopSliceExcluding(botPersona, listChatRoles()))
+		chatBody.MakeStopSliceExcluding("", listChatRoles()))
 	data, err := json.Marshal(payload)
 	if err != nil {
 		logger.Error("failed to form a msg", "error", err)
@@ -604,7 +604,7 @@ func (or OpenRouterCompletion) FormMsg(msg, role string, resume bool) (io.Reader
 	if cfg.ThinkUse && !cfg.ToolUse {
 		prompt += "<think>"
 	}
-	stopSlice := chatBody.MakeStopSliceExcluding(botPersona, listChatRoles())
+	stopSlice := chatBody.MakeStopSliceExcluding("", listChatRoles())
 	logger.Debug("checking prompt for /completion", "tool_use", cfg.ToolUse,
 		"msg", msg, "resume", resume, "prompt", prompt, "stop_strings", stopSlice)
 	payload := models.NewOpenRouterCompletionReq(chatBody.Model, prompt,

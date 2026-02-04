@@ -861,18 +861,7 @@ out:
 		newMsg = processMessageTag(newMsg)
 		chatBody.Messages = append(chatBody.Messages, newMsg)
 	}
-	logger.Debug("chatRound: before cleanChatBody", "messages_before_clean", len(chatBody.Messages))
-	for i, msg := range chatBody.Messages {
-		logger.Debug("chatRound: before cleaning", "index", i,
-			"role", msg.Role, "content_len", len(msg.Content),
-			"has_content", msg.HasContent(), "tool_call_id", msg.ToolCallID)
-	}
-	// // Clean null/empty messages to prevent API issues with endpoints like llama.cpp jinja template
 	cleanChatBody()
-	logger.Debug("chatRound: after cleanChatBody", "messages_after_clean", len(chatBody.Messages))
-	for i, msg := range chatBody.Messages {
-		logger.Debug("chatRound: after cleaning", "index", i, "role", msg.Role, "content_len", len(msg.Content), "has_content", msg.HasContent(), "tool_call_id", msg.ToolCallID)
-	}
 	refreshChatDisplay()
 	updateStatusLine()
 	// bot msg is done;
@@ -901,19 +890,10 @@ func cleanChatBody() {
 	if chatBody == nil || chatBody.Messages == nil {
 		return
 	}
-	originalLen := len(chatBody.Messages)
-	logger.Debug("cleanChatBody: before cleaning", "message_count", originalLen)
-	for i, msg := range chatBody.Messages {
-		logger.Debug("cleanChatBody: before clean", "index", i, "role", msg.Role, "content_len", len(msg.Content), "has_content", msg.HasContent(), "tool_call_id", msg.ToolCallID)
-	}
 	// Tool request cleaning is now configurable via AutoCleanToolCallsFromCtx (default false)
 	// /completion msg where part meant for user and other part tool call
 	chatBody.Messages = cleanToolCalls(chatBody.Messages)
 	chatBody.Messages = consolidateAssistantMessages(chatBody.Messages)
-	logger.Debug("cleanChatBody: after cleaning", "original_len", originalLen, "new_len", len(chatBody.Messages))
-	for i, msg := range chatBody.Messages {
-		logger.Debug("cleanChatBody: after clean", "index", i, "role", msg.Role, "content_len", len(msg.Content), "has_content", msg.HasContent(), "tool_call_id", msg.ToolCallID)
-	}
 }
 
 // convertJSONToMapStringString unmarshals JSON into map[string]interface{} and converts all values to strings.

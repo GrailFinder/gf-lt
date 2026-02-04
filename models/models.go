@@ -382,9 +382,12 @@ func (cb *ChatBody) MakeStopSliceExcluding(
 			continue
 		}
 		// Add multiple variations to catch different formatting
-		ss = append(ss, role+":\n") // Most common: role with newline
-		ss = append(ss, role+":")   // Role with colon but no newline
-		ss = append(ss, role+": ")  // Role with colon and space
+		ss = append(ss, role+":\n")   // Most common: role with newline
+		ss = append(ss, role+":")     // Role with colon but no newline
+		ss = append(ss, role+": ")    // Role with colon and single space
+		ss = append(ss, role+":  ")   // Role with colon and double space (common tokenization)
+		ss = append(ss, role+":  \n") // Role with colon and double space (common tokenization)
+		ss = append(ss, role+":   ")  // Role with colon and triple space
 	}
 	return ss
 }
