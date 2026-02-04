@@ -96,8 +96,10 @@ func parseKnownToTag(content string) []string {
 		if list == "" {
 			continue
 		}
-		parts := strings.Split(list, ",")
-		for _, p := range parts {
+		strings.SplitSeq(list, ",")
+		// parts := strings.Split(list, ",")
+		// for _, p := range parts {
+		for p := range strings.SplitSeq(list, ",") {
 			p = strings.TrimSpace(p)
 			if p != "" {
 				knownTo = append(knownTo, p)
@@ -118,25 +120,17 @@ func processMessageTag(msg models.RoleMsg) models.RoleMsg {
 	// If KnownTo already set, assume tag already processed (content cleaned).
 	// However, we still check for new tags (maybe added later).
 	knownTo := parseKnownToTag(msg.Content)
-	// logger.Info("processing tags", "msg", msg.Content, "known_to", knownTo)
 	// If tag found, replace KnownTo with new list (merge with existing?)
 	// For simplicity, if knownTo is not nil, replace.
-	if knownTo != nil {
-		msg.KnownTo = knownTo
-		// Only ensure sender role is in KnownTo if there was a tag
-		// This means the message is intended for specific characters
-		if msg.Role != "" {
-			senderAdded := false
-			for _, k := range msg.KnownTo {
-				if k == msg.Role {
-					senderAdded = true
-					break
-				}
-			}
-			if !senderAdded {
-				msg.KnownTo = append(msg.KnownTo, msg.Role)
-			}
-		}
+	if knownTo == nil {
+		return msg
+	}
+	msg.KnownTo = knownTo
+	if msg.Role == "" {
+		return msg
+	}
+	if !slices.Contains(msg.KnownTo, msg.Role) {
+		msg.KnownTo = append(msg.KnownTo, msg.Role)
 	}
 	return msg
 }
@@ -781,9 +775,6 @@ func chatWatcher(ctx context.Context) {
 }
 
 func chatRound(r *models.ChatRoundReq) error {
-	// chunkChan := make(chan string, 10)
-	// openAIToolChan := make(chan string, 10)
-	// streamDone := make(chan bool, 1)
 	botRespMode = true
 	botPersona := cfg.AssistantRole
 	if cfg.WriteNextMsgAsCompletionAgent != "" {
@@ -1350,6 +1341,7 @@ func triggerPrivateMessageResponses(msg models.RoleMsg) {
 		crr := &models.ChatRoundReq{
 			UserMsg: triggerMsg,
 			Role:    recipient,
+			Resume:  true,
 		}
 		chatRoundChan <- crr
 	}

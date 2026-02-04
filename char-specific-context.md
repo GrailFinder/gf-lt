@@ -130,6 +130,9 @@ Card example:
 
 Character‑specific context relies on the `/completion` endpoint (or other completion‑style endpoints) where the LLM is presented with a raw text prompt containing the entire filtered history. It does **not** work with OpenAI‑style `/v1/chat/completions` endpoints, because those endpoints enforce a fixed role set (`user`/`assistant`/`system`) and strip custom role names and metadata.
 
+### TTS
+Although text message might be hidden from user character. If TTS is enabled it will be read.
+
 ### Tag Parsing
 
 - The tag is case‑sensitive.
