@@ -91,7 +91,6 @@ func colorText() {
 	for i, cb := range codeBlocks {
 		text = strings.Replace(text, fmt.Sprintf(placeholder, i), cb, 1)
 	}
-	logger.Debug("thinking debug", "blocks", thinkBlocks)
 	for i, tb := range thinkBlocks {
 		text = strings.Replace(text, fmt.Sprintf(placeholderThink, i), tb, 1)
 	}

@@ -874,7 +874,7 @@ func init() {
 			// lastRole := chatBody.Messages[len(chatBody.Messages)-1].Role
 			textView.SetText(chatToText(chatBody.Messages, cfg.ShowSys))
 			// go chatRound("", cfg.UserRole, textView, true, false)
-			chatRoundChan <- &models.ChatRoundReq{Role: cfg.UserRole}
+			chatRoundChan <- &models.ChatRoundReq{Role: cfg.UserRole, Regen: true}
 			return nil
 		}
 		if event.Key() == tcell.KeyF3 && !botRespMode {
