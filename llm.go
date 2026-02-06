@@ -78,6 +78,7 @@ type ChunkParser interface {
 	ParseChunk([]byte) (*models.TextChunk, error)
 	FormMsg(msg, role string, cont bool) (io.Reader, error)
 	GetToken() string
+	GetAPIType() models.APIType
 }
 
 func choseChunkParser() {
@@ -125,6 +126,10 @@ type OpenRouterCompletion struct {
 }
 type OpenRouterChat struct {
 	Model string
+}
+
+func (lcp LCPCompletion) GetAPIType() models.APIType {
+	return models.APITypeCompletion
 }
 
 func (lcp LCPCompletion) GetToken() string {
@@ -233,7 +238,11 @@ func (lcp LCPCompletion) ParseChunk(data []byte) (*models.TextChunk, error) {
 	return resp, nil
 }
 
-func (op LCPChat) GetToken() string {
+func (lcp LCPChat) GetAPIType() models.APIType {
+	return models.APITypeChat
+}
+
+func (lcp LCPChat) GetToken() string {
 	return ""
 }
 
@@ -371,6 +380,10 @@ func (op LCPChat) FormMsg(msg, role string, resume bool) (io.Reader, error) {
 }
 
 // deepseek
+func (ds DeepSeekerCompletion) GetAPIType() models.APIType {
+	return models.APITypeCompletion
+}
+
 func (ds DeepSeekerCompletion) ParseChunk(data []byte) (*models.TextChunk, error) {
 	llmchunk := models.DSCompletionResp{}
 	if err := json.Unmarshal(data, &llmchunk); err != nil {
@@ -451,6 +464,10 @@ func (ds DeepSeekerCompletion) FormMsg(msg, role string, resume bool) (io.Reader
 		return nil, err
 	}
 	return bytes.NewReader(data), nil
+}
+
+func (ds DeepSeekerChat) GetAPIType() models.APIType {
+	return models.APITypeChat
 }
 
 func (ds DeepSeekerChat) ParseChunk(data []byte) (*models.TextChunk, error) {
@@ -539,6 +556,10 @@ func (ds DeepSeekerChat) FormMsg(msg, role string, resume bool) (io.Reader, erro
 }
 
 // openrouter
+func (or OpenRouterCompletion) GetAPIType() models.APIType {
+	return models.APITypeCompletion
+}
+
 func (or OpenRouterCompletion) ParseChunk(data []byte) (*models.TextChunk, error) {
 	llmchunk := models.OpenRouterCompletionResp{}
 	if err := json.Unmarshal(data, &llmchunk); err != nil {
@@ -618,6 +639,10 @@ func (or OpenRouterCompletion) FormMsg(msg, role string, resume bool) (io.Reader
 }
 
 // chat
+func (or OpenRouterChat) GetAPIType() models.APIType {
+	return models.APITypeChat
+}
+
 func (or OpenRouterChat) ParseChunk(data []byte) (*models.TextChunk, error) {
 	llmchunk := models.OpenRouterChatResp{}
 	if err := json.Unmarshal(data, &llmchunk); err != nil {

@@ -682,8 +682,10 @@ func sendMsgToLLM(body io.Reader) {
 		answerText = strings.ReplaceAll(chunk.Chunk, "\n\n", "\n")
 		// Accumulate text to check for stop strings that might span across chunks
 		// check if chunk is in stopstrings => stop
-		if slices.Contains(stopStrings, answerText) {
-			logger.Debug("Stop string detected and handled", "stop_string", answerText)
+		// this check is needed only for openrouter /v1/completion, since it does not respect stop slice
+		if chunkParser.GetAPIType() == models.APITypeCompletion &&
+			slices.Contains(stopStrings, answerText) {
+			logger.Debug("stop string detected on client side for completion endpoint", "stop_string", answerText)
 			streamDone <- true
 		}
 		chunkChan <- answerText

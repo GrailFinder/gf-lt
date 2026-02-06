@@ -558,3 +558,10 @@ type ChatRoundReq struct {
 	Regen   bool
 	Resume  bool
 }
+
+type APIType int
+
+const (
+	APITypeChat APIType = iota
+	APITypeCompletion
+)
