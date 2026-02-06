@@ -113,7 +113,7 @@ func parseKnownToTag(content string) []string {
 // processMessageTag processes a message for known_to tag and sets KnownTo field.
 // It also ensures the sender's role is included in KnownTo.
 // If KnownTo already set (e.g., from DB), preserves it unless new tag found.
-func processMessageTag(msg models.RoleMsg) models.RoleMsg {
+func processMessageTag(msg *models.RoleMsg) *models.RoleMsg {
 	if cfg == nil || !cfg.CharSpecificContextEnabled {
 		return msg
 	}
@@ -297,7 +297,8 @@ func warmUpModel() {
 	go func() {
 		var data []byte
 		var err error
-		if strings.HasSuffix(cfg.CurrentAPI, "/completion") {
+		switch {
+		case strings.HasSuffix(cfg.CurrentAPI, "/completion"):
 			// Old completion endpoint
 			req := models.NewLCPReq(".", chatBody.Model, nil, map[string]float32{
 				"temperature":    0.8,
@@ -307,7 +308,7 @@ func warmUpModel() {
 			}, []string{})
 			req.Stream = false
 			data, err = json.Marshal(req)
-		} else if strings.Contains(cfg.CurrentAPI, "/v1/chat/completions") {
+		case strings.Contains(cfg.CurrentAPI, "/v1/chat/completions"):
 			// OpenAI-compatible chat endpoint
 			req := models.OpenAIReq{
 				ChatBody: &models.ChatBody{
@@ -320,7 +321,7 @@ func warmUpModel() {
 				Tools: nil,
 			}
 			data, err = json.Marshal(req)
-		} else {
+		default:
 			// Unknown local endpoint, skip
 			return
 		}
@@ -861,14 +862,14 @@ out:
 		// lastM.Content = lastM.Content + respText.String()
 		// Process the updated message to check for known_to tags in resumed response
 		updatedMsg := chatBody.Messages[len(chatBody.Messages)-1]
-		processedMsg := processMessageTag(updatedMsg)
-		chatBody.Messages[len(chatBody.Messages)-1] = processedMsg
+		processedMsg := processMessageTag(&updatedMsg)
+		chatBody.Messages[len(chatBody.Messages)-1] = *processedMsg
 	} else {
 		newMsg := models.RoleMsg{
 			Role: botPersona, Content: respText.String(),
 		}
 		// Process the new message to check for known_to tags in LLM response
-		newMsg = processMessageTag(newMsg)
+		newMsg = *processMessageTag(&newMsg)
 		chatBody.Messages = append(chatBody.Messages, newMsg)
 	}
 	cleanChatBody()
@@ -889,7 +890,7 @@ out:
 	if cfg.AutoTurn {
 		lastMsg := chatBody.Messages[len(chatBody.Messages)-1]
 		if len(lastMsg.KnownTo) > 0 {
-			triggerPrivateMessageResponses(lastMsg)
+			triggerPrivateMessageResponses(&lastMsg)
 		}
 	}
 	return nil
@@ -970,7 +971,7 @@ func unmarshalFuncCall(jsonStr string) (*models.FuncCall, error) {
 
 // findCall: adds chatRoundReq into the chatRoundChan and returns true if does
 func findCall(msg, toolCall string) bool {
-	fc := &models.FuncCall{}
+	var fc *models.FuncCall
 	if toolCall != "" {
 		// HTML-decode the tool call string to handle encoded characters like &lt; -> <=
 		decodedToolCall := html.UnescapeString(toolCall)
@@ -1306,7 +1307,7 @@ func init() {
 
 // triggerPrivateMessageResponses checks if a message was sent privately to specific characters
 // and triggers those non-user characters to respond
-func triggerPrivateMessageResponses(msg models.RoleMsg) {
+func triggerPrivateMessageResponses(msg *models.RoleMsg) {
 	if cfg == nil || !cfg.CharSpecificContextEnabled {
 		return
 	}

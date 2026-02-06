@@ -533,8 +533,7 @@ func init() {
 	})
 	textView.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		// Handle vim-like navigation in TextView
-		switch event.Key() {
-		case tcell.KeyRune:
+		if event.Key() == tcell.KeyRune {
 			switch event.Rune() {
 			case 'j':
 				// For line down
@@ -672,17 +671,18 @@ func init() {
 				return nil
 			}
 			m := chatBody.Messages[selectedIndex]
-			if roleEditMode {
+			switch {
+			case roleEditMode:
 				hideIndexBar() // Hide overlay first
 				// Set the current role as the default text in the input field
 				roleEditWindow.SetText(m.Role)
 				pages.AddPage(roleEditPage, roleEditWindow, true, true)
 				roleEditMode = false // Reset the flag
-			} else if editMode {
+			case editMode:
 				hideIndexBar() // Hide overlay first
 				pages.AddPage(editMsgPage, editArea, true, true)
 				editArea.SetText(m.Content, true)
-			} else {
+			default:
 				if err := copyToClipboard(m.Content); err != nil {
 					logger.Error("failed to copy to clipboard", "error", err)
 				}
@@ -760,22 +760,19 @@ func init() {
 			pages.RemovePage(helpPage)
 		})
 	helpView.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		switch event.Key() {
-		case tcell.KeyEnter:
+		if event.Key() == tcell.KeyEnter {
 			return event
-		default:
-			if event.Key() == tcell.KeyRune && event.Rune() == 'x' {
-				pages.RemovePage(helpPage)
-				return nil
-			}
+		}
+		if event.Key() == tcell.KeyRune && event.Rune() == 'x' {
+			pages.RemovePage(helpPage)
+			return nil
 		}
 		return nil
 	})
 	//
 	imgView = tview.NewImage()
 	imgView.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		switch event.Key() {
-		case tcell.KeyEnter:
+		if event.Key() == tcell.KeyEnter {
 			pages.RemovePage(imgPage)
 			return event
 		}

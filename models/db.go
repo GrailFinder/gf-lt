@@ -14,7 +14,7 @@ type Chat struct {
 	UpdatedAt time.Time `db:"updated_at" json:"updated_at"`
 }
 
-func (c Chat) ToHistory() ([]RoleMsg, error) {
+func (c *Chat) ToHistory() ([]RoleMsg, error) {
 	resp := []RoleMsg{}
 	if err := json.Unmarshal([]byte(c.Msgs), &resp); err != nil {
 		return nil, err

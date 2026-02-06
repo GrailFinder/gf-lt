@@ -313,11 +313,12 @@ func makePropsTable(props map[string]float32) *tview.Table {
 					logger.Warn("empty options list for", "label", label, "api", cfg.CurrentAPI, "localModelsLen", len(LocalModels), "orModelsLen", len(ORFreeModels))
 					message := "No options available for " + label
 					if label == "Select a model" {
-						if strings.Contains(cfg.CurrentAPI, "openrouter.ai") {
+						switch {
+						case strings.Contains(cfg.CurrentAPI, "openrouter.ai"):
 							message = "No OpenRouter models available. Check token and connection."
-						} else if strings.Contains(cfg.CurrentAPI, "api.deepseek.com") {
+						case strings.Contains(cfg.CurrentAPI, "api.deepseek.com"):
 							message = "DeepSeek models should be available. Please report bug."
-						} else {
+						default:
 							message = "No llama.cpp models loaded. Ensure llama.cpp server is running with models."
 						}
 					}

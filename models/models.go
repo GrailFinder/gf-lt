@@ -98,7 +98,7 @@ type RoleMsg struct {
 }
 
 // MarshalJSON implements custom JSON marshaling for RoleMsg
-func (m RoleMsg) MarshalJSON() ([]byte, error) {
+func (m *RoleMsg) MarshalJSON() ([]byte, error) {
 	if m.hasContentParts {
 		// Use structured content format
 		aux := struct {
@@ -166,11 +166,11 @@ func (m *RoleMsg) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func (m RoleMsg) ToText(i int) string {
+func (m *RoleMsg) ToText(i int) string {
 	icon := fmt.Sprintf("(%d)", i)
 
 	// Convert content to string representation
-	contentStr := ""
+	var contentStr string
 	if !m.hasContentParts {
 		contentStr = m.Content
 	} else {
@@ -198,8 +198,8 @@ func (m RoleMsg) ToText(i int) string {
 	return strings.ReplaceAll(textMsg, "\n\n", "\n")
 }
 
-func (m RoleMsg) ToPrompt() string {
-	contentStr := ""
+func (m *RoleMsg) ToPrompt() string {
+	var contentStr string
 	if !m.hasContentParts {
 		contentStr = m.Content
 	} else {
@@ -240,7 +240,7 @@ func NewMultimodalMsg(role string, contentParts []interface{}) RoleMsg {
 }
 
 // HasContent returns true if the message has either string content or structured content parts
-func (m RoleMsg) HasContent() bool {
+func (m *RoleMsg) HasContent() bool {
 	if m.Content != "" {
 		return true
 	}
@@ -251,17 +251,17 @@ func (m RoleMsg) HasContent() bool {
 }
 
 // IsContentParts returns true if the message uses structured content parts
-func (m RoleMsg) IsContentParts() bool {
+func (m *RoleMsg) IsContentParts() bool {
 	return m.hasContentParts
 }
 
 // GetContentParts returns the content parts of the message
-func (m RoleMsg) GetContentParts() []interface{} {
+func (m *RoleMsg) GetContentParts() []interface{} {
 	return m.ContentParts
 }
 
 // Copy creates a copy of the RoleMsg with all fields
-func (m RoleMsg) Copy() RoleMsg {
+func (m *RoleMsg) Copy() RoleMsg {
 	return RoleMsg{
 		Role:            m.Role,
 		Content:         m.Content,
@@ -382,12 +382,14 @@ func (cb *ChatBody) MakeStopSliceExcluding(
 			continue
 		}
 		// Add multiple variations to catch different formatting
-		ss = append(ss, role+":\n")   // Most common: role with newline
-		ss = append(ss, role+":")     // Role with colon but no newline
-		ss = append(ss, role+": ")    // Role with colon and single space
-		ss = append(ss, role+":  ")   // Role with colon and double space (common tokenization)
-		ss = append(ss, role+":  \n") // Role with colon and double space (common tokenization)
-		ss = append(ss, role+":   ")  // Role with colon and triple space
+		ss = append(ss, 
+			role+":\n",   // Most common: role with newline
+			role+":",     // Role with colon but no newline
+			role+": ",    // Role with colon and single space
+			role+":  ",   // Role with colon and double space (common tokenization)
+			role+":  \n", // Role with colon and double space (common tokenization)
+			role+":   ",  // Role with colon and triple space
+		)
 	}
 	return ss
 }

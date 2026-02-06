@@ -506,7 +506,7 @@ func TestProcessMessageTag(t *testing.T) {
 				CharSpecificContextTag:     tt.tag,
 			}
 			cfg = testCfg
-			got := processMessageTag(tt.msg)
+			got := processMessageTag(&tt.msg)
 			if len(got.KnownTo) != len(tt.wantMsg.KnownTo) {
 				t.Errorf("processMessageTag() KnownTo length = %v, want %v", len(got.KnownTo), len(tt.wantMsg.KnownTo))
 				t.Logf("got: %v", got.KnownTo)

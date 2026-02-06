@@ -159,7 +159,7 @@ func (lcp LCPCompletion) FormMsg(msg, role string, resume bool) (io.Reader, erro
 	}
 	if msg != "" { // otherwise let the bot to continue
 		newMsg := models.RoleMsg{Role: role, Content: msg}
-		newMsg = processMessageTag(newMsg)
+		newMsg = *processMessageTag(&newMsg)
 		chatBody.Messages = append(chatBody.Messages, newMsg)
 	}
 	if !resume {
@@ -319,7 +319,7 @@ func (op LCPChat) FormMsg(msg, role string, resume bool) (io.Reader, error) {
 			// Create a simple text message
 			newMsg = models.NewRoleMsg(role, msg)
 		}
-		newMsg = processMessageTag(newMsg)
+		newMsg = *processMessageTag(&newMsg)
 		chatBody.Messages = append(chatBody.Messages, newMsg)
 		logger.Debug("LCPChat FormMsg: added message to chatBody", "role", newMsg.Role,
 			"content_len", len(newMsg.Content), "message_count_after_add", len(chatBody.Messages))
@@ -413,7 +413,7 @@ func (ds DeepSeekerCompletion) FormMsg(msg, role string, resume bool) (io.Reader
 	}
 	if msg != "" { // otherwise let the bot to continue
 		newMsg := models.RoleMsg{Role: role, Content: msg}
-		newMsg = processMessageTag(newMsg)
+		newMsg = *processMessageTag(&newMsg)
 		chatBody.Messages = append(chatBody.Messages, newMsg)
 	}
 	if !resume {
@@ -504,7 +504,7 @@ func (ds DeepSeekerChat) FormMsg(msg, role string, resume bool) (io.Reader, erro
 	}
 	if msg != "" { // otherwise let the bot continue
 		newMsg := models.RoleMsg{Role: role, Content: msg}
-		newMsg = processMessageTag(newMsg)
+		newMsg = *processMessageTag(&newMsg)
 		chatBody.Messages = append(chatBody.Messages, newMsg)
 	}
 	if !resume {
@@ -586,7 +586,7 @@ func (or OpenRouterCompletion) FormMsg(msg, role string, resume bool) (io.Reader
 	logger.Debug("formmsg openroutercompletion", "link", cfg.CurrentAPI)
 	if msg != "" { // otherwise let the bot to continue
 		newMsg := models.RoleMsg{Role: role, Content: msg}
-		newMsg = processMessageTag(newMsg)
+		newMsg = *processMessageTag(&newMsg)
 		chatBody.Messages = append(chatBody.Messages, newMsg)
 	}
 	if !resume {
@@ -707,7 +707,7 @@ func (or OpenRouterChat) FormMsg(msg, role string, resume bool) (io.Reader, erro
 			// Create a simple text message
 			newMsg = models.NewRoleMsg(role, msg)
 		}
-		newMsg = processMessageTag(newMsg)
+		newMsg = *processMessageTag(&newMsg)
 		chatBody.Messages = append(chatBody.Messages, newMsg)
 	}
 	if !resume {

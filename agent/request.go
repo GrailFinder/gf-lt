@@ -77,17 +77,18 @@ func (ag *AgentClient) buildRequest(sysprompt, msg string) ([]byte, error) {
 		}
 		prompt := strings.TrimSpace(sb.String())
 
-		if isDeepSeek {
+		switch {
+		case isDeepSeek:
 			// DeepSeek completion
 			req := models.NewDSCompletionReq(prompt, model, defaultProps["temperature"], []string{})
 			req.Stream = false // Agents don't need streaming
 			return json.Marshal(req)
-		} else if isOpenRouter {
+		case isOpenRouter:
 			// OpenRouter completion
 			req := models.NewOpenRouterCompletionReq(model, prompt, defaultProps, []string{})
 			req.Stream = false // Agents don't need streaming
 			return json.Marshal(req)
-		} else {
+		default:
 			// Assume llama.cpp completion
 			req := models.NewLCPReq(prompt, model, nil, defaultProps, []string{})
 			req.Stream = false // Agents don't need streaming
@@ -103,15 +104,16 @@ func (ag *AgentClient) buildRequest(sysprompt, msg string) ([]byte, error) {
 			Messages: messages,
 		}
 
-		if isDeepSeek {
+		switch {
+		case isDeepSeek:
 			// DeepSeek chat
 			req := models.NewDSChatReq(*chatBody)
 			return json.Marshal(req)
-		} else if isOpenRouter {
+		case isOpenRouter:
 			// OpenRouter chat
 			req := models.NewOpenRouterChatReq(*chatBody, defaultProps)
 			return json.Marshal(req)
-		} else {
+		default:
 			// Assume llama.cpp chat (OpenAI format)
 			req := models.OpenAIReq{
 				ChatBody: chatBody,
