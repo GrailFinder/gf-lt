@@ -1334,6 +1334,9 @@ func triggerPrivateMessageResponses(msg *models.RoleMsg) {
 			Role:    recipient,
 			Resume:  true,
 		}
+		fmt.Fprintf(textView, "\n[-:-:b](%d) ", len(chatBody.Messages))
+		fmt.Fprint(textView, roleToIcon(recipient))
+		fmt.Fprint(textView, "[-:-:-]\n")
 		chatRoundChan <- crr
 	}
 }
