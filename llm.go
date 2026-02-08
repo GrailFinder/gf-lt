@@ -59,16 +59,18 @@ func ClearImageAttachment() {
 // filterMessagesForCurrentCharacter filters messages based on char-specific context.
 // Returns filtered messages and the bot persona role (target character).
 func filterMessagesForCurrentCharacter(messages []models.RoleMsg) ([]models.RoleMsg, string) {
-	if cfg == nil || !cfg.CharSpecificContextEnabled {
-		botPersona := cfg.AssistantRole
-		if cfg.WriteNextMsgAsCompletionAgent != "" {
-			botPersona = cfg.WriteNextMsgAsCompletionAgent
-		}
-		return messages, botPersona
-	}
 	botPersona := cfg.AssistantRole
 	if cfg.WriteNextMsgAsCompletionAgent != "" {
 		botPersona = cfg.WriteNextMsgAsCompletionAgent
+	}
+	if cfg == nil || !cfg.CharSpecificContextEnabled {
+		return messages, botPersona
+	}
+	// get last message (written by user) and checck if it has a tag
+	lm := messages[len(messages)-1]
+	recipient, ok := getValidKnowToRecipient(&lm)
+	if ok && recipient != "" {
+		botPersona = recipient
 	}
 	filtered := filterMessagesForCharacter(messages, botPersona)
 	return filtered, botPersona
@@ -162,23 +164,21 @@ func (lcp LCPCompletion) FormMsg(msg, role string, resume bool) (io.Reader, erro
 		newMsg = *processMessageTag(&newMsg)
 		chatBody.Messages = append(chatBody.Messages, newMsg)
 	}
-	if !resume {
-		// if rag - add as system message to avoid conflicts with tool usage
-		if cfg.RAGEnabled {
-			um := chatBody.Messages[len(chatBody.Messages)-1].Content
-			logger.Debug("RAG is enabled, preparing RAG context", "user_message", um)
-			ragResp, err := chatRagUse(um)
-			if err != nil {
-				logger.Error("failed to form a rag msg", "error", err)
-				return nil, err
-			}
-			logger.Debug("RAG response received", "response_len", len(ragResp),
-				"response_preview", ragResp[:min(len(ragResp), 100)])
-			// Use system role for RAG context to avoid conflicts with tool usage
-			ragMsg := models.RoleMsg{Role: "system", Content: RAGMsg + ragResp}
-			chatBody.Messages = append(chatBody.Messages, ragMsg)
-			logger.Debug("RAG message added to chat body", "message_count", len(chatBody.Messages))
+	// if rag - add as system message to avoid conflicts with tool usage
+	if !resume && cfg.RAGEnabled {
+		um := chatBody.Messages[len(chatBody.Messages)-1].Content
+		logger.Debug("RAG is enabled, preparing RAG context", "user_message", um)
+		ragResp, err := chatRagUse(um)
+		if err != nil {
+			logger.Error("failed to form a rag msg", "error", err)
+			return nil, err
 		}
+		logger.Debug("RAG response received", "response_len", len(ragResp),
+			"response_preview", ragResp[:min(len(ragResp), 100)])
+		// Use system role for RAG context to avoid conflicts with tool usage
+		ragMsg := models.RoleMsg{Role: "system", Content: RAGMsg + ragResp}
+		chatBody.Messages = append(chatBody.Messages, ragMsg)
+		logger.Debug("RAG message added to chat body", "message_count", len(chatBody.Messages))
 	}
 	// sending description of the tools and how to use them
 	if cfg.ToolUse && !resume && role == cfg.UserRole && !containsToolSysMsg() {
@@ -324,24 +324,22 @@ func (op LCPChat) FormMsg(msg, role string, resume bool) (io.Reader, error) {
 		logger.Debug("LCPChat FormMsg: added message to chatBody", "role", newMsg.Role,
 			"content_len", len(newMsg.Content), "message_count_after_add", len(chatBody.Messages))
 	}
-	if !resume {
-		// if rag - add as system message to avoid conflicts with tool usage
-		if cfg.RAGEnabled {
-			um := chatBody.Messages[len(chatBody.Messages)-1].Content
-			logger.Debug("LCPChat: RAG is enabled, preparing RAG context", "user_message", um)
-			ragResp, err := chatRagUse(um)
-			if err != nil {
-				logger.Error("LCPChat: failed to form a rag msg", "error", err)
-				return nil, err
-			}
-			logger.Debug("LCPChat: RAG response received",
-				"response_len", len(ragResp), "response_preview", ragResp[:min(len(ragResp), 100)])
-			// Use system role for RAG context to avoid conflicts with tool usage
-			ragMsg := models.RoleMsg{Role: "system", Content: RAGMsg + ragResp}
-			chatBody.Messages = append(chatBody.Messages, ragMsg)
-			logger.Debug("LCPChat: RAG message added to chat body", "role", ragMsg.Role,
-				"rag_content_len", len(ragMsg.Content), "message_count_after_rag", len(chatBody.Messages))
+	// if rag - add as system message to avoid conflicts with tool usage
+	if !resume && cfg.RAGEnabled {
+		um := chatBody.Messages[len(chatBody.Messages)-1].Content
+		logger.Debug("LCPChat: RAG is enabled, preparing RAG context", "user_message", um)
+		ragResp, err := chatRagUse(um)
+		if err != nil {
+			logger.Error("LCPChat: failed to form a rag msg", "error", err)
+			return nil, err
 		}
+		logger.Debug("LCPChat: RAG response received",
+			"response_len", len(ragResp), "response_preview", ragResp[:min(len(ragResp), 100)])
+		// Use system role for RAG context to avoid conflicts with tool usage
+		ragMsg := models.RoleMsg{Role: "system", Content: RAGMsg + ragResp}
+		chatBody.Messages = append(chatBody.Messages, ragMsg)
+		logger.Debug("LCPChat: RAG message added to chat body", "role", ragMsg.Role,
+			"rag_content_len", len(ragMsg.Content), "message_count_after_rag", len(chatBody.Messages))
 	}
 	filteredMessages, botPersona := filterMessagesForCurrentCharacter(chatBody.Messages)
 	// openai /v1/chat does not support custom roles; needs to be user, assistant, system
@@ -416,24 +414,21 @@ func (ds DeepSeekerCompletion) FormMsg(msg, role string, resume bool) (io.Reader
 		newMsg = *processMessageTag(&newMsg)
 		chatBody.Messages = append(chatBody.Messages, newMsg)
 	}
-	if !resume {
-		// if rag - add as system message to avoid conflicts with tool usage
-		// TODO: perhaps RAG should be a func/tool call instead?
-		if cfg.RAGEnabled {
-			um := chatBody.Messages[len(chatBody.Messages)-1].Content
-			logger.Debug("DeepSeekerCompletion: RAG is enabled, preparing RAG context", "user_message", um)
-			ragResp, err := chatRagUse(um)
-			if err != nil {
-				logger.Error("DeepSeekerCompletion: failed to form a rag msg", "error", err)
-				return nil, err
-			}
-			logger.Debug("DeepSeekerCompletion: RAG response received",
-				"response_len", len(ragResp), "response_preview", ragResp[:min(len(ragResp), 100)])
-			// Use system role for RAG context to avoid conflicts with tool usage
-			ragMsg := models.RoleMsg{Role: "system", Content: RAGMsg + ragResp}
-			chatBody.Messages = append(chatBody.Messages, ragMsg)
-			logger.Debug("DeepSeekerCompletion: RAG message added to chat body", "message_count", len(chatBody.Messages))
+	// if rag - add as system message to avoid conflicts with tool usage
+	if !resume && cfg.RAGEnabled {
+		um := chatBody.Messages[len(chatBody.Messages)-1].Content
+		logger.Debug("DeepSeekerCompletion: RAG is enabled, preparing RAG context", "user_message", um)
+		ragResp, err := chatRagUse(um)
+		if err != nil {
+			logger.Error("DeepSeekerCompletion: failed to form a rag msg", "error", err)
+			return nil, err
 		}
+		logger.Debug("DeepSeekerCompletion: RAG response received",
+			"response_len", len(ragResp), "response_preview", ragResp[:min(len(ragResp), 100)])
+		// Use system role for RAG context to avoid conflicts with tool usage
+		ragMsg := models.RoleMsg{Role: "system", Content: RAGMsg + ragResp}
+		chatBody.Messages = append(chatBody.Messages, ragMsg)
+		logger.Debug("DeepSeekerCompletion: RAG message added to chat body", "message_count", len(chatBody.Messages))
 	}
 	// sending description of the tools and how to use them
 	if cfg.ToolUse && !resume && role == cfg.UserRole && !containsToolSysMsg() {
@@ -507,23 +502,21 @@ func (ds DeepSeekerChat) FormMsg(msg, role string, resume bool) (io.Reader, erro
 		newMsg = *processMessageTag(&newMsg)
 		chatBody.Messages = append(chatBody.Messages, newMsg)
 	}
-	if !resume {
-		// if rag - add as system message to avoid conflicts with tool usage
-		if cfg.RAGEnabled {
-			um := chatBody.Messages[len(chatBody.Messages)-1].Content
-			logger.Debug("RAG is enabled, preparing RAG context", "user_message", um)
-			ragResp, err := chatRagUse(um)
-			if err != nil {
-				logger.Error("failed to form a rag msg", "error", err)
-				return nil, err
-			}
-			logger.Debug("RAG response received", "response_len", len(ragResp),
-				"response_preview", ragResp[:min(len(ragResp), 100)])
-			// Use system role for RAG context to avoid conflicts with tool usage
-			ragMsg := models.RoleMsg{Role: "system", Content: RAGMsg + ragResp}
-			chatBody.Messages = append(chatBody.Messages, ragMsg)
-			logger.Debug("RAG message added to chat body", "message_count", len(chatBody.Messages))
+	// if rag - add as system message to avoid conflicts with tool usage
+	if !resume && cfg.RAGEnabled {
+		um := chatBody.Messages[len(chatBody.Messages)-1].Content
+		logger.Debug("RAG is enabled, preparing RAG context", "user_message", um)
+		ragResp, err := chatRagUse(um)
+		if err != nil {
+			logger.Error("failed to form a rag msg", "error", err)
+			return nil, err
 		}
+		logger.Debug("RAG response received", "response_len", len(ragResp),
+			"response_preview", ragResp[:min(len(ragResp), 100)])
+		// Use system role for RAG context to avoid conflicts with tool usage
+		ragMsg := models.RoleMsg{Role: "system", Content: RAGMsg + ragResp}
+		chatBody.Messages = append(chatBody.Messages, ragMsg)
+		logger.Debug("RAG message added to chat body", "message_count", len(chatBody.Messages))
 	}
 	// Create copy of chat body with standardized user role
 	filteredMessages, botPersona := filterMessagesForCurrentCharacter(chatBody.Messages)
@@ -589,23 +582,21 @@ func (or OpenRouterCompletion) FormMsg(msg, role string, resume bool) (io.Reader
 		newMsg = *processMessageTag(&newMsg)
 		chatBody.Messages = append(chatBody.Messages, newMsg)
 	}
-	if !resume {
-		// if rag - add as system message to avoid conflicts with tool usage
-		if cfg.RAGEnabled {
-			um := chatBody.Messages[len(chatBody.Messages)-1].Content
-			logger.Debug("RAG is enabled, preparing RAG context", "user_message", um)
-			ragResp, err := chatRagUse(um)
-			if err != nil {
-				logger.Error("failed to form a rag msg", "error", err)
-				return nil, err
-			}
-			logger.Debug("RAG response received", "response_len",
-				len(ragResp), "response_preview", ragResp[:min(len(ragResp), 100)])
-			// Use system role for RAG context to avoid conflicts with tool usage
-			ragMsg := models.RoleMsg{Role: "system", Content: RAGMsg + ragResp}
-			chatBody.Messages = append(chatBody.Messages, ragMsg)
-			logger.Debug("RAG message added to chat body", "message_count", len(chatBody.Messages))
+	// if rag - add as system message to avoid conflicts with tool usage
+	if !resume && cfg.RAGEnabled {
+		um := chatBody.Messages[len(chatBody.Messages)-1].Content
+		logger.Debug("RAG is enabled, preparing RAG context", "user_message", um)
+		ragResp, err := chatRagUse(um)
+		if err != nil {
+			logger.Error("failed to form a rag msg", "error", err)
+			return nil, err
 		}
+		logger.Debug("RAG response received", "response_len",
+			len(ragResp), "response_preview", ragResp[:min(len(ragResp), 100)])
+		// Use system role for RAG context to avoid conflicts with tool usage
+		ragMsg := models.RoleMsg{Role: "system", Content: RAGMsg + ragResp}
+		chatBody.Messages = append(chatBody.Messages, ragMsg)
+		logger.Debug("RAG message added to chat body", "message_count", len(chatBody.Messages))
 	}
 	// sending description of the tools and how to use them
 	if cfg.ToolUse && !resume && role == cfg.UserRole && !containsToolSysMsg() {
@@ -710,23 +701,21 @@ func (or OpenRouterChat) FormMsg(msg, role string, resume bool) (io.Reader, erro
 		newMsg = *processMessageTag(&newMsg)
 		chatBody.Messages = append(chatBody.Messages, newMsg)
 	}
-	if !resume {
-		// if rag - add as system message to avoid conflicts with tool usage
-		if cfg.RAGEnabled {
-			um := chatBody.Messages[len(chatBody.Messages)-1].Content
-			logger.Debug("RAG is enabled, preparing RAG context", "user_message", um)
-			ragResp, err := chatRagUse(um)
-			if err != nil {
-				logger.Error("failed to form a rag msg", "error", err)
-				return nil, err
-			}
-			logger.Debug("RAG response received", "response_len", len(ragResp),
-				"response_preview", ragResp[:min(len(ragResp), 100)])
-			// Use system role for RAG context to avoid conflicts with tool usage
-			ragMsg := models.RoleMsg{Role: "system", Content: RAGMsg + ragResp}
-			chatBody.Messages = append(chatBody.Messages, ragMsg)
-			logger.Debug("RAG message added to chat body", "message_count", len(chatBody.Messages))
+	// if rag - add as system message to avoid conflicts with tool usage
+	if !resume && cfg.RAGEnabled {
+		um := chatBody.Messages[len(chatBody.Messages)-1].Content
+		logger.Debug("RAG is enabled, preparing RAG context", "user_message", um)
+		ragResp, err := chatRagUse(um)
+		if err != nil {
+			logger.Error("failed to form a rag msg", "error", err)
+			return nil, err
 		}
+		logger.Debug("RAG response received", "response_len", len(ragResp),
+			"response_preview", ragResp[:min(len(ragResp), 100)])
+		// Use system role for RAG context to avoid conflicts with tool usage
+		ragMsg := models.RoleMsg{Role: "system", Content: RAGMsg + ragResp}
+		chatBody.Messages = append(chatBody.Messages, ragMsg)
+		logger.Debug("RAG message added to chat body", "message_count", len(chatBody.Messages))
 	}
 	// Create copy of chat body with standardized user role
 	filteredMessages, botPersona := filterMessagesForCurrentCharacter(chatBody.Messages)
