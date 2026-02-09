@@ -18,9 +18,7 @@ func showModelSelectionPopup() {
 			return ORFreeModels
 		}
 		// Assume local llama.cpp
-		refreshLocalModelsIfEmpty()
-		localModelsMu.RLock()
-		defer localModelsMu.RUnlock()
+		updateModelLists()
 		return LocalModels
 	}
 	// Get the current model list based on the API
