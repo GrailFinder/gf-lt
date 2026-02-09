@@ -206,7 +206,7 @@ func makeChatTable(chatMap map[string]models.Chat) *tview.Table {
 			}
 			// Update sysMap with fresh card data
 			sysMap[agentName] = newCard
-			applyCharCard(newCard)
+			applyCharCard(newCard, false)
 			startNewChat()
 			pages.RemovePage(historyPage)
 			return

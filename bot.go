@@ -1150,16 +1150,16 @@ func addNewChat(chatName string) {
 	activeChatName = chat.Name
 }
 
-func applyCharCard(cc *models.CharCard) {
+func applyCharCard(cc *models.CharCard, loadHistory bool) {
 	cfg.AssistantRole = cc.Role
 	history, err := loadAgentsLastChat(cfg.AssistantRole)
-	if err != nil {
+	if err != nil || !loadHistory {
 		// too much action for err != nil; loadAgentsLastChat needs to be split up
-		logger.Warn("failed to load last agent chat;", "agent", cc.Role, "err", err)
 		history = []models.RoleMsg{
 			{Role: "system", Content: cc.SysPrompt},
 			{Role: cfg.AssistantRole, Content: cc.FirstMsg},
 		}
+		logger.Warn("failed to load last agent chat;", "agent", cc.Role, "err", err, "new_history", history)
 		addNewChat("")
 	}
 	chatBody.Messages = history
@@ -1170,7 +1170,7 @@ func charToStart(agentName string) bool {
 	if !ok {
 		return false
 	}
-	applyCharCard(cc)
+	applyCharCard(cc, true)
 	return true
 }
 
