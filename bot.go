@@ -141,6 +141,9 @@ func filterMessagesForCharacter(messages []models.RoleMsg, character string) []m
 	if cfg == nil || !cfg.CharSpecificContextEnabled || character == "" {
 		return messages
 	}
+	if character == "system" { // system sees every message
+		return messages
+	}
 	filtered := make([]models.RoleMsg, 0, len(messages))
 	for _, msg := range messages {
 		// If KnownTo is nil or empty, message is visible to all
