@@ -1016,7 +1016,7 @@ func init() {
 			return nil
 		}
 		if event.Key() == tcell.KeyCtrlN {
-			startNewChat()
+			startNewChat(true)
 			return nil
 		}
 		if event.Key() == tcell.KeyCtrlO {

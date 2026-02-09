@@ -1165,12 +1165,12 @@ func applyCharCard(cc *models.CharCard, loadHistory bool) {
 	chatBody.Messages = history
 }
 
-func charToStart(agentName string) bool {
+func charToStart(agentName string, keepSysP bool) bool {
 	cc, ok := sysMap[agentName]
 	if !ok {
 		return false
 	}
-	applyCharCard(cc, true)
+	applyCharCard(cc, keepSysP)
 	return true
 }
 
@@ -1223,7 +1223,7 @@ func summarizeAndStartNewChat() {
 		return
 	}
 	// Start a new chat
-	startNewChat()
+	startNewChat(true)
 	// Inject summary as a tool call response
 	toolMsg := models.RoleMsg{
 		Role:       cfg.ToolRole,

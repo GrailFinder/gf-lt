@@ -121,12 +121,12 @@ func initSysCards() ([]string, error) {
 	return labels, nil
 }
 
-func startNewChat() {
+func startNewChat(keepSysP bool) {
 	id, err := store.ChatGetMaxID()
 	if err != nil {
 		logger.Error("failed to get chat id", "error", err)
 	}
-	if ok := charToStart(cfg.AssistantRole); !ok {
+	if ok := charToStart(cfg.AssistantRole, keepSysP); !ok {
 		logger.Warn("no such sys msg", "name", cfg.AssistantRole)
 	}
 	// set chat body

@@ -206,8 +206,8 @@ func makeChatTable(chatMap map[string]models.Chat) *tview.Table {
 			}
 			// Update sysMap with fresh card data
 			sysMap[agentName] = newCard
-			applyCharCard(newCard, false)
-			startNewChat()
+			// fetching sysprompt and first message anew from the card
+			startNewChat(false)
 			pages.RemovePage(historyPage)
 			return
 		default:
@@ -543,7 +543,7 @@ func makeAgentTable(agentList []string) *tview.Table {
 		// notification := fmt.Sprintf("chat: %s; action: %s", selectedChat, tc.Text)
 		switch tc.Text {
 		case "load":
-			if ok := charToStart(selected); !ok {
+			if ok := charToStart(selected, true); !ok {
 				logger.Warn("no such sys msg", "name", selected)
 				pages.RemovePage(agentPage)
 				return
