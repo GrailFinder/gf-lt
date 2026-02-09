@@ -76,10 +76,10 @@ func parseKnownToTag(content string) []string {
 	}
 	tag := cfg.CharSpecificContextTag
 	if tag == "" {
-		tag = "__known_to_chars__"
+		tag = "@"
 	}
-	// Pattern: tag + list + "__"
-	pattern := regexp.QuoteMeta(tag) + `(.*?)__`
+	// Pattern: tag + list + "@"
+	pattern := regexp.QuoteMeta(tag) + `(.*?)@`
 	re := regexp.MustCompile(pattern)
 	matches := re.FindAllStringSubmatch(content, -1)
 	if len(matches) == 0 {

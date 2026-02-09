@@ -12,16 +12,16 @@ Character-Specific Context is a feature that enables private communication betwe
 
 ### Tagging Messages
 
-Messages can be tagged with a special string (by default `__known_to_chars__`) followed by a comma-separated list of character names. The tag can appear anywhere in the message content. **After csv of characters tag should be closed with `__` (for regexp to know where it ends).**
+Messages can be tagged with a special string (by default `@`) followed by a comma-separated list of character names. The tag can appear anywhere in the message content. **After csv of characters tag should be closed with `@` (for regexp to know where it ends).**
 
 **Example:**
 ```
-Alice: __known_to_chars__Bob__ Can you keep a secret?
+Alice: @Bob@ Can you keep a secret?
 ```
 
 **To avoid breaking immersion, it is better to place the tag in (ooc:)**
 ```
-Alice: (ooc: __known_to_chars__Bob__) Can you keep a secret?
+Alice: (ooc: @Bob@) Can you keep a secret?
 ```
 
 This message will be visible only to Alice (the sender) and Bob. The tag is parsed by `parseKnownToTag` and the resulting list of character names is stored in the `KnownTo` field of the message (`RoleMsg`). The sender is automatically added to the `KnownTo` list (if not already present) by `processMessageTag`.
@@ -44,7 +44,7 @@ The filtered history is then used to construct the prompt sent to the LLM. This 
 Two configuration settings control this feature:
 
 - `CharSpecificContextEnabled` – boolean; enables or disables the feature globally.
-- `CharSpecificContextTag` – string; the tag used to mark private messages. Default is `__known_to_chars__`.
+- `CharSpecificContextTag` – string; the tag used to mark private messages. Default is `@`.
 
 These are set in `config.toml` (see `config.example.toml` for the default values).
 
@@ -62,7 +62,7 @@ These are set in `config.toml` (see `config.example.toml` for the default values
 Alice wants to tell Bob something without Carl knowing:
 
 ```
-Alice: __known_to_chars__Bob__ Meet me at the library tonight.
+Alice: @Bob@ Meet me at the library tonight.
 ```
 
 Result:
@@ -75,7 +75,7 @@ Result:
 Alice shares a secret with Bob and Carl, but not David:
 
 ```
-Alice: (ooc: __known_to_chars__Bob,Carl__) The treasure is hidden under the old oak.
+Alice: (ooc: @Bob,Carl@) The treasure is hidden under the old oak.
 ```
 
 ### Public Message
@@ -116,7 +116,7 @@ So far only json format supports multiple characters.
 Card example:
 ```
 {
-  "sys_prompt": "This is a chat between Alice, Bob and Carl. Normally what is said by any character is seen by all others. But characters also might write messages intended to specific targets if their message contain string tag '__known_to_chars__{CharName1,CharName2,CharName3}__'.\nFor example:\nAlice:\n\"Hey, Bob. I have a secret for you... (ooc: __known_to_chars__Bob__)\"\nThis message would be seen only by Bob and Alice (sender always sees their own message).",
+  "sys_prompt": "This is a chat between Alice, Bob and Carl. Normally what is said by any character is seen by all others. But characters also might write messages intended to specific targets if their message contain string tag '@{CharName1,CharName2,CharName3}@'.\nFor example:\nAlice:\n\"Hey, Bob. I have a secret for you... (ooc: @Bob@)\"\nThis message would be seen only by Bob and Alice (sender always sees their own message).",
   "role": "Alice",
   "filepath": "sysprompts/alice_bob_carl.json",
   "chars": ["Alice", "Bob", "Carl"],
@@ -147,6 +147,6 @@ The `KnownTo` field is stored as a JSON array in the database. Existing messages
 
 ```toml
 CharSpecificContextEnabled = true
-CharSpecificContextTag = "__known_to_chars__"
+CharSpecificContextTag = "@"
 AutoTurn = false
 ```

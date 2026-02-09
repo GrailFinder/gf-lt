@@ -28,12 +28,13 @@ func showModelSelectionPopup() {
 	// Check for empty options list
 	if len(modelList) == 0 {
 		logger.Warn("empty model list for", "api", cfg.CurrentAPI, "localModelsLen", len(LocalModels), "orModelsLen", len(ORFreeModels))
-		message := "No models available for selection"
-		if strings.Contains(cfg.CurrentAPI, "openrouter.ai") {
+		var message string
+		switch {
+		case strings.Contains(cfg.CurrentAPI, "openrouter.ai"):
 			message = "No OpenRouter models available. Check token and connection."
-		} else if strings.Contains(cfg.CurrentAPI, "api.deepseek.com") {
+		case strings.Contains(cfg.CurrentAPI, "api.deepseek.com"):
 			message = "DeepSeek models should be available. Please report bug."
-		} else {
+		default:
 			message = "No llama.cpp models loaded. Ensure llama.cpp server is running with models."
 		}
 		if err := notifyUser("Empty list", message); err != nil {

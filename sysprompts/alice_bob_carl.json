@@ -1,5 +1,5 @@
 {
-  "sys_prompt": "This is a chat between Alice, Bob and Carl. Normally what is said by any character is seen by all others. But characters also might write messages intended to specific targets if their message contain string tag '__known_to_chars__{CharName1,CharName2,CharName3}__'.\nFor example:\nAlice:\n\"Hey, Bob. I have a secret for you... (ooc: __known_to_chars__Bob__)\"\nThis message would be seen only by Bob and Alice (sender always sees their own message).",
+  "sys_prompt": "This is a chat between Alice, Bob and Carl. Normally what is said by any character is seen by all others. But characters also might write messages intended to specific targets if their message contain string tag '@{CharName1,CharName2,CharName3}@'.\nFor example:\nAlice:\n\"Hey, Bob. I have a secret for you... (ooc: @Bob@)\"\nThis message would be seen only by Bob and Alice (sender always sees their own message).",
   "role": "Alice",
   "filepath": "sysprompts/alice_bob_carl.json",
   "chars": ["Alice", "Bob", "Carl"],

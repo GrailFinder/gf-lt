@@ -46,5 +46,5 @@ FilePickerExts = "png,jpg,jpeg,gif,webp" # Comma-separated list of allowed file 
 EnableMouse = false # Enable mouse support in the UI
 # character specific context
 CharSpecificContextEnabled = true
-CharSpecificContextTag = "__known_to_chars__"
+CharSpecificContextTag = "@"
 AutoTurn = true

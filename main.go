@@ -8,18 +8,15 @@ import (
 )
 
 var (
-	boolColors             = map[bool]string{true: "green", false: "red"}
-	botRespMode            = false
-	editMode               = false
-	roleEditMode           = false
-	injectRole             = true
-	selectedIndex          = int(-1)
-	currentAPIIndex        = 0 // Index to track current API in ApiLinks slice
-	currentORModelIndex    = 0 // Index to track current OpenRouter model in ORFreeModels slice
-	currentLocalModelIndex = 0 // Index to track current llama.cpp model
-	shellMode              = false
-	indexLineCompletion    = "F12 to show keys help | llm turn: [%s:-:b]%v[-:-:-] (F6) | chat: [orange:-:b]%s[-:-:-] (F1) | toolUseAdviced: [%s:-:b]%v[-:-:-] (ctrl+k) | model: [orange:-:b]%s[-:-:-] (ctrl+l) | skip LLM resp: [%s:-:b]%v[-:-:-] (F10)\nAPI: [orange:-:b]%s[-:-:-] (ctrl+v) | recording: [%s:-:b]%v[-:-:-] (ctrl+r) | writing as: [orange:-:b]%s[-:-:-] (ctrl+q) | bot will write as [orange:-:b]%s[-:-:-] (ctrl+x) | role injection (alt+7) [%s:-:b]%v[-:-:-]"
-	focusSwitcher          = map[tview.Primitive]tview.Primitive{}
+	boolColors          = map[bool]string{true: "green", false: "red"}
+	botRespMode         = false
+	editMode            = false
+	roleEditMode        = false
+	injectRole          = true
+	selectedIndex       = int(-1)
+	shellMode           = false
+	indexLineCompletion = "F12 to show keys help | llm turn: [%s:-:b]%v[-:-:-] (F6) | chat: [orange:-:b]%s[-:-:-] (F1) | toolUseAdviced: [%s:-:b]%v[-:-:-] (ctrl+k) | model: [orange:-:b]%s[-:-:-] (ctrl+l) | skip LLM resp: [%s:-:b]%v[-:-:-] (F10)\nAPI: [orange:-:b]%s[-:-:-] (ctrl+v) | recording: [%s:-:b]%v[-:-:-] (ctrl+r) | writing as: [orange:-:b]%s[-:-:-] (ctrl+q) | bot will write as [orange:-:b]%s[-:-:-] (ctrl+x) | role injection (alt+7) [%s:-:b]%v[-:-:-]"
+	focusSwitcher       = map[tview.Primitive]tview.Primitive{}
 )
 
 func main() {

@@ -299,81 +299,81 @@ func TestParseKnownToTag(t *testing.T) {
 	}{
 		{
 			name:        "feature disabled returns original",
-			content:     "Hello __known_to_chars__Alice__",
+			content:     "Hello @Alice@",
 			enabled:     false,
-			tag:         "__known_to_chars__",
-			wantCleaned: "Hello __known_to_chars__Alice__",
+			tag:         "@",
+			wantCleaned: "Hello @Alice@",
 			wantKnownTo: nil,
 		},
 		{
 			name:        "no tag returns original",
 			content:     "Hello Alice",
 			enabled:     true,
-			tag:         "__known_to_chars__",
+			tag:         "@",
 			wantCleaned: "Hello Alice",
 			wantKnownTo: nil,
 		},
 		{
 			name:        "single tag with one char",
-			content:     "Hello __known_to_chars__Alice__",
+			content:     "Hello @Alice@",
 			enabled:     true,
-			tag:         "__known_to_chars__",
+			tag:         "@",
 			wantCleaned: "Hello",
 			wantKnownTo: []string{"Alice"},
 		},
 		{
 			name:        "single tag with two chars",
-			content:     "Secret __known_to_chars__Alice,Bob__ message",
+			content:     "Secret @Alice,Bob@ message",
 			enabled:     true,
-			tag:         "__known_to_chars__",
+			tag:         "@",
 			wantCleaned: "Secret  message",
 			wantKnownTo: []string{"Alice", "Bob"},
 		},
 		{
 			name:        "tag at beginning",
-			content:     "__known_to_chars__Alice__ Hello",
+			content:     "@Alice@ Hello",
 			enabled:     true,
-			tag:         "__known_to_chars__",
+			tag:         "@",
 			wantCleaned: "Hello",
 			wantKnownTo: []string{"Alice"},
 		},
 		{
 			name:        "tag at end",
-			content:     "Hello __known_to_chars__Alice__",
+			content:     "Hello @Alice@",
 			enabled:     true,
-			tag:         "__known_to_chars__",
+			tag:         "@",
 			wantCleaned: "Hello",
 			wantKnownTo: []string{"Alice"},
 		},
 		{
 			name:        "multiple tags",
-			content:     "First __known_to_chars__Alice__ then __known_to_chars__Bob__",
+			content:     "First @Alice@ then @Bob@",
 			enabled:     true,
-			tag:         "__known_to_chars__",
+			tag:         "@",
 			wantCleaned: "First  then",
 			wantKnownTo: []string{"Alice", "Bob"},
 		},
 		{
 			name:        "custom tag",
-			content:     "Secret __secret__Alice,Bob__ message",
+			content:     "Secret @Alice,Bob@ message",
 			enabled:     true,
-			tag:         "__secret__",
+			tag:         "@",
 			wantCleaned: "Secret  message",
 			wantKnownTo: []string{"Alice", "Bob"},
 		},
 		{
 			name:        "empty list",
-			content:     "Secret __known_to_chars____",
+			content:     "Secret @@@",
 			enabled:     true,
-			tag:         "__known_to_chars__",
+			tag:         "@",
 			wantCleaned: "Secret",
 			wantKnownTo: nil,
 		},
 		{
 			name:        "whitespace around commas",
-			content:     "__known_to_chars__ Alice , Bob , Carl __",
+			content:     "@ Alice , Bob , Carl @",
 			enabled:     true,
-			tag:         "__known_to_chars__",
+			tag:         "@",
 			wantCleaned: "",
 			wantKnownTo: []string{"Alice", "Bob", "Carl"},
 		},
@@ -415,13 +415,13 @@ func TestProcessMessageTag(t *testing.T) {
 			name: "feature disabled returns unchanged",
 			msg: models.RoleMsg{
 				Role:    "Alice",
-				Content: "Secret __known_to_chars__Bob__",
+				Content: "Secret @Bob@",
 			},
 			enabled: false,
-			tag:     "__known_to_chars__",
+			tag:     "@",
 			wantMsg: models.RoleMsg{
 				Role:    "Alice",
-				Content: "Secret __known_to_chars__Bob__",
+				Content: "Secret @Bob@",
 				KnownTo: nil,
 			},
 		},
@@ -432,7 +432,7 @@ func TestProcessMessageTag(t *testing.T) {
 				Content: "Hello everyone",
 			},
 			enabled: true,
-			tag:     "__known_to_chars__",
+			tag:     "@",
 			wantMsg: models.RoleMsg{
 				Role:    "Alice",
 				Content: "Hello everyone",
@@ -443,10 +443,10 @@ func TestProcessMessageTag(t *testing.T) {
 			name: "tag with Bob, adds Alice automatically",
 			msg: models.RoleMsg{
 				Role:    "Alice",
-				Content: "Secret __known_to_chars__Bob__",
+				Content: "Secret @Bob@",
 			},
 			enabled: true,
-			tag:     "__known_to_chars__",
+			tag:     "@",
 			wantMsg: models.RoleMsg{
 				Role:    "Alice",
 				Content: "Secret",
@@ -457,10 +457,10 @@ func TestProcessMessageTag(t *testing.T) {
 			name: "tag already includes sender",
 			msg: models.RoleMsg{
 				Role:    "Alice",
-				Content: "__known_to_chars__Alice,Bob__",
+				Content: "@Alice,Bob@",
 			},
 			enabled: true,
-			tag:     "__known_to_chars__",
+			tag:     "@",
 			wantMsg: models.RoleMsg{
 				Role:    "Alice",
 				Content: "",
@@ -471,11 +471,11 @@ func TestProcessMessageTag(t *testing.T) {
 			name: "knownTo already set (from DB), tag still processed",
 			msg: models.RoleMsg{
 				Role:    "Alice",
-				Content: "Secret __known_to_chars__Bob__",
+				Content: "Secret @Bob@",
 				KnownTo: []string{"Alice"}, // from previous processing
 			},
 			enabled: true,
-			tag:     "__known_to_chars__",
+			tag:     "@",
 			wantMsg: models.RoleMsg{
 				Role:    "Alice",
 				Content: "Secret",
@@ -486,14 +486,14 @@ func TestProcessMessageTag(t *testing.T) {
 			name: "example from real use",
 			msg: models.RoleMsg{
 				Role:    "Alice",
-				Content: "I'll start with a simple one! The word is 'banana'. (ooc: __known_to_chars__Bob__)",
+				Content: "I'll start with a simple one! The word is 'banana'. (ooc: @Bob@)",
 				KnownTo: []string{"Alice"}, // from previous processing
 			},
 			enabled: true,
-			tag:     "__known_to_chars__",
+			tag:     "@",
 			wantMsg: models.RoleMsg{
 				Role:    "Alice",
-				Content: "I'll start with a simple one! The word is 'banana'. (ooc: __known_to_chars__Bob__)",
+				Content: "I'll start with a simple one! The word is 'banana'. (ooc: @Bob@)",
 				KnownTo: []string{"Bob", "Alice"},
 			},
 		},
@@ -588,7 +588,7 @@ func TestFilterMessagesForCharacter(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			testCfg := &config.Config{
 				CharSpecificContextEnabled: tt.enabled,
-				CharSpecificContextTag:     "__known_to_chars__",
+				CharSpecificContextTag:     "@",
 			}
 			cfg = testCfg
 
@@ -640,7 +640,7 @@ func TestKnownToFieldPreservationScenario(t *testing.T) {
 	// Test the specific scenario from the log where KnownTo field was getting lost
 	originalMsg := models.RoleMsg{
 		Role:    "Alice",
-		Content: `Alice: "Okay, Bob. The word is... **'Ephemeral'**. (ooc: __known_to_chars__Bob__)"`,
+		Content: `Alice: "Okay, Bob. The word is... **'Ephemeral'**. (ooc: @Bob@)"`,
 		KnownTo: []string{"Bob"}, // This was detected in the log
 	}
 
