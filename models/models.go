@@ -89,12 +89,12 @@ type ImageContentPart struct {
 
 // RoleMsg represents a message with content that can be either a simple string or structured content parts
 type RoleMsg struct {
-	Role            string        `json:"role"`
-	Content         string        `json:"-"`
-	ContentParts    []interface{} `json:"-"`
-	ToolCallID      string        `json:"tool_call_id,omitempty"` // For tool response messages
-	KnownTo         []string      `json:"known_to,omitempty"`
-	hasContentParts bool          // Flag to indicate which content type to marshal
+	Role            string   `json:"role"`
+	Content         string   `json:"-"`
+	ContentParts    []any    `json:"-"`
+	ToolCallID      string   `json:"tool_call_id,omitempty"` // For tool response messages
+	KnownTo         []string `json:"known_to,omitempty"`
+	hasContentParts bool     // Flag to indicate which content type to marshal
 }
 
 // MarshalJSON implements custom JSON marshaling for RoleMsg
@@ -102,10 +102,10 @@ func (m *RoleMsg) MarshalJSON() ([]byte, error) {
 	if m.hasContentParts {
 		// Use structured content format
 		aux := struct {
-			Role       string        `json:"role"`
-			Content    []interface{} `json:"content"`
-			ToolCallID string        `json:"tool_call_id,omitempty"`
-			KnownTo    []string      `json:"known_to,omitempty"`
+			Role       string   `json:"role"`
+			Content    []any    `json:"content"`
+			ToolCallID string   `json:"tool_call_id,omitempty"`
+			KnownTo    []string `json:"known_to,omitempty"`
 		}{
 			Role:       m.Role,
 			Content:    m.ContentParts,
@@ -134,10 +134,10 @@ func (m *RoleMsg) MarshalJSON() ([]byte, error) {
 func (m *RoleMsg) UnmarshalJSON(data []byte) error {
 	// First, try to unmarshal as structured content format
 	var structured struct {
-		Role       string        `json:"role"`
-		Content    []interface{} `json:"content"`
-		ToolCallID string        `json:"tool_call_id,omitempty"`
-		KnownTo    []string      `json:"known_to,omitempty"`
+		Role       string   `json:"role"`
+		Content    []any    `json:"content"`
+		ToolCallID string   `json:"tool_call_id,omitempty"`
+		KnownTo    []string `json:"known_to,omitempty"`
 	}
 	if err := json.Unmarshal(data, &structured); err == nil && len(structured.Content) > 0 {
 		m.Role = structured.Role
@@ -168,7 +168,6 @@ func (m *RoleMsg) UnmarshalJSON(data []byte) error {
 
 func (m *RoleMsg) ToText(i int) string {
 	icon := fmt.Sprintf("(%d)", i)
-
 	// Convert content to string representation
 	var contentStr string
 	if !m.hasContentParts {
@@ -177,7 +176,7 @@ func (m *RoleMsg) ToText(i int) string {
 		// For structured content, just take the text parts
 		var textParts []string
 		for _, part := range m.ContentParts {
-			if partMap, ok := part.(map[string]interface{}); ok {
+			if partMap, ok := part.(map[string]any); ok {
 				if partType, exists := partMap["type"]; exists && partType == "text" {
 					if textVal, textExists := partMap["text"]; textExists {
 						if textStr, isStr := textVal.(string); isStr {
@@ -189,7 +188,6 @@ func (m *RoleMsg) ToText(i int) string {
 		}
 		contentStr = strings.Join(textParts, " ") + " "
 	}
-
 	// check if already has role annotation (/completion makes them)
 	if !strings.HasPrefix(contentStr, m.Role+":") {
 		icon = fmt.Sprintf("(%d) <%s>: ", i, m.Role)
@@ -206,7 +204,7 @@ func (m *RoleMsg) ToPrompt() string {
 		// For structured content, just take the text parts
 		var textParts []string
 		for _, part := range m.ContentParts {
-			if partMap, ok := part.(map[string]interface{}); ok {
+			if partMap, ok := part.(map[string]any); ok {
 				if partType, exists := partMap["type"]; exists && partType == "text" {
 					if textVal, textExists := partMap["text"]; textExists {
 						if textStr, isStr := textVal.(string); isStr {
@@ -231,7 +229,7 @@ func NewRoleMsg(role, content string) RoleMsg {
 }
 
 // NewMultimodalMsg creates a RoleMsg with structured content parts (text and images)
-func NewMultimodalMsg(role string, contentParts []interface{}) RoleMsg {
+func NewMultimodalMsg(role string, contentParts []any) RoleMsg {
 	return RoleMsg{
 		Role:            role,
 		ContentParts:    contentParts,
@@ -256,7 +254,7 @@ func (m *RoleMsg) IsContentParts() bool {
 }
 
 // GetContentParts returns the content parts of the message
-func (m *RoleMsg) GetContentParts() []interface{} {
+func (m *RoleMsg) GetContentParts() []any {
 	return m.ContentParts
 }
 
@@ -277,9 +275,9 @@ func (m *RoleMsg) AddTextPart(text string) {
 	if !m.hasContentParts {
 		// Convert to content parts format
 		if m.Content != "" {
-			m.ContentParts = []interface{}{TextContentPart{Type: "text", Text: m.Content}}
+			m.ContentParts = []any{TextContentPart{Type: "text", Text: m.Content}}
 		} else {
-			m.ContentParts = []interface{}{}
+			m.ContentParts = []any{}
 		}
 		m.hasContentParts = true
 	}
@@ -293,9 +291,9 @@ func (m *RoleMsg) AddImagePart(imageURL string) {
 	if !m.hasContentParts {
 		// Convert to content parts format
 		if m.Content != "" {
-			m.ContentParts = []interface{}{TextContentPart{Type: "text", Text: m.Content}}
+			m.ContentParts = []any{TextContentPart{Type: "text", Text: m.Content}}
 		} else {
-			m.ContentParts = []interface{}{}
+			m.ContentParts = []any{}
 		}
 		m.hasContentParts = true
 	}
@@ -382,7 +380,7 @@ func (cb *ChatBody) MakeStopSliceExcluding(
 			continue
 		}
 		// Add multiple variations to catch different formatting
-		ss = append(ss, 
+		ss = append(ss,
 			role+":\n",   // Most common: role with newline
 			role+":",     // Role with colon but no newline
 			role+": ",    // Role with colon and single space
@@ -467,12 +465,12 @@ type LlamaCPPReq struct {
 	Stream bool   `json:"stream"`
 	// For multimodal requests, prompt should be an object with prompt_string and multimodal_data
 	// For regular requests, prompt is a string
-	Prompt        interface{} `json:"prompt"` // Can be string or object with prompt_string and multimodal_data
-	Temperature   float32     `json:"temperature"`
-	DryMultiplier float32     `json:"dry_multiplier"`
-	Stop          []string    `json:"stop"`
-	MinP          float32     `json:"min_p"`
-	NPredict      int32       `json:"n_predict"`
+	Prompt        any      `json:"prompt"` // Can be string or object with prompt_string and multimodal_data
+	Temperature   float32  `json:"temperature"`
+	DryMultiplier float32  `json:"dry_multiplier"`
+	Stop          []string `json:"stop"`
+	MinP          float32  `json:"min_p"`
+	NPredict      int32    `json:"n_predict"`
 	// MaxTokens        int     `json:"max_tokens"`
 	// DryBase          float64 `json:"dry_base"`
 	// DryAllowedLength int     `json:"dry_allowed_length"`
@@ -500,7 +498,7 @@ type PromptObject struct {
 }
 
 func NewLCPReq(prompt, model string, multimodalData []string, props map[string]float32, stopStrings []string) LlamaCPPReq {
-	var finalPrompt interface{}
+	var finalPrompt any
 	if len(multimodalData) > 0 {
 		// When multimodal data is present, use the object format as per Python example:
 		// { "prompt": { "prompt_string": "...", "multimodal_data": [...] } }
