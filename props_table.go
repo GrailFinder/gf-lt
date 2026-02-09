@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -53,7 +52,6 @@ func makePropsTable(props map[string]float32) *tview.Table {
 	row++
 	// Store cell data for later use in selection functions
 	cellData := make(map[string]*CellData)
-	var modelCellID string // will be set for the model selection row
 	// Helper function to add a checkbox-like row
 	addCheckboxRow := func(label string, initialValue bool, onChange func(bool)) {
 		table.SetCell(row, 0,
@@ -161,52 +159,6 @@ func makePropsTable(props map[string]float32) *tview.Table {
 		defer localModelsMu.RUnlock()
 		return LocalModels
 	}
-	var modelRowIndex int // will be set before model row is added
-	// Prepare API links dropdown - ensure current API is first, avoid duplicates
-	apiLinks := make([]string, 0, len(cfg.ApiLinks)+1)
-	apiLinks = append(apiLinks, cfg.CurrentAPI)
-	for _, api := range cfg.ApiLinks {
-		if api != cfg.CurrentAPI {
-			apiLinks = append(apiLinks, api)
-		}
-	}
-	addListPopupRow("Select an api", apiLinks, cfg.CurrentAPI, func(option string) {
-		cfg.CurrentAPI = option
-		// Update model list based on new API
-		newModelList := getModelListForAPI(cfg.CurrentAPI)
-		if modelCellID != "" {
-			if data := cellData[modelCellID]; data != nil {
-				data.Options = newModelList
-			}
-		}
-		// Ensure chatBody.Model is in the new list; if not, set to first available model
-		if len(newModelList) > 0 && !slices.Contains(newModelList, chatBody.Model) {
-			chatBody.Model = newModelList[0]
-			cfg.CurrentModel = chatBody.Model
-			// Update the displayed cell text - need to find model row
-			// Search for model row by label
-			for r := 0; r < table.GetRowCount(); r++ {
-				if cell := table.GetCell(r, 0); cell != nil && cell.Text == "Select a model" {
-					if valueCell := table.GetCell(r, 1); valueCell != nil {
-						valueCell.SetText(chatBody.Model)
-					}
-					break
-				}
-			}
-		}
-	})
-	// Prepare model list dropdown
-	modelRowIndex = row
-	modelCellID = fmt.Sprintf("listpopup_%d", modelRowIndex)
-	modelList := getModelListForAPI(cfg.CurrentAPI)
-	addListPopupRow("Select a model", modelList, chatBody.Model, func(option string) {
-		chatBody.Model = option
-		cfg.CurrentModel = chatBody.Model
-	})
-	// Role selection dropdown
-	addListPopupRow("Write next message as", listRolesWithUser(), cfg.WriteNextMsgAs, func(option string) {
-		cfg.WriteNextMsgAs = option
-	})
 	// Add input fields
 	addInputRow("New char to write msg as", "", func(text string) {
 		if text != "" {

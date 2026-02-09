@@ -77,16 +77,16 @@ var (
 [yellow]Ctrl+n[white]: start a new chat
 [yellow]Ctrl+o[white]: open image file picker
 [yellow]Ctrl+p[white]: props edit form (min-p, dry, etc.)
-[yellow]Ctrl+v[white]: switch between /completion and /chat api (if provided in config)
+[yellow]Ctrl+v[white]: show API link selection popup to choose current API
 [yellow]Ctrl+r[white]: start/stop recording from your microphone (needs stt server or whisper binary)
 [yellow]Ctrl+t[white]: remove thinking (<think>) and tool messages from context (delete from chat)
-[yellow]Ctrl+l[white]: rotate through free OpenRouter models (if openrouter api) or update connected model name (llamacpp)
+[yellow]Ctrl+l[white]: show model selection popup to choose current model
 [yellow]Ctrl+k[white]: switch tool use (recommend tool use to llm after user msg)
 [yellow]Ctrl+a[white]: interrupt tts (needs tts server)
 [yellow]Ctrl+g[white]: open RAG file manager (load files for context retrieval)
 [yellow]Ctrl+y[white]: list loaded RAG files (view and manage loaded files)
-[yellow]Ctrl+q[white]: cycle through mentioned chars in chat, to pick persona to send next msg as
-[yellow]Ctrl+x[white]: cycle through mentioned chars in chat, to pick persona to send next msg as (for llm)
+[yellow]Ctrl+q[white]: show user role selection popup to choose who sends next msg as
+[yellow]Ctrl+x[white]: show bot role selection popup to choose which agent responds next
 [yellow]Alt+1[white]: toggle shell mode (execute commands locally)
 [yellow]Alt+2[white]: toggle auto-scrolling (for reading while LLM types)
 [yellow]Alt+3[white]: summarize chat history and start new chat with summary as tool response
@@ -1026,30 +1026,8 @@ func init() {
 			return nil
 		}
 		if event.Key() == tcell.KeyCtrlL {
-			// Check if the current API is an OpenRouter API
-			if strings.Contains(cfg.CurrentAPI, "openrouter.ai/api/v1/") {
-				// Rotate through OpenRouter free models
-				if len(ORFreeModels) > 0 {
-					currentORModelIndex = (currentORModelIndex + 1) % len(ORFreeModels)
-					chatBody.Model = ORFreeModels[currentORModelIndex]
-					cfg.CurrentModel = chatBody.Model
-				}
-				updateStatusLine()
-			} else {
-				localModelsMu.RLock()
-				if len(LocalModels) > 0 {
-					currentLocalModelIndex = (currentLocalModelIndex + 1) % len(LocalModels)
-					chatBody.Model = LocalModels[currentLocalModelIndex]
-					cfg.CurrentModel = chatBody.Model
-				}
-				localModelsMu.RUnlock()
-				updateStatusLine()
-				// // For non-OpenRouter APIs, use the old logic
-				// go func() {
-				// 	fetchLCPModelName() // blocks
-				// 	updateStatusLine()
-				// }()
-			}
+			// Show model selection popup instead of rotating models
+			showModelSelectionPopup()
 			return nil
 		}
 		if event.Key() == tcell.KeyCtrlT {
@@ -1061,29 +1039,8 @@ func init() {
 			return nil
 		}
 		if event.Key() == tcell.KeyCtrlV {
-			// switch between API links using index-based rotation
-			if len(cfg.ApiLinks) == 0 {
-				// No API links to rotate through
-				return nil
-			}
-			// Find current API in the list to get the current index
-			currentIndex := -1
-			for i, api := range cfg.ApiLinks {
-				if api == cfg.CurrentAPI {
-					currentIndex = i
-					break
-				}
-			}
-			// If current API is not in the list, start from beginning
-			// Otherwise, advance to next API in the list (with wrap-around)
-			if currentIndex == -1 {
-				currentAPIIndex = 0
-			} else {
-				currentAPIIndex = (currentIndex + 1) % len(cfg.ApiLinks)
-			}
-			cfg.CurrentAPI = cfg.ApiLinks[currentAPIIndex]
-			choseChunkParser()
-			updateStatusLine()
+			// Show API link selection popup instead of rotating APIs
+			showAPILinkSelectionPopup()
 			return nil
 		}
 		if event.Key() == tcell.KeyCtrlS {
@@ -1179,54 +1136,13 @@ func init() {
 			return nil
 		}
 		if event.Key() == tcell.KeyCtrlQ {
-			persona := cfg.UserRole
-			if cfg.WriteNextMsgAs != "" {
-				persona = cfg.WriteNextMsgAs
-			}
-			roles := listRolesWithUser()
-			for i, role := range roles {
-				if strings.EqualFold(role, persona) {
-					if i == len(roles)-1 {
-						cfg.WriteNextMsgAs = roles[0] // reached last, get first
-						persona = cfg.WriteNextMsgAs
-						break
-					}
-					cfg.WriteNextMsgAs = roles[i+1] // get next role
-					persona = cfg.WriteNextMsgAs
-					break
-				}
-			}
-			// role got switch, update textview with character specific context for user
-			filtered := filterMessagesForCharacter(chatBody.Messages, persona)
-			textView.SetText(chatToText(filtered, cfg.ShowSys))
-			updateStatusLine()
-			colorText()
+			// Show user role selection popup instead of cycling through roles
+			showUserRoleSelectionPopup()
 			return nil
 		}
 		if event.Key() == tcell.KeyCtrlX {
-			botPersona := cfg.AssistantRole
-			if cfg.WriteNextMsgAsCompletionAgent != "" {
-				botPersona = cfg.WriteNextMsgAsCompletionAgent
-			}
-			// roles := chatBody.ListRoles()
-			roles := listChatRoles()
-			if len(roles) == 0 {
-				logger.Warn("empty roles in chat")
-			}
-			if !strInSlice(cfg.AssistantRole, roles) {
-				roles = append(roles, cfg.AssistantRole)
-			}
-			for i, role := range roles {
-				if strings.EqualFold(role, botPersona) {
-					if i == len(roles)-1 {
-						cfg.WriteNextMsgAsCompletionAgent = roles[0] // reached last, get first
-						break
-					}
-					cfg.WriteNextMsgAsCompletionAgent = roles[i+1] // get next role
-					break
-				}
-			}
-			updateStatusLine()
+			// Show bot role selection popup instead of cycling through roles
+			showBotRoleSelectionPopup()
 			return nil
 		}
 		if event.Key() == tcell.KeyCtrlG {
