@@ -39,7 +39,7 @@ func makeChatTable(chatMap map[string]models.Chat) *tview.Table {
 	// Add header row (row 0)
 	for c := 0; c < cols; c++ {
 		color := tcell.ColorWhite
-		headerText := ""
+		var headerText string
 		switch c {
 		case 0:
 			headerText = "Chat Name"
@@ -128,7 +128,7 @@ func makeChatTable(chatMap map[string]models.Chat) *tview.Table {
 				return
 			}
 			chatBody.Messages = history
-			textView.SetText(chatToText(cfg.ShowSys))
+			textView.SetText(chatToText(chatBody.Messages, cfg.ShowSys))
 			activeChatName = selectedChat
 			pages.RemovePage(historyPage)
 			return
@@ -151,7 +151,7 @@ func makeChatTable(chatMap map[string]models.Chat) *tview.Table {
 			}
 			// load last chat
 			chatBody.Messages = loadOldChatOrGetNew()
-			textView.SetText(chatToText(cfg.ShowSys))
+			textView.SetText(chatToText(chatBody.Messages, cfg.ShowSys))
 			pages.RemovePage(historyPage)
 			return
 		case "update card":
@@ -184,7 +184,7 @@ func makeChatTable(chatMap map[string]models.Chat) *tview.Table {
 		case "move sysprompt onto 1st msg":
 			chatBody.Messages[1].Content = chatBody.Messages[0].Content + chatBody.Messages[1].Content
 			chatBody.Messages[0].Content = rpDefenitionSysMsg
-			textView.SetText(chatToText(cfg.ShowSys))
+			textView.SetText(chatToText(chatBody.Messages, cfg.ShowSys))
 			activeChatName = selectedChat
 			pages.RemovePage(historyPage)
 			return
@@ -215,8 +215,8 @@ func makeChatTable(chatMap map[string]models.Chat) *tview.Table {
 			}
 			// Update sysMap with fresh card data
 			sysMap[agentName] = newCard
-			applyCharCard(newCard)
-			startNewChat()
+			// fetching sysprompt and first message anew from the card
+			startNewChat(false)
 			pages.RemovePage(historyPage)
 			return
 		default:
@@ -268,19 +268,20 @@ func makeRAGTable(fileList []string) *tview.Flex {
 	for r := 0; r < rows; r++ {
 		for c := 0; c < cols; c++ {
 			color := tcell.ColorWhite
-			if c < 1 {
+			switch {
+			case c < 1:
 				fileTable.SetCell(r+1, c, // +1 to account for the exit row at index 0
 					tview.NewTableCell(fileList[r]).
 						SetTextColor(color).
 						SetAlign(tview.AlignCenter).
 						SetSelectable(false))
-			} else if c == 1 { // Action description column - not selectable
+			case c == 1: // Action description column - not selectable
 				fileTable.SetCell(r+1, c, // +1 to account for the exit row at index 0
 					tview.NewTableCell("(Action)").
 						SetTextColor(color).
 						SetAlign(tview.AlignCenter).
 						SetSelectable(false))
-			} else { // Action button column - selectable
+			default: // Action button column - selectable
 				fileTable.SetCell(r+1, c, // +1 to account for the exit row at index 0
 					tview.NewTableCell(actions[c-1]).
 						SetTextColor(color).
@@ -415,19 +416,20 @@ func makeLoadedRAGTable(fileList []string) *tview.Flex {
 	for r := 0; r < rows; r++ {
 		for c := 0; c < cols; c++ {
 			color := tcell.ColorWhite
-			if c < 1 {
+			switch {
+			case c < 1:
 				fileTable.SetCell(r+1, c, // +1 to account for the exit row at index 0
 					tview.NewTableCell(fileList[r]).
 						SetTextColor(color).
 						SetAlign(tview.AlignCenter).
 						SetSelectable(false))
-			} else if c == 1 { // Action description column - not selectable
+			case c == 1: // Action description column - not selectable
 				fileTable.SetCell(r+1, c, // +1 to account for the exit row at index 0
 					tview.NewTableCell("(Action)").
 						SetTextColor(color).
 						SetAlign(tview.AlignCenter).
 						SetSelectable(false))
-			} else { // Action button column - selectable
+			default: // Action button column - selectable
 				fileTable.SetCell(r+1, c, // +1 to account for the exit row at index 0
 					tview.NewTableCell(actions[c-1]).
 						SetTextColor(color).
@@ -496,13 +498,14 @@ func makeAgentTable(agentList []string) *tview.Table {
 	for r := 0; r < rows; r++ {
 		for c := 0; c < cols; c++ {
 			color := tcell.ColorWhite
-			if c < 1 {
+			switch {
+			case c < 1:
 				chatActTable.SetCell(r, c,
 					tview.NewTableCell(agentList[r]).
 						SetTextColor(color).
 						SetAlign(tview.AlignCenter).
 						SetSelectable(false))
-			} else if c == 1 {
+			case c == 1:
 				if actions[c-1] == "filepath" {
 					cc, ok := sysMap[agentList[r]]
 					if !ok {
@@ -519,7 +522,7 @@ func makeAgentTable(agentList []string) *tview.Table {
 					tview.NewTableCell(actions[c-1]).
 						SetTextColor(color).
 						SetAlign(tview.AlignCenter))
-			} else {
+			default:
 				chatActTable.SetCell(r, c,
 					tview.NewTableCell(actions[c-1]).
 						SetTextColor(color).
@@ -549,13 +552,13 @@ func makeAgentTable(agentList []string) *tview.Table {
 		// notification := fmt.Sprintf("chat: %s; action: %s", selectedChat, tc.Text)
 		switch tc.Text {
 		case "load":
-			if ok := charToStart(selected); !ok {
+			if ok := charToStart(selected, true); !ok {
 				logger.Warn("no such sys msg", "name", selected)
 				pages.RemovePage(agentPage)
 				return
 			}
 			// replace textview
-			textView.SetText(chatToText(cfg.ShowSys))
+			textView.SetText(chatToText(chatBody.Messages, cfg.ShowSys))
 			colorText()
 			updateStatusLine()
 			// sysModal.ClearButtons()
@@ -609,13 +612,14 @@ func makeCodeBlockTable(codeBlocks []string) *tview.Table {
 			if len(codeBlocks[r]) < 30 {
 				previewLen = len(codeBlocks[r])
 			}
-			if c < 1 {
+			switch {
+			case c < 1:
 				table.SetCell(r, c,
 					tview.NewTableCell(codeBlocks[r][:previewLen]).
 						SetTextColor(color).
 						SetAlign(tview.AlignCenter).
 						SetSelectable(false))
-			} else {
+			default:
 				table.SetCell(r, c,
 					tview.NewTableCell(actions[c-1]).
 						SetTextColor(color).
@@ -680,13 +684,14 @@ func makeImportChatTable(filenames []string) *tview.Table {
 	for r := 0; r < rows; r++ {
 		for c := 0; c < cols; c++ {
 			color := tcell.ColorWhite
-			if c < 1 {
+			switch {
+			case c < 1:
 				chatActTable.SetCell(r, c,
 					tview.NewTableCell(filenames[r]).
 						SetTextColor(color).
 						SetAlign(tview.AlignCenter).
 						SetSelectable(false))
-			} else {
+			default:
 				chatActTable.SetCell(r, c,
 					tview.NewTableCell(actions[c-1]).
 						SetTextColor(color).
@@ -724,7 +729,7 @@ func makeImportChatTable(filenames []string) *tview.Table {
 			colorText()
 			updateStatusLine()
 			// redraw the text in text area
-			textView.SetText(chatToText(cfg.ShowSys))
+			textView.SetText(chatToText(chatBody.Messages, cfg.ShowSys))
 			pages.RemovePage(historyPage)
 			app.SetFocus(textArea)
 			return
@@ -870,25 +875,23 @@ func makeFilePicker() *tview.Flex {
 					currentStackPos = len(dirStack) - 1
 					statusView.SetText("Current: " + newDir)
 				})
-			} else {
+			} else if hasAllowedExtension(name) {
 				// Only show files that have allowed extensions (from config)
-				if hasAllowedExtension(name) {
-					// Capture the file name for the closure to avoid loop variable issues
-					fileName := name
-					fullFilePath := path.Join(dir, fileName)
-					listView.AddItem(fileName+" [gray](File)[-]", "", 0, func() {
-						selectedFile = fullFilePath
+				// Capture the file name for the closure to avoid loop variable issues
+				fileName := name
+				fullFilePath := path.Join(dir, fileName)
+				listView.AddItem(fileName+" [gray](File)[-]", "", 0, func() {
+					selectedFile = fullFilePath
+					statusView.SetText("Selected: " + selectedFile)
+					// Check if the file is an image
+					if isImageFile(fileName) {
+						// For image files, offer to attach to the next LLM message
+						statusView.SetText("Selected image: " + selectedFile)
+					} else {
+						// For non-image files, display as before
 						statusView.SetText("Selected: " + selectedFile)
-						// Check if the file is an image
-						if isImageFile(fileName) {
-							// For image files, offer to attach to the next LLM message
-							statusView.SetText("Selected image: " + selectedFile)
-						} else {
-							// For non-image files, display as before
-							statusView.SetText("Selected: " + selectedFile)
-						}
-					})
-				}
+					}
+				})
 			}
 		}
 		statusView.SetText("Current: " + dir)

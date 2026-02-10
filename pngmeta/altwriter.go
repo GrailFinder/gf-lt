@@ -120,7 +120,7 @@ func createTextChunk(embed PngEmbed) ([]byte, error) {
 	if err := binary.Write(chunk, binary.BigEndian, uint32(len(data))); err != nil {
 		return nil, fmt.Errorf("error writing chunk length: %w", err)
 	}
-	if _, err := chunk.Write([]byte(textChunkType)); err != nil {
+	if _, err := chunk.WriteString(textChunkType); err != nil {
 		return nil, fmt.Errorf("error writing chunk type: %w", err)
 	}
 	if _, err := chunk.Write(data); err != nil {

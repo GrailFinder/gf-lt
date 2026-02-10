@@ -946,7 +946,7 @@ func summarizeChat(args map[string]string) []byte {
 		return []byte("No chat history to summarize.")
 	}
 	// Format chat history for the agent
-	chatText := chatToText(true) // include system and tool messages
+	chatText := chatToText(chatBody.Messages, true) // include system and tool messages
 	return []byte(chatText)
 }
 

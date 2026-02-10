@@ -26,7 +26,11 @@ type Config struct {
 	WriteNextMsgAs                string
 	WriteNextMsgAsCompletionAgent string
 	SkipLLMResp                   bool
-	AutoCleanToolCallsFromCtx     bool `toml:"AutoCleanToolCallsFromCtx"`
+	AutoCleanToolCallsFromCtx     bool   `toml:"AutoCleanToolCallsFromCtx"`
+	DBPATH                        string `toml:"DBPATH"`
+	FilePickerDir                 string `toml:"FilePickerDir"`
+	FilePickerExts                string `toml:"FilePickerExts"`
+	EnableMouse                   bool   `toml:"EnableMouse"`
 	// embeddings
 	RAGEnabled bool   `toml:"RAGEnabled"`
 	EmbedURL   string `toml:"EmbedURL"`
@@ -61,10 +65,10 @@ type Config struct {
 	WhisperBinaryPath string `toml:"WhisperBinaryPath"`
 	WhisperModelPath  string `toml:"WhisperModelPath"`
 	STT_LANG          string `toml:"STT_LANG"`
-	DBPATH            string `toml:"DBPATH"`
-	FilePickerDir     string `toml:"FilePickerDir"`
-	FilePickerExts    string `toml:"FilePickerExts"`
-	EnableMouse       bool   `toml:"EnableMouse"`
+	// character spefic contetx
+	CharSpecificContextEnabled bool   `toml:"CharSpecificContextEnabled"`
+	CharSpecificContextTag     string `toml:"CharSpecificContextTag"`
+	AutoTurn                   bool   `toml:"AutoTurn"`
 }
 
 func LoadConfig(fn string) (*Config, error) {

@@ -107,7 +107,7 @@ func (r *RAG) LoadRAG(fpath string) error {
 	}
 
 	// Adjust batch size if needed
-	if len(paragraphs) < int(r.cfg.RAGBatchSize) && len(paragraphs) > 0 {
+	if len(paragraphs) < r.cfg.RAGBatchSize && len(paragraphs) > 0 {
 		r.cfg.RAGBatchSize = len(paragraphs)
 	}
 
@@ -133,7 +133,7 @@ func (r *RAG) LoadRAG(fpath string) error {
 	ctn := 0
 	totalParagraphs := len(paragraphs)
 	for {
-		if int(right) > totalParagraphs {
+		if right > totalParagraphs {
 			batchCh <- map[int][]string{left: paragraphs[left:]}
 			break
 		}

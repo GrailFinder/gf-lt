@@ -77,22 +77,23 @@ var (
 [yellow]Ctrl+n[white]: start a new chat
 [yellow]Ctrl+o[white]: open image file picker
 [yellow]Ctrl+p[white]: props edit form (min-p, dry, etc.)
-[yellow]Ctrl+v[white]: switch between /completion and /chat api (if provided in config)
+[yellow]Ctrl+v[white]: show API link selection popup to choose current API
 [yellow]Ctrl+r[white]: start/stop recording from your microphone (needs stt server or whisper binary)
 [yellow]Ctrl+t[white]: remove thinking (<think>) and tool messages from context (delete from chat)
-[yellow]Ctrl+l[white]: rotate through free OpenRouter models (if openrouter api) or update connected model name (llamacpp)
+[yellow]Ctrl+l[white]: show model selection popup to choose current model
 [yellow]Ctrl+k[white]: switch tool use (recommend tool use to llm after user msg)
 [yellow]Ctrl+a[white]: interrupt tts (needs tts server)
 [yellow]Ctrl+g[white]: open RAG file manager (load files for context retrieval)
 [yellow]Ctrl+y[white]: list loaded RAG files (view and manage loaded files)
-[yellow]Ctrl+q[white]: cycle through mentioned chars in chat, to pick persona to send next msg as
-[yellow]Ctrl+x[white]: cycle through mentioned chars in chat, to pick persona to send next msg as (for llm)
+[yellow]Ctrl+q[white]: show user role selection popup to choose who sends next msg as
+[yellow]Ctrl+x[white]: show bot role selection popup to choose which agent responds next
 [yellow]Alt+1[white]: toggle shell mode (execute commands locally)
 [yellow]Alt+2[white]: toggle auto-scrolling (for reading while LLM types)
 [yellow]Alt+3[white]: summarize chat history and start new chat with summary as tool response
 [yellow]Alt+4[white]: edit msg role
 [yellow]Alt+5[white]: toggle system and tool messages display
 [yellow]Alt+6[white]: toggle status line visibility
+[yellow]Alt+7[white]: toggle role injection (inject role in messages)
 [yellow]Alt+8[white]: show char img or last picked img
 [yellow]Alt+9[white]: warm up (load) selected llama.cpp model
 
@@ -310,7 +311,7 @@ func performSearch(term string) {
 		searchResultLengths = nil
 		originalTextForSearch = ""
 		// Re-render text without highlights
-		textView.SetText(chatToText(cfg.ShowSys))
+		textView.SetText(chatToText(chatBody.Messages, cfg.ShowSys))
 		colorText()
 		return
 	}
@@ -517,8 +518,8 @@ func init() {
 				searchResults = nil       // Clear search results
 				searchResultLengths = nil // Clear search result lengths
 				originalTextForSearch = ""
-				textView.SetText(chatToText(cfg.ShowSys)) // Reset text without search regions
-				colorText()                               // Apply normal chat coloring
+				textView.SetText(chatToText(chatBody.Messages, cfg.ShowSys)) // Reset text without search regions
+				colorText()                                                  // Apply normal chat coloring
 			} else {
 				// Original logic if no search is active
 				currentSelection := textView.GetHighlights()
@@ -532,8 +533,7 @@ func init() {
 	})
 	textView.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		// Handle vim-like navigation in TextView
-		switch event.Key() {
-		case tcell.KeyRune:
+		if event.Key() == tcell.KeyRune {
 			switch event.Rune() {
 			case 'j':
 				// For line down
@@ -594,7 +594,7 @@ func init() {
 			}
 			chatBody.Messages[selectedIndex].Content = editedMsg
 			// change textarea
-			textView.SetText(chatToText(cfg.ShowSys))
+			textView.SetText(chatToText(chatBody.Messages, cfg.ShowSys))
 			pages.RemovePage(editMsgPage)
 			editMode = false
 			return nil
@@ -627,7 +627,7 @@ func init() {
 				}
 				if selectedIndex >= 0 && selectedIndex < len(chatBody.Messages) {
 					chatBody.Messages[selectedIndex].Role = newRole
-					textView.SetText(chatToText(cfg.ShowSys))
+					textView.SetText(chatToText(chatBody.Messages, cfg.ShowSys))
 					colorText()
 					pages.RemovePage(roleEditPage)
 				}
@@ -671,17 +671,18 @@ func init() {
 				return nil
 			}
 			m := chatBody.Messages[selectedIndex]
-			if roleEditMode {
+			switch {
+			case roleEditMode:
 				hideIndexBar() // Hide overlay first
 				// Set the current role as the default text in the input field
 				roleEditWindow.SetText(m.Role)
 				pages.AddPage(roleEditPage, roleEditWindow, true, true)
 				roleEditMode = false // Reset the flag
-			} else if editMode {
+			case editMode:
 				hideIndexBar() // Hide overlay first
 				pages.AddPage(editMsgPage, editArea, true, true)
 				editArea.SetText(m.Content, true)
-			} else {
+			default:
 				if err := copyToClipboard(m.Content); err != nil {
 					logger.Error("failed to copy to clipboard", "error", err)
 				}
@@ -739,7 +740,7 @@ func init() {
 					searchResults = nil
 					searchResultLengths = nil
 					originalTextForSearch = ""
-					textView.SetText(chatToText(cfg.ShowSys))
+					textView.SetText(chatToText(chatBody.Messages, cfg.ShowSys))
 					colorText()
 					return
 				} else {
@@ -759,22 +760,19 @@ func init() {
 			pages.RemovePage(helpPage)
 		})
 	helpView.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		switch event.Key() {
-		case tcell.KeyEnter:
+		if event.Key() == tcell.KeyEnter {
 			return event
-		default:
-			if event.Key() == tcell.KeyRune && event.Rune() == 'x' {
-				pages.RemovePage(helpPage)
-				return nil
-			}
+		}
+		if event.Key() == tcell.KeyRune && event.Rune() == 'x' {
+			pages.RemovePage(helpPage)
+			return nil
 		}
 		return nil
 	})
 	//
 	imgView = tview.NewImage()
 	imgView.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		switch event.Key() {
-		case tcell.KeyEnter:
+		if event.Key() == tcell.KeyEnter {
 			pages.RemovePage(imgPage)
 			return event
 		}
@@ -787,7 +785,7 @@ func init() {
 	//
 	textArea.SetMovedFunc(updateStatusLine)
 	updateStatusLine()
-	textView.SetText(chatToText(cfg.ShowSys))
+	textView.SetText(chatToText(chatBody.Messages, cfg.ShowSys))
 	colorText()
 	if scrollToEndEnabled {
 		textView.ScrollToEnd()
@@ -801,7 +799,7 @@ func init() {
 		if event.Key() == tcell.KeyRune && event.Rune() == '5' && event.Modifiers()&tcell.ModAlt != 0 {
 			// switch cfg.ShowSys
 			cfg.ShowSys = !cfg.ShowSys
-			textView.SetText(chatToText(cfg.ShowSys))
+			textView.SetText(chatToText(chatBody.Messages, cfg.ShowSys))
 			colorText()
 		}
 		if event.Key() == tcell.KeyRune && event.Rune() == '3' && event.Modifiers()&tcell.ModAlt != 0 {
@@ -826,6 +824,11 @@ func init() {
 			if err := notifyUser("autoscroll", "Auto-scrolling "+status); err != nil {
 				logger.Error("failed to send notification", "error", err)
 			}
+			updateStatusLine()
+		}
+		// Handle Alt+7 to toggle injectRole
+		if event.Key() == tcell.KeyRune && event.Rune() == '7' && event.Modifiers()&tcell.ModAlt != 0 {
+			injectRole = !injectRole
 			updateStatusLine()
 		}
 		if event.Key() == tcell.KeyF1 {
@@ -866,8 +869,9 @@ func init() {
 			chatBody.Messages = chatBody.Messages[:len(chatBody.Messages)-1]
 			// there is no case where user msg is regenerated
 			// lastRole := chatBody.Messages[len(chatBody.Messages)-1].Role
-			textView.SetText(chatToText(cfg.ShowSys))
-			go chatRound("", cfg.UserRole, textView, true, false)
+			textView.SetText(chatToText(chatBody.Messages, cfg.ShowSys))
+			// go chatRound("", cfg.UserRole, textView, true, false)
+			chatRoundChan <- &models.ChatRoundReq{Role: cfg.UserRole, Regen: true}
 			return nil
 		}
 		if event.Key() == tcell.KeyF3 && !botRespMode {
@@ -888,7 +892,7 @@ func init() {
 				return nil
 			}
 			chatBody.Messages = chatBody.Messages[:len(chatBody.Messages)-1]
-			textView.SetText(chatToText(cfg.ShowSys))
+			textView.SetText(chatToText(chatBody.Messages, cfg.ShowSys))
 			colorText()
 			return nil
 		}
@@ -1012,7 +1016,7 @@ func init() {
 			return nil
 		}
 		if event.Key() == tcell.KeyCtrlN {
-			startNewChat()
+			startNewChat(true)
 			return nil
 		}
 		if event.Key() == tcell.KeyCtrlO {
@@ -1022,64 +1026,21 @@ func init() {
 			return nil
 		}
 		if event.Key() == tcell.KeyCtrlL {
-			// Check if the current API is an OpenRouter API
-			if strings.Contains(cfg.CurrentAPI, "openrouter.ai/api/v1/") {
-				// Rotate through OpenRouter free models
-				if len(ORFreeModels) > 0 {
-					currentORModelIndex = (currentORModelIndex + 1) % len(ORFreeModels)
-					chatBody.Model = ORFreeModels[currentORModelIndex]
-					cfg.CurrentModel = chatBody.Model
-				}
-				updateStatusLine()
-			} else {
-				localModelsMu.RLock()
-				if len(LocalModels) > 0 {
-					currentLocalModelIndex = (currentLocalModelIndex + 1) % len(LocalModels)
-					chatBody.Model = LocalModels[currentLocalModelIndex]
-					cfg.CurrentModel = chatBody.Model
-				}
-				localModelsMu.RUnlock()
-				updateStatusLine()
-				// // For non-OpenRouter APIs, use the old logic
-				// go func() {
-				// 	fetchLCPModelName() // blocks
-				// 	updateStatusLine()
-				// }()
-			}
+			// Show model selection popup instead of rotating models
+			showModelSelectionPopup()
 			return nil
 		}
 		if event.Key() == tcell.KeyCtrlT {
 			// clear context
 			// remove tools and thinking
 			removeThinking(chatBody)
-			textView.SetText(chatToText(cfg.ShowSys))
+			textView.SetText(chatToText(chatBody.Messages, cfg.ShowSys))
 			colorText()
 			return nil
 		}
 		if event.Key() == tcell.KeyCtrlV {
-			// switch between API links using index-based rotation
-			if len(cfg.ApiLinks) == 0 {
-				// No API links to rotate through
-				return nil
-			}
-			// Find current API in the list to get the current index
-			currentIndex := -1
-			for i, api := range cfg.ApiLinks {
-				if api == cfg.CurrentAPI {
-					currentIndex = i
-					break
-				}
-			}
-			// If current API is not in the list, start from beginning
-			// Otherwise, advance to next API in the list (with wrap-around)
-			if currentIndex == -1 {
-				currentAPIIndex = 0
-			} else {
-				currentAPIIndex = (currentIndex + 1) % len(cfg.ApiLinks)
-			}
-			cfg.CurrentAPI = cfg.ApiLinks[currentAPIIndex]
-			choseChunkParser()
-			updateStatusLine()
+			// Show API link selection popup instead of rotating APIs
+			showAPILinkSelectionPopup()
 			return nil
 		}
 		if event.Key() == tcell.KeyCtrlS {
@@ -1170,54 +1131,18 @@ func init() {
 			// INFO: continue bot/text message
 			// without new role
 			lastRole := chatBody.Messages[len(chatBody.Messages)-1].Role
-			go chatRound("", lastRole, textView, false, true)
+			// go chatRound("", lastRole, textView, false, true)
+			chatRoundChan <- &models.ChatRoundReq{Role: lastRole, Resume: true}
 			return nil
 		}
 		if event.Key() == tcell.KeyCtrlQ {
-			persona := cfg.UserRole
-			if cfg.WriteNextMsgAs != "" {
-				persona = cfg.WriteNextMsgAs
-			}
-			roles := listRolesWithUser()
-			logger.Info("list roles", "roles", roles)
-			for i, role := range roles {
-				if strings.EqualFold(role, persona) {
-					if i == len(roles)-1 {
-						cfg.WriteNextMsgAs = roles[0] // reached last, get first
-						break
-					}
-					cfg.WriteNextMsgAs = roles[i+1] // get next role
-					logger.Info("picked role", "roles", roles, "index", i+1)
-					break
-				}
-			}
-			updateStatusLine()
+			// Show user role selection popup instead of cycling through roles
+			showUserRoleSelectionPopup()
 			return nil
 		}
 		if event.Key() == tcell.KeyCtrlX {
-			persona := cfg.AssistantRole
-			if cfg.WriteNextMsgAsCompletionAgent != "" {
-				persona = cfg.WriteNextMsgAsCompletionAgent
-			}
-			roles := chatBody.ListRoles()
-			if len(roles) == 0 {
-				logger.Warn("empty roles in chat")
-			}
-			if !strInSlice(cfg.AssistantRole, roles) {
-				roles = append(roles, cfg.AssistantRole)
-			}
-			for i, role := range roles {
-				if strings.EqualFold(role, persona) {
-					if i == len(roles)-1 {
-						cfg.WriteNextMsgAsCompletionAgent = roles[0] // reached last, get first
-						break
-					}
-					cfg.WriteNextMsgAsCompletionAgent = roles[i+1] // get next role
-					logger.Info("picked role", "roles", roles, "index", i+1)
-					break
-				}
-			}
-			updateStatusLine()
+			// Show bot role selection popup instead of cycling through roles
+			showBotRoleSelectionPopup()
 			return nil
 		}
 		if event.Key() == tcell.KeyCtrlG {
@@ -1295,7 +1220,6 @@ func init() {
 		// cannot send msg in editMode or botRespMode
 		if event.Key() == tcell.KeyEscape && !editMode && !botRespMode {
 			msgText := textArea.GetText()
-			// TODO: add shellmode command -> output to the chat history, or at least have an option
 			if shellMode && msgText != "" {
 				// In shell mode, execute command instead of sending to LLM
 				executeCommandAndDisplay(msgText)
@@ -1335,7 +1259,8 @@ func init() {
 					}
 					colorText()
 				}
-				go chatRound(msgText, persona, textView, false, false)
+				// go chatRound(msgText, persona, textView, false, false)
+				chatRoundChan <- &models.ChatRoundReq{Role: persona, UserMsg: msgText}
 				// Also clear any image attachment after sending the message
 				go func() {
 					// Wait a short moment for the message to be processed, then clear the image attachment

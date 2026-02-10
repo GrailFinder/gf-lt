@@ -18,35 +18,35 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/neurosnap/sentences/english"
-	"github.com/rivo/tview"
 )
 
 var (
-	httpClient = &http.Client{}
-	cfg        *config.Config
-	logger     *slog.Logger
-	logLevel   = new(slog.LevelVar)
-)
-var (
-	activeChatName      string
-	chunkChan           = make(chan string, 10)
-	openAIToolChan      = make(chan string, 10)
-	streamDone          = make(chan bool, 1)
-	chatBody            *models.ChatBody
-	store               storage.FullRepo
-	defaultFirstMsg     = "Hello! What can I do for you?"
-	defaultStarter      = []models.RoleMsg{}
-	defaultStarterBytes = []byte{}
-	interruptResp       = false
-	ragger              *rag.RAG
-	chunkParser         ChunkParser
-	lastToolCall        *models.FuncCall
+	httpClient      = &http.Client{}
+	cfg             *config.Config
+	logger          *slog.Logger
+	logLevel        = new(slog.LevelVar)
+	ctx, cancel     = context.WithCancel(context.Background())
+	activeChatName  string
+	chatRoundChan   = make(chan *models.ChatRoundReq, 1)
+	chunkChan       = make(chan string, 10)
+	openAIToolChan  = make(chan string, 10)
+	streamDone      = make(chan bool, 1)
+	chatBody        *models.ChatBody
+	store           storage.FullRepo
+	defaultFirstMsg = "Hello! What can I do for you?"
+	defaultStarter  = []models.RoleMsg{}
+	interruptResp   = false
+	ragger          *rag.RAG
+	chunkParser     ChunkParser
+	lastToolCall    *models.FuncCall
 	//nolint:unused // TTS_ENABLED conditionally uses this
 	orator          Orator
 	asr             STT
@@ -68,26 +68,102 @@ var (
 	LocalModels = []string{}
 )
 
-// cleanNullMessages removes messages with null or empty content to prevent API issues
-func cleanNullMessages(messages []models.RoleMsg) []models.RoleMsg {
-	// // deletes tool calls which we don't want for now
-	// cleaned := make([]models.RoleMsg, 0, len(messages))
-	// for _, msg := range messages {
-	// 	// is there a sense for this check at all?
-	// 	if msg.HasContent() || msg.ToolCallID != "" || msg.Role == cfg.AssistantRole || msg.Role == cfg.WriteNextMsgAsCompletionAgent {
-	// 		cleaned = append(cleaned, msg)
-	// 	} else {
-	// 		// Log filtered messages for debugging
-	// 		logger.Warn("filtering out message during cleaning", "role", msg.Role, "content", msg.Content, "tool_call_id", msg.ToolCallID, "has_content", msg.HasContent())
-	// 	}
-	// }
-	return consolidateConsecutiveAssistantMessages(messages)
+// parseKnownToTag extracts known_to list from content using configured tag.
+// Returns cleaned content and list of character names.
+func parseKnownToTag(content string) []string {
+	if cfg == nil || !cfg.CharSpecificContextEnabled {
+		return nil
+	}
+	tag := cfg.CharSpecificContextTag
+	if tag == "" {
+		tag = "@"
+	}
+	// Pattern: tag + list + "@"
+	pattern := regexp.QuoteMeta(tag) + `(.*?)@`
+	re := regexp.MustCompile(pattern)
+	matches := re.FindAllStringSubmatch(content, -1)
+	if len(matches) == 0 {
+		return nil
+	}
+	// There may be multiple tags; we combine all.
+	var knownTo []string
+	for _, match := range matches {
+		if len(match) < 2 {
+			continue
+		}
+		// Remove the entire matched tag from content
+		list := strings.TrimSpace(match[1])
+		if list == "" {
+			continue
+		}
+		strings.SplitSeq(list, ",")
+		// parts := strings.Split(list, ",")
+		// for _, p := range parts {
+		for p := range strings.SplitSeq(list, ",") {
+			p = strings.TrimSpace(p)
+			if p != "" {
+				knownTo = append(knownTo, p)
+			}
+		}
+	}
+	// Also remove any leftover trailing "__" that might be orphaned? Not needed.
+	return knownTo
+}
+
+// processMessageTag processes a message for known_to tag and sets KnownTo field.
+// It also ensures the sender's role is included in KnownTo.
+// If KnownTo already set (e.g., from DB), preserves it unless new tag found.
+func processMessageTag(msg *models.RoleMsg) *models.RoleMsg {
+	if cfg == nil || !cfg.CharSpecificContextEnabled {
+		return msg
+	}
+	// If KnownTo already set, assume tag already processed (content cleaned).
+	// However, we still check for new tags (maybe added later).
+	knownTo := parseKnownToTag(msg.Content)
+	// If tag found, replace KnownTo with new list (merge with existing?)
+	// For simplicity, if knownTo is not nil, replace.
+	if knownTo == nil {
+		return msg
+	}
+	msg.KnownTo = knownTo
+	if msg.Role == "" {
+		return msg
+	}
+	if !slices.Contains(msg.KnownTo, msg.Role) {
+		msg.KnownTo = append(msg.KnownTo, msg.Role)
+	}
+	return msg
+}
+
+// filterMessagesForCharacter returns messages visible to the specified character.
+// If CharSpecificContextEnabled is false, returns all messages.
+func filterMessagesForCharacter(messages []models.RoleMsg, character string) []models.RoleMsg {
+	if cfg == nil || !cfg.CharSpecificContextEnabled || character == "" {
+		return messages
+	}
+	if character == "system" { // system sees every message
+		return messages
+	}
+	filtered := make([]models.RoleMsg, 0, len(messages))
+	for _, msg := range messages {
+		// If KnownTo is nil or empty, message is visible to all
+		// system msg cannot be filtered
+		if len(msg.KnownTo) == 0 || msg.Role == "system" {
+			filtered = append(filtered, msg)
+			continue
+		}
+		if slices.Contains(msg.KnownTo, character) {
+			// Check if character is in KnownTo lis
+			filtered = append(filtered, msg)
+		}
+	}
+	return filtered
 }
 
 func cleanToolCalls(messages []models.RoleMsg) []models.RoleMsg {
 	// If AutoCleanToolCallsFromCtx is false, keep tool call messages in context
 	if cfg != nil && !cfg.AutoCleanToolCallsFromCtx {
-		return consolidateConsecutiveAssistantMessages(messages)
+		return consolidateAssistantMessages(messages)
 	}
 	cleaned := make([]models.RoleMsg, 0, len(messages))
 	for i, msg := range messages {
@@ -97,11 +173,11 @@ func cleanToolCalls(messages []models.RoleMsg) []models.RoleMsg {
 			cleaned = append(cleaned, msg)
 		}
 	}
-	return consolidateConsecutiveAssistantMessages(cleaned)
+	return consolidateAssistantMessages(cleaned)
 }
 
-// consolidateConsecutiveAssistantMessages merges consecutive assistant messages into a single message
-func consolidateConsecutiveAssistantMessages(messages []models.RoleMsg) []models.RoleMsg {
+// consolidateAssistantMessages merges consecutive assistant messages into a single message
+func consolidateAssistantMessages(messages []models.RoleMsg) []models.RoleMsg {
 	if len(messages) == 0 {
 		return messages
 	}
@@ -110,7 +186,8 @@ func consolidateConsecutiveAssistantMessages(messages []models.RoleMsg) []models
 	isBuildingAssistantMsg := false
 	for i := 0; i < len(messages); i++ {
 		msg := messages[i]
-		if msg.Role == cfg.AssistantRole || msg.Role == cfg.WriteNextMsgAsCompletionAgent {
+		// assistant role only
+		if msg.Role == cfg.AssistantRole {
 			// If this is an assistant message, start or continue building
 			if !isBuildingAssistantMsg {
 				// Start accumulating assistant message
@@ -223,7 +300,8 @@ func warmUpModel() {
 	go func() {
 		var data []byte
 		var err error
-		if strings.HasSuffix(cfg.CurrentAPI, "/completion") {
+		switch {
+		case strings.HasSuffix(cfg.CurrentAPI, "/completion"):
 			// Old completion endpoint
 			req := models.NewLCPReq(".", chatBody.Model, nil, map[string]float32{
 				"temperature":    0.8,
@@ -233,7 +311,7 @@ func warmUpModel() {
 			}, []string{})
 			req.Stream = false
 			data, err = json.Marshal(req)
-		} else if strings.Contains(cfg.CurrentAPI, "/v1/chat/completions") {
+		case strings.Contains(cfg.CurrentAPI, "/v1/chat/completions"):
 			// OpenAI-compatible chat endpoint
 			req := models.OpenAIReq{
 				ChatBody: &models.ChatBody{
@@ -246,7 +324,7 @@ func warmUpModel() {
 				Tools: nil,
 			}
 			data, err = json.Marshal(req)
-		} else {
+		default:
 			// Unknown local endpoint, skip
 			return
 		}
@@ -412,9 +490,62 @@ func monitorModelLoad(modelID string) {
 	}()
 }
 
+// extractDetailedErrorFromBytes extracts detailed error information from response body bytes
+func extractDetailedErrorFromBytes(body []byte, statusCode int) string {
+	// Try to parse as JSON to extract detailed error information
+	var errorResponse map[string]interface{}
+	if err := json.Unmarshal(body, &errorResponse); err == nil {
+		// Check if it's an error response with detailed information
+		if errorData, ok := errorResponse["error"]; ok {
+			if errorMap, ok := errorData.(map[string]interface{}); ok {
+				var errorMsg string
+				if msg, ok := errorMap["message"]; ok {
+					errorMsg = fmt.Sprintf("%v", msg)
+				}
+
+				var details []string
+				if code, ok := errorMap["code"]; ok {
+					details = append(details, fmt.Sprintf("Code: %v", code))
+				}
+
+				if metadata, ok := errorMap["metadata"]; ok {
+					// Handle metadata which might contain raw error details
+					if metadataMap, ok := metadata.(map[string]interface{}); ok {
+						if raw, ok := metadataMap["raw"]; ok {
+							// Parse the raw error string if it's JSON
+							var rawError map[string]interface{}
+							if rawStr, ok := raw.(string); ok && json.Unmarshal([]byte(rawStr), &rawError) == nil {
+								if rawErrorData, ok := rawError["error"]; ok {
+									if rawErrorMap, ok := rawErrorData.(map[string]interface{}); ok {
+										if rawMsg, ok := rawErrorMap["message"]; ok {
+											return fmt.Sprintf("API Error: %s", rawMsg)
+										}
+									}
+								}
+							}
+						}
+					}
+					details = append(details, fmt.Sprintf("Metadata: %v", metadata))
+				}
+
+				if len(details) > 0 {
+					return fmt.Sprintf("API Error: %s (%s)", errorMsg, strings.Join(details, ", "))
+				}
+
+				return "API Error: " + errorMsg
+			}
+		}
+	}
+
+	// If not a structured error response, return the raw body with status
+	return fmt.Sprintf("HTTP Status: %d, Response Body: %s", statusCode, string(body))
+}
+
 // sendMsgToLLM expects streaming resp
 func sendMsgToLLM(body io.Reader) {
 	choseChunkParser()
+	// openrouter does not respect stop strings, so we have to cut the message ourselves
+	stopStrings := chatBody.MakeStopSliceExcluding("", listChatRoles())
 	req, err := http.NewRequest("POST", cfg.CurrentAPI, body)
 	if err != nil {
 		logger.Error("newreq error", "error", err)
@@ -438,6 +569,33 @@ func sendMsgToLLM(body io.Reader) {
 		streamDone <- true
 		return
 	}
+
+	// Check if the initial response is an error before starting to stream
+	if resp.StatusCode >= 400 {
+		// Read the response body to get detailed error information
+		bodyBytes, err := io.ReadAll(resp.Body)
+		if err != nil {
+			logger.Error("failed to read error response body", "error", err, "status_code", resp.StatusCode)
+			detailedError := fmt.Sprintf("HTTP Status: %d, Failed to read response body: %v", resp.StatusCode, err)
+			if err := notifyUser("API Error", detailedError); err != nil {
+				logger.Error("failed to notify", "error", err)
+			}
+			resp.Body.Close()
+			streamDone <- true
+			return
+		}
+
+		// Parse the error response for detailed information
+		detailedError := extractDetailedErrorFromBytes(bodyBytes, resp.StatusCode)
+		logger.Error("API returned error status", "status_code", resp.StatusCode, "detailed_error", detailedError)
+		if err := notifyUser("API Error", detailedError); err != nil {
+			logger.Error("failed to notify", "error", err)
+		}
+		resp.Body.Close()
+		streamDone <- true
+		return
+	}
+
 	defer resp.Body.Close()
 	reader := bufio.NewReader(resp.Body)
 	counter := uint32(0)
@@ -455,11 +613,23 @@ func sendMsgToLLM(body io.Reader) {
 		}
 		line, err := reader.ReadBytes('\n')
 		if err != nil {
-			logger.Error("error reading response body", "error", err, "line", string(line),
-				"user_role", cfg.UserRole, "parser", chunkParser, "link", cfg.CurrentAPI)
-			// if err.Error() != "EOF" {
-			if err := notifyUser("API error", err.Error()); err != nil {
-				logger.Error("failed to notify", "error", err)
+			// Check if this is an EOF error and if the response contains detailed error information
+			if err == io.EOF {
+				// For streaming responses, we may have already consumed the error body
+				// So we'll use the original status code to provide context
+				detailedError := fmt.Sprintf("Streaming connection closed unexpectedly (Status: %d). This may indicate an API error. Check your API provider and model settings.", resp.StatusCode)
+				logger.Error("error reading response body", "error", err, "detailed_error", detailedError,
+					"status_code", resp.StatusCode, "user_role", cfg.UserRole, "parser", chunkParser, "link", cfg.CurrentAPI)
+				if err := notifyUser("API Error", detailedError); err != nil {
+					logger.Error("failed to notify", "error", err)
+				}
+			} else {
+				logger.Error("error reading response body", "error", err, "line", string(line),
+					"user_role", cfg.UserRole, "parser", chunkParser, "link", cfg.CurrentAPI)
+				// if err.Error() != "EOF" {
+				if err := notifyUser("API error", err.Error()); err != nil {
+					logger.Error("failed to notify", "error", err)
+				}
 			}
 			streamDone <- true
 			break
@@ -514,6 +684,14 @@ func sendMsgToLLM(body io.Reader) {
 		}
 		// bot sends way too many \n
 		answerText = strings.ReplaceAll(chunk.Chunk, "\n\n", "\n")
+		// Accumulate text to check for stop strings that might span across chunks
+		// check if chunk is in stopstrings => stop
+		// this check is needed only for openrouter /v1/completion, since it does not respect stop slice
+		if chunkParser.GetAPIType() == models.APITypeCompletion &&
+			slices.Contains(stopStrings, answerText) {
+			logger.Debug("stop string detected on client side for completion endpoint", "stop_string", answerText)
+			streamDone <- true
+		}
 		chunkChan <- answerText
 		openAIToolChan <- chunk.ToolChunk
 		if chunk.FuncName != "" {
@@ -597,7 +775,20 @@ func roleToIcon(role string) string {
 	return "<" + role + ">: "
 }
 
-func chatRound(userMsg, role string, tv *tview.TextView, regen, resume bool) {
+func chatWatcher(ctx context.Context) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case chatRoundReq := <-chatRoundChan:
+			if err := chatRound(chatRoundReq); err != nil {
+				logger.Error("failed to chatRound", "err", err)
+			}
+		}
+	}
+}
+
+func chatRound(r *models.ChatRoundReq) error {
 	botRespMode = true
 	botPersona := cfg.AssistantRole
 	if cfg.WriteNextMsgAsCompletionAgent != "" {
@@ -605,32 +796,23 @@ func chatRound(userMsg, role string, tv *tview.TextView, regen, resume bool) {
 	}
 	defer func() { botRespMode = false }()
 	// check that there is a model set to use if is not local
-	if cfg.CurrentAPI == cfg.DeepSeekChatAPI || cfg.CurrentAPI == cfg.DeepSeekCompletionAPI {
-		if chatBody.Model != "deepseek-chat" && chatBody.Model != "deepseek-reasoner" {
-			if err := notifyUser("bad request", "wrong deepseek model name"); err != nil {
-				logger.Warn("failed ot notify user", "error", err)
-				return
-			}
-			return
-		}
-	}
 	choseChunkParser()
-	reader, err := chunkParser.FormMsg(userMsg, role, resume)
+	reader, err := chunkParser.FormMsg(r.UserMsg, r.Role, r.Resume)
 	if reader == nil || err != nil {
-		logger.Error("empty reader from msgs", "role", role, "error", err)
-		return
+		logger.Error("empty reader from msgs", "role", r.Role, "error", err)
+		return err
 	}
 	if cfg.SkipLLMResp {
-		return
+		return nil
 	}
 	go sendMsgToLLM(reader)
-	logger.Debug("looking at vars in chatRound", "msg", userMsg, "regen", regen, "resume", resume)
-	if !resume {
-		fmt.Fprintf(tv, "\n[-:-:b](%d) ", len(chatBody.Messages))
-		fmt.Fprint(tv, roleToIcon(botPersona))
-		fmt.Fprint(tv, "[-:-:-]\n")
+	logger.Debug("looking at vars in chatRound", "msg", r.UserMsg, "regen", r.Regen, "resume", r.Resume)
+	if !r.Resume {
+		fmt.Fprintf(textView, "\n[-:-:b](%d) ", len(chatBody.Messages))
+		fmt.Fprint(textView, roleToIcon(botPersona))
+		fmt.Fprint(textView, "[-:-:-]\n")
 		if cfg.ThinkUse && !strings.Contains(cfg.CurrentAPI, "v1") {
-			// fmt.Fprint(tv, "<think>")
+			// fmt.Fprint(textView, "<think>")
 			chunkChan <- "<think>"
 		}
 	}
@@ -640,29 +822,29 @@ out:
 	for {
 		select {
 		case chunk := <-chunkChan:
-			fmt.Fprint(tv, chunk)
+			fmt.Fprint(textView, chunk)
 			respText.WriteString(chunk)
 			if scrollToEndEnabled {
-				tv.ScrollToEnd()
+				textView.ScrollToEnd()
 			}
 			// Send chunk to audio stream handler
 			if cfg.TTS_ENABLED {
 				TTSTextChan <- chunk
 			}
 		case toolChunk := <-openAIToolChan:
-			fmt.Fprint(tv, toolChunk)
+			fmt.Fprint(textView, toolChunk)
 			toolResp.WriteString(toolChunk)
 			if scrollToEndEnabled {
-				tv.ScrollToEnd()
+				textView.ScrollToEnd()
 			}
 		case <-streamDone:
 			// drain any remaining chunks from chunkChan before exiting
 			for len(chunkChan) > 0 {
 				chunk := <-chunkChan
-				fmt.Fprint(tv, chunk)
+				fmt.Fprint(textView, chunk)
 				respText.WriteString(chunk)
 				if scrollToEndEnabled {
-					tv.ScrollToEnd()
+					textView.ScrollToEnd()
 				}
 				if cfg.TTS_ENABLED {
 					// Send chunk to audio stream handler
@@ -678,25 +860,23 @@ out:
 	}
 	botRespMode = false
 	// numbers in chatbody and displayed must be the same
-	if resume {
+	if r.Resume {
 		chatBody.Messages[len(chatBody.Messages)-1].Content += respText.String()
 		// lastM.Content = lastM.Content + respText.String()
+		// Process the updated message to check for known_to tags in resumed response
+		updatedMsg := chatBody.Messages[len(chatBody.Messages)-1]
+		processedMsg := processMessageTag(&updatedMsg)
+		chatBody.Messages[len(chatBody.Messages)-1] = *processedMsg
 	} else {
-		chatBody.Messages = append(chatBody.Messages, models.RoleMsg{
+		newMsg := models.RoleMsg{
 			Role: botPersona, Content: respText.String(),
-		})
+		}
+		// Process the new message to check for known_to tags in LLM response
+		newMsg = *processMessageTag(&newMsg)
+		chatBody.Messages = append(chatBody.Messages, newMsg)
 	}
-	logger.Debug("chatRound: before cleanChatBody", "messages_before_clean", len(chatBody.Messages))
-	for i, msg := range chatBody.Messages {
-		logger.Debug("chatRound: before cleaning", "index", i, "role", msg.Role, "content_len", len(msg.Content), "has_content", msg.HasContent(), "tool_call_id", msg.ToolCallID)
-	}
-	// // Clean null/empty messages to prevent API issues with endpoints like llama.cpp jinja template
 	cleanChatBody()
-	logger.Debug("chatRound: after cleanChatBody", "messages_after_clean", len(chatBody.Messages))
-	for i, msg := range chatBody.Messages {
-		logger.Debug("chatRound: after cleaning", "index", i, "role", msg.Role, "content_len", len(msg.Content), "has_content", msg.HasContent(), "tool_call_id", msg.ToolCallID)
-	}
-	colorText()
+	refreshChatDisplay()
 	updateStatusLine()
 	// bot msg is done;
 	// now check it for func call
@@ -704,7 +884,19 @@ out:
 	if err := updateStorageChat(activeChatName, chatBody.Messages); err != nil {
 		logger.Warn("failed to update storage", "error", err, "name", activeChatName)
 	}
-	findCall(respText.String(), toolResp.String(), tv)
+	if findCall(respText.String(), toolResp.String()) {
+		return nil
+	}
+	// Check if this message was sent privately to specific characters
+	// If so, trigger those characters to respond if that char is not controlled by user
+	// perhaps we should have narrator role to determine which char is next to act
+	if cfg.AutoTurn {
+		lastMsg := chatBody.Messages[len(chatBody.Messages)-1]
+		if len(lastMsg.KnownTo) > 0 {
+			triggerPrivateMessageResponses(&lastMsg)
+		}
+	}
+	return nil
 }
 
 // cleanChatBody removes messages with null or empty content to prevent API issues
@@ -712,19 +904,10 @@ func cleanChatBody() {
 	if chatBody == nil || chatBody.Messages == nil {
 		return
 	}
-	originalLen := len(chatBody.Messages)
-	logger.Debug("cleanChatBody: before cleaning", "message_count", originalLen)
-	for i, msg := range chatBody.Messages {
-		logger.Debug("cleanChatBody: before clean", "index", i, "role", msg.Role, "content_len", len(msg.Content), "has_content", msg.HasContent(), "tool_call_id", msg.ToolCallID)
-	}
 	// Tool request cleaning is now configurable via AutoCleanToolCallsFromCtx (default false)
 	// /completion msg where part meant for user and other part tool call
 	chatBody.Messages = cleanToolCalls(chatBody.Messages)
-	chatBody.Messages = cleanNullMessages(chatBody.Messages)
-	logger.Debug("cleanChatBody: after cleaning", "original_len", originalLen, "new_len", len(chatBody.Messages))
-	for i, msg := range chatBody.Messages {
-		logger.Debug("cleanChatBody: after clean", "index", i, "role", msg.Role, "content_len", len(msg.Content), "has_content", msg.HasContent(), "tool_call_id", msg.ToolCallID)
-	}
+	chatBody.Messages = consolidateAssistantMessages(chatBody.Messages)
 }
 
 // convertJSONToMapStringString unmarshals JSON into map[string]interface{} and converts all values to strings.
@@ -789,8 +972,9 @@ func unmarshalFuncCall(jsonStr string) (*models.FuncCall, error) {
 	return fc, nil
 }
 
-func findCall(msg, toolCall string, tv *tview.TextView) {
-	fc := &models.FuncCall{}
+// findCall: adds chatRoundReq into the chatRoundChan and returns true if does
+func findCall(msg, toolCall string) bool {
+	var fc *models.FuncCall
 	if toolCall != "" {
 		// HTML-decode the tool call string to handle encoded characters like &lt; -> <=
 		decodedToolCall := html.UnescapeString(toolCall)
@@ -807,8 +991,13 @@ func findCall(msg, toolCall string, tv *tview.TextView) {
 			chatBody.Messages = append(chatBody.Messages, toolResponseMsg)
 			// Clear the stored tool call ID after using it (no longer needed)
 			// Trigger the assistant to continue processing with the error message
-			chatRound("", cfg.AssistantRole, tv, false, false)
-			return
+			crr := &models.ChatRoundReq{
+				Role: cfg.AssistantRole,
+			}
+			// provoke next llm msg after failed tool call
+			chatRoundChan <- crr
+			// chatRound("", cfg.AssistantRole, tv, false, false)
+			return true
 		}
 		lastToolCall.Args = openAIToolMap
 		fc = lastToolCall
@@ -820,8 +1009,8 @@ func findCall(msg, toolCall string, tv *tview.TextView) {
 		}
 	} else {
 		jsStr := toolCallRE.FindString(msg)
-		if jsStr == "" {
-			return
+		if jsStr == "" { // no tool call case
+			return false
 		}
 		prefix := "__tool_call__\n"
 		suffix := "\n__tool_call__"
@@ -840,8 +1029,13 @@ func findCall(msg, toolCall string, tv *tview.TextView) {
 			chatBody.Messages = append(chatBody.Messages, toolResponseMsg)
 			logger.Debug("findCall: added tool error response", "role", toolResponseMsg.Role, "content_len", len(toolResponseMsg.Content), "message_count_after_add", len(chatBody.Messages))
 			// Trigger the assistant to continue processing with the error message
-			chatRound("", cfg.AssistantRole, tv, false, false)
-			return
+			// chatRound("", cfg.AssistantRole, tv, false, false)
+			crr := &models.ChatRoundReq{
+				Role: cfg.AssistantRole,
+			}
+			// provoke next llm msg after failed tool call
+			chatRoundChan <- crr
+			return true
 		}
 		// Update lastToolCall with parsed function call
 		lastToolCall.ID = fc.ID
@@ -874,13 +1068,17 @@ func findCall(msg, toolCall string, tv *tview.TextView) {
 		lastToolCall.ID = ""
 		// Trigger the assistant to continue processing with the new tool response
 		// by calling chatRound with empty content to continue the assistant's response
-		chatRound("", cfg.AssistantRole, tv, false, false)
-		return
+		crr := &models.ChatRoundReq{
+			Role: cfg.AssistantRole,
+		}
+		// failed to find tool
+		chatRoundChan <- crr
+		return true
 	}
 	resp := callToolWithAgent(fc.Name, fc.Args)
 	toolMsg := string(resp) // Remove the "tool response: " prefix and %+v formatting
 	logger.Info("llm used tool call", "tool_resp", toolMsg, "tool_attrs", fc)
-	fmt.Fprintf(tv, "%s[-:-:b](%d) <%s>: [-:-:-]\n%s\n",
+	fmt.Fprintf(textView, "%s[-:-:b](%d) <%s>: [-:-:-]\n%s\n",
 		"\n\n", len(chatBody.Messages), cfg.ToolRole, toolMsg)
 	// Create tool response message with the proper tool_call_id
 	toolResponseMsg := models.RoleMsg{
@@ -894,12 +1092,16 @@ func findCall(msg, toolCall string, tv *tview.TextView) {
 	lastToolCall.ID = ""
 	// Trigger the assistant to continue processing with the new tool response
 	// by calling chatRound with empty content to continue the assistant's response
-	chatRound("", cfg.AssistantRole, tv, false, false)
+	crr := &models.ChatRoundReq{
+		Role: cfg.AssistantRole,
+	}
+	chatRoundChan <- crr
+	return true
 }
 
-func chatToTextSlice(showSys bool) []string {
-	resp := make([]string, len(chatBody.Messages))
-	for i, msg := range chatBody.Messages {
+func chatToTextSlice(messages []models.RoleMsg, showSys bool) []string {
+	resp := make([]string, len(messages))
+	for i, msg := range messages {
 		// INFO: skips system msg and tool msg
 		if !showSys && (msg.Role == cfg.ToolRole || msg.Role == "system") {
 			continue
@@ -909,8 +1111,8 @@ func chatToTextSlice(showSys bool) []string {
 	return resp
 }
 
-func chatToText(showSys bool) string {
-	s := chatToTextSlice(showSys)
+func chatToText(messages []models.RoleMsg, showSys bool) string {
+	s := chatToTextSlice(messages, showSys)
 	return strings.Join(s, "\n")
 }
 
@@ -951,28 +1153,27 @@ func addNewChat(chatName string) {
 	activeChatName = chat.Name
 }
 
-func applyCharCard(cc *models.CharCard) {
+func applyCharCard(cc *models.CharCard, loadHistory bool) {
 	cfg.AssistantRole = cc.Role
-	// FIXME: remove
 	history, err := loadAgentsLastChat(cfg.AssistantRole)
-	if err != nil {
+	if err != nil || !loadHistory {
 		// too much action for err != nil; loadAgentsLastChat needs to be split up
-		logger.Warn("failed to load last agent chat;", "agent", cc.Role, "err", err)
 		history = []models.RoleMsg{
 			{Role: "system", Content: cc.SysPrompt},
 			{Role: cfg.AssistantRole, Content: cc.FirstMsg},
 		}
+		logger.Warn("failed to load last agent chat;", "agent", cc.Role, "err", err, "new_history", history)
 		addNewChat("")
 	}
 	chatBody.Messages = history
 }
 
-func charToStart(agentName string) bool {
+func charToStart(agentName string, keepSysP bool) bool {
 	cc, ok := sysMap[agentName]
 	if !ok {
 		return false
 	}
-	applyCharCard(cc)
+	applyCharCard(cc, keepSysP)
 	return true
 }
 
@@ -1025,7 +1226,7 @@ func summarizeAndStartNewChat() {
 		return
 	}
 	// Start a new chat
-	startNewChat()
+	startNewChat(true)
 	// Inject summary as a tool call response
 	toolMsg := models.RoleMsg{
 		Role:       cfg.ToolRole,
@@ -1034,7 +1235,7 @@ func summarizeAndStartNewChat() {
 	}
 	chatBody.Messages = append(chatBody.Messages, toolMsg)
 	// Update UI
-	textView.SetText(chatToText(cfg.ShowSys))
+	textView.SetText(chatToText(chatBody.Messages, cfg.ShowSys))
 	colorText()
 	// Update storage
 	if err := updateStorageChat(activeChatName, chatBody.Messages); err != nil {
@@ -1044,10 +1245,12 @@ func summarizeAndStartNewChat() {
 }
 
 func init() {
+	// ctx, cancel := context.WithCancel(context.Background())
 	var err error
 	cfg, err = config.LoadConfig("config.toml")
 	if err != nil {
 		fmt.Println("failed to load config.toml")
+		cancel()
 		os.Exit(1)
 		return
 	}
@@ -1059,11 +1262,8 @@ func init() {
 		os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		slog.Error("failed to open log file", "error", err, "filename", cfg.LogFile)
-		return
-	}
-	defaultStarterBytes, err = json.Marshal(defaultStarter)
-	if err != nil {
-		slog.Error("failed to marshal defaultStarter", "error", err)
+		cancel()
+		os.Exit(1)
 		return
 	}
 	// load cards
@@ -1074,13 +1274,17 @@ func init() {
 	logger = slog.New(slog.NewTextHandler(logfile, &slog.HandlerOptions{Level: logLevel}))
 	store = storage.NewProviderSQL(cfg.DBPATH, logger)
 	if store == nil {
+		cancel()
 		os.Exit(1)
+		return
 	}
 	ragger = rag.New(logger, store, cfg)
 	// https://github.com/coreydaley/ggerganov-llama.cpp/blob/master/examples/server/README.md
 	// load all chats in memory
 	if _, err := loadHistoryChats(); err != nil {
 		logger.Error("failed to load chat", "error", err)
+		cancel()
+		os.Exit(1)
 		return
 	}
 	lastToolCall = &models.FuncCall{}
@@ -1101,4 +1305,54 @@ func init() {
 	// Initialize scrollToEndEnabled based on config
 	scrollToEndEnabled = cfg.AutoScrollEnabled
 	go updateModelLists()
+	go chatWatcher(ctx)
+}
+
+func getValidKnowToRecipient(msg *models.RoleMsg) (string, bool) {
+	if cfg == nil || !cfg.CharSpecificContextEnabled {
+		return "", false
+	}
+	// case where all roles are in the tag => public message
+	cr := listChatRoles()
+	slices.Sort(cr)
+	slices.Sort(msg.KnownTo)
+	if slices.Equal(cr, msg.KnownTo) {
+		logger.Info("got msg with tag mentioning every role")
+		return "", false
+	}
+	// Check each character in the KnownTo list
+	for _, recipient := range msg.KnownTo {
+		if recipient == msg.Role || recipient == cfg.ToolRole {
+			// weird cases, skip
+			continue
+		}
+		// Skip if this is the user character (user handles their own turn)
+		// If user is in KnownTo, stop processing - it's the user's turn
+		if recipient == cfg.UserRole || recipient == cfg.WriteNextMsgAs {
+			return "", false
+		}
+		return recipient, true
+	}
+	return "", false
+}
+
+// triggerPrivateMessageResponses checks if a message was sent privately to specific characters
+// and triggers those non-user characters to respond
+func triggerPrivateMessageResponses(msg *models.RoleMsg) {
+	recipient, ok := getValidKnowToRecipient(msg)
+	if !ok || recipient == "" {
+		return
+	}
+	// Trigger the recipient character to respond
+	triggerMsg := recipient + ":\n"
+	// Send empty message so LLM continues naturally from the conversation
+	crr := &models.ChatRoundReq{
+		UserMsg: triggerMsg,
+		Role:    recipient,
+		Resume:  true,
+	}
+	fmt.Fprintf(textView, "\n[-:-:b](%d) ", len(chatBody.Messages))
+	fmt.Fprint(textView, roleToIcon(recipient))
+	fmt.Fprint(textView, "[-:-:-]\n")
+	chatRoundChan <- crr
 }

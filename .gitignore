@@ -6,6 +6,7 @@ history/
 config.toml
 sysprompts/*
 !sysprompts/cluedo.json
+!sysprompts/alice_bob_carl.json
 history_bak/
 .aider*
 tags

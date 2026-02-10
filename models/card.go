@@ -31,18 +31,20 @@ func (c *CharCardSpec) Simplify(userName, fpath string) *CharCard {
 	fm := strings.ReplaceAll(strings.ReplaceAll(c.FirstMes, "{{char}}", c.Name), "{{user}}", userName)
 	sysPr := strings.ReplaceAll(strings.ReplaceAll(c.Description, "{{char}}", c.Name), "{{user}}", userName)
 	return &CharCard{
-		SysPrompt: sysPr,
-		FirstMsg:  fm,
-		Role:      c.Name,
-		FilePath:  fpath,
+		SysPrompt:  sysPr,
+		FirstMsg:   fm,
+		Role:       c.Name,
+		FilePath:   fpath,
+		Characters: []string{c.Name, userName},
 	}
 }
 
 type CharCard struct {
-	SysPrompt string `json:"sys_prompt"`
-	FirstMsg  string `json:"first_msg"`
-	Role      string `json:"role"`
-	FilePath  string `json:"filepath"`
+	SysPrompt  string   `json:"sys_prompt"`
+	FirstMsg   string   `json:"first_msg"`
+	Role       string   `json:"role"`
+	Characters []string `json:"chars"`
+	FilePath   string   `json:"filepath"`
 }
 
 func (cc *CharCard) ToSpec(userName string) *CharCardSpec {

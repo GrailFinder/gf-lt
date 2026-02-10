@@ -19,7 +19,7 @@ AssistantRole = "assistant"
 SysDir = "sysprompts"
 ChunkLimit = 100000
 AutoScrollEnabled = true
-# AutoCleanToolCallsFromCtx = false
+AutoCleanToolCallsFromCtx = false
 # rag settings
 RAGBatchSize = 1
 RAGWordLimit = 80
@@ -39,7 +39,12 @@ WhisperBinaryPath = "./batteries/whisper.cpp/build/bin/whisper-cli" # Path to wh
 WhisperModelPath = "./batteries/whisper.cpp/ggml-large-v3-turbo-q5_0.bin"  # Path to whisper model file (for WHISPER_BINARY mode)
 STT_LANG = "en"  # Language for speech recognition (for WHISPER_BINARY mode)
 STT_SR = 16000  # Sample rate for audio recording
+#
 DBPATH = "gflt.db"
 FilePickerDir = "." # Directory where file picker should start
 FilePickerExts = "png,jpg,jpeg,gif,webp" # Comma-separated list of allowed file extensions for file picker
 EnableMouse = false # Enable mouse support in the UI
+# character specific context
+CharSpecificContextEnabled = true
+CharSpecificContextTag = "@"
+AutoTurn = true

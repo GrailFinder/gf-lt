@@ -7,8 +7,8 @@ import (
 	"image"
 	"os"
 	"path"
+	"slices"
 	"strings"
-	"time"
 	"unicode"
 
 	"math/rand/v2"
@@ -21,6 +21,28 @@ func isASCII(s string) bool {
 		}
 	}
 	return true
+}
+
+// refreshChatDisplay updates the chat display based on current character view
+// It filters messages for the character the user is currently "writing as"
+// and updates the textView with the filtered conversation
+func refreshChatDisplay() {
+	// Determine which character's view to show
+	viewingAs := cfg.UserRole
+	if cfg.WriteNextMsgAs != "" {
+		viewingAs = cfg.WriteNextMsgAs
+	}
+	// Filter messages for this character
+	filteredMessages := filterMessagesForCharacter(chatBody.Messages, viewingAs)
+	displayText := chatToText(filteredMessages, cfg.ShowSys)
+	// Use QueueUpdate for thread-safe UI updates
+	app.QueueUpdate(func() {
+		textView.SetText(displayText)
+		colorText()
+		if scrollToEndEnabled {
+			textView.ScrollToEnd()
+		}
+	})
 }
 
 func colorText() {
@@ -69,7 +91,6 @@ func colorText() {
 	for i, cb := range codeBlocks {
 		text = strings.Replace(text, fmt.Sprintf(placeholder, i), cb, 1)
 	}
-	logger.Debug("thinking debug", "blocks", thinkBlocks)
 	for i, tb := range thinkBlocks {
 		text = strings.Replace(text, fmt.Sprintf(placeholderThink, i), tb, 1)
 	}
@@ -100,23 +121,24 @@ func initSysCards() ([]string, error) {
 	return labels, nil
 }
 
-func startNewChat() {
+func startNewChat(keepSysP bool) {
 	id, err := store.ChatGetMaxID()
 	if err != nil {
 		logger.Error("failed to get chat id", "error", err)
 	}
-	if ok := charToStart(cfg.AssistantRole); !ok {
+	if ok := charToStart(cfg.AssistantRole, keepSysP); !ok {
 		logger.Warn("no such sys msg", "name", cfg.AssistantRole)
 	}
 	// set chat body
 	chatBody.Messages = chatBody.Messages[:2]
-	textView.SetText(chatToText(cfg.ShowSys))
+	textView.SetText(chatToText(chatBody.Messages, cfg.ShowSys))
 	newChat := &models.Chat{
-		ID:        id + 1,
-		Name:      fmt.Sprintf("%d_%s", id+1, cfg.AssistantRole),
-		Msgs:      string(defaultStarterBytes),
-		Agent:     cfg.AssistantRole,
-		CreatedAt: time.Now(),
+		ID:   id + 1,
+		Name: fmt.Sprintf("%d_%s", id+1, cfg.AssistantRole),
+		// chat is written to db when we get first llm response (or any)
+		// actual chat history (messages) would be parsed then
+		Msgs:  "",
+		Agent: cfg.AssistantRole,
 	}
 	activeChatName = newChat.Name
 	chatMap[newChat.Name] = newChat
@@ -166,7 +188,7 @@ func setLogLevel(sl string) {
 }
 
 func listRolesWithUser() []string {
-	roles := chatBody.ListRoles()
+	roles := listChatRoles()
 	// Remove user role if it exists in the list (to avoid duplicates and ensure it's at position 0)
 	filteredRoles := make([]string, 0, len(roles))
 	for _, role := range roles {
@@ -176,6 +198,7 @@ func listRolesWithUser() []string {
 	}
 	// Prepend user role to the beginning of the list
 	result := append([]string{cfg.UserRole}, filteredRoles...)
+	slices.Sort(result)
 	return result
 }
 
@@ -237,9 +260,10 @@ func makeStatusLine() string {
 	} else {
 		shellModeInfo = ""
 	}
-	statusLine := fmt.Sprintf(indexLineCompletion, botRespMode, activeChatName,
-		cfg.ToolUse, chatBody.Model, cfg.SkipLLMResp, cfg.CurrentAPI,
-		isRecording, persona, botPersona, injectRole)
+	statusLine := fmt.Sprintf(indexLineCompletion, boolColors[botRespMode], botRespMode, activeChatName,
+		boolColors[cfg.ToolUse], cfg.ToolUse, chatBody.Model, boolColors[cfg.SkipLLMResp],
+		cfg.SkipLLMResp, cfg.CurrentAPI, boolColors[isRecording], isRecording, persona,
+		botPersona, boolColors[injectRole], injectRole)
 	return statusLine + imageInfo + shellModeInfo
 }
 
@@ -251,4 +275,43 @@ func randString(n int) string {
 		b[i] = letters[rand.IntN(len(letters))]
 	}
 	return string(b)
+}
+
+// set of roles within card definition and mention in chat history
+func listChatRoles() []string {
+	currentChat, ok := chatMap[activeChatName]
+	cbc := chatBody.ListRoles()
+	if !ok {
+		return cbc
+	}
+	currentCard, ok := sysMap[currentChat.Agent]
+	if !ok {
+		// case which won't let to switch roles:
+		// started new chat (basic_sys or any other), at the start it yet be saved or have chatbody
+		// if it does not have a card or chars, it'll return an empty slice
+		// log error
+		logger.Warn("failed to find current card in sysMap", "agent", currentChat.Agent, "sysMap", sysMap)
+		return cbc
+	}
+	charset := []string{}
+	for _, name := range currentCard.Characters {
+		if !strInSlice(name, cbc) {
+			charset = append(charset, name)
+		}
+	}
+	charset = append(charset, cbc...)
+	return charset
+}
+
+func deepseekModelValidator() error {
+	if cfg.CurrentAPI == cfg.DeepSeekChatAPI || cfg.CurrentAPI == cfg.DeepSeekCompletionAPI {
+		if chatBody.Model != "deepseek-chat" && chatBody.Model != "deepseek-reasoner" {
+			if err := notifyUser("bad request", "wrong deepseek model name"); err != nil {
+				logger.Warn("failed ot notify user", "error", err)
+				return err
+			}
+			return nil
+		}
+	}
+	return nil
 }
