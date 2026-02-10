@@ -189,9 +189,12 @@ func (m *RoleMsg) ToText(i int) string {
 		contentStr = strings.Join(textParts, " ") + " "
 	}
 	// check if already has role annotation (/completion makes them)
-	if !strings.HasPrefix(contentStr, m.Role+":") {
-		icon = fmt.Sprintf("(%d) <%s>: ", i, m.Role)
-	}
+	// in that case remove it, and then add to icon
+	// since icon and content are separated by \n
+	contentStr, _ = strings.CutPrefix(contentStr, m.Role+":")
+	// if !strings.HasPrefix(contentStr, m.Role+":") {
+	icon = fmt.Sprintf("(%d) <%s>: ", i, m.Role)
+	// }
 	textMsg := fmt.Sprintf("[-:-:b]%s[-:-:-]\n%s\n", icon, contentStr)
 	return strings.ReplaceAll(textMsg, "\n\n", "\n")
 }
