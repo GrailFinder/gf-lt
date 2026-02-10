@@ -67,11 +67,9 @@ In case you're running llama.cpp, here is an example of starting the llama.cpp s
 For roleplay, /completion endpoints are much better, since /chat endpoints swap any character name to either `user` or `assistant`.
 Once you have the desired API endpoint
 (for example: http://localhost:8080/completion),
-there are two ways to pick a model:
-- `Ctrl+L` allows you to iterate through the model list while in the main window.
-- `Ctrl+P` (opens the properties table). Go to the `Select a model` row and press Enter. A list of available models will appear; pick any that you want, then press `x` to exit the properties table.
+- `Ctrl+L` to show a model selection popup;
 
-#### Llama.cpp model preload
+#### Llama.cpp model (pre)load
 
 Llama.cpp supports swapping models. To load the picked ones, press `Alt+9`.
 
@@ -128,9 +126,9 @@ The screen flashes briefly as it calculates. "I am experiencing degraded functio
 ```
 
 Once the character name is in history, we can switch who the LLM will respond as by pressing `Ctrl+X`.
-For now, it should be rotating between HAL9000, `Username`, Seraphina, and system.
-Make the status line mention: `Bot will write as Seraphina (ctrl+x)`
-and press Escape to see her reaction.
+For now, it should give a choice between HAL9000, `Username`, Seraphina, and system.
+After the change the status line should say: `Bot will write as Seraphina (ctrl+x)`
+press Escape for llm to write as Seraphina.
 
 #### Image input
 
