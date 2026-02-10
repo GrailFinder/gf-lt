@@ -113,7 +113,7 @@ When `AutoTurn` is enabled, the system can automatically trigger responses from 
 ## Cardmaking with multiple characters
 
 So far only json format supports multiple characters.
-![card example](sysprompts/alice_bob_carl.json)
+[card example](sysprompts/alice_bob_carl.json)
 
 ## Limitations & Caveats
 
