@@ -45,6 +45,18 @@ func refreshChatDisplay() {
 	})
 }
 
+func stopTTSIfNotForUser(msg *models.RoleMsg) {
+	viewingAs := cfg.UserRole
+	if cfg.WriteNextMsgAs != "" {
+		viewingAs = cfg.WriteNextMsgAs
+	}
+	// stop tts if msg is not for user
+	if cfg.CharSpecificContextEnabled &&
+		!slices.Contains(msg.KnownTo, viewingAs) && cfg.TTS_ENABLED {
+		TTSDoneChan <- true
+	}
+}
+
 func colorText() {
 	text := textView.GetText(false)
 	quoteReplacer := strings.NewReplacer(

@@ -874,6 +874,7 @@ out:
 		// Process the new message to check for known_to tags in LLM response
 		newMsg = *processMessageTag(&newMsg)
 		chatBody.Messages = append(chatBody.Messages, newMsg)
+		stopTTSIfNotForUser(&newMsg)
 	}
 	cleanChatBody()
 	refreshChatDisplay()

@@ -113,16 +113,7 @@ When `AutoTurn` is enabled, the system can automatically trigger responses from 
 ## Cardmaking with multiple characters
 
 So far only json format supports multiple characters.
-Card example:
-```
-{
-  "sys_prompt": "This is a chat between Alice, Bob and Carl. Normally what is said by any character is seen by all others. But characters also might write messages intended to specific targets if their message contain string tag '@{CharName1,CharName2,CharName3}@'.\nFor example:\nAlice:\n\"Hey, Bob. I have a secret for you... (ooc: @Bob@)\"\nThis message would be seen only by Bob and Alice (sender always sees their own message).",
-  "role": "Alice",
-  "filepath": "sysprompts/alice_bob_carl.json",
-  "chars": ["Alice", "Bob", "Carl"],
-  "first_msg": "Hey guys! Want to play Alias like game? I'll tell Bob a word and he needs to describe that word so Carl can guess what it was?"
-}
-```
+![card example](sysprompts/alice_bob_carl.json)
 
 ## Limitations & Caveats
 
@@ -131,7 +122,7 @@ Card example:
 Character‑specific context relies on the `/completion` endpoint (or other completion‑style endpoints) where the LLM is presented with a raw text prompt containing the entire filtered history. It does **not** work with OpenAI‑style `/v1/chat/completions` endpoints, because those endpoints enforce a fixed role set (`user`/`assistant`/`system`) and strip custom role names and metadata.
 
 ### TTS
-Although text message might be hidden from user character. If TTS is enabled it will be read.
+Although text message might be hidden from user character. If TTS is enabled it will be read until tags are parsed. If message should not be viewed by user, tts will stop.
 
 ### Tag Parsing
 

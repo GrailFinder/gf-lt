@@ -1120,12 +1120,8 @@ func init() {
 			}
 		}
 		// I need keybind for tts to shut up
-		if event.Key() == tcell.KeyCtrlA {
-			// textArea.SetText("pressed ctrl+A", true)
-			if cfg.TTS_ENABLED {
-				// audioStream.TextChan <- chunk
-				TTSDoneChan <- true
-			}
+		if event.Key() == tcell.KeyCtrlA && cfg.TTS_ENABLED {
+			TTSDoneChan <- true
 		}
 		if event.Key() == tcell.KeyCtrlW {
 			// INFO: continue bot/text message
