@@ -17,7 +17,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"path"
 	"regexp"
 	"slices"
 	"strconv"
@@ -341,32 +340,6 @@ func warmUpModel() {
 		// Start monitoring for model load completion
 		monitorModelLoad(chatBody.Model)
 	}()
-}
-
-func fetchLCPModelName() *models.LCPModels {
-	//nolint
-	resp, err := httpClient.Get(cfg.FetchModelNameAPI)
-	if err != nil {
-		chatBody.Model = "disconnected"
-		logger.Warn("failed to get model", "link", cfg.FetchModelNameAPI, "error", err)
-		if err := notifyUser("error", "request failed "+cfg.FetchModelNameAPI); err != nil {
-			logger.Debug("failed to notify user", "error", err, "fn", "fetchLCPModelName")
-		}
-		return nil
-	}
-	defer resp.Body.Close()
-	llmModel := models.LCPModels{}
-	if err := json.NewDecoder(resp.Body).Decode(&llmModel); err != nil {
-		logger.Warn("failed to decode resp", "link", cfg.FetchModelNameAPI, "error", err)
-		return nil
-	}
-	if resp.StatusCode != 200 {
-		chatBody.Model = "disconnected"
-		return nil
-	}
-	chatBody.Model = path.Base(llmModel.Data[0].ID)
-	cfg.CurrentModel = chatBody.Model
-	return &llmModel
 }
 
 // nolint

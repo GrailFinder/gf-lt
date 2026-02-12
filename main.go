@@ -1,9 +1,6 @@
 package main
 
 import (
-	"flag"
-	"strconv"
-
 	"github.com/rivo/tview"
 )
 
@@ -20,13 +17,6 @@ var (
 )
 
 func main() {
-	apiPort := flag.Int("port", 0, "port to host api")
-	flag.Parse()
-	if apiPort != nil && *apiPort > 3000 {
-		srv := Server{}
-		srv.ListenToRequests(strconv.Itoa(*apiPort))
-		return
-	}
 	pages.AddPage("main", flex, true, true)
 	if err := app.SetRoot(pages,
 		true).EnableMouse(cfg.EnableMouse).EnablePaste(true).Run(); err != nil {
