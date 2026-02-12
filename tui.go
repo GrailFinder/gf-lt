@@ -871,6 +871,9 @@ func init() {
 			// lastRole := chatBody.Messages[len(chatBody.Messages)-1].Role
 			textView.SetText(chatToText(chatBody.Messages, cfg.ShowSys))
 			// go chatRound("", cfg.UserRole, textView, true, false)
+			if cfg.TTS_ENABLED {
+				TTSDoneChan <- true
+			}
 			chatRoundChan <- &models.ChatRoundReq{Role: cfg.UserRole, Regen: true}
 			return nil
 		}
@@ -893,6 +896,9 @@ func init() {
 			}
 			chatBody.Messages = chatBody.Messages[:len(chatBody.Messages)-1]
 			textView.SetText(chatToText(chatBody.Messages, cfg.ShowSys))
+			if cfg.TTS_ENABLED {
+				TTSDoneChan <- true
+			}
 			colorText()
 			return nil
 		}
