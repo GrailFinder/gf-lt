@@ -858,7 +858,7 @@ func init() {
 			updateStatusLine()
 			return nil
 		}
-		if event.Key() == tcell.KeyF2 {
+		if event.Key() == tcell.KeyF2 && !botRespMode {
 			// regen last msg
 			if len(chatBody.Messages) == 0 {
 				if err := notifyUser("info", "no messages to regenerate"); err != nil {
