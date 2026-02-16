@@ -175,9 +175,16 @@ func (m *RoleMsg) ToText(i int) string {
 		// For structured content, just take the text parts
 		var textParts []string
 		for _, part := range m.ContentParts {
-			if partMap, ok := part.(map[string]any); ok {
-				if partType, exists := partMap["type"]; exists && partType == "text" {
-					if textVal, textExists := partMap["text"]; textExists {
+			switch p := part.(type) {
+			case TextContentPart:
+				if p.Type == "text" {
+					textParts = append(textParts, p.Text)
+				}
+			case ImageContentPart:
+				// skip images for text display
+			case map[string]any:
+				if partType, exists := p["type"]; exists && partType == "text" {
+					if textVal, textExists := p["text"]; textExists {
 						if textStr, isStr := textVal.(string); isStr {
 							textParts = append(textParts, textStr)
 						}
@@ -206,9 +213,16 @@ func (m *RoleMsg) ToPrompt() string {
 		// For structured content, just take the text parts
 		var textParts []string
 		for _, part := range m.ContentParts {
-			if partMap, ok := part.(map[string]any); ok {
-				if partType, exists := partMap["type"]; exists && partType == "text" {
-					if textVal, textExists := partMap["text"]; textExists {
+			switch p := part.(type) {
+			case TextContentPart:
+				if p.Type == "text" {
+					textParts = append(textParts, p.Text)
+				}
+			case ImageContentPart:
+				// skip images for text display
+			case map[string]any:
+				if partType, exists := p["type"]; exists && partType == "text" {
+					if textVal, textExists := p["text"]; textExists {
 						if textStr, isStr := textVal.(string); isStr {
 							textParts = append(textParts, textStr)
 						}
