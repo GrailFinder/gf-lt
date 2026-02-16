@@ -135,6 +135,9 @@ func makePropsTable(props map[string]float32) *tview.Table {
 		// Reconfigure the app's mouse setting
 		app.EnableMouse(cfg.EnableMouse)
 	})
+	addCheckboxRow("Image Preview (file picker)", cfg.ImagePreview, func(checked bool) {
+		cfg.ImagePreview = checked
+	})
 	addCheckboxRow("Auto turn (for cards with many chars)", cfg.AutoTurn, func(checked bool) {
 		cfg.AutoTurn = checked
 	})

@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"image"
 	"os"
 	"path"
 	"strings"
@@ -823,9 +824,25 @@ func makeFilePicker() *tview.Flex {
 	statusView := tview.NewTextView()
 	statusView.SetBorder(true).SetTitle("Selected File").SetTitleAlign(tview.AlignLeft)
 	statusView.SetTextColor(tcell.ColorYellow)
-	// Layout - only include list view and status view
+	// Image preview pane
+	var imgPreview *tview.Image
+	if cfg.ImagePreview {
+		imgPreview = tview.NewImage()
+		imgPreview.SetBorder(true).SetTitle("Preview").SetTitleAlign(tview.AlignLeft)
+	}
+	// Horizontal flex for list + preview
+	var hFlex *tview.Flex
+	if cfg.ImagePreview && imgPreview != nil {
+		hFlex = tview.NewFlex().SetDirection(tview.FlexColumn).
+			AddItem(listView, 0, 3, true).
+			AddItem(imgPreview, 0, 2, false)
+	} else {
+		hFlex = tview.NewFlex().SetDirection(tview.FlexColumn).
+			AddItem(listView, 0, 1, true)
+	}
+	// Main vertical flex
 	flex := tview.NewFlex().SetDirection(tview.FlexRow)
-	flex.AddItem(listView, 0, 3, true)
+	flex.AddItem(hFlex, 0, 3, true)
 	flex.AddItem(statusView, 3, 0, false)
 	// Refresh the file list
 	var refreshList func(string)
@@ -846,6 +863,7 @@ func makeFilePicker() *tview.Flex {
 				// We're at the root ("/") and trying to go up, just don't add the parent item
 			} else {
 				listView.AddItem("../ [gray](Parent Directory)[-]", "", 'p', func() {
+					imgPreview.SetImage(nil)
 					refreshList(parentDir)
 					dirStack = append(dirStack, parentDir)
 					currentStackPos = len(dirStack) - 1
@@ -869,6 +887,7 @@ func makeFilePicker() *tview.Flex {
 				// Capture the directory name for the closure to avoid loop variable issues
 				dirName := name
 				listView.AddItem(dirName+"/ [gray](Directory)[-]", "", 0, func() {
+					imgPreview.SetImage(nil)
 					newDir := path.Join(dir, dirName)
 					refreshList(newDir)
 					dirStack = append(dirStack, newDir)
@@ -898,6 +917,43 @@ func makeFilePicker() *tview.Flex {
 	}
 	// Initialize the file list
 	refreshList(startDir)
+	// Update image preview when selection changes
+	if cfg.ImagePreview && imgPreview != nil {
+		listView.SetChangedFunc(func(index int, mainText, secondaryText string, rune rune) {
+			itemText, _ := listView.GetItemText(index)
+			if strings.HasPrefix(itemText, "Exit file picker") || strings.HasPrefix(itemText, "../") {
+				imgPreview.SetImage(nil)
+				return
+			}
+			actualItemName := itemText
+			if bracketPos := strings.Index(itemText, " ["); bracketPos != -1 {
+				actualItemName = itemText[:bracketPos]
+			}
+			if strings.HasSuffix(actualItemName, "/") {
+				imgPreview.SetImage(nil)
+				return
+			}
+			if !isImageFile(actualItemName) {
+				imgPreview.SetImage(nil)
+				return
+			}
+			filePath := path.Join(currentDisplayDir, actualItemName)
+			go func() {
+				file, err := os.Open(filePath)
+				if err != nil {
+					app.QueueUpdate(func() { imgPreview.SetImage(nil) })
+					return
+				}
+				defer file.Close()
+				img, _, err := image.Decode(file)
+				if err != nil {
+					app.QueueUpdate(func() { imgPreview.SetImage(nil) })
+					return
+				}
+				app.QueueUpdate(func() { imgPreview.SetImage(img) })
+			}()
+		})
+	}
 	// Set up keyboard navigation
 	flex.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		switch event.Key() {
@@ -905,6 +961,9 @@ func makeFilePicker() *tview.Flex {
 			pages.RemovePage(filePickerPage)
 			return nil
 		case tcell.KeyBackspace2: // Backspace to go to parent directory
+			if cfg.ImagePreview && imgPreview != nil {
+				imgPreview.SetImage(nil)
+			}
 			if currentStackPos > 0 {
 				currentStackPos--
 				prevDir := dirStack[currentStackPos]
@@ -954,6 +1013,9 @@ func makeFilePicker() *tview.Flex {
 					}
 					// Navigate to the selected directory
 					logger.Info("going to the dir", "dir", targetDir)
+					if cfg.ImagePreview && imgPreview != nil {
+						imgPreview.SetImage(nil)
+					}
 					refreshList(targetDir)
 					dirStack = append(dirStack, targetDir)
 					currentStackPos = len(dirStack) - 1
