@@ -190,14 +190,6 @@ func (lcp LCPCompletion) FormMsg(msg, role string, resume bool) (io.Reader, erro
 		messages[i] = m.ToPrompt()
 	}
 	prompt := strings.Join(messages, "\n")
-	// strings builder?
-	if !resume {
-		botMsgStart := "\n" + botPersona + ":\n"
-		prompt += botMsgStart
-	}
-	if cfg.ThinkUse && !cfg.ToolUse {
-		prompt += "<think>"
-	}
 	// Add multimodal media markers to the prompt text when multimodal data is present
 	// This is required by llama.cpp multimodal models so they know where to insert media
 	if len(multimodalData) > 0 {
@@ -208,6 +200,14 @@ func (lcp LCPCompletion) FormMsg(msg, role string, resume bool) (io.Reader, erro
 			sb.WriteString(" <__media__>") // llama.cpp default multimodal marker
 		}
 		prompt = sb.String()
+	}
+	// needs to be after <__media__> if there are images
+	if !resume {
+		botMsgStart := "\n" + botPersona + ":\n"
+		prompt += botMsgStart
+	}
+	if cfg.ThinkUse && !cfg.ToolUse {
+		prompt += "<think>"
 	}
 	logger.Debug("checking prompt for /completion", "tool_use", cfg.ToolUse,
 		"msg", msg, "resume", resume, "prompt", prompt, "multimodal_data_count", len(multimodalData))
