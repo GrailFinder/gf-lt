@@ -1087,7 +1087,15 @@ func chatToTextSlice(messages []models.RoleMsg, showSys bool) []string {
 
 func chatToText(messages []models.RoleMsg, showSys bool) string {
 	s := chatToTextSlice(messages, showSys)
-	return strings.Join(s, "\n")
+	text := strings.Join(s, "\n")
+
+	// Collapse thinking blocks if enabled
+	if thinkingCollapsed {
+		placeholder := "[yellow::i][thinking... (press Alt+T to expand)][-:-:-]"
+		text = thinkRE.ReplaceAllString(text, placeholder)
+	}
+
+	return text
 }
 
 func removeThinking(chatBody *models.ChatBody) {

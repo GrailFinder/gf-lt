@@ -96,6 +96,7 @@ var (
 [yellow]Alt+7[white]: toggle role injection (inject role in messages)
 [yellow]Alt+8[white]: show char img or last picked img
 [yellow]Alt+9[white]: warm up (load) selected llama.cpp model
+[yellow]Alt+t[white]: toggle thinking blocks visibility (collapse/expand <think> blocks)
 
 === scrolling chat window (some keys similar to vim) ===
 [yellow]arrows up/down and j/k[white]: scroll up and down
@@ -830,6 +831,20 @@ func init() {
 		if event.Key() == tcell.KeyRune && event.Rune() == '7' && event.Modifiers()&tcell.ModAlt != 0 {
 			injectRole = !injectRole
 			updateStatusLine()
+		}
+		// Handle Alt+T to toggle thinking block visibility
+		if event.Key() == tcell.KeyRune && event.Rune() == 't' && event.Modifiers()&tcell.ModAlt != 0 {
+			thinkingCollapsed = !thinkingCollapsed
+			textView.SetText(chatToText(chatBody.Messages, cfg.ShowSys))
+			colorText()
+			status := "expanded"
+			if thinkingCollapsed {
+				status = "collapsed"
+			}
+			if err := notifyUser("thinking", fmt.Sprintf("Thinking blocks %s", status)); err != nil {
+				logger.Error("failed to send notification", "error", err)
+			}
+			return nil
 		}
 		if event.Key() == tcell.KeyF1 {
 			// chatList, err := loadHistoryChats()
