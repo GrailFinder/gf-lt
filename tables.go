@@ -938,20 +938,18 @@ func makeFilePicker() *tview.Flex {
 				return
 			}
 			filePath := path.Join(currentDisplayDir, actualItemName)
-			go func() {
-				file, err := os.Open(filePath)
-				if err != nil {
-					app.QueueUpdate(func() { imgPreview.SetImage(nil) })
-					return
-				}
-				defer file.Close()
-				img, _, err := image.Decode(file)
-				if err != nil {
-					app.QueueUpdate(func() { imgPreview.SetImage(nil) })
-					return
-				}
-				app.QueueUpdate(func() { imgPreview.SetImage(img) })
-			}()
+			file, err := os.Open(filePath)
+			if err != nil {
+				imgPreview.SetImage(nil)
+				return
+			}
+			defer file.Close()
+			img, _, err := image.Decode(file)
+			if err != nil {
+				imgPreview.SetImage(nil)
+				return
+			}
+			imgPreview.SetImage(img)
 		})
 	}
 	// Set up keyboard navigation
