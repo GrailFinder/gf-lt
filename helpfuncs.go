@@ -23,6 +23,25 @@ func isASCII(s string) bool {
 	return true
 }
 
+// stripThinkingFromMsg removes thinking blocks from assistant messages.
+// Skips user, tool, and system messages as they may contain thinking examples.
+func stripThinkingFromMsg(msg models.RoleMsg) *models.RoleMsg {
+	if !cfg.StripThinkingFromAPI {
+		return &msg
+	}
+	// Skip user, tool, and system messages - they might contain thinking examples
+	if msg.Role == cfg.UserRole || msg.Role == cfg.ToolRole || msg.Role == "system" {
+		return &msg
+	}
+	// Strip thinking from assistant messages
+	if thinkRE.MatchString(msg.Content) {
+		msg.Content = thinkRE.ReplaceAllString(msg.Content, "")
+		// Clean up any double newlines that might result
+		msg.Content = strings.TrimSpace(msg.Content)
+	}
+	return &msg
+}
+
 // refreshChatDisplay updates the chat display based on current character view
 // It filters messages for the character the user is currently "writing as"
 // and updates the textView with the filtered conversation

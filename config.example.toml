@@ -48,3 +48,4 @@ EnableMouse = false # Enable mouse support in the UI
 CharSpecificContextEnabled = true
 CharSpecificContextTag = "@"
 AutoTurn = true
+StripThinkingFromAPI = true  # Strip <think> blocks from messages before sending to LLM (keeps them in chat history)

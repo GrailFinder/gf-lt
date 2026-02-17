@@ -19,6 +19,7 @@ type Config struct {
 	ToolRole                      string `toml:"ToolRole"`
 	ToolUse                       bool   `toml:"ToolUse"`
 	ThinkUse                      bool   `toml:"ThinkUse"`
+	StripThinkingFromAPI          bool   `toml:"StripThinkingFromAPI"`
 	AssistantRole                 string `toml:"AssistantRole"`
 	SysDir                        string `toml:"SysDir"`
 	ChunkLimit                    uint32 `toml:"ChunkLimit"`
