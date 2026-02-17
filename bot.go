@@ -1236,6 +1236,15 @@ func init() {
 		os.Exit(1)
 		return
 	}
+	// Set image base directory for path display
+	baseDir := cfg.FilePickerDir
+	if baseDir == "" || baseDir == "." {
+		// Resolve "." to current working directory
+		if wd, err := os.Getwd(); err == nil {
+			baseDir = wd
+		}
+	}
+	models.SetImageBaseDir(baseDir)
 	defaultStarter = []models.RoleMsg{
 		{Role: "system", Content: basicSysMsg},
 		{Role: cfg.AssistantRole, Content: defaultFirstMsg},

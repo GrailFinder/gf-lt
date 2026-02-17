@@ -5,8 +5,21 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 )
+
+var (
+	// imageBaseDir is the base directory for displaying image paths.
+	// If set, image paths will be shown relative to this directory.
+	imageBaseDir = ""
+)
+
+// SetImageBaseDir sets the base directory for displaying image paths.
+// If dir is empty, full paths will be shown.
+func SetImageBaseDir(dir string) {
+	imageBaseDir = dir
+}
 
 type FuncCall struct {
 	ID   string            `json:"id,omitempty"`
@@ -82,6 +95,7 @@ type TextContentPart struct {
 
 type ImageContentPart struct {
 	Type     string `json:"type"`
+	Path     string `json:"path,omitempty"` // Store original file path
 	ImageURL struct {
 		URL string `json:"url"`
 	} `json:"image_url"`
@@ -169,10 +183,11 @@ func (m *RoleMsg) UnmarshalJSON(data []byte) error {
 func (m *RoleMsg) ToText(i int) string {
 	// Convert content to string representation
 	var contentStr string
+	var imageIndicators []string
 	if !m.hasContentParts {
 		contentStr = m.Content
 	} else {
-		// For structured content, just take the text parts
+		// For structured content, collect text parts and image indicators
 		var textParts []string
 		for _, part := range m.ContentParts {
 			switch p := part.(type) {
@@ -181,13 +196,34 @@ func (m *RoleMsg) ToText(i int) string {
 					textParts = append(textParts, p.Text)
 				}
 			case ImageContentPart:
-				// skip images for text display
+				// Collect image indicator
+				displayPath := p.Path
+				if displayPath == "" {
+					displayPath = "image"
+				} else {
+					displayPath = extractDisplayPath(displayPath)
+				}
+				imageIndicators = append(imageIndicators, fmt.Sprintf("[orange::i][image: %s][-:-:-]", displayPath))
 			case map[string]any:
-				if partType, exists := p["type"]; exists && partType == "text" {
-					if textVal, textExists := p["text"]; textExists {
-						if textStr, isStr := textVal.(string); isStr {
-							textParts = append(textParts, textStr)
+				if partType, exists := p["type"]; exists {
+					if partType == "text" {
+						if textVal, textExists := p["text"]; textExists {
+							if textStr, isStr := textVal.(string); isStr {
+								textParts = append(textParts, textStr)
+							}
 						}
+					} else if partType == "image_url" {
+						// Handle unmarshaled image content
+						var displayPath string
+						if pathVal, pathExists := p["path"]; pathExists {
+							if pathStr, isStr := pathVal.(string); isStr && pathStr != "" {
+								displayPath = extractDisplayPath(pathStr)
+							}
+						}
+						if displayPath == "" {
+							displayPath = "image"
+						}
+						imageIndicators = append(imageIndicators, fmt.Sprintf("[orange::i][image: %s][-:-:-]", displayPath))
 					}
 				}
 			}
@@ -201,7 +237,17 @@ func (m *RoleMsg) ToText(i int) string {
 	// if !strings.HasPrefix(contentStr, m.Role+":") {
 	icon := fmt.Sprintf("(%d) <%s>: ", i, m.Role)
 	// }
-	textMsg := fmt.Sprintf("[-:-:b]%s[-:-:-]\n%s\n", icon, contentStr)
+	// Build final message with image indicators before text
+	var finalContent strings.Builder
+	if len(imageIndicators) > 0 {
+		// Add each image indicator on its own line
+		for _, indicator := range imageIndicators {
+			finalContent.WriteString(indicator)
+			finalContent.WriteString("\n")
+		}
+	}
+	finalContent.WriteString(contentStr)
+	textMsg := fmt.Sprintf("[-:-:b]%s[-:-:-]\n%s\n", icon, finalContent.String())
 	return strings.ReplaceAll(textMsg, "\n\n", "\n")
 }
 
@@ -303,7 +349,7 @@ func (m *RoleMsg) AddTextPart(text string) {
 }
 
 // AddImagePart adds an image content part to the message
-func (m *RoleMsg) AddImagePart(imageURL string) {
+func (m *RoleMsg) AddImagePart(imageURL, imagePath string) {
 	if !m.hasContentParts {
 		// Convert to content parts format
 		if m.Content != "" {
@@ -316,6 +362,7 @@ func (m *RoleMsg) AddImagePart(imageURL string) {
 
 	imagePart := ImageContentPart{
 		Type: "image_url",
+		Path: imagePath, // Store the original file path
 		ImageURL: struct {
 			URL string `json:"url"`
 		}{URL: imageURL},
@@ -353,6 +400,31 @@ func CreateImageURLFromPath(imagePath string) (string, error) {
 
 	// Create data URL
 	return fmt.Sprintf("data:%s;base64,%s", mimeType, encoded), nil
+}
+
+// extractDisplayPath returns a path suitable for display, potentially relative to imageBaseDir
+func extractDisplayPath(p string) string {
+	if p == "" {
+		return ""
+	}
+
+	// If base directory is set, try to make path relative to it
+	if imageBaseDir != "" {
+		if rel, err := filepath.Rel(imageBaseDir, p); err == nil {
+			// Check if relative path doesn't start with ".." (meaning it's within base dir)
+			// If it starts with "..", we might still want to show it as relative
+			// but for now we show full path if it goes outside base dir
+			if !strings.HasPrefix(rel, "..") {
+				p = rel
+			}
+		}
+	}
+
+	// Truncate long paths to last 60 characters if needed
+	if len(p) > 60 {
+		return "..." + p[len(p)-60:]
+	}
+	return p
 }
 
 type ChatBody struct {

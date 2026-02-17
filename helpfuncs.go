@@ -54,14 +54,11 @@ func refreshChatDisplay() {
 	// Filter messages for this character
 	filteredMessages := filterMessagesForCharacter(chatBody.Messages, viewingAs)
 	displayText := chatToText(filteredMessages, cfg.ShowSys)
-	// Use QueueUpdate for thread-safe UI updates
-	app.QueueUpdate(func() {
-		textView.SetText(displayText)
-		colorText()
-		if scrollToEndEnabled {
-			textView.ScrollToEnd()
-		}
-	})
+	textView.SetText(displayText)
+	colorText()
+	if scrollToEndEnabled {
+		textView.ScrollToEnd()
+	}
 }
 
 func stopTTSIfNotForUser(msg *models.RoleMsg) {

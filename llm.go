@@ -289,7 +289,7 @@ func (op LCPChat) FormMsg(msg, role string, resume bool) (io.Reader, error) {
 				// If image processing fails, fall back to simple text message
 				newMsg = models.NewRoleMsg(role, msg)
 			} else {
-				newMsg.AddImagePart(imageURL)
+				newMsg.AddImagePart(imageURL, localImageAttachmentPath)
 			}
 			// Only clear the global image attachment after successfully processing it in this API call
 			imageAttachmentPath = "" // Clear the attachment after use
@@ -664,7 +664,7 @@ func (or OpenRouterChat) FormMsg(msg, role string, resume bool) (io.Reader, erro
 				// If image processing fails, fall back to simple text message
 				newMsg = models.NewRoleMsg(role, msg)
 			} else {
-				newMsg.AddImagePart(imageURL)
+				newMsg.AddImagePart(imageURL, localImageAttachmentPath)
 			}
 			// Only clear the global image attachment after successfully processing it in this API call
 			imageAttachmentPath = "" // Clear the attachment after use
