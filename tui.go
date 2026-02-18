@@ -83,6 +83,7 @@ var (
 [yellow]Ctrl+l[white]: show model selection popup to choose current model
 [yellow]Ctrl+k[white]: switch tool use (recommend tool use to llm after user msg)
 [yellow]Ctrl+a[white]: interrupt tts (needs tts server)
+[yellow]Alt+0[white]: replay last message via tts (needs tts server)
 [yellow]Ctrl+g[white]: open RAG file manager (load files for context retrieval)
 [yellow]Ctrl+y[white]: list loaded RAG files (view and manage loaded files)
 [yellow]Ctrl+q[white]: show user role selection popup to choose who sends next msg as
@@ -1143,6 +1144,18 @@ func init() {
 		// I need keybind for tts to shut up
 		if event.Key() == tcell.KeyCtrlA && cfg.TTS_ENABLED {
 			TTSDoneChan <- true
+		}
+		if event.Key() == tcell.KeyRune && event.Rune() == '0' && event.Modifiers()&tcell.ModAlt != 0 && cfg.TTS_ENABLED {
+			if len(chatBody.Messages) > 0 {
+				// Stop any currently playing TTS first
+				TTSDoneChan <- true
+				lastMsg := chatBody.Messages[len(chatBody.Messages)-1]
+				cleanedText := models.CleanText(lastMsg.Content)
+				if cleanedText != "" {
+					go orator.Speak(cleanedText)
+				}
+			}
+			return nil
 		}
 		if event.Key() == tcell.KeyCtrlW {
 			// INFO: continue bot/text message

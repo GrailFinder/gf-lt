@@ -13,10 +13,9 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
-	"regexp"
 	"strings"
-	"time"
 	"sync"
+	"time"
 
 	google_translate_tts "github.com/GrailFinder/google-translate-tts"
 	"github.com/GrailFinder/google-translate-tts/handlers"
@@ -31,42 +30,7 @@ var (
 	TTSFlushChan = make(chan bool, 1)
 	TTSDoneChan  = make(chan bool, 1)
 	// endsWithPunctuation = regexp.MustCompile(`[;.!?]$`)
-	threeOrMoreDashesRE = regexp.MustCompile(`-{3,}`)
 )
-
-// cleanText removes markdown and special characters that are not suitable for TTS
-func cleanText(text string) string {
-	// Remove markdown-like characters that might interfere with TTS
-	text = strings.ReplaceAll(text, "*", "") // Bold/italic markers
-	text = strings.ReplaceAll(text, "#", "") // Headers
-	text = strings.ReplaceAll(text, "_", "") // Underline/italic markers
-	text = strings.ReplaceAll(text, "~", "") // Strikethrough markers
-	text = strings.ReplaceAll(text, "`", "") // Code markers
-	text = strings.ReplaceAll(text, "[", "") // Link brackets
-	text = strings.ReplaceAll(text, "]", "") // Link brackets
-	text = strings.ReplaceAll(text, "!", "") // Exclamation marks (if not punctuation)
-	// Remove HTML tags using regex
-	htmlTagRegex := regexp.MustCompile(`<[^>]*>`)
-	text = htmlTagRegex.ReplaceAllString(text, "")
-	// Split text into lines to handle table separators
-	lines := strings.Split(text, "\n")
-	var filteredLines []string
-	for _, line := range lines {
-		// Check if the line looks like a table separator (e.g., |----|, |===|, | - - - |)
-		// A table separator typically contains only |, -, =, and spaces
-		isTableSeparator := regexp.MustCompile(`^\s*\|\s*[-=\s]+\|\s*$`).MatchString(strings.TrimSpace(line))
-		if !isTableSeparator {
-			// If it's not a table separator, remove vertical bars but keep the content
-			processedLine := strings.ReplaceAll(line, "|", "")
-			filteredLines = append(filteredLines, processedLine)
-		}
-		// If it is a table separator, skip it (don't add to filteredLines)
-	}
-	text = strings.Join(filteredLines, "\n")
-	text = threeOrMoreDashesRE.ReplaceAllString(text, "")
-	text = strings.TrimSpace(text) // Remove leading/trailing whitespace
-	return text
-}
 
 type Orator interface {
 	Speak(text string) error
@@ -157,7 +121,7 @@ func (o *KokoroOrator) readroutine() {
 					}
 					continue // if only one (often incomplete) sentence; wait for next chunk
 				}
-				cleanedText := cleanText(sentence.Text)
+				cleanedText := models.CleanText(sentence.Text)
 				if cleanedText == "" {
 					continue // Skip empty text after cleaning
 				}
@@ -186,7 +150,7 @@ func (o *KokoroOrator) readroutine() {
 			// flush remaining text
 			o.mu.Lock()
 			remaining := o.textBuffer.String()
-			remaining = cleanText(remaining)
+			remaining = models.CleanText(remaining)
 			o.textBuffer.Reset()
 			o.mu.Unlock()
 			if remaining == "" {
@@ -389,7 +353,7 @@ func (o *GoogleTranslateOrator) readroutine() {
 					}
 					continue // if only one (often incomplete) sentence; wait for next chunk
 				}
-				cleanedText := cleanText(sentence.Text)
+				cleanedText := models.CleanText(sentence.Text)
 				if cleanedText == "" {
 					continue // Skip empty text after cleaning
 				}
@@ -417,7 +381,7 @@ func (o *GoogleTranslateOrator) readroutine() {
 			}
 			o.mu.Lock()
 			remaining := o.textBuffer.String()
-			remaining = cleanText(remaining)
+			remaining = models.CleanText(remaining)
 			o.textBuffer.Reset()
 			o.mu.Unlock()
 			if remaining == "" {
