@@ -5,6 +5,7 @@ import (
 	"gf-lt/models"
 	"gf-lt/pngmeta"
 	"image"
+	"net/url"
 	"os"
 	"path"
 	"slices"
@@ -259,6 +260,34 @@ func strInSlice(s string, sl []string) bool {
 	return false
 }
 
+// isLocalLlamacpp checks if the current API is a local llama.cpp instance.
+func isLocalLlamacpp() bool {
+	u, err := url.Parse(cfg.CurrentAPI)
+	if err != nil {
+		return false
+	}
+	host := u.Hostname()
+	return host == "localhost" || host == "127.0.0.1" || host == "::1"
+}
+
+// getModelColor returns the color tag for the model name based on its load status.
+// For non-local models, returns orange. For local llama.cpp models, returns green if loaded, red if not.
+func getModelColor() string {
+	if !isLocalLlamacpp() {
+		return "orange"
+	}
+	// Check if model is loaded
+	loaded, err := isModelLoaded(chatBody.Model)
+	if err != nil {
+		// On error, assume not loaded (red)
+		return "red"
+	}
+	if loaded {
+		return "green"
+	}
+	return "red"
+}
+
 func makeStatusLine() string {
 	isRecording := false
 	if asr != nil {
@@ -288,8 +317,10 @@ func makeStatusLine() string {
 	} else {
 		shellModeInfo = ""
 	}
+	// Get model color based on load status for local llama.cpp models
+	modelColor := getModelColor()
 	statusLine := fmt.Sprintf(indexLineCompletion, boolColors[botRespMode], botRespMode, activeChatName,
-		boolColors[cfg.ToolUse], cfg.ToolUse, chatBody.Model, boolColors[cfg.SkipLLMResp],
+		boolColors[cfg.ToolUse], cfg.ToolUse, modelColor, chatBody.Model, boolColors[cfg.SkipLLMResp],
 		cfg.SkipLLMResp, cfg.CurrentAPI, boolColors[isRecording], isRecording, persona,
 		botPersona, boolColors[injectRole], injectRole)
 	return statusLine + imageInfo + shellModeInfo
