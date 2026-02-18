@@ -928,11 +928,12 @@ func makeFilePicker() *tview.Flex {
 			}
 		}
 		// Update status line based on search state
-		if searching {
+		switch {
+		case searching:
 			statusView.SetText("Search: " + searchQuery + "_")
-		} else if searchQuery != "" {
+		case searchQuery != "":
 			statusView.SetText("Current: " + dir + " (filter: " + searchQuery + ")")
-		} else {
+		default:
 			statusView.SetText("Current: " + dir)
 		}
 	}

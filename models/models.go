@@ -206,13 +206,14 @@ func (m *RoleMsg) ToText(i int) string {
 				imageIndicators = append(imageIndicators, fmt.Sprintf("[orange::i][image: %s][-:-:-]", displayPath))
 			case map[string]any:
 				if partType, exists := p["type"]; exists {
-					if partType == "text" {
+					switch partType {
+					case "text":
 						if textVal, textExists := p["text"]; textExists {
 							if textStr, isStr := textVal.(string); isStr {
 								textParts = append(textParts, textStr)
 							}
 						}
-					} else if partType == "image_url" {
+					case "image_url":
 						// Handle unmarshaled image content
 						var displayPath string
 						if pathVal, pathExists := p["path"]; pathExists {

@@ -841,7 +841,7 @@ func init() {
 			if thinkingCollapsed {
 				status = "collapsed"
 			}
-			if err := notifyUser("thinking", fmt.Sprintf("Thinking blocks %s", status)); err != nil {
+			if err := notifyUser("thinking", "Thinking blocks "+status); err != nil {
 				logger.Error("failed to send notification", "error", err)
 			}
 			return nil

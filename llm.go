@@ -165,7 +165,7 @@ func (lcp LCPCompletion) FormMsg(msg, role string, resume bool) (io.Reader, erro
 	filteredMessages, botPersona := filterMessagesForCurrentCharacter(chatBody.Messages)
 	messages := make([]string, len(filteredMessages))
 	for i, m := range filteredMessages {
-		messages[i] = stripThinkingFromMsg(m).ToPrompt()
+		messages[i] = stripThinkingFromMsg(&m).ToPrompt()
 	}
 	prompt := strings.Join(messages, "\n")
 	// Add multimodal media markers to the prompt text when multimodal data is present
@@ -328,7 +328,7 @@ func (op LCPChat) FormMsg(msg, role string, resume bool) (io.Reader, error) {
 		Stream:   chatBody.Stream,
 	}
 	for i, msg := range filteredMessages {
-		strippedMsg := *stripThinkingFromMsg(msg)
+		strippedMsg := *stripThinkingFromMsg(&msg)
 		if strippedMsg.Role == cfg.UserRole {
 			bodyCopy.Messages[i] = strippedMsg
 			bodyCopy.Messages[i].Role = "user"
@@ -413,7 +413,7 @@ func (ds DeepSeekerCompletion) FormMsg(msg, role string, resume bool) (io.Reader
 	filteredMessages, botPersona := filterMessagesForCurrentCharacter(chatBody.Messages)
 	messages := make([]string, len(filteredMessages))
 	for i, m := range filteredMessages {
-		messages[i] = stripThinkingFromMsg(m).ToPrompt()
+		messages[i] = stripThinkingFromMsg(&m).ToPrompt()
 	}
 	prompt := strings.Join(messages, "\n")
 	// strings builder?
@@ -503,7 +503,7 @@ func (ds DeepSeekerChat) FormMsg(msg, role string, resume bool) (io.Reader, erro
 		Stream:   chatBody.Stream,
 	}
 	for i, msg := range filteredMessages {
-		strippedMsg := *stripThinkingFromMsg(msg)
+		strippedMsg := *stripThinkingFromMsg(&msg)
 		if strippedMsg.Role == cfg.UserRole || i == 1 {
 			bodyCopy.Messages[i] = strippedMsg
 			bodyCopy.Messages[i].Role = "user"
@@ -579,7 +579,7 @@ func (or OpenRouterCompletion) FormMsg(msg, role string, resume bool) (io.Reader
 	filteredMessages, botPersona := filterMessagesForCurrentCharacter(chatBody.Messages)
 	messages := make([]string, len(filteredMessages))
 	for i, m := range filteredMessages {
-		messages[i] = stripThinkingFromMsg(m).ToPrompt()
+		messages[i] = stripThinkingFromMsg(&m).ToPrompt()
 	}
 	prompt := strings.Join(messages, "\n")
 	// strings builder?
@@ -700,7 +700,7 @@ func (or OpenRouterChat) FormMsg(msg, role string, resume bool) (io.Reader, erro
 		Stream:   chatBody.Stream,
 	}
 	for i, msg := range filteredMessages {
-		strippedMsg := *stripThinkingFromMsg(msg)
+		strippedMsg := *stripThinkingFromMsg(&msg)
 		bodyCopy.Messages[i] = strippedMsg
 		// Standardize role if it's a user role
 		if bodyCopy.Messages[i].Role == cfg.UserRole {
