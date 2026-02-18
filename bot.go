@@ -886,6 +886,8 @@ func cleanChatBody() {
 
 // convertJSONToMapStringString unmarshals JSON into map[string]interface{} and converts all values to strings.
 func convertJSONToMapStringString(jsonStr string) (map[string]string, error) {
+	// Extract JSON object from string - models may output extra text after JSON
+	jsonStr = extractJSON(jsonStr)
 	var raw map[string]interface{}
 	if err := json.Unmarshal([]byte(jsonStr), &raw); err != nil {
 		return nil, err
@@ -909,6 +911,23 @@ func convertJSONToMapStringString(jsonStr string) (map[string]string, error) {
 		}
 	}
 	return result, nil
+}
+
+// extractJSON finds the first { and last } to extract only the JSON object
+// This handles cases where models output extra text after JSON
+func extractJSON(s string) string {
+	// Try direct parse first - if it works, return as-is
+	var dummy map[string]interface{}
+	if err := json.Unmarshal([]byte(s), &dummy); err == nil {
+		return s
+	}
+	// Otherwise find JSON boundaries
+	start := strings.Index(s, "{")
+	end := strings.LastIndex(s, "}")
+	if start >= 0 && end > start {
+		return s[start : end+1]
+	}
+	return s
 }
 
 // unmarshalFuncCall unmarshals a JSON tool call, converting numeric arguments to strings.
