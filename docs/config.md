@@ -145,6 +145,9 @@ This document explains how to set up and configure the application using the `co
 #### FilePickerExts (`"png,jpg,jpeg,gif,webp"`)
 - Comma-separated list of allowed file extensions for the file picker.
 
+#### CodingDir (`"."`)
+- Default directory for coding assistant file operations. Relative paths in file tools (file_read, file_write, etc.) are resolved against this directory. Use absolute paths (starting with `/`) to bypass this.
+
 #### EnableMouse (`false`)
 - Enable or disable mouse support in the UI. When set to `true`, allows clicking buttons and interacting with UI elements using the mouse, but prevents the terminal from handling mouse events normally (such as selecting and copying text). When set to `false`, enables default terminal behavior allowing you to select and copy text, but disables mouse interaction with UI elements.
 

@@ -76,6 +76,7 @@ var (
 [yellow]Ctrl+c[white]: close programm
 [yellow]Ctrl+n[white]: start a new chat
 [yellow]Ctrl+o[white]: open image file picker
+[yellow]c[white]: (in file picker) set current dir as CodingDir
 [yellow]Ctrl+p[white]: props edit form (min-p, dry, etc.)
 [yellow]Ctrl+v[white]: show API link selection popup to choose current API
 [yellow]Ctrl+r[white]: start/stop recording from your microphone (needs stt server or whisper binary)

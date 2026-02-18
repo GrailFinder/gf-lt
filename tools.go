@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -377,6 +378,8 @@ func fileCreate(args map[string]string) []byte {
 		return []byte(msg)
 	}
 
+	path = resolvePath(path)
+
 	content, ok := args["content"]
 	if !ok {
 		content = ""
@@ -399,6 +402,8 @@ func fileRead(args map[string]string) []byte {
 		logger.Error(msg)
 		return []byte(msg)
 	}
+
+	path = resolvePath(path)
 
 	content, err := readStringFromFile(path)
 	if err != nil {
@@ -428,6 +433,7 @@ func fileWrite(args map[string]string) []byte {
 		logger.Error(msg)
 		return []byte(msg)
 	}
+	path = resolvePath(path)
 	content, ok := args["content"]
 	if !ok {
 		content = ""
@@ -448,6 +454,7 @@ func fileWriteAppend(args map[string]string) []byte {
 		logger.Error(msg)
 		return []byte(msg)
 	}
+	path = resolvePath(path)
 	content, ok := args["content"]
 	if !ok {
 		content = ""
@@ -469,6 +476,8 @@ func fileDelete(args map[string]string) []byte {
 		return []byte(msg)
 	}
 
+	path = resolvePath(path)
+
 	if err := removeFile(path); err != nil {
 		msg := "failed to delete file; error: " + err.Error()
 		logger.Error(msg)
@@ -486,6 +495,7 @@ func fileMove(args map[string]string) []byte {
 		logger.Error(msg)
 		return []byte(msg)
 	}
+	src = resolvePath(src)
 
 	dst, ok := args["dst"]
 	if !ok || dst == "" {
@@ -493,6 +503,7 @@ func fileMove(args map[string]string) []byte {
 		logger.Error(msg)
 		return []byte(msg)
 	}
+	dst = resolvePath(dst)
 
 	if err := moveFile(src, dst); err != nil {
 		msg := "failed to move file; error: " + err.Error()
@@ -511,6 +522,7 @@ func fileCopy(args map[string]string) []byte {
 		logger.Error(msg)
 		return []byte(msg)
 	}
+	src = resolvePath(src)
 
 	dst, ok := args["dst"]
 	if !ok || dst == "" {
@@ -518,6 +530,7 @@ func fileCopy(args map[string]string) []byte {
 		logger.Error(msg)
 		return []byte(msg)
 	}
+	dst = resolvePath(dst)
 
 	if err := copyFile(src, dst); err != nil {
 		msg := "failed to copy file; error: " + err.Error()
@@ -534,6 +547,8 @@ func fileList(args map[string]string) []byte {
 	if !ok || path == "" {
 		path = "." // default to current directory
 	}
+
+	path = resolvePath(path)
 
 	files, err := listDirectory(path)
 	if err != nil {
@@ -557,6 +572,13 @@ func fileList(args map[string]string) []byte {
 }
 
 // Helper functions for file operations
+
+func resolvePath(p string) string {
+	if filepath.IsAbs(p) {
+		return p
+	}
+	return filepath.Join(cfg.CodingDir, p)
+}
 
 func readStringFromFile(filename string) (string, error) {
 	data, err := os.ReadFile(filename)

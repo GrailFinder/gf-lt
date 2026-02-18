@@ -820,7 +820,7 @@ func makeFilePicker() *tview.Flex {
 	}
 	// Create UI elements
 	listView := tview.NewList()
-	listView.SetBorder(true).SetTitle("Files & Directories").SetTitleAlign(tview.AlignLeft)
+	listView.SetBorder(true).SetTitle("Files & Directories [c: set CodingDir]").SetTitleAlign(tview.AlignLeft)
 	// Status view for selected file information
 	statusView := tview.NewTextView()
 	statusView.SetBorder(true).SetTitle("Selected File").SetTitleAlign(tview.AlignLeft)
@@ -1031,6 +1031,37 @@ func makeFilePicker() *tview.Flex {
 				searchQuery = ""
 				refreshList(currentDisplayDir, "")
 				return nil
+			}
+			if event.Rune() == 'c' {
+				// Set CodingDir to current directory
+				itemIndex := listView.GetCurrentItem()
+				if itemIndex >= 0 && itemIndex < listView.GetItemCount() {
+					itemText, _ := listView.GetItemText(itemIndex)
+					// Get the actual directory path
+					var targetDir string
+					if strings.HasPrefix(itemText, "Exit") || strings.HasPrefix(itemText, "Select this directory") {
+						targetDir = currentDisplayDir
+					} else {
+						actualItemName := itemText
+						if bracketPos := strings.Index(itemText, " ["); bracketPos != -1 {
+							actualItemName = itemText[:bracketPos]
+						}
+						if strings.HasPrefix(actualItemName, "../") {
+							targetDir = path.Dir(currentDisplayDir)
+						} else if strings.HasSuffix(actualItemName, "/") {
+							dirName := strings.TrimSuffix(actualItemName, "/")
+							targetDir = path.Join(currentDisplayDir, dirName)
+						} else {
+							targetDir = currentDisplayDir
+						}
+					}
+					cfg.CodingDir = targetDir
+					if err := notifyUser("CodingDir", "Set to: "+targetDir); err != nil {
+						logger.Error("failed to notify user", "error", err)
+					}
+					pages.RemovePage(filePickerPage)
+					return nil
+				}
 			}
 		case tcell.KeyEnter:
 			// Get the currently highlighted item in the list
