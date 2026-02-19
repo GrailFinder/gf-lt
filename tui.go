@@ -49,14 +49,6 @@ var (
 	imgPage        = "imgPage"
 	filePickerPage = "filePicker"
 	exportDir      = "chat_exports"
-
-	// file completion
-	complPopup   *tview.List
-	complActive  bool
-	complAtPos   int
-	complMatches []string
-	complIndex   int
-
 	// For overlay search functionality
 	searchField    *tview.InputField
 	searchPageName = "searchOverlay"
@@ -185,52 +177,11 @@ func init() {
 	textArea = tview.NewTextArea().
 		SetPlaceholder("input is multiline; press <Enter> to start the next line;\npress <Esc> to send the message.")
 	textArea.SetBorder(true).SetTitle("input")
-
-	// Setup file completion popup
-	complPopup = tview.NewList()
-	complPopup.SetBorder(true).SetTitle("Files (@ to trigger)")
-	pages.AddPage("complPopup", complPopup, false, false)
-
 	// Add input capture for @ completion
 	textArea.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		if shellMode && event.Key() == tcell.KeyRune && event.Rune() == '@' {
-			complAtPos = len(textArea.GetText())
-			showFileCompletion("")
+			showFileCompletionPopup("")
 			return event
-		}
-		if complActive {
-			switch event.Key() {
-			case tcell.KeyUp:
-				if complIndex > 0 {
-					complIndex--
-					complPopup.SetCurrentItem(complIndex)
-				}
-				return nil
-			case tcell.KeyDown:
-				if complIndex < len(complMatches)-1 {
-					complIndex++
-					complPopup.SetCurrentItem(complIndex)
-				}
-				return nil
-			case tcell.KeyTab, tcell.KeyEnter:
-				if len(complMatches) > 0 {
-					insertCompletion()
-				}
-				return nil
-			case tcell.KeyEsc:
-				hideCompletion()
-				return nil
-			}
-		}
-		if complActive && event.Key() == tcell.KeyRune {
-			r := event.Rune()
-			if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '-' || r == '_' || r == '/' || r == '.' {
-				currentText := textArea.GetText()
-				if len(currentText) > complAtPos {
-					filter := currentText[complAtPos+1:]
-					showFileCompletion(filter)
-				}
-			}
 		}
 		return event
 	})

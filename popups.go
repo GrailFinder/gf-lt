@@ -312,3 +312,41 @@ func showBotRoleSelectionPopup() {
 	pages.AddPage("botRoleSelectionPopup", modal(roleListWidget, 80, 20), true, true)
 	app.SetFocus(roleListWidget)
 }
+
+func showFileCompletionPopup(filter string) {
+	baseDir := cfg.CodingDir
+	if baseDir == "" {
+		baseDir = "."
+	}
+	complMatches := scanFiles(baseDir, filter)
+	if len(complMatches) == 0 {
+		return
+	}
+	widget := tview.NewList().ShowSecondaryText(false).
+		SetSelectedBackgroundColor(tcell.ColorGray)
+	widget.SetTitle("file completion").SetBorder(true)
+	for _, m := range complMatches {
+		widget.AddItem(m, "", 0, nil)
+	}
+	widget.SetSelectedFunc(func(index int, mainText string, secondaryText string, shortcut rune) {
+		currentText := textArea.GetText()
+		atIdx := strings.LastIndex(currentText, "@")
+		if atIdx >= 0 {
+			before := currentText[:atIdx]
+			textArea.SetText(before+mainText, true)
+		}
+		pages.RemovePage("fileCompletionPopup")
+	})
+	modal := func(p tview.Primitive, width, height int) tview.Primitive {
+		return tview.NewFlex().
+			AddItem(nil, 0, 1, false).
+			AddItem(tview.NewFlex().SetDirection(tview.FlexRow).
+				AddItem(nil, 0, 1, false).
+				AddItem(p, height, 1, true).
+				AddItem(nil, 0, 1, false), width, 1, true).
+			AddItem(nil, 0, 1, false)
+	}
+	// Add modal page and make it visible
+	pages.AddPage("fileCompletionPopup", modal(widget, 80, 20), true, true)
+	app.SetFocus(widget)
+}
