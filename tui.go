@@ -135,20 +135,20 @@ Press <Enter> or 'x' to return
 			ContrastSecondaryTextColor:  tcell.ColorLime,
 		},
 		"gruvbox": tview.Theme{
-			PrimitiveBackgroundColor:    tcell.ColorBlack,         // Matches #1e1e2e
-			ContrastBackgroundColor:     tcell.ColorDarkGoldenrod, // Selected option: warm yellow (#b57614)
-			MoreContrastBackgroundColor: tcell.ColorDarkSlateGray, // Non-selected options: dark grayish-blue (#32302f)
-			BorderColor:                 tcell.ColorLightGray,     // Light gray (#a89984)
-			TitleColor:                  tcell.ColorRed,           // Red (#fb4934)
-			GraphicsColor:               tcell.ColorDarkCyan,      // Cyan (#689d6a)
-			PrimaryTextColor:            tcell.ColorLightGray,     // Light gray (#d5c4a1)
-			SecondaryTextColor:          tcell.ColorYellow,        // Yellow (#fabd2f)
-			TertiaryTextColor:           tcell.ColorOrange,        // Orange (#fe8019)
-			InverseTextColor:            tcell.ColorWhite,         // White (#f9f5d7) for selected text
-			ContrastSecondaryTextColor:  tcell.ColorLightGreen,    // Light green (#b8bb26)
+			PrimitiveBackgroundColor:    tcell.NewHexColor(0x282828), // Background: #282828 (dark gray)
+			ContrastBackgroundColor:     tcell.ColorDarkGoldenrod,    // Selected option: warm yellow (#b57614)
+			MoreContrastBackgroundColor: tcell.ColorDarkSlateGray,    // Non-selected options: dark grayish-blue (#32302f)
+			BorderColor:                 tcell.ColorLightGray,        // Light gray (#a89984)
+			TitleColor:                  tcell.ColorRed,              // Red (#fb4934)
+			GraphicsColor:               tcell.ColorDarkCyan,         // Cyan (#689d6a)
+			PrimaryTextColor:            tcell.ColorLightGray,        // Light gray (#d5c4a1)
+			SecondaryTextColor:          tcell.ColorYellow,           // Yellow (#fabd2f)
+			TertiaryTextColor:           tcell.ColorOrange,           // Orange (#fe8019)
+			InverseTextColor:            tcell.ColorWhite,            // White (#f9f5d7) for selected text
+			ContrastSecondaryTextColor:  tcell.ColorLightGreen,       // Light green (#b8bb26)
 		},
 		"solarized": tview.Theme{
-			PrimitiveBackgroundColor:    tcell.NewHexColor(0x1e1e2e), // #1e1e2e for main dropdown box
+			PrimitiveBackgroundColor:    tcell.NewHexColor(0x002b36), // Background: #002b36 (base03)
 			ContrastBackgroundColor:     tcell.ColorDarkCyan,         // Selected option: cyan (#2aa198)
 			MoreContrastBackgroundColor: tcell.ColorDarkSlateGray,    // Non-selected options: dark blue (#073642)
 			BorderColor:                 tcell.ColorLightBlue,        // Light blue (#839496)
@@ -161,7 +161,7 @@ Press <Enter> or 'x' to return
 			ContrastSecondaryTextColor:  tcell.ColorLightCyan,        // Light cyan (#93a1a1)
 		},
 		"dracula": tview.Theme{
-			PrimitiveBackgroundColor:    tcell.NewHexColor(0x1e1e2e), // #1e1e2e for main dropdown box
+			PrimitiveBackgroundColor:    tcell.NewHexColor(0x282a36), // Background: #282a36
 			ContrastBackgroundColor:     tcell.ColorDarkMagenta,      // Selected option: magenta (#bd93f9)
 			MoreContrastBackgroundColor: tcell.ColorDarkGray,         // Non-selected options: dark gray (#44475a)
 			BorderColor:                 tcell.ColorLightGray,        // Light gray (#f8f8f2)

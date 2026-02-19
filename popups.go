@@ -403,11 +403,17 @@ func updateWidgetColors(theme tview.Theme) {
 	textArea.SetBorderColor(borderColor)
 	textArea.SetTitleColor(titleColor)
 	textArea.SetTextStyle(tcell.StyleDefault.Background(bgColor).Foreground(fgColor))
+	textArea.SetPlaceholderStyle(tcell.StyleDefault.Background(bgColor).Foreground(fgColor))
+	// Force textarea refresh by restoring text (SetTextStyle doesn't trigger redraw)
+	textArea.SetText(textArea.GetText(), true)
 
 	editArea.SetBackgroundColor(bgColor)
 	editArea.SetBorderColor(borderColor)
 	editArea.SetTitleColor(titleColor)
 	editArea.SetTextStyle(tcell.StyleDefault.Background(bgColor).Foreground(fgColor))
+	editArea.SetPlaceholderStyle(tcell.StyleDefault.Background(bgColor).Foreground(fgColor))
+	// Force textarea refresh by restoring text (SetTextStyle doesn't trigger redraw)
+	editArea.SetText(editArea.GetText(), true)
 
 	statusLineWidget.SetBackgroundColor(bgColor)
 	statusLineWidget.SetTextColor(fgColor)
