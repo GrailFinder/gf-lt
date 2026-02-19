@@ -388,6 +388,42 @@ func showFileCompletionPopup(filter string) {
 	app.SetFocus(widget)
 }
 
+func updateWidgetColors(theme tview.Theme) {
+	bgColor := theme.PrimitiveBackgroundColor
+	fgColor := theme.PrimaryTextColor
+	borderColor := theme.BorderColor
+	titleColor := theme.TitleColor
+
+	textView.SetBackgroundColor(bgColor)
+	textView.SetTextColor(fgColor)
+	textView.SetBorderColor(borderColor)
+	textView.SetTitleColor(titleColor)
+
+	textArea.SetBackgroundColor(bgColor)
+	textArea.SetBorderColor(borderColor)
+	textArea.SetTitleColor(titleColor)
+	textArea.SetTextStyle(tcell.StyleDefault.Background(bgColor).Foreground(fgColor))
+
+	editArea.SetBackgroundColor(bgColor)
+	editArea.SetBorderColor(borderColor)
+	editArea.SetTitleColor(titleColor)
+	editArea.SetTextStyle(tcell.StyleDefault.Background(bgColor).Foreground(fgColor))
+
+	statusLineWidget.SetBackgroundColor(bgColor)
+	statusLineWidget.SetTextColor(fgColor)
+	statusLineWidget.SetBorderColor(borderColor)
+	statusLineWidget.SetTitleColor(titleColor)
+
+	helpView.SetBackgroundColor(bgColor)
+	helpView.SetTextColor(fgColor)
+	helpView.SetBorderColor(borderColor)
+	helpView.SetTitleColor(titleColor)
+
+	searchField.SetBackgroundColor(bgColor)
+	searchField.SetBorderColor(borderColor)
+	searchField.SetTitleColor(titleColor)
+}
+
 // showColorschemeSelectionPopup creates a modal popup to select a colorscheme
 func showColorschemeSelectionPopup() {
 	// Get the list of available colorschemes
@@ -431,10 +467,10 @@ func showColorschemeSelectionPopup() {
 	schemeListWidget.SetSelectedFunc(func(index int, mainText string, secondaryText string, shortcut rune) {
 		// Update the colorscheme
 		if theme, ok := colorschemes[mainText]; ok {
-			// Refresh the UI to apply the new theme
+			tview.Styles = theme
 			go func() {
 				app.QueueUpdateDraw(func() {
-					tview.Styles = theme
+					updateWidgetColors(theme)
 				})
 			}()
 		}
