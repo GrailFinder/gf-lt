@@ -74,8 +74,6 @@ var (
 [yellow]Ctrl+c[white]: close programm
 [yellow]Ctrl+n[white]: start a new chat
 [yellow]Ctrl+o[white]: open image file picker
-[yellow]@[white]: file completion (type @ in input to get file suggestions)
-[yellow]c[white]: (in file picker) set current dir as CodingDir
 [yellow]Ctrl+p[white]: props edit form (min-p, dry, etc.)
 [yellow]Ctrl+v[white]: show API link selection popup to choose current API
 [yellow]Ctrl+r[white]: start/stop recording from your microphone (needs stt server or whisper binary)
@@ -108,6 +106,13 @@ var (
 
 === tables (chat history, agent pick, file pick, properties) ===
 [yellow]x[white]: to exit the table page
+
+=== filepicker ===
+[yellow]c[white]: (in file picker) set current dir as CodingDir
+[yellow]x[white]: to exit
+
+=== shell mode ===
+[yellow]@match->Tab[white]: file completion (type @ in input to get file suggestions)
 
 === status line ===
 %s
@@ -179,9 +184,32 @@ func init() {
 	textArea.SetBorder(true).SetTitle("input")
 	// Add input capture for @ completion
 	textArea.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		if shellMode && event.Key() == tcell.KeyRune && event.Rune() == '@' {
-			showFileCompletionPopup("")
+		if !shellMode {
 			return event
+		}
+		// Handle Tab key for file completion
+		if event.Key() == tcell.KeyTab {
+			currentText := textArea.GetText()
+			row, col, _, _ := textArea.GetCursor()
+			// Calculate absolute position from row/col
+			lines := strings.Split(currentText, "\n")
+			cursorPos := 0
+			for i := 0; i < row && i < len(lines); i++ {
+				cursorPos += len(lines[i]) + 1 // +1 for newline
+			}
+			cursorPos += col
+			// Look backwards from cursor to find @
+			if cursorPos > 0 {
+				// Find the last @ before cursor
+				textBeforeCursor := currentText[:cursorPos]
+				atIndex := strings.LastIndex(textBeforeCursor, "@")
+				if atIndex >= 0 {
+					// Extract the partial match text after @
+					filter := textBeforeCursor[atIndex+1:]
+					showFileCompletionPopup(filter)
+					return nil // Consume the Tab event
+				}
+			}
 		}
 		return event
 	})

@@ -70,6 +70,10 @@ func showModelSelectionPopup() {
 			pages.RemovePage("modelSelectionPopup")
 			return nil
 		}
+		if event.Key() == tcell.KeyRune && event.Rune() == 'x' {
+			pages.RemovePage("modelSelectionPopup")
+			return nil
+		}
 		return event
 	})
 	modal := func(p tview.Primitive, width, height int) tview.Primitive {
@@ -163,6 +167,10 @@ func showAPILinkSelectionPopup() {
 			pages.RemovePage("apiLinkSelectionPopup")
 			return nil
 		}
+		if event.Key() == tcell.KeyRune && event.Rune() == 'x' {
+			pages.RemovePage("apiLinkSelectionPopup")
+			return nil
+		}
 		return event
 	})
 	modal := func(p tview.Primitive, width, height int) tview.Primitive {
@@ -226,6 +234,10 @@ func showUserRoleSelectionPopup() {
 	})
 	roleListWidget.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		if event.Key() == tcell.KeyEscape {
+			pages.RemovePage("userRoleSelectionPopup")
+			return nil
+		}
+		if event.Key() == tcell.KeyRune && event.Rune() == 'x' {
 			pages.RemovePage("userRoleSelectionPopup")
 			return nil
 		}
@@ -297,6 +309,10 @@ func showBotRoleSelectionPopup() {
 			pages.RemovePage("botRoleSelectionPopup")
 			return nil
 		}
+		if event.Key() == tcell.KeyRune && event.Rune() == 'x' {
+			pages.RemovePage("botRoleSelectionPopup")
+			return nil
+		}
 		return event
 	})
 	modal := func(p tview.Primitive, width, height int) tview.Primitive {
@@ -322,6 +338,16 @@ func showFileCompletionPopup(filter string) {
 	if len(complMatches) == 0 {
 		return
 	}
+	// If only one match, auto-complete without showing popup
+	if len(complMatches) == 1 {
+		currentText := textArea.GetText()
+		atIdx := strings.LastIndex(currentText, "@")
+		if atIdx >= 0 {
+			before := currentText[:atIdx]
+			textArea.SetText(before+complMatches[0], true)
+		}
+		return
+	}
 	widget := tview.NewList().ShowSecondaryText(false).
 		SetSelectedBackgroundColor(tcell.ColorGray)
 	widget.SetTitle("file completion").SetBorder(true)
@@ -336,6 +362,17 @@ func showFileCompletionPopup(filter string) {
 			textArea.SetText(before+mainText, true)
 		}
 		pages.RemovePage("fileCompletionPopup")
+	})
+	widget.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		if event.Key() == tcell.KeyEscape {
+			pages.RemovePage("fileCompletionPopup")
+			return nil
+		}
+		if event.Key() == tcell.KeyRune && event.Rune() == 'x' {
+			pages.RemovePage("fileCompletionPopup")
+			return nil
+		}
+		return event
 	})
 	modal := func(p tview.Primitive, width, height int) tview.Primitive {
 		return tview.NewFlex().
