@@ -51,6 +51,13 @@ var (
 	filePickerPage = "filePicker"
 	exportDir      = "chat_exports"
 
+	// file completion
+	complPopup   *tview.List
+	complActive  bool
+	complAtPos   int
+	complMatches []string
+	complIndex   int
+
 	// For overlay search functionality
 	searchField    *tview.InputField
 	searchPageName = "searchOverlay"
@@ -76,6 +83,7 @@ var (
 [yellow]Ctrl+c[white]: close programm
 [yellow]Ctrl+n[white]: start a new chat
 [yellow]Ctrl+o[white]: open image file picker
+[yellow]@[white]: file completion (type @ in input to get file suggestions)
 [yellow]c[white]: (in file picker) set current dir as CodingDir
 [yellow]Ctrl+p[white]: props edit form (min-p, dry, etc.)
 [yellow]Ctrl+v[white]: show API link selection popup to choose current API
@@ -493,6 +501,74 @@ func searchPrev() {
 	highlightCurrentMatch()
 }
 
+func scanFiles(dir, filter string) []string {
+	var files []string
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return files
+	}
+	for _, entry := range entries {
+		name := entry.Name()
+		if strings.HasPrefix(name, ".") {
+			continue
+		}
+		if filter == "" || strings.HasPrefix(strings.ToLower(name), strings.ToLower(filter)) {
+			if entry.IsDir() {
+				files = append(files, name+"/")
+			} else {
+				files = append(files, name)
+			}
+		}
+	}
+	return files
+}
+
+func showFileCompletion(filter string) {
+	baseDir := cfg.CodingDir
+	if baseDir == "" {
+		baseDir = "."
+	}
+	complMatches = scanFiles(baseDir, filter)
+	if len(complMatches) == 0 {
+		hideCompletion()
+		return
+	}
+	if len(complMatches) > 10 {
+		complMatches = complMatches[:10]
+	}
+	complPopup.Clear()
+	for _, f := range complMatches {
+		complPopup.AddItem(f, "", 0, nil)
+	}
+	complIndex = 0
+	complPopup.SetCurrentItem(0)
+	complActive = true
+	pages.AddPage("complPopup", complPopup, true, false)
+	app.SetFocus(complPopup)
+	app.Draw()
+}
+
+func insertCompletion() {
+	if complIndex >= 0 && complIndex < len(complMatches) {
+		match := complMatches[complIndex]
+		currentText := textArea.GetText()
+		atIdx := strings.LastIndex(currentText, "@")
+		if atIdx >= 0 {
+			before := currentText[:atIdx]
+			textArea.SetText(before+match, true)
+		}
+	}
+	hideCompletion()
+}
+
+func hideCompletion() {
+	complActive = false
+	complMatches = nil
+	pages.RemovePage("complPopup")
+	app.SetFocus(textArea)
+	app.Draw()
+}
+
 func init() {
 	tview.Styles = colorschemes["default"]
 	app = tview.NewApplication()
@@ -500,6 +576,56 @@ func init() {
 	textArea = tview.NewTextArea().
 		SetPlaceholder("input is multiline; press <Enter> to start the next line;\npress <Esc> to send the message.")
 	textArea.SetBorder(true).SetTitle("input")
+
+	// Setup file completion popup
+	complPopup = tview.NewList()
+	complPopup.SetBorder(true).SetTitle("Files (@ to trigger)")
+	pages.AddPage("complPopup", complPopup, false, false)
+
+	// Add input capture for @ completion
+	textArea.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		if event.Key() == tcell.KeyRune && event.Rune() == '@' {
+			complAtPos = len(textArea.GetText())
+			showFileCompletion("")
+			return event
+		}
+		if complActive {
+			switch event.Key() {
+			case tcell.KeyUp:
+				if complIndex > 0 {
+					complIndex--
+					complPopup.SetCurrentItem(complIndex)
+				}
+				return nil
+			case tcell.KeyDown:
+				if complIndex < len(complMatches)-1 {
+					complIndex++
+					complPopup.SetCurrentItem(complIndex)
+				}
+				return nil
+			case tcell.KeyTab, tcell.KeyEnter:
+				if len(complMatches) > 0 {
+					insertCompletion()
+				}
+				return nil
+			case tcell.KeyEsc:
+				hideCompletion()
+				return nil
+			}
+		}
+		if complActive && event.Key() == tcell.KeyRune {
+			r := event.Rune()
+			if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '-' || r == '_' || r == '/' || r == '.' {
+				currentText := textArea.GetText()
+				if len(currentText) > complAtPos {
+					filter := currentText[complAtPos+1:]
+					showFileCompletion(filter)
+				}
+			}
+		}
+		return event
+	})
+
 	textView = tview.NewTextView().
 		SetDynamicColors(true).
 		SetRegions(true).
