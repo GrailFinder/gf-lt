@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"path/filepath"
 	"slices"
 	"strings"
 	"unicode"
@@ -706,23 +707,51 @@ func searchPrev() {
 // == tab completion ==
 
 func scanFiles(dir, filter string) []string {
+	const maxDepth = 3
+	const maxFiles = 50
 	var files []string
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return files
-	}
-	for _, entry := range entries {
-		name := entry.Name()
-		if strings.HasPrefix(name, ".") {
-			continue
+
+	var scanRecursive func(currentDir string, currentDepth int, relPath string)
+	scanRecursive = func(currentDir string, currentDepth int, relPath string) {
+		if len(files) >= maxFiles {
+			return
 		}
-		if filter == "" || strings.HasPrefix(strings.ToLower(name), strings.ToLower(filter)) {
+		if currentDepth > maxDepth {
+			return
+		}
+
+		entries, err := os.ReadDir(currentDir)
+		if err != nil {
+			return
+		}
+
+		for _, entry := range entries {
+			if len(files) >= maxFiles {
+				return
+			}
+
+			name := entry.Name()
+			if strings.HasPrefix(name, ".") {
+				continue
+			}
+
+			fullPath := name
+			if relPath != "" {
+				fullPath = relPath + "/" + name
+			}
+
 			if entry.IsDir() {
-				files = append(files, name+"/")
+				// Recursively scan subdirectories
+				scanRecursive(filepath.Join(currentDir, name), currentDepth+1, fullPath)
 			} else {
-				files = append(files, name)
+				// Check if file matches filter
+				if filter == "" || strings.HasPrefix(strings.ToLower(fullPath), strings.ToLower(filter)) {
+					files = append(files, fullPath)
+				}
 			}
 		}
 	}
+
+	scanRecursive(dir, 0, "")
 	return files
 }

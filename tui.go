@@ -112,7 +112,7 @@ var (
 [yellow]x[white]: to exit
 
 === shell mode ===
-[yellow]@match->Tab[white]: file completion (type @ in input to get file suggestions)
+	[yellow]@match->Tab[white]: file completion with relative paths (recursive, depth 3, max 50 files)
 
 === status line ===
 %s
