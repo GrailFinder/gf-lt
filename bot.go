@@ -1070,7 +1070,7 @@ func findCall(msg, toolCall string) bool {
 	}
 	resp := callToolWithAgent(fc.Name, fc.Args)
 	toolMsg := string(resp) // Remove the "tool response: " prefix and %+v formatting
-	logger.Info("llm used tool call", "tool_resp", toolMsg, "tool_attrs", fc)
+	logger.Info("llm used a tool call", "tool_name", fc.Name, "too_args", fc.Args, "id", fc.ID, "tool_resp", toolMsg)
 	fmt.Fprintf(textView, "%s[-:-:b](%d) <%s>: [-:-:-]\n%s\n",
 		"\n\n", len(chatBody.Messages), cfg.ToolRole, toolMsg)
 	// Create tool response message with the proper tool_call_id
