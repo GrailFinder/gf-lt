@@ -387,3 +387,81 @@ func showFileCompletionPopup(filter string) {
 	pages.AddPage("fileCompletionPopup", modal(widget, 80, 20), true, true)
 	app.SetFocus(widget)
 }
+
+// showColorschemeSelectionPopup creates a modal popup to select a colorscheme
+func showColorschemeSelectionPopup() {
+	// Get the list of available colorschemes
+	schemeNames := make([]string, 0, len(colorschemes))
+	for name := range colorschemes {
+		schemeNames = append(schemeNames, name)
+	}
+	slices.Sort(schemeNames)
+	// Check for empty options list
+	if len(schemeNames) == 0 {
+		logger.Warn("no colorschemes available for selection")
+		message := "No colorschemes available."
+		if err := notifyUser("Empty list", message); err != nil {
+			logger.Error("failed to send notification", "error", err)
+		}
+		return
+	}
+	// Create a list primitive
+	schemeListWidget := tview.NewList().ShowSecondaryText(false).
+		SetSelectedBackgroundColor(tcell.ColorGray)
+	schemeListWidget.SetTitle("Select Colorscheme").SetBorder(true)
+
+	currentScheme := "default"
+	for name := range colorschemes {
+		if tview.Styles == colorschemes[name] {
+			currentScheme = name
+			break
+		}
+	}
+	currentSchemeIndex := -1
+	for i, scheme := range schemeNames {
+		if scheme == currentScheme {
+			currentSchemeIndex = i
+		}
+		schemeListWidget.AddItem(scheme, "", 0, nil)
+	}
+	// Set the current selection if found
+	if currentSchemeIndex != -1 {
+		schemeListWidget.SetCurrentItem(currentSchemeIndex)
+	}
+	schemeListWidget.SetSelectedFunc(func(index int, mainText string, secondaryText string, shortcut rune) {
+		// Update the colorscheme
+		if theme, ok := colorschemes[mainText]; ok {
+			// Refresh the UI to apply the new theme
+			go func() {
+				app.QueueUpdateDraw(func() {
+					tview.Styles = theme
+				})
+			}()
+		}
+		// Remove the popup page
+		pages.RemovePage("colorschemeSelectionPopup")
+	})
+	schemeListWidget.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		if event.Key() == tcell.KeyEscape {
+			pages.RemovePage("colorschemeSelectionPopup")
+			return nil
+		}
+		if event.Key() == tcell.KeyRune && event.Rune() == 'x' {
+			pages.RemovePage("colorschemeSelectionPopup")
+			return nil
+		}
+		return event
+	})
+	modal := func(p tview.Primitive, width, height int) tview.Primitive {
+		return tview.NewFlex().
+			AddItem(nil, 0, 1, false).
+			AddItem(tview.NewFlex().SetDirection(tview.FlexRow).
+				AddItem(nil, 0, 1, false).
+				AddItem(p, height, 1, true).
+				AddItem(nil, 0, 1, false), width, 1, true).
+			AddItem(nil, 0, 1, false)
+	}
+	// Add modal page and make it visible
+	pages.AddPage("colorschemeSelectionPopup", modal(schemeListWidget, 40, len(schemeNames)+2), true, true)
+	app.SetFocus(schemeListWidget)
+}
