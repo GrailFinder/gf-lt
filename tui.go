@@ -483,6 +483,19 @@ func init() {
 			pages.RemovePage(helpPage)
 			return nil
 		}
+		// Allow scrolling keys to pass through to the TextView
+		switch event.Key() {
+		case tcell.KeyUp, tcell.KeyDown,
+			tcell.KeyPgUp, tcell.KeyPgDn,
+			tcell.KeyHome, tcell.KeyEnd:
+			return event
+		}
+		if event.Key() == tcell.KeyRune {
+			switch event.Rune() {
+			case 'j', 'k', 'g', 'G':
+				return event
+			}
+		}
 		return nil
 	})
 	//
