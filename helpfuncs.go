@@ -12,12 +12,53 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"time"
 	"unicode"
 
 	"math/rand/v2"
 
 	"github.com/rivo/tview"
 )
+
+// Cached model color - updated by background goroutine
+var cachedModelColor string = "orange"
+
+// startModelColorUpdater starts a background goroutine that periodically updates
+// the cached model color. Only runs HTTP requests for local llama.cpp APIs.
+func startModelColorUpdater() {
+	go func() {
+		ticker := time.NewTicker(5 * time.Second)
+		defer ticker.Stop()
+
+		// Initial check
+		updateCachedModelColor()
+
+		for range ticker.C {
+			updateCachedModelColor()
+		}
+	}()
+}
+
+// updateCachedModelColor updates the global cachedModelColor variable
+func updateCachedModelColor() {
+	if !isLocalLlamacpp() {
+		cachedModelColor = "orange"
+		return
+	}
+
+	// Check if model is loaded
+	loaded, err := isModelLoaded(chatBody.Model)
+	if err != nil {
+		// On error, assume not loaded (red)
+		cachedModelColor = "red"
+		return
+	}
+	if loaded {
+		cachedModelColor = "green"
+	} else {
+		cachedModelColor = "red"
+	}
+}
 
 func isASCII(s string) bool {
 	for i := 0; i < len(s); i++ {
@@ -132,8 +173,8 @@ func colorText() {
 }
 
 func updateStatusLine() {
-	statusLineWidget.SetText(makeStatusLine())
-	helpView.SetText(fmt.Sprintf(helpText, makeStatusLine()))
+	status := makeStatusLine()
+	statusLineWidget.SetText(status)
 }
 
 func initSysCards() ([]string, error) {
@@ -275,22 +316,11 @@ func isLocalLlamacpp() bool {
 	return host == "localhost" || host == "127.0.0.1" || host == "::1"
 }
 
-// getModelColor returns the color tag for the model name based on its load status.
+// getModelColor returns the cached color tag for the model name.
+// The cached value is updated by a background goroutine every 5 seconds.
 // For non-local models, returns orange. For local llama.cpp models, returns green if loaded, red if not.
 func getModelColor() string {
-	if !isLocalLlamacpp() {
-		return "orange"
-	}
-	// Check if model is loaded
-	loaded, err := isModelLoaded(chatBody.Model)
-	if err != nil {
-		// On error, assume not loaded (red)
-		return "red"
-	}
-	if loaded {
-		return "green"
-	}
-	return "red"
+	return cachedModelColor
 }
 
 func makeStatusLine() string {

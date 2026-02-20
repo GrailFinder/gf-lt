@@ -177,6 +177,9 @@ Press <Enter> or 'x' to return
 )
 
 func init() {
+	// Start background goroutine to update model color cache
+	startModelColorUpdater()
+
 	tview.Styles = colorschemes["default"]
 	app = tview.NewApplication()
 	pages = tview.NewPages()
@@ -749,6 +752,8 @@ func init() {
 		}
 		if event.Key() == tcell.KeyF12 {
 			// help window cheatsheet
+			// Update help text with current status before showing
+			helpView.SetText(fmt.Sprintf(helpText, makeStatusLine()))
 			pages.AddPage(helpPage, helpView, true, true)
 			return nil
 		}
