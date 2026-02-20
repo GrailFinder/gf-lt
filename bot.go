@@ -456,6 +456,7 @@ func monitorModelLoad(modelID string) {
 					if err := notifyUser("model loaded", "Model "+modelID+" is now loaded and ready."); err != nil {
 						logger.Debug("failed to notify user", "error", err)
 					}
+					refreshChatDisplay()
 					return
 				}
 			}
@@ -763,6 +764,7 @@ func chatWatcher(ctx context.Context) {
 
 func chatRound(r *models.ChatRoundReq) error {
 	botRespMode = true
+	updateStatusLine()
 	botPersona := cfg.AssistantRole
 	if cfg.WriteNextMsgAsCompletionAgent != "" {
 		botPersona = cfg.WriteNextMsgAsCompletionAgent

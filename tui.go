@@ -96,7 +96,7 @@ var (
 [yellow]Alt+8[white]: show char img or last picked img
 [yellow]Alt+9[white]: warm up (load) selected llama.cpp model
 [yellow]Alt+t[white]: toggle thinking blocks visibility (collapse/expand <think> blocks)
-[yellow]Alt+c[white]: show colorscheme selection popup
+[yellow]Alt+i[white]: show colorscheme selection popup
 
 === scrolling chat window (some keys similar to vim) ===
 [yellow]arrows up/down and j/k[white]: scroll up and down

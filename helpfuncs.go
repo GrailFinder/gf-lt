@@ -61,6 +61,7 @@ func refreshChatDisplay() {
 	displayText := chatToText(filteredMessages, cfg.ShowSys)
 	textView.SetText(displayText)
 	colorText()
+	updateStatusLine()
 	if scrollToEndEnabled {
 		textView.ScrollToEnd()
 	}
