@@ -835,6 +835,7 @@ func init() {
 				lastMsg := chatBody.Messages[len(chatBody.Messages)-1]
 				cleanedText := models.CleanText(lastMsg.Content)
 				if cleanedText != "" {
+					// nolint: errcheck
 					go orator.Speak(cleanedText)
 				}
 			}

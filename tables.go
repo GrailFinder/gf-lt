@@ -1046,6 +1046,7 @@ func makeFilePicker() *tview.Flex {
 						if bracketPos := strings.Index(itemText, " ["); bracketPos != -1 {
 							actualItemName = itemText[:bracketPos]
 						}
+						// nolint: gocritic
 						if strings.HasPrefix(actualItemName, "../") {
 							targetDir = path.Dir(currentDisplayDir)
 						} else if strings.HasSuffix(actualItemName, "/") {

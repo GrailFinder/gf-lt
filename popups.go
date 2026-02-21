@@ -388,7 +388,7 @@ func showFileCompletionPopup(filter string) {
 	app.SetFocus(widget)
 }
 
-func updateWidgetColors(theme tview.Theme) {
+func updateWidgetColors(theme *tview.Theme) {
 	bgColor := theme.PrimitiveBackgroundColor
 	fgColor := theme.PrimaryTextColor
 	borderColor := theme.BorderColor
@@ -476,7 +476,7 @@ func showColorschemeSelectionPopup() {
 			tview.Styles = theme
 			go func() {
 				app.QueueUpdateDraw(func() {
-					updateWidgetColors(theme)
+					updateWidgetColors(&theme)
 				})
 			}()
 		}

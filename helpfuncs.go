@@ -354,10 +354,15 @@ func makeStatusLine() string {
 	}
 	// Get model color based on load status for local llama.cpp models
 	modelColor := getModelColor()
-	statusLine := fmt.Sprintf(indexLineCompletion, boolColors[botRespMode], botRespMode, activeChatName,
+	statusLine := fmt.Sprintf(statusLineTempl, boolColors[botRespMode], botRespMode, activeChatName,
 		boolColors[cfg.ToolUse], cfg.ToolUse, modelColor, chatBody.Model, boolColors[cfg.SkipLLMResp],
 		cfg.SkipLLMResp, cfg.CurrentAPI, boolColors[isRecording], isRecording, persona,
-		botPersona, boolColors[injectRole], injectRole)
+		botPersona)
+	// completion endpoint
+	if !strings.Contains(cfg.CurrentAPI, "chat") {
+		roleInject := fmt.Sprintf(" | role injection [%s:-:b]%v[-:-:-] (alt+7)", boolColors[injectRole], injectRole)
+		statusLine += roleInject
+	}
 	return statusLine + imageInfo + shellModeInfo
 }
 
@@ -741,7 +746,6 @@ func scanFiles(dir, filter string) []string {
 	const maxDepth = 3
 	const maxFiles = 50
 	var files []string
-
 	var scanRecursive func(currentDir string, currentDepth int, relPath string)
 	scanRecursive = func(currentDir string, currentDepth int, relPath string) {
 		if len(files) >= maxFiles {
@@ -750,39 +754,33 @@ func scanFiles(dir, filter string) []string {
 		if currentDepth > maxDepth {
 			return
 		}
-
 		entries, err := os.ReadDir(currentDir)
 		if err != nil {
 			return
 		}
-
 		for _, entry := range entries {
 			if len(files) >= maxFiles {
 				return
 			}
-
 			name := entry.Name()
 			if strings.HasPrefix(name, ".") {
 				continue
 			}
-
 			fullPath := name
 			if relPath != "" {
 				fullPath = relPath + "/" + name
 			}
-
 			if entry.IsDir() {
 				// Recursively scan subdirectories
 				scanRecursive(filepath.Join(currentDir, name), currentDepth+1, fullPath)
-			} else {
-				// Check if file matches filter
-				if filter == "" || strings.HasPrefix(strings.ToLower(fullPath), strings.ToLower(filter)) {
-					files = append(files, fullPath)
-				}
+				continue
+			}
+			// Check if file matches filter
+			if filter == "" || strings.HasPrefix(strings.ToLower(fullPath), strings.ToLower(filter)) {
+				files = append(files, fullPath)
 			}
 		}
 	}
-
 	scanRecursive(dir, 0, "")
 	return files
 }
