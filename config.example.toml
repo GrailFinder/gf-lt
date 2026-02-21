@@ -50,3 +50,7 @@ CharSpecificContextEnabled = true
 CharSpecificContextTag = "@"
 AutoTurn = true
 StripThinkingFromAPI = true  # Strip <think> blocks from messages before sending to LLM (keeps them in chat history)
+# OpenRouter reasoning configuration (only applies to OpenRouter chat API)
+# Valid values: xhigh, high, medium, low, minimal, none (empty or none = disabled)
+# Models that support reasoning will include thinking content wrapped in <think> tags
+ReasoningEffort = "medium"

@@ -614,12 +614,14 @@ func (or OpenRouterChat) ParseChunk(data []byte) (*models.TextChunk, error) {
 		logger.Error("failed to decode", "error", err, "line", string(data))
 		return nil, err
 	}
+	lastChoice := llmchunk.Choices[len(llmchunk.Choices)-1]
 	resp := &models.TextChunk{
-		Chunk: llmchunk.Choices[len(llmchunk.Choices)-1].Delta.Content,
+		Chunk:     lastChoice.Delta.Content,
+		Reasoning: lastChoice.Delta.Reasoning,
 	}
 	// Handle tool calls similar to LCPChat
-	if len(llmchunk.Choices[len(llmchunk.Choices)-1].Delta.ToolCalls) > 0 {
-		toolCall := llmchunk.Choices[len(llmchunk.Choices)-1].Delta.ToolCalls[0]
+	if len(lastChoice.Delta.ToolCalls) > 0 {
+		toolCall := lastChoice.Delta.ToolCalls[0]
 		resp.ToolChunk = toolCall.Function.Arguments
 		fname := toolCall.Function.Name
 		if fname != "" {
@@ -631,7 +633,7 @@ func (or OpenRouterChat) ParseChunk(data []byte) (*models.TextChunk, error) {
 	if resp.ToolChunk != "" {
 		resp.ToolResp = true
 	}
-	if llmchunk.Choices[len(llmchunk.Choices)-1].FinishReason == "stop" {
+	if lastChoice.FinishReason == "stop" {
 		if resp.Chunk != "" {
 			logger.Error("text inside of finish llmchunk", "chunk", llmchunk)
 		}
@@ -710,7 +712,7 @@ func (or OpenRouterChat) FormMsg(msg, role string, resume bool) (io.Reader, erro
 	}
 	// Clean null/empty messages to prevent API issues
 	bodyCopy.Messages = consolidateAssistantMessages(bodyCopy.Messages)
-	orBody := models.NewOpenRouterChatReq(*bodyCopy, defaultLCPProps)
+	orBody := models.NewOpenRouterChatReq(*bodyCopy, defaultLCPProps, cfg.ReasoningEffort)
 	if cfg.ToolUse && !resume && role != cfg.ToolRole {
 		orBody.Tools = baseTools // set tools to use
 	}

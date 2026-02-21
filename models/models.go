@@ -86,6 +86,7 @@ type TextChunk struct {
 	ToolResp  bool
 	FuncName  string
 	ToolID    string
+	Reasoning string // For models that send reasoning separately (OpenRouter, etc.)
 }
 
 type TextContentPart struct {

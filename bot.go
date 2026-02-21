@@ -573,6 +573,9 @@ func sendMsgToLLM(body io.Reader) {
 	defer resp.Body.Close()
 	reader := bufio.NewReader(resp.Body)
 	counter := uint32(0)
+	reasoningBuffer := strings.Builder{}
+	hasReasoning := false
+	reasoningSent := false
 	for {
 		var (
 			answerText string
@@ -645,6 +648,13 @@ func sendMsgToLLM(body io.Reader) {
 		// 	break
 		// }
 		if chunk.Finished {
+			// Send any remaining reasoning if not already sent
+			if hasReasoning && !reasoningSent {
+				reasoningText := "<think>" + reasoningBuffer.String() + "</think>"
+				answerText = strings.ReplaceAll(reasoningText, "\n\n", "\n")
+				chunkChan <- answerText
+				reasoningSent = true
+			}
 			if chunk.Chunk != "" {
 				logger.Warn("text inside of finish llmchunk", "chunk", chunk, "counter", counter)
 				answerText = strings.ReplaceAll(chunk.Chunk, "\n\n", "\n")
@@ -656,6 +666,20 @@ func sendMsgToLLM(body io.Reader) {
 		if counter == 0 {
 			chunk.Chunk = strings.TrimPrefix(chunk.Chunk, " ")
 		}
+		// Handle reasoning chunks - buffer them and prepend when content starts
+		if chunk.Reasoning != "" && !reasoningSent {
+			reasoningBuffer.WriteString(chunk.Reasoning)
+			hasReasoning = true
+		}
+
+		// When we get content and have buffered reasoning, send reasoning first
+		if chunk.Chunk != "" && hasReasoning && !reasoningSent {
+			reasoningText := "<think>" + reasoningBuffer.String() + "</think>"
+			answerText = strings.ReplaceAll(reasoningText, "\n\n", "\n")
+			chunkChan <- answerText
+			reasoningSent = true
+		}
+
 		// bot sends way too many \n
 		answerText = strings.ReplaceAll(chunk.Chunk, "\n\n", "\n")
 		// Accumulate text to check for stop strings that might span across chunks
@@ -666,7 +690,9 @@ func sendMsgToLLM(body io.Reader) {
 			logger.Debug("stop string detected on client side for completion endpoint", "stop_string", answerText)
 			streamDone <- true
 		}
-		chunkChan <- answerText
+		if answerText != "" {
+			chunkChan <- answerText
+		}
 		openAIToolChan <- chunk.ToolChunk
 		if chunk.FuncName != "" {
 			lastToolCall.Name = chunk.FuncName

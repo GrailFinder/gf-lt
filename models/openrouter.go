@@ -25,17 +25,23 @@ func NewOpenRouterCompletionReq(model, prompt string, props map[string]float32, 
 }
 
 type OpenRouterChatReq struct {
-	Messages    []RoleMsg `json:"messages"`
-	Model       string    `json:"model"`
-	Stream      bool      `json:"stream"`
-	Temperature float32   `json:"temperature"`
-	MinP        float32   `json:"min_p"`
-	NPredict    int32     `json:"max_tokens"`
-	Tools       []Tool    `json:"tools"`
+	Messages    []RoleMsg        `json:"messages"`
+	Model       string           `json:"model"`
+	Stream      bool             `json:"stream"`
+	Temperature float32          `json:"temperature"`
+	MinP        float32          `json:"min_p"`
+	NPredict    int32            `json:"max_tokens"`
+	Tools       []Tool           `json:"tools"`
+	Reasoning   *ReasoningConfig `json:"reasoning,omitempty"`
 }
 
-func NewOpenRouterChatReq(cb ChatBody, props map[string]float32) OpenRouterChatReq {
-	return OpenRouterChatReq{
+type ReasoningConfig struct {
+	Effort  string `json:"effort,omitempty"`  // xhigh, high, medium, low, minimal, none
+	Summary string `json:"summary,omitempty"` // auto, concise, detailed
+}
+
+func NewOpenRouterChatReq(cb ChatBody, props map[string]float32, reasoningEffort string) OpenRouterChatReq {
+	req := OpenRouterChatReq{
 		Messages:    cb.Messages,
 		Model:       cb.Model,
 		Stream:      cb.Stream,
@@ -43,6 +49,13 @@ func NewOpenRouterChatReq(cb ChatBody, props map[string]float32) OpenRouterChatR
 		MinP:        props["min_p"],
 		NPredict:    int32(props["n_predict"]),
 	}
+	// Only include reasoning config if effort is specified and not "none"
+	if reasoningEffort != "" && reasoningEffort != "none" {
+		req.Reasoning = &ReasoningConfig{
+			Effort: reasoningEffort,
+		}
+	}
+	return req
 }
 
 type OpenRouterChatRespNonStream struct {
@@ -82,6 +95,7 @@ type OpenRouterChatResp struct {
 		Delta struct {
 			Role      string          `json:"role"`
 			Content   string          `json:"content"`
+			Reasoning string          `json:"reasoning"`
 			ToolCalls []ToolDeltaResp `json:"tool_calls"`
 		} `json:"delta"`
 		FinishReason       string `json:"finish_reason"`

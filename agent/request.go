@@ -15,10 +15,10 @@ import (
 var httpClient = &http.Client{}
 
 var defaultProps = map[string]float32{
-	"temperature":     0.8,
-	"dry_multiplier":  0.0,
-	"min_p":           0.05,
-	"n_predict":       -1.0,
+	"temperature":    0.8,
+	"dry_multiplier": 0.0,
+	"min_p":          0.05,
+	"n_predict":      -1.0,
 }
 
 func detectAPI(api string) (isCompletion, isChat, isDeepSeek, isOpenRouter bool) {
@@ -110,8 +110,8 @@ func (ag *AgentClient) buildRequest(sysprompt, msg string) ([]byte, error) {
 			req := models.NewDSChatReq(*chatBody)
 			return json.Marshal(req)
 		case isOpenRouter:
-			// OpenRouter chat
-			req := models.NewOpenRouterChatReq(*chatBody, defaultProps)
+			// OpenRouter chat - agents don't use reasoning by default
+			req := models.NewOpenRouterChatReq(*chatBody, defaultProps, "")
 			return json.Marshal(req)
 		default:
 			// Assume llama.cpp chat (OpenAI format)

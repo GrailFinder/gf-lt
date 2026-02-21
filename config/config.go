@@ -20,6 +20,7 @@ type Config struct {
 	ToolUse                       bool   `toml:"ToolUse"`
 	ThinkUse                      bool   `toml:"ThinkUse"`
 	StripThinkingFromAPI          bool   `toml:"StripThinkingFromAPI"`
+	ReasoningEffort               string `toml:"ReasoningEffort"`
 	AssistantRole                 string `toml:"AssistantRole"`
 	SysDir                        string `toml:"SysDir"`
 	ChunkLimit                    uint32 `toml:"ChunkLimit"`
