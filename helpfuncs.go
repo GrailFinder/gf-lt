@@ -433,7 +433,7 @@ func updateFlexLayout() {
 	flex.AddItem(textView, 0, 40, false)
 	flex.AddItem(textArea, 0, 10, false)
 	if positionVisible {
-		flex.AddItem(statusLineWidget, 0, 4, false)
+		flex.AddItem(statusLineWidget, 0, 2, false)
 	}
 	// Keep focus on currently focused widget
 	focused := app.GetFocus()
