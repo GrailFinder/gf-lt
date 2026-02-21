@@ -653,7 +653,6 @@ func sendMsgToLLM(body io.Reader) {
 				reasoningText := "<think>" + reasoningBuffer.String() + "</think>"
 				answerText = strings.ReplaceAll(reasoningText, "\n\n", "\n")
 				chunkChan <- answerText
-				reasoningSent = true
 			}
 			if chunk.Chunk != "" {
 				logger.Warn("text inside of finish llmchunk", "chunk", chunk, "counter", counter)

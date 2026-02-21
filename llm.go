@@ -237,8 +237,10 @@ func (op LCPChat) ParseChunk(data []byte) (*models.TextChunk, error) {
 		return &models.TextChunk{Finished: true}, nil
 	}
 
+	lastChoice := llmchunk.Choices[len(llmchunk.Choices)-1]
 	resp := &models.TextChunk{
-		Chunk: llmchunk.Choices[len(llmchunk.Choices)-1].Delta.Content,
+		Chunk:     lastChoice.Delta.Content,
+		Reasoning: lastChoice.Delta.ReasoningContent,
 	}
 
 	// Check for tool calls in all choices, not just the last one
@@ -256,7 +258,7 @@ func (op LCPChat) ParseChunk(data []byte) (*models.TextChunk, error) {
 		}
 	}
 
-	if llmchunk.Choices[len(llmchunk.Choices)-1].FinishReason == "stop" {
+	if lastChoice.FinishReason == "stop" {
 		if resp.Chunk != "" {
 			logger.Error("text inside of finish llmchunk", "chunk", llmchunk)
 		}

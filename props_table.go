@@ -149,6 +149,11 @@ func makePropsTable(props map[string]float32) *tview.Table {
 	addListPopupRow("Set log level", logLevels, GetLogLevel(), func(option string) {
 		setLogLevel(option)
 	})
+	// Add reasoning effort dropdown (for OpenRouter and supported APIs)
+	reasoningEfforts := []string{"", "none", "minimal", "low", "medium", "high", "xhigh"}
+	addListPopupRow("Reasoning effort (OR)", reasoningEfforts, cfg.ReasoningEffort, func(option string) {
+		cfg.ReasoningEffort = option
+	})
 	// Helper function to get model list for a given API
 	getModelListForAPI := func(api string) []string {
 		if strings.Contains(api, "api.deepseek.com/") {

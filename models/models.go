@@ -64,8 +64,9 @@ type LLMRespChunk struct {
 		FinishReason string `json:"finish_reason"`
 		Index        int    `json:"index"`
 		Delta        struct {
-			Content   string          `json:"content"`
-			ToolCalls []ToolDeltaResp `json:"tool_calls"`
+			Content          string          `json:"content"`
+			ReasoningContent string          `json:"reasoning_content"`
+			ToolCalls        []ToolDeltaResp `json:"tool_calls"`
 		} `json:"delta"`
 	} `json:"choices"`
 	Created int    `json:"created"`
