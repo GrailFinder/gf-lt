@@ -818,10 +818,55 @@ func chatRound(r *models.ChatRoundReq) error {
 	}
 	respText := strings.Builder{}
 	toolResp := strings.Builder{}
+	// Variables for handling thinking blocks during streaming
+	inThinkingBlock := false
+	thinkingBuffer := strings.Builder{}
 out:
 	for {
 		select {
 		case chunk := <-chunkChan:
+			// Handle thinking blocks during streaming
+			if strings.HasPrefix(chunk, "<think>") && !inThinkingBlock {
+				// Start of thinking block
+				inThinkingBlock = true
+				thinkingBuffer.Reset()
+				thinkingBuffer.WriteString(chunk)
+				if thinkingCollapsed {
+					// Don't display yet, just buffer
+					respText.WriteString(chunk)
+					continue
+				}
+			} else if inThinkingBlock {
+				thinkingBuffer.WriteString(chunk)
+				if strings.Contains(chunk, "</think>") {
+					// End of thinking block
+					inThinkingBlock = false
+					if thinkingCollapsed {
+						// Show placeholder instead of the full thinking
+						thinkingContent := thinkingBuffer.String()
+						start := len("<think>")
+						end := len(thinkingContent) - len("</think>")
+						if end > start {
+							content := thinkingContent[start:end]
+							placeholder := fmt.Sprintf("[yellow::i][thinking... (%d chars) (press Alt+T to expand)][-:-:-]", len(content))
+							fmt.Fprint(textView, placeholder)
+						} else {
+							fmt.Fprint(textView, "[yellow::i][thinking... (press Alt+T to expand)][-:-:-]")
+						}
+						respText.WriteString(chunk)
+						if scrollToEndEnabled {
+							textView.ScrollToEnd()
+						}
+						continue
+					}
+					// If not collapsed, fall through to normal display
+				} else if thinkingCollapsed {
+					// Still in thinking block and collapsed - just buffer, don't display
+					respText.WriteString(chunk)
+					continue
+				}
+				// If not collapsed, fall through to normal display
+			}
 			fmt.Fprint(textView, chunk)
 			respText.WriteString(chunk)
 			if scrollToEndEnabled {
@@ -1137,8 +1182,16 @@ func chatToText(messages []models.RoleMsg, showSys bool) string {
 
 	// Collapse thinking blocks if enabled
 	if thinkingCollapsed {
-		placeholder := "[yellow::i][thinking... (press Alt+T to expand)][-:-:-]"
-		text = thinkRE.ReplaceAllString(text, placeholder)
+		text = thinkRE.ReplaceAllStringFunc(text, func(match string) string {
+			// Extract content between <think> and </think>
+			start := len("<think>")
+			end := len(match) - len("</think>")
+			if start < end && start < len(match) {
+				content := match[start:end]
+				return fmt.Sprintf("[yellow::i][thinking... (%d chars) (press Alt+T to expand)][-:-:-]", len(content))
+			}
+			return "[yellow::i][thinking... (press Alt+T to expand)][-:-:-]"
+		})
 	}
 
 	return text
