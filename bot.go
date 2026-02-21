@@ -403,6 +403,23 @@ func fetchLCPModels() ([]string, error) {
 	return localModels, nil
 }
 
+// fetchLCPModelsWithLoadStatus returns models with "(loaded)" indicator for loaded models
+func fetchLCPModelsWithLoadStatus() ([]string, error) {
+	models, err := fetchLCPModelsWithStatus()
+	if err != nil {
+		return nil, err
+	}
+	result := make([]string, 0, len(models.Data))
+	for _, m := range models.Data {
+		modelName := m.ID
+		if m.Status.Value == "loaded" {
+			modelName = modelName + " (loaded)"
+		}
+		result = append(result, modelName)
+	}
+	return result, nil
+}
+
 // fetchLCPModelsWithStatus returns the full LCPModels struct including status information.
 func fetchLCPModelsWithStatus() (*models.LCPModels, error) {
 	resp, err := http.Get(cfg.FetchModelNameAPI)
@@ -832,6 +849,7 @@ func chatRound(r *models.ChatRoundReq) error {
 	// Variables for handling thinking blocks during streaming
 	inThinkingBlock := false
 	thinkingBuffer := strings.Builder{}
+	justExitedThinkingCollapsed := false
 out:
 	for {
 		select {
@@ -859,6 +877,7 @@ out:
 					if thinkingCollapsed {
 						// Thinking already displayed as placeholder, just update respText
 						respText.WriteString(chunk)
+						justExitedThinkingCollapsed = true
 						if scrollToEndEnabled {
 							textView.ScrollToEnd()
 						}
@@ -871,6 +890,11 @@ out:
 					continue
 				}
 				// If not collapsed, fall through to normal display
+			}
+			// Add spacing after collapsed thinking block before real response
+			if justExitedThinkingCollapsed {
+				chunk = "\n\n" + chunk
+				justExitedThinkingCollapsed = false
 			}
 			fmt.Fprint(textView, chunk)
 			respText.WriteString(chunk)

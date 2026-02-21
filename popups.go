@@ -17,9 +17,13 @@ func showModelSelectionPopup() {
 		} else if strings.Contains(api, "openrouter.ai") {
 			return ORFreeModels
 		}
-		// Assume local llama.cpp
-		updateModelLists()
-		return LocalModels
+		// Assume local llama.cpp - fetch with load status
+		models, err := fetchLCPModelsWithLoadStatus()
+		if err != nil {
+			logger.Error("failed to fetch models with load status", "error", err)
+			return LocalModels
+		}
+		return models
 	}
 	// Get the current model list based on the API
 	modelList := getModelListForAPI(cfg.CurrentAPI)
@@ -57,8 +61,10 @@ func showModelSelectionPopup() {
 		modelListWidget.SetCurrentItem(currentModelIndex)
 	}
 	modelListWidget.SetSelectedFunc(func(index int, mainText string, secondaryText string, shortcut rune) {
+		// Strip "(loaded)" suffix if present for local llama.cpp models
+		modelName := strings.TrimSuffix(mainText, " (loaded)")
 		// Update the model in both chatBody and config
-		chatBody.Model = mainText
+		chatBody.Model = modelName
 		cfg.CurrentModel = chatBody.Model
 		// Remove the popup page
 		pages.RemovePage("modelSelectionPopup")
