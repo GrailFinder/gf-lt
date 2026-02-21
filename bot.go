@@ -573,7 +573,6 @@ func sendMsgToLLM(body io.Reader) {
 	defer resp.Body.Close()
 	reader := bufio.NewReader(resp.Body)
 	counter := uint32(0)
-	reasoningBuffer := strings.Builder{}
 	hasReasoning := false
 	reasoningSent := false
 	for {
@@ -648,11 +647,9 @@ func sendMsgToLLM(body io.Reader) {
 		// 	break
 		// }
 		if chunk.Finished {
-			// Send any remaining reasoning if not already sent
+			// Close the thinking block if we were streaming reasoning and haven't closed it yet
 			if hasReasoning && !reasoningSent {
-				reasoningText := "<think>" + reasoningBuffer.String() + "</think>"
-				answerText = strings.ReplaceAll(reasoningText, "\n\n", "\n")
-				chunkChan <- answerText
+				chunkChan <- "</think>"
 			}
 			if chunk.Chunk != "" {
 				logger.Warn("text inside of finish llmchunk", "chunk", chunk, "counter", counter)
@@ -665,17 +662,24 @@ func sendMsgToLLM(body io.Reader) {
 		if counter == 0 {
 			chunk.Chunk = strings.TrimPrefix(chunk.Chunk, " ")
 		}
-		// Handle reasoning chunks - buffer them and prepend when content starts
+		// Handle reasoning chunks - stream them immediately as they arrive
 		if chunk.Reasoning != "" && !reasoningSent {
-			reasoningBuffer.WriteString(chunk.Reasoning)
-			hasReasoning = true
+			if !hasReasoning {
+				// First reasoning chunk - send opening tag
+				chunkChan <- "<think>"
+				hasReasoning = true
+			}
+			// Stream reasoning content immediately
+			answerText = strings.ReplaceAll(chunk.Reasoning, "\n\n", "\n")
+			if answerText != "" {
+				chunkChan <- answerText
+			}
 		}
 
-		// When we get content and have buffered reasoning, send reasoning first
+		// When we get content and have been streaming reasoning, close the thinking block
 		if chunk.Chunk != "" && hasReasoning && !reasoningSent {
-			reasoningText := "<think>" + reasoningBuffer.String() + "</think>"
-			answerText = strings.ReplaceAll(reasoningText, "\n\n", "\n")
-			chunkChan <- answerText
+			// Close the thinking block before sending actual content
+			chunkChan <- "</think>"
 			reasoningSent = true
 		}
 
@@ -807,14 +811,21 @@ func chatRound(r *models.ChatRoundReq) error {
 	}
 	go sendMsgToLLM(reader)
 	logger.Debug("looking at vars in chatRound", "msg", r.UserMsg, "regen", r.Regen, "resume", r.Resume)
+	msgIdx := len(chatBody.Messages)
 	if !r.Resume {
-		fmt.Fprintf(textView, "\n[-:-:b](%d) ", len(chatBody.Messages))
+		// Add empty message to chatBody immediately so it persists during Alt+T toggle
+		chatBody.Messages = append(chatBody.Messages, models.RoleMsg{
+			Role: botPersona, Content: "",
+		})
+		fmt.Fprintf(textView, "\n[-:-:b](%d) ", msgIdx)
 		fmt.Fprint(textView, roleToIcon(botPersona))
 		fmt.Fprint(textView, "[-:-:-]\n")
 		if cfg.ThinkUse && !strings.Contains(cfg.CurrentAPI, "v1") {
 			// fmt.Fprint(textView, "<think>")
 			chunkChan <- "<think>"
 		}
+	} else {
+		msgIdx = len(chatBody.Messages) - 1
 	}
 	respText := strings.Builder{}
 	toolResp := strings.Builder{}
@@ -832,7 +843,11 @@ out:
 				thinkingBuffer.Reset()
 				thinkingBuffer.WriteString(chunk)
 				if thinkingCollapsed {
-					// Don't display yet, just buffer
+					// Show placeholder immediately when thinking starts in collapsed mode
+					fmt.Fprint(textView, "[yellow::i][thinking... (press Alt+T to expand)][-:-:-]")
+					if scrollToEndEnabled {
+						textView.ScrollToEnd()
+					}
 					respText.WriteString(chunk)
 					continue
 				}
@@ -842,17 +857,7 @@ out:
 					// End of thinking block
 					inThinkingBlock = false
 					if thinkingCollapsed {
-						// Show placeholder instead of the full thinking
-						thinkingContent := thinkingBuffer.String()
-						start := len("<think>")
-						end := len(thinkingContent) - len("</think>")
-						if end > start {
-							content := thinkingContent[start:end]
-							placeholder := fmt.Sprintf("[yellow::i][thinking... (%d chars) (press Alt+T to expand)][-:-:-]", len(content))
-							fmt.Fprint(textView, placeholder)
-						} else {
-							fmt.Fprint(textView, "[yellow::i][thinking... (press Alt+T to expand)][-:-:-]")
-						}
+						// Thinking already displayed as placeholder, just update respText
 						respText.WriteString(chunk)
 						if scrollToEndEnabled {
 							textView.ScrollToEnd()
@@ -869,6 +874,8 @@ out:
 			}
 			fmt.Fprint(textView, chunk)
 			respText.WriteString(chunk)
+			// Update the message in chatBody.Messages so it persists during Alt+T
+			chatBody.Messages[msgIdx].Content = respText.String()
 			if scrollToEndEnabled {
 				textView.ScrollToEnd()
 			}
@@ -913,13 +920,11 @@ out:
 		processedMsg := processMessageTag(&updatedMsg)
 		chatBody.Messages[len(chatBody.Messages)-1] = *processedMsg
 	} else {
-		newMsg := models.RoleMsg{
-			Role: botPersona, Content: respText.String(),
-		}
-		// Process the new message to check for known_to tags in LLM response
-		newMsg = *processMessageTag(&newMsg)
-		chatBody.Messages = append(chatBody.Messages, newMsg)
-		stopTTSIfNotForUser(&newMsg)
+		// Message was already added at the start, just process it for known_to tags
+		chatBody.Messages[msgIdx].Content = respText.String()
+		processedMsg := processMessageTag(&chatBody.Messages[msgIdx])
+		chatBody.Messages[msgIdx] = *processedMsg
+		stopTTSIfNotForUser(&chatBody.Messages[msgIdx])
 	}
 	cleanChatBody()
 	refreshChatDisplay()
