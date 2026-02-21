@@ -1197,6 +1197,16 @@ func chatToText(messages []models.RoleMsg, showSys bool) string {
 			}
 			return "[yellow::i][thinking... (press Alt+T to expand)][-:-:-]"
 		})
+		// Handle incomplete thinking blocks (during streaming when </think> hasn't arrived yet)
+		if strings.Contains(text, "<think>") && !strings.Contains(text, "</think>") {
+			// Find the incomplete thinking block and replace it
+			startIdx := strings.Index(text, "<think>")
+			if startIdx != -1 {
+				content := text[startIdx+len("<think>"):]
+				placeholder := fmt.Sprintf("[yellow::i][thinking... (%d chars) (press Alt+T to expand)][-:-:-]", len(content))
+				text = text[:startIdx] + placeholder
+			}
+		}
 	}
 
 	return text
