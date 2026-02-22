@@ -108,14 +108,17 @@ func refreshChatDisplay() {
 	}
 }
 
+// stopTTSIfNotForUser: character specific context, not meant fot the human to hear
 func stopTTSIfNotForUser(msg *models.RoleMsg) {
+	if strings.Contains(cfg.CurrentAPI, "/chat") || !cfg.CharSpecificContextEnabled {
+		return
+	}
 	viewingAs := cfg.UserRole
 	if cfg.WriteNextMsgAs != "" {
 		viewingAs = cfg.WriteNextMsgAs
 	}
 	// stop tts if msg is not for user
-	if cfg.CharSpecificContextEnabled &&
-		!slices.Contains(msg.KnownTo, viewingAs) && cfg.TTS_ENABLED {
+	if !slices.Contains(msg.KnownTo, viewingAs) && cfg.TTS_ENABLED {
 		TTSDoneChan <- true
 	}
 }
