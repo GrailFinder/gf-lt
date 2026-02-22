@@ -8,7 +8,7 @@ made with use of [tview](https://github.com/rivo/tview)
 - tts/stt (run make commands to get deps);
 - image input;
 - function calls (function calls are implemented natively, to avoid calling outside sources);
-- [character specific context (unique feature)](char-specific-context.md)
+- [character specific context (unique feature)](docs/char-specific-context.md)
 
 #### how it looks
 ![how it looks](assets/ex01.png)

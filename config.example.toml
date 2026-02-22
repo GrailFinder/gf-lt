@@ -10,7 +10,10 @@ DeepSeekModel = "deepseek-reasoner"
 OpenRouterCompletionAPI = "https://openrouter.ai/api/v1/completions"
 OpenRouterChatAPI = "https://openrouter.ai/api/v1/chat/completions"
 # OpenRouterToken = ""
+# embeddings
 EmbedURL = "http://localhost:8082/v1/embeddings"
+HFToken = false
+#
 ShowSys = true
 LogFile = "log.txt"
 UserRole = "user"
@@ -21,6 +24,7 @@ ChunkLimit = 100000
 AutoScrollEnabled = true
 AutoCleanToolCallsFromCtx = false
 # rag settings
+RAGEnabled = false
 RAGBatchSize = 1
 RAGWordLimit = 80
 RAGWorkers = 2

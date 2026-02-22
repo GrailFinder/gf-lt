@@ -36,11 +36,11 @@ type Config struct {
 	ImagePreview                  bool   `toml:"ImagePreview"`
 	EnableMouse                   bool   `toml:"EnableMouse"`
 	// embeddings
-	RAGEnabled bool   `toml:"RAGEnabled"`
-	EmbedURL   string `toml:"EmbedURL"`
-	HFToken    string `toml:"HFToken"`
-	RAGDir     string `toml:"RAGDir"`
+	EmbedURL string `toml:"EmbedURL"`
+	HFToken  string `toml:"HFToken"`
 	// rag settings
+	RAGEnabled   bool   `toml:"RAGEnabled"`
+	RAGDir       string `toml:"RAGDir"`
 	RAGWorkers   uint32 `toml:"RAGWorkers"`
 	RAGBatchSize int    `toml:"RAGBatchSize"`
 	RAGWordLimit uint32 `toml:"RAGWordLimit"`

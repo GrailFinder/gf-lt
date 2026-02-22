@@ -151,6 +151,19 @@ This document explains how to set up and configure the application using the `co
 #### EnableMouse (`false`)
 - Enable or disable mouse support in the UI. When set to `true`, allows clicking buttons and interacting with UI elements using the mouse, but prevents the terminal from handling mouse events normally (such as selecting and copying text). When set to `false`, enables default terminal behavior allowing you to select and copy text, but disables mouse interaction with UI elements.
 
+### Character-Specific Context Settings (/completion only)
+
+[character specific context page for more info](docs/char-specific-context.md)
+
+#### CharSpecificContextEnabled (`true`)
+- Enable or disable character-specific context functionality.
+
+#### CharSpecificContextTag (`"@"`)
+- The tag prefix used to reference character-specific context in messages.
+
+#### AutoTurn (`true`)
+- Enable or disable automatic turn detection/switching.
+
 ### Additional Features
 
 Those could be switched in program, but also bould be setup in config.
@@ -159,7 +172,13 @@ Those could be switched in program, but also bould be setup in config.
 - Enable or disable explanation of tools to llm, so it could use them.
 
 #### ThinkUse
-- Enable or disable insertion of <think> token at the beggining of llm resp.
+- Enable or disable insertion of  JsonSerializerToken at the beggining of llm resp.
+
+### StripThinkingFromAPI (`true`)
+- Strip thinking blocks from messages before sending to LLM. Keeps them in chat history for local viewing but reduces token usage in API calls.
+
+#### ReasoningEffort (`"medium"`)
+- OpenRouter reasoning configuration (only applies to OpenRouter chat API). Valid values: `xhigh`, `high`, `medium`, `low`, `minimal`, `none`. Empty or `none` disables reasoning.
 
 ## Environment Variables
 
