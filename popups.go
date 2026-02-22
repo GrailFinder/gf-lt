@@ -62,7 +62,7 @@ func showModelSelectionPopup() {
 	}
 	modelListWidget.SetSelectedFunc(func(index int, mainText string, secondaryText string, shortcut rune) {
 		// Strip "(loaded)" suffix if present for local llama.cpp models
-		modelName := strings.TrimSuffix(mainText, " (loaded)")
+		modelName := strings.TrimPrefix(mainText, "(loaded) ")
 		// Update the model in both chatBody and config
 		chatBody.Model = modelName
 		cfg.CurrentModel = chatBody.Model

@@ -413,7 +413,7 @@ func fetchLCPModelsWithLoadStatus() ([]string, error) {
 	for _, m := range models.Data {
 		modelName := m.ID
 		if m.Status.Value == "loaded" {
-			modelName = modelName + " (loaded)"
+			modelName = "(loaded) " + modelName
 		}
 		result = append(result, modelName)
 	}
@@ -1369,7 +1369,7 @@ func init() {
 	var err error
 	cfg, err = config.LoadConfig("config.toml")
 	if err != nil {
-		fmt.Println("failed to load config.toml")
+		fmt.Println("failed to load config.toml", err)
 		cancel()
 		os.Exit(1)
 		return
