@@ -577,7 +577,7 @@ func resolvePath(p string) string {
 	if filepath.IsAbs(p) {
 		return p
 	}
-	return filepath.Join(cfg.CodingDir, p)
+	return filepath.Join(cfg.FilePickerDir, p)
 }
 
 func readStringFromFile(filename string) (string, error) {

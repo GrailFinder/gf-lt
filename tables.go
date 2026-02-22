@@ -820,7 +820,9 @@ func makeFilePicker() *tview.Flex {
 	}
 	// Create UI elements
 	listView := tview.NewList()
-	listView.SetBorder(true).SetTitle("Files & Directories [c: set CodingDir]").SetTitleAlign(tview.AlignLeft)
+	listView.SetBorder(true).
+		SetTitle("Files & Directories [s: set FilePickerDir]. Current base dir: " + cfg.FilePickerDir).
+		SetTitleAlign(tview.AlignLeft)
 	// Status view for selected file information
 	statusView := tview.NewTextView()
 	statusView.SetBorder(true).SetTitle("Selected File").SetTitleAlign(tview.AlignLeft)
@@ -1032,8 +1034,8 @@ func makeFilePicker() *tview.Flex {
 				refreshList(currentDisplayDir, "")
 				return nil
 			}
-			if event.Rune() == 'c' {
-				// Set CodingDir to current directory
+			if event.Rune() == 's' {
+				// Set FilePickerDir to current directory
 				itemIndex := listView.GetCurrentItem()
 				if itemIndex >= 0 && itemIndex < listView.GetItemCount() {
 					itemText, _ := listView.GetItemText(itemIndex)
@@ -1056,11 +1058,11 @@ func makeFilePicker() *tview.Flex {
 							targetDir = currentDisplayDir
 						}
 					}
-					cfg.CodingDir = targetDir
-					if err := notifyUser("CodingDir", "Set to: "+targetDir); err != nil {
+					cfg.FilePickerDir = targetDir
+					if err := notifyUser("FilePickerDir", "Set to: "+targetDir); err != nil {
 						logger.Error("failed to notify user", "error", err)
 					}
-					pages.RemovePage(filePickerPage)
+					// pages.RemovePage(filePickerPage)
 					return nil
 				}
 			}

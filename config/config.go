@@ -32,7 +32,6 @@ type Config struct {
 	DBPATH                        string `toml:"DBPATH"`
 	FilePickerDir                 string `toml:"FilePickerDir"`
 	FilePickerExts                string `toml:"FilePickerExts"`
-	CodingDir                     string `toml:"CodingDir"`
 	ImagePreview                  bool   `toml:"ImagePreview"`
 	EnableMouse                   bool   `toml:"EnableMouse"`
 	// embeddings

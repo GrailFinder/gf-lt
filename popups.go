@@ -336,7 +336,7 @@ func showBotRoleSelectionPopup() {
 }
 
 func showFileCompletionPopup(filter string) {
-	baseDir := cfg.CodingDir
+	baseDir := cfg.FilePickerDir
 	if baseDir == "" {
 		baseDir = "."
 	}

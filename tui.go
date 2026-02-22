@@ -106,7 +106,7 @@ var (
 [yellow]x[white]: to exit the table page
 
 === filepicker ===
-[yellow]c[white]: (in file picker) set current dir as CodingDir
+[yellow]s[white]: (in file picker) set current dir as FilePickerDir
 [yellow]x[white]: to exit
 
 === shell mode ===
