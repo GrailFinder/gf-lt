@@ -354,13 +354,17 @@ func makeStatusLine() string {
 	}
 	// Get model color based on load status for local llama.cpp models
 	modelColor := getModelColor()
-	statusLine := fmt.Sprintf(statusLineTempl, boolColors[botRespMode], botRespMode, activeChatName,
-		boolColors[cfg.ToolUse], cfg.ToolUse, modelColor, chatBody.Model, boolColors[cfg.SkipLLMResp],
-		cfg.SkipLLMResp, cfg.CurrentAPI, boolColors[isRecording], isRecording, persona,
-		botPersona)
+	statusLine := fmt.Sprintf(statusLineTempl, boolColors[botRespMode], activeChatName,
+		boolColors[cfg.ToolUse], modelColor, chatBody.Model, boolColors[cfg.SkipLLMResp],
+		cfg.CurrentAPI, persona, botPersona)
+	if cfg.STT_ENABLED {
+		recordingS := fmt.Sprintf(" | [%s:-:b]voice recording[-:-:-] (ctrl+r)",
+			boolColors[isRecording])
+		statusLine += recordingS
+	}
 	// completion endpoint
 	if !strings.Contains(cfg.CurrentAPI, "chat") {
-		roleInject := fmt.Sprintf(" | role injection [%s:-:b]%v[-:-:-] (alt+7)", boolColors[injectRole], injectRole)
+		roleInject := fmt.Sprintf(" | [%s:-:b]role injection[-:-:-] (alt+7)", boolColors[injectRole])
 		statusLine += roleInject
 	}
 	return statusLine + imageInfo + shellModeInfo
