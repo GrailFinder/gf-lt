@@ -61,14 +61,11 @@ func showModelSelectionPopup() {
 		modelListWidget.SetCurrentItem(currentModelIndex)
 	}
 	modelListWidget.SetSelectedFunc(func(index int, mainText string, secondaryText string, shortcut rune) {
-		// Strip "(loaded)" suffix if present for local llama.cpp models
 		modelName := strings.TrimPrefix(mainText, "(loaded) ")
-		// Update the model in both chatBody and config
 		chatBody.Model = modelName
 		cfg.CurrentModel = chatBody.Model
-		// Remove the popup page
 		pages.RemovePage("modelSelectionPopup")
-		// Update the status line to reflect the change
+		updateCachedModelColor()
 		updateStatusLine()
 	})
 	modelListWidget.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
@@ -162,10 +159,9 @@ func showAPILinkSelectionPopup() {
 			chatBody.Model = newModelList[0]
 			cfg.CurrentModel = chatBody.Model
 		}
-		// Remove the popup page
 		pages.RemovePage("apiLinkSelectionPopup")
-		// Update the parser and status line to reflect the change
 		choseChunkParser()
+		updateCachedModelColor()
 		updateStatusLine()
 	})
 	apiListWidget.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
