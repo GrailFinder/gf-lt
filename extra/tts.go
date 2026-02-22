@@ -92,8 +92,6 @@ func (o *KokoroOrator) stoproutine() {
 
 func (o *KokoroOrator) readroutine() {
 	tokenizer, _ := english.NewSentenceTokenizer(nil)
-	// var sentenceBuf bytes.Buffer
-	// var remainder strings.Builder
 	for {
 		select {
 		case chunk := <-TTSTextChan:
@@ -106,24 +104,28 @@ func (o *KokoroOrator) readroutine() {
 				continue
 			}
 			text := o.textBuffer.String()
-			o.mu.Unlock()
 			sentences := tokenizer.Tokenize(text)
 			o.logger.Debug("adding chunk", "chunk", chunk, "text", text, "sen-len", len(sentences))
-			for i, sentence := range sentences {
-				if i == len(sentences)-1 { // last sentence
-					o.mu.Lock()
-					o.textBuffer.Reset()
-					_, err := o.textBuffer.WriteString(sentence.Text)
-					o.mu.Unlock()
-					if err != nil {
-						o.logger.Warn("failed to write to stringbuilder", "error", err)
-						continue
-					}
-					continue // if only one (often incomplete) sentence; wait for next chunk
+			if len(sentences) <= 1 {
+				o.mu.Unlock()
+				continue
+			}
+			completeSentences := sentences[:len(sentences)-1]
+			remaining := sentences[len(sentences)-1].Text
+			o.textBuffer.Reset()
+			o.textBuffer.WriteString(remaining)
+			o.mu.Unlock()
+
+			for _, sentence := range completeSentences {
+				o.mu.Lock()
+				interrupted := o.interrupt
+				o.mu.Unlock()
+				if interrupted {
+					return
 				}
 				cleanedText := models.CleanText(sentence.Text)
 				if cleanedText == "" {
-					continue // Skip empty text after cleaning
+					continue
 				}
 				o.logger.Debug("calling Speak with sentence", "sent", cleanedText)
 				if err := o.Speak(cleanedText); err != nil {
@@ -338,24 +340,28 @@ func (o *GoogleTranslateOrator) readroutine() {
 				continue
 			}
 			text := o.textBuffer.String()
-			o.mu.Unlock()
 			sentences := tokenizer.Tokenize(text)
 			o.logger.Debug("adding chunk", "chunk", chunk, "text", text, "sen-len", len(sentences))
-			for i, sentence := range sentences {
-				if i == len(sentences)-1 { // last sentence
-					o.mu.Lock()
-					o.textBuffer.Reset()
-					_, err := o.textBuffer.WriteString(sentence.Text)
-					o.mu.Unlock()
-					if err != nil {
-						o.logger.Warn("failed to write to stringbuilder", "error", err)
-						continue
-					}
-					continue // if only one (often incomplete) sentence; wait for next chunk
+			if len(sentences) <= 1 {
+				o.mu.Unlock()
+				continue
+			}
+			completeSentences := sentences[:len(sentences)-1]
+			remaining := sentences[len(sentences)-1].Text
+			o.textBuffer.Reset()
+			o.textBuffer.WriteString(remaining)
+			o.mu.Unlock()
+
+			for _, sentence := range completeSentences {
+				o.mu.Lock()
+				interrupted := o.interrupt
+				o.mu.Unlock()
+				if interrupted {
+					return
 				}
 				cleanedText := models.CleanText(sentence.Text)
 				if cleanedText == "" {
-					continue // Skip empty text after cleaning
+					continue
 				}
 				o.logger.Debug("calling Speak with sentence", "sent", cleanedText)
 				if err := o.Speak(cleanedText); err != nil {
