@@ -153,7 +153,7 @@ This document explains how to set up and configure the application using the `co
 
 ### Character-Specific Context Settings (/completion only)
 
-[character specific context page for more info](docs/char-specific-context.md)
+[character specific context page for more info](./char-specific-context.md)
 
 #### CharSpecificContextEnabled (`true`)
 - Enable or disable character-specific context functionality.
