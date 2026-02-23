@@ -105,12 +105,13 @@ type ImageContentPart struct {
 
 // RoleMsg represents a message with content that can be either a simple string or structured content parts
 type RoleMsg struct {
-	Role            string   `json:"role"`
-	Content         string   `json:"-"`
-	ContentParts    []any    `json:"-"`
-	ToolCallID      string   `json:"tool_call_id,omitempty"` // For tool response messages
-	KnownTo         []string `json:"known_to,omitempty"`
-	hasContentParts bool     // Flag to indicate which content type to marshal
+	Role            string         `json:"role"`
+	Content         string         `json:"-"`
+	ContentParts    []any          `json:"-"`
+	ToolCallID      string         `json:"tool_call_id,omitempty"` // For tool response messages
+	KnownTo         []string       `json:"known_to,omitempty"`
+	Stats           *ResponseStats `json:"-"` // Display-only, not persisted
+	hasContentParts bool           // Flag to indicate which content type to marshal
 }
 
 // MarshalJSON implements custom JSON marshaling for RoleMsg
@@ -183,13 +184,11 @@ func (m *RoleMsg) UnmarshalJSON(data []byte) error {
 }
 
 func (m *RoleMsg) ToText(i int) string {
-	// Convert content to string representation
 	var contentStr string
 	var imageIndicators []string
 	if !m.hasContentParts {
 		contentStr = m.Content
 	} else {
-		// For structured content, collect text parts and image indicators
 		var textParts []string
 		for _, part := range m.ContentParts {
 			switch p := part.(type) {
@@ -198,7 +197,6 @@ func (m *RoleMsg) ToText(i int) string {
 					textParts = append(textParts, p.Text)
 				}
 			case ImageContentPart:
-				// Collect image indicator
 				displayPath := p.Path
 				if displayPath == "" {
 					displayPath = "image"
@@ -216,7 +214,6 @@ func (m *RoleMsg) ToText(i int) string {
 							}
 						}
 					case "image_url":
-						// Handle unmarshaled image content
 						var displayPath string
 						if pathVal, pathExists := p["path"]; pathExists {
 							if pathStr, isStr := pathVal.(string); isStr && pathStr != "" {
@@ -233,23 +230,20 @@ func (m *RoleMsg) ToText(i int) string {
 		}
 		contentStr = strings.Join(textParts, " ") + " "
 	}
-	// check if already has role annotation (/completion makes them)
-	// in that case remove it, and then add to icon
-	// since icon and content are separated by \n
 	contentStr, _ = strings.CutPrefix(contentStr, m.Role+":")
-	// if !strings.HasPrefix(contentStr, m.Role+":") {
 	icon := fmt.Sprintf("(%d) <%s>: ", i, m.Role)
-	// }
-	// Build final message with image indicators before text
 	var finalContent strings.Builder
 	if len(imageIndicators) > 0 {
-		// Add each image indicator on its own line
 		for _, indicator := range imageIndicators {
 			finalContent.WriteString(indicator)
 			finalContent.WriteString("\n")
 		}
 	}
 	finalContent.WriteString(contentStr)
+	if m.Stats != nil {
+		finalContent.WriteString(fmt.Sprintf("\n[gray::i][%d tok, %.1fs, %.1f t/s][-:-:-]",
+			m.Stats.Tokens, m.Stats.Duration, m.Stats.TokensPerSec))
+	}
 	textMsg := fmt.Sprintf("[-:-:b]%s[-:-:-]\n%s\n", icon, finalContent.String())
 	return strings.ReplaceAll(textMsg, "\n\n", "\n")
 }
@@ -331,6 +325,7 @@ func (m *RoleMsg) Copy() RoleMsg {
 		ContentParts:    m.ContentParts,
 		ToolCallID:      m.ToolCallID,
 		KnownTo:         m.KnownTo,
+		Stats:           m.Stats,
 		hasContentParts: m.hasContentParts,
 	}
 }
@@ -641,6 +636,12 @@ func (lcp *LCPModels) ListModels() []string {
 		resp = append(resp, model.ID)
 	}
 	return resp
+}
+
+type ResponseStats struct {
+	Tokens       int
+	Duration     float64
+	TokensPerSec float64
 }
 
 type ChatRoundReq struct {
