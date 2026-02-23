@@ -110,7 +110,7 @@ type RoleMsg struct {
 	ContentParts    []any          `json:"-"`
 	ToolCallID      string         `json:"tool_call_id,omitempty"` // For tool response messages
 	KnownTo         []string       `json:"known_to,omitempty"`
-	Stats           *ResponseStats `json:"-"` // Display-only, not persisted
+	Stats           *ResponseStats `json:"stats"`
 	hasContentParts bool           // Flag to indicate which content type to marshal
 }
 
