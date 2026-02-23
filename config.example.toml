@@ -12,7 +12,7 @@ OpenRouterChatAPI = "https://openrouter.ai/api/v1/chat/completions"
 # OpenRouterToken = ""
 # embeddings
 EmbedURL = "http://localhost:8082/v1/embeddings"
-HFToken = false
+HFToken = ""
 #
 ShowSys = true
 LogFile = "log.txt"
