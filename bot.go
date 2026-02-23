@@ -855,7 +855,14 @@ func chatRound(r *models.ChatRoundReq) error {
 		chatBody.Messages = append(chatBody.Messages, models.RoleMsg{
 			Role: botPersona, Content: "",
 		})
-		fmt.Fprintf(textView, "\n[-:-:b](%d) ", msgIdx)
+		nl := "\n\n"
+		prevText := textView.GetText(true)
+		if strings.HasSuffix(prevText, nl) {
+			nl = ""
+		} else if strings.HasSuffix(prevText, "\n") {
+			nl = "\n"
+		}
+		fmt.Fprintf(textView, "%s[-:-:b](%d) ", nl, msgIdx)
 		fmt.Fprint(textView, roleToIcon(botPersona))
 		fmt.Fprint(textView, "[-:-:-]\n")
 		if cfg.ThinkUse && !strings.Contains(cfg.CurrentAPI, "v1") {
