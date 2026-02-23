@@ -1198,6 +1198,8 @@ func findCall(msg, toolCall string) bool {
 		chatRoundChan <- crr
 		return true
 	}
+	// Show tool call progress indicator before execution
+	fmt.Fprintf(textView, "\n[yellow::i][tool: %s...][-:-:-]", fc.Name)
 	resp := callToolWithAgent(fc.Name, fc.Args)
 	toolMsg := string(resp) // Remove the "tool response: " prefix and %+v formatting
 	logger.Info("llm used a tool call", "tool_name", fc.Name, "too_args", fc.Args, "id", fc.ID, "tool_resp", toolMsg)
