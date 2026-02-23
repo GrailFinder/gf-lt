@@ -65,16 +65,19 @@ func showModelSelectionPopup() {
 		chatBody.Model = modelName
 		cfg.CurrentModel = chatBody.Model
 		pages.RemovePage("modelSelectionPopup")
+		app.SetFocus(textArea)
 		updateCachedModelColor()
 		updateStatusLine()
 	})
 	modelListWidget.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		if event.Key() == tcell.KeyEscape {
 			pages.RemovePage("modelSelectionPopup")
+			app.SetFocus(textArea)
 			return nil
 		}
 		if event.Key() == tcell.KeyRune && event.Rune() == 'x' {
 			pages.RemovePage("modelSelectionPopup")
+			app.SetFocus(textArea)
 			return nil
 		}
 		return event
@@ -160,6 +163,7 @@ func showAPILinkSelectionPopup() {
 			cfg.CurrentModel = chatBody.Model
 		}
 		pages.RemovePage("apiLinkSelectionPopup")
+		app.SetFocus(textArea)
 		choseChunkParser()
 		updateCachedModelColor()
 		updateStatusLine()
@@ -167,10 +171,12 @@ func showAPILinkSelectionPopup() {
 	apiListWidget.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		if event.Key() == tcell.KeyEscape {
 			pages.RemovePage("apiLinkSelectionPopup")
+			app.SetFocus(textArea)
 			return nil
 		}
 		if event.Key() == tcell.KeyRune && event.Rune() == 'x' {
 			pages.RemovePage("apiLinkSelectionPopup")
+			app.SetFocus(textArea)
 			return nil
 		}
 		return event
@@ -230,6 +236,7 @@ func showUserRoleSelectionPopup() {
 		textView.SetText(chatToText(filtered, cfg.ShowSys))
 		// Remove the popup page
 		pages.RemovePage("userRoleSelectionPopup")
+		app.SetFocus(textArea)
 		// Update the status line to reflect the change
 		updateStatusLine()
 		colorText()
@@ -237,10 +244,12 @@ func showUserRoleSelectionPopup() {
 	roleListWidget.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		if event.Key() == tcell.KeyEscape {
 			pages.RemovePage("userRoleSelectionPopup")
+			app.SetFocus(textArea)
 			return nil
 		}
 		if event.Key() == tcell.KeyRune && event.Rune() == 'x' {
 			pages.RemovePage("userRoleSelectionPopup")
+			app.SetFocus(textArea)
 			return nil
 		}
 		return event
@@ -303,16 +312,19 @@ func showBotRoleSelectionPopup() {
 		cfg.WriteNextMsgAsCompletionAgent = mainText
 		// Remove the popup page
 		pages.RemovePage("botRoleSelectionPopup")
+		app.SetFocus(textArea)
 		// Update the status line to reflect the change
 		updateStatusLine()
 	})
 	roleListWidget.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		if event.Key() == tcell.KeyEscape {
 			pages.RemovePage("botRoleSelectionPopup")
+			app.SetFocus(textArea)
 			return nil
 		}
 		if event.Key() == tcell.KeyRune && event.Rune() == 'x' {
 			pages.RemovePage("botRoleSelectionPopup")
+			app.SetFocus(textArea)
 			return nil
 		}
 		return event
@@ -364,14 +376,17 @@ func showFileCompletionPopup(filter string) {
 			textArea.SetText(before+mainText, true)
 		}
 		pages.RemovePage("fileCompletionPopup")
+		app.SetFocus(textArea)
 	})
 	widget.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		if event.Key() == tcell.KeyEscape {
 			pages.RemovePage("fileCompletionPopup")
+			app.SetFocus(textArea)
 			return nil
 		}
 		if event.Key() == tcell.KeyRune && event.Rune() == 'x' {
 			pages.RemovePage("fileCompletionPopup")
+			app.SetFocus(textArea)
 			return nil
 		}
 		return event
@@ -484,14 +499,17 @@ func showColorschemeSelectionPopup() {
 		}
 		// Remove the popup page
 		pages.RemovePage("colorschemeSelectionPopup")
+		app.SetFocus(textArea)
 	})
 	schemeListWidget.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		if event.Key() == tcell.KeyEscape {
 			pages.RemovePage("colorschemeSelectionPopup")
+			app.SetFocus(textArea)
 			return nil
 		}
 		if event.Key() == tcell.KeyRune && event.Rune() == 'x' {
 			pages.RemovePage("colorschemeSelectionPopup")
+			app.SetFocus(textArea)
 			return nil
 		}
 		return event

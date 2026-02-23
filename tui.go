@@ -15,6 +15,11 @@ import (
 	"github.com/rivo/tview"
 )
 
+func isFullScreenPageActive() bool {
+	name, _ := pages.GetFrontPage()
+	return name != "main"
+}
+
 var (
 	app                *tview.Application
 	pages              *tview.Pages
@@ -525,6 +530,9 @@ func init() {
 			return nil
 		}
 		if event.Key() == tcell.KeyRune && event.Rune() == 'i' && event.Modifiers()&tcell.ModAlt != 0 {
+			if isFullScreenPageActive() {
+				return event
+			}
 			showColorschemeSelectionPopup()
 			return nil
 		}
@@ -731,6 +739,9 @@ func init() {
 			return nil
 		}
 		if event.Key() == tcell.KeyCtrlL {
+			if isFullScreenPageActive() {
+				return event
+			}
 			// Show model selection popup instead of rotating models
 			showModelSelectionPopup()
 			return nil
@@ -744,6 +755,9 @@ func init() {
 			return nil
 		}
 		if event.Key() == tcell.KeyCtrlV {
+			if isFullScreenPageActive() {
+				return event
+			}
 			// Show API link selection popup instead of rotating APIs
 			showAPILinkSelectionPopup()
 			return nil
@@ -850,11 +864,17 @@ func init() {
 			return nil
 		}
 		if event.Key() == tcell.KeyCtrlQ {
+			if isFullScreenPageActive() {
+				return event
+			}
 			// Show user role selection popup instead of cycling through roles
 			showUserRoleSelectionPopup()
 			return nil
 		}
 		if event.Key() == tcell.KeyCtrlX {
+			if isFullScreenPageActive() {
+				return event
+			}
 			// Show bot role selection popup instead of cycling through roles
 			showBotRoleSelectionPopup()
 			return nil
