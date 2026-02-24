@@ -826,8 +826,26 @@ func chatWatcher(ctx context.Context) {
 	}
 }
 
+// inpired by https://github.com/rivo/tview/issues/225
+func showSpinner() {
+	spinners := []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
+	var i int
+	for botRespMode {
+		time.Sleep(100 * time.Millisecond)
+		spin := i % len(spinners)
+		app.QueueUpdateDraw(func() {
+			textArea.SetTitle(spinners[spin] + " input")
+		})
+		i++
+	}
+	app.QueueUpdateDraw(func() {
+		textArea.SetTitle("input")
+	})
+}
+
 func chatRound(r *models.ChatRoundReq) error {
 	botRespMode = true
+	go showSpinner()
 	updateStatusLine()
 	botPersona := cfg.AssistantRole
 	if cfg.WriteNextMsgAsCompletionAgent != "" {
