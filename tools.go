@@ -16,6 +16,7 @@ import (
 	"sync"
 	"time"
 
+	"gf-lt/rag"
 	"github.com/GrailFinder/searchagent/searcher"
 )
 
@@ -58,9 +59,9 @@ Your current tools:
 "when_to_use": "when asked to search the web for information; returns clean summary without html,css and other web elements; limit is optional (default 3)"
 },
 {
-"name":"websearch_raw",
+"name":"rag_search",
 "args": ["query", "limit"],
-"when_to_use": "when asked to search the web for information; returns raw data as is without processing; limit is optional (default 3)"
+"when_to_use": "when asked to search the local document database for information; performs query refinement, semantic search, reranking, and synthesis; returns clean summary with sources; limit is optional (default 3)"
 },
 {
 "name":"read_url",
@@ -146,6 +147,7 @@ under the topic: Adam's number is stored:
 After that you are free to respond to the user.
 `
 	webSearchSysPrompt = `Summarize the web search results, extracting key information and presenting a concise answer. Provide sources and URLs where relevant.`
+	ragSearchSysPrompt = `Synthesize the document search results, extracting key information and presenting a concise answer. Provide sources and document IDs where relevant.`
 	readURLSysPrompt   = `Extract and summarize the content from the webpage. Provide key information, main points, and any relevant details.`
 	summarySysPrompt   = `Please provide a concise summary of the following conversation. Focus on key points, decisions, and actions. Provide only the summary, no additional commentary.`
 	basicCard          = &models.CharCard{
@@ -170,6 +172,10 @@ func init() {
 		panic("failed to init seachagent; error: " + err.Error())
 	}
 	WebSearcher = sa
+
+	if err := rag.Init(cfg, logger, store); err != nil {
+		logger.Warn("failed to init rag; rag_search tool will not be available", "error", err)
+	}
 }
 
 // getWebAgentClient returns a singleton AgentClient for web agents.
@@ -196,6 +202,8 @@ func getWebAgentClient() *agent.AgentClient {
 func registerWebAgents() {
 	webAgentsOnce.Do(func() {
 		client := getWebAgentClient()
+		// Register rag_search agent
+		agent.Register("rag_search", agent.NewWebAgentB(client, ragSearchSysPrompt))
 		// Register websearch agent
 		agent.Register("websearch", agent.NewWebAgentB(client, webSearchSysPrompt))
 		// Register read_url agent
@@ -233,6 +241,48 @@ func websearch(args map[string]string) []byte {
 	data, err := json.Marshal(resp)
 	if err != nil {
 		msg := "failed to marshal search result; error: " + err.Error()
+		logger.Error(msg)
+		return []byte(msg)
+	}
+	return data
+}
+
+// rag search (searches local document database)
+func ragsearch(args map[string]string) []byte {
+	query, ok := args["query"]
+	if !ok || query == "" {
+		msg := "query not provided to rag_search tool"
+		logger.Error(msg)
+		return []byte(msg)
+	}
+	limitS, ok := args["limit"]
+	if !ok || limitS == "" {
+		limitS = "3"
+	}
+	limit, err := strconv.Atoi(limitS)
+	if err != nil || limit == 0 {
+		logger.Warn("ragsearch limit; passed bad value; setting to default (3)",
+			"limit_arg", limitS, "error", err)
+		limit = 3
+	}
+
+	ragInstance := rag.GetInstance()
+	if ragInstance == nil {
+		msg := "rag not initialized; rag_search tool is not available"
+		logger.Error(msg)
+		return []byte(msg)
+	}
+
+	results, err := ragInstance.Search(query, limit)
+	if err != nil {
+		msg := "rag search failed; error: " + err.Error()
+		logger.Error(msg)
+		return []byte(msg)
+	}
+
+	data, err := json.Marshal(results)
+	if err != nil {
+		msg := "failed to marshal rag search result; error: " + err.Error()
 		logger.Error(msg)
 		return []byte(msg)
 	}
@@ -997,6 +1047,7 @@ var fnMap = map[string]fnSig{
 	"recall":            recall,
 	"recall_topics":     recallTopics,
 	"memorise":          memorise,
+	"rag_search":        ragsearch,
 	"websearch":         websearch,
 	"websearch_raw":     websearchRaw,
 	"read_url":          readURL,
@@ -1033,6 +1084,28 @@ func callToolWithAgent(name string, args map[string]string) []byte {
 
 // openai style def
 var baseTools = []models.Tool{
+	// rag_search
+	models.Tool{
+		Type: "function",
+		Function: models.ToolFunc{
+			Name:        "rag_search",
+			Description: "Search local document database given query, limit of sources (default 3). Performs query refinement, semantic search, reranking, and synthesis.",
+			Parameters: models.ToolFuncParams{
+				Type:     "object",
+				Required: []string{"query", "limit"},
+				Properties: map[string]models.ToolArgProps{
+					"query": models.ToolArgProps{
+						Type:        "string",
+						Description: "search query",
+					},
+					"limit": models.ToolArgProps{
+						Type:        "string",
+						Description: "limit of the document results",
+					},
+				},
+			},
+		},
+	},
 	// websearch
 	models.Tool{
 		Type: "function",
