@@ -165,9 +165,6 @@ Those could be switched in program, but also bould be setup in config.
 #### ToolUse
 - Enable or disable explanation of tools to llm, so it could use them.
 
-#### ThinkUse
-- Enable or disable insertion of  JsonSerializerToken at the beggining of llm resp.
-
 ### StripThinkingFromAPI (`true`)
 - Strip thinking blocks from messages before sending to LLM. Keeps them in chat history for local viewing but reduces token usage in API calls.
 

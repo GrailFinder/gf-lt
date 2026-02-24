@@ -569,7 +569,6 @@ func sendMsgToLLM(body io.Reader) {
 		streamDone <- true
 		return
 	}
-
 	// Check if the initial response is an error before starting to stream
 	if resp.StatusCode >= 400 {
 		// Read the response body to get detailed error information
@@ -584,7 +583,6 @@ func sendMsgToLLM(body io.Reader) {
 			streamDone <- true
 			return
 		}
-
 		// Parse the error response for detailed information
 		detailedError := extractDetailedErrorFromBytes(bodyBytes, resp.StatusCode)
 		logger.Error("API returned error status", "status_code", resp.StatusCode, "detailed_error", detailedError)
@@ -710,7 +708,6 @@ func sendMsgToLLM(body io.Reader) {
 				tokenCount++
 			}
 		}
-
 		// When we get content and have been streaming reasoning, close the thinking block
 		if chunk.Chunk != "" && hasReasoning && !reasoningSent {
 			// Close the thinking block before sending actual content
@@ -718,7 +715,6 @@ func sendMsgToLLM(body io.Reader) {
 			tokenCount++
 			reasoningSent = true
 		}
-
 		// bot sends way too many \n
 		answerText = strings.ReplaceAll(chunk.Chunk, "\n\n", "\n")
 		// Accumulate text to check for stop strings that might span across chunks
@@ -764,12 +760,10 @@ func chatRagUse(qText string) (string, error) {
 		questions[i] = q.Text
 		logger.Debug("RAG question extracted", "index", i, "question", q.Text)
 	}
-
 	if len(questions) == 0 {
 		logger.Warn("No questions extracted from query text", "query", qText)
 		return "No related results from RAG vector storage.", nil
 	}
-
 	respVecs := []models.VectorRow{}
 	for i, q := range questions {
 		logger.Debug("Processing RAG question", "index", i, "question", q)
@@ -779,7 +773,6 @@ func chatRagUse(qText string) (string, error) {
 			continue
 		}
 		logger.Debug("Got embeddings for question", "index", i, "question_len", len(q), "embedding_len", len(emb))
-
 		// Create EmbeddingResp struct for the search
 		embeddingResp := &models.EmbeddingResp{
 			Embedding: emb,
@@ -793,7 +786,6 @@ func chatRagUse(qText string) (string, error) {
 		logger.Debug("RAG search returned vectors", "index", i, "question", q, "vector_count", len(vecs))
 		respVecs = append(respVecs, vecs...)
 	}
-
 	// get raw text
 	resps := []string{}
 	logger.Debug("RAG query final results", "total_vecs_found", len(respVecs))
@@ -801,12 +793,10 @@ func chatRagUse(qText string) (string, error) {
 		resps = append(resps, rv.RawText)
 		logger.Debug("RAG result", "slug", rv.Slug, "filename", rv.FileName, "raw_text_len", len(rv.RawText))
 	}
-
 	if len(resps) == 0 {
 		logger.Info("No RAG results found for query", "original_query", qText, "question_count", len(questions))
 		return "No related results from RAG vector storage.", nil
 	}
-
 	result := strings.Join(resps, "\n")
 	logger.Debug("RAG query completed", "result_len", len(result), "response_count", len(resps))
 	return result, nil
@@ -836,7 +826,10 @@ func chatRound(r *models.ChatRoundReq) error {
 	if cfg.WriteNextMsgAsCompletionAgent != "" {
 		botPersona = cfg.WriteNextMsgAsCompletionAgent
 	}
-	defer func() { botRespMode = false }()
+	defer func() {
+		botRespMode = false
+		ClearImageAttachment()
+	}()
 	// check that there is a model set to use if is not local
 	choseChunkParser()
 	reader, err := chunkParser.FormMsg(r.UserMsg, r.Role, r.Resume)
@@ -862,13 +855,7 @@ func chatRound(r *models.ChatRoundReq) error {
 		} else if strings.HasSuffix(prevText, "\n") {
 			nl = "\n"
 		}
-		fmt.Fprintf(textView, "%s[-:-:b](%d) ", nl, msgIdx)
-		fmt.Fprint(textView, roleToIcon(botPersona))
-		fmt.Fprint(textView, "[-:-:-]\n")
-		if cfg.ThinkUse && !strings.Contains(cfg.CurrentAPI, "v1") {
-			// fmt.Fprint(textView, "<think>")
-			chunkChan <- "<think>"
-		}
+		fmt.Fprintf(textView, "%s[-:-:b](%d) %s[-:-:-]\n", nl, msgIdx, roleToIcon(botPersona))
 	} else {
 		msgIdx = len(chatBody.Messages) - 1
 	}
@@ -1246,7 +1233,6 @@ func chatToTextSlice(messages []models.RoleMsg, showSys bool) []string {
 func chatToText(messages []models.RoleMsg, showSys bool) string {
 	s := chatToTextSlice(messages, showSys)
 	text := strings.Join(s, "\n")
-
 	// Collapse thinking blocks if enabled
 	if thinkingCollapsed {
 		text = thinkRE.ReplaceAllStringFunc(text, func(match string) string {
@@ -1270,7 +1256,6 @@ func chatToText(messages []models.RoleMsg, showSys bool) string {
 			}
 		}
 	}
-
 	return text
 }
 

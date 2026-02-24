@@ -1,4 +1,4 @@
-.PHONY: setconfig run lint setup-whisper build-whisper download-whisper-model docker-up docker-down docker-logs noextra-run
+.PHONY: setconfig run lint setup-whisper build-whisper download-whisper-model docker-up docker-down docker-logs noextra-run installdelve checkdelve
 
 run: setconfig
 	go build -tags extra -o gf-lt && ./gf-lt
@@ -14,6 +14,12 @@ noextra-run: setconfig
 
 setconfig:
 	find config.toml &>/dev/null || cp config.example.toml config.toml
+
+installdelve:
+	go install github.com/go-delve/delve/cmd/dlv@latest
+
+checkdelve:
+	which dlv &>/dev/null || installdelve
 
 lint: ## Run linters. Use make install-linters first.
 	golangci-lint run -c .golangci.yml ./...

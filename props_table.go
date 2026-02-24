@@ -115,9 +115,6 @@ func makePropsTable(props map[string]float32) *tview.Table {
 		row++
 	}
 	// Add checkboxes
-	addCheckboxRow("Insert <think> tag (/completion only)", cfg.ThinkUse, func(checked bool) {
-		cfg.ThinkUse = checked
-	})
 	addCheckboxRow("RAG use", cfg.RAGEnabled, func(checked bool) {
 		cfg.RAGEnabled = checked
 	})

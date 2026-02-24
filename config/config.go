@@ -18,7 +18,6 @@ type Config struct {
 	UserRole                      string `toml:"UserRole"`
 	ToolRole                      string `toml:"ToolRole"`
 	ToolUse                       bool   `toml:"ToolUse"`
-	ThinkUse                      bool   `toml:"ThinkUse"`
 	StripThinkingFromAPI          bool   `toml:"StripThinkingFromAPI"`
 	ReasoningEffort               string `toml:"ReasoningEffort"`
 	AssistantRole                 string `toml:"AssistantRole"`

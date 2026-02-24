@@ -995,13 +995,6 @@ func init() {
 				}
 				// go chatRound(msgText, persona, textView, false, false)
 				chatRoundChan <- &models.ChatRoundReq{Role: persona, UserMsg: msgText}
-				// Also clear any image attachment after sending the message
-				go func() {
-					// Wait a short moment for the message to be processed, then clear the image attachment
-					// This allows the image to be sent with the current message if it was attached
-					// But clears it for the next message
-					ClearImageAttachment()
-				}()
 			}
 			return nil
 		}

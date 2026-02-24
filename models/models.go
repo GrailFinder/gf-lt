@@ -241,8 +241,7 @@ func (m *RoleMsg) ToText(i int) string {
 	}
 	finalContent.WriteString(contentStr)
 	if m.Stats != nil {
-		finalContent.WriteString(fmt.Sprintf("\n[gray::i][%d tok, %.1fs, %.1f t/s][-:-:-]",
-			m.Stats.Tokens, m.Stats.Duration, m.Stats.TokensPerSec))
+		fmt.Fprintf(&finalContent, "\n[gray::i][%d tok, %.1fs, %.1f t/s][-:-:-]", m.Stats.Tokens, m.Stats.Duration, m.Stats.TokensPerSec)
 	}
 	textMsg := fmt.Sprintf("[-:-:b]%s[-:-:-]\n%s\n", icon, finalContent.String())
 	return strings.ReplaceAll(textMsg, "\n\n", "\n")

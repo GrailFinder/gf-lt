@@ -184,9 +184,6 @@ func (lcp LCPCompletion) FormMsg(msg, role string, resume bool) (io.Reader, erro
 		botMsgStart := "\n" + botPersona + ":\n"
 		prompt += botMsgStart
 	}
-	if cfg.ThinkUse && !cfg.ToolUse {
-		prompt += "<think>"
-	}
 	logger.Debug("checking prompt for /completion", "tool_use", cfg.ToolUse,
 		"msg", msg, "resume", resume, "prompt", prompt, "multimodal_data_count", len(multimodalData))
 	payload := models.NewLCPReq(prompt, chatBody.Model, multimodalData,
@@ -423,9 +420,6 @@ func (ds DeepSeekerCompletion) FormMsg(msg, role string, resume bool) (io.Reader
 		botMsgStart := "\n" + botPersona + ":\n"
 		prompt += botMsgStart
 	}
-	if cfg.ThinkUse && !cfg.ToolUse {
-		prompt += "<think>"
-	}
 	logger.Debug("checking prompt for /completion", "tool_use", cfg.ToolUse,
 		"msg", msg, "resume", resume, "prompt", prompt)
 	payload := models.NewDSCompletionReq(prompt, chatBody.Model,
@@ -588,9 +582,6 @@ func (or OpenRouterCompletion) FormMsg(msg, role string, resume bool) (io.Reader
 	if !resume {
 		botMsgStart := "\n" + botPersona + ":\n"
 		prompt += botMsgStart
-	}
-	if cfg.ThinkUse && !cfg.ToolUse {
-		prompt += "<think>"
 	}
 	stopSlice := chatBody.MakeStopSliceExcluding("", listChatRoles())
 	logger.Debug("checking prompt for /completion", "tool_use", cfg.ToolUse,
