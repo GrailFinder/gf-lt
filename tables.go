@@ -236,9 +236,20 @@ func makeChatTable(chatMap map[string]models.Chat) *tview.Table {
 }
 
 // nolint:unused
+func formatSize(size int64) string {
+	units := []string{"B", "KB", "MB", "GB", "TB"}
+	i := 0
+	s := float64(size)
+	for s >= 1024 && i < len(units)-1 {
+		s /= 1024
+		i++
+	}
+	return fmt.Sprintf("%.1f%s", s, units[i])
+}
+
 func makeRAGTable(fileList []string) *tview.Flex {
 	actions := []string{"load", "delete"}
-	rows, cols := len(fileList), len(actions)+1
+	rows, cols := len(fileList), len(actions)+2
 	fileTable := tview.NewTable().
 		SetBorders(true)
 	longStatusView := tview.NewTextView()
@@ -252,39 +263,62 @@ func makeRAGTable(fileList []string) *tview.Flex {
 		AddItem(fileTable, 0, 60, true)
 	// Add the exit option as the first row (row 0)
 	fileTable.SetCell(0, 0,
-		tview.NewTableCell("Exit RAG manager").
+		tview.NewTableCell("File Name").
 			SetTextColor(tcell.ColorWhite).
 			SetAlign(tview.AlignCenter).
 			SetSelectable(false))
 	fileTable.SetCell(0, 1,
-		tview.NewTableCell("(Close without action)").
-			SetTextColor(tcell.ColorGray).
+		tview.NewTableCell("Preview").
+			SetTextColor(tcell.ColorWhite).
 			SetAlign(tview.AlignCenter).
 			SetSelectable(false))
 	fileTable.SetCell(0, 2,
-		tview.NewTableCell("exit").
-			SetTextColor(tcell.ColorGray).
-			SetAlign(tview.AlignCenter))
+		tview.NewTableCell("Load").
+			SetTextColor(tcell.ColorWhite).
+			SetAlign(tview.AlignCenter).
+			SetSelectable(false))
+	fileTable.SetCell(0, 3,
+		tview.NewTableCell("Delete").
+			SetTextColor(tcell.ColorWhite).
+			SetAlign(tview.AlignCenter).
+			SetSelectable(false))
 	// Add the file rows starting from row 1
 	for r := 0; r < rows; r++ {
 		for c := 0; c < cols; c++ {
 			color := tcell.ColorWhite
 			switch {
-			case c < 1:
-				fileTable.SetCell(r+1, c, // +1 to account for the exit row at index 0
+			case c == 0:
+				fileTable.SetCell(r+1, c,
 					tview.NewTableCell(fileList[r]).
 						SetTextColor(color).
 						SetAlign(tview.AlignCenter).
 						SetSelectable(false))
-			case c == 1: // Action description column - not selectable
-				fileTable.SetCell(r+1, c, // +1 to account for the exit row at index 0
-					tview.NewTableCell("(Action)").
+			case c == 1:
+				fpath := path.Join(cfg.RAGDir, fileList[r])
+				if fi, err := os.Stat(fpath); err == nil {
+					size := fi.Size()
+					modTime := fi.ModTime()
+					preview := fmt.Sprintf("%s | %s", formatSize(size), modTime.Format("2006-01-02 15:04"))
+					fileTable.SetCell(r+1, c,
+						tview.NewTableCell(preview).
+							SetTextColor(color).
+							SetAlign(tview.AlignCenter).
+							SetSelectable(false))
+				} else {
+					fileTable.SetCell(r+1, c,
+						tview.NewTableCell("error").
+							SetTextColor(color).
+							SetAlign(tview.AlignCenter).
+							SetSelectable(false))
+				}
+			case c == 2:
+				fileTable.SetCell(r+1, c,
+					tview.NewTableCell("load").
 						SetTextColor(color).
-						SetAlign(tview.AlignCenter).
-						SetSelectable(false))
-			default: // Action button column - selectable
-				fileTable.SetCell(r+1, c, // +1 to account for the exit row at index 0
-					tview.NewTableCell(actions[c-1]).
+						SetAlign(tview.AlignCenter))
+			default:
+				fileTable.SetCell(r+1, c,
+					tview.NewTableCell("delete").
 						SetTextColor(color).
 						SetAlign(tview.AlignCenter))
 			}
@@ -318,7 +352,7 @@ func makeRAGTable(fileList []string) *tview.Flex {
 	}()
 	fileTable.Select(0, 0).
 		SetFixed(1, 1).
-		SetSelectable(true, false).
+		SetSelectable(true, true).
 		SetSelectedStyle(tcell.StyleDefault.Background(tcell.ColorGray).Foreground(tcell.ColorWhite)).
 		SetDoneFunc(func(key tcell.Key) {
 			if key == tcell.KeyEsc || key == tcell.KeyF1 || key == tcell.Key('x') || key == tcell.KeyCtrlX {
@@ -335,6 +369,8 @@ func makeRAGTable(fileList []string) *tview.Flex {
 		}
 		// defer pages.RemovePage(RAGPage)
 		tc := fileTable.GetCell(row, column)
+		tc.SetTextColor(tcell.ColorRed)
+		fileTable.SetSelectable(false, false)
 		// Check if the selected row is the exit row (row 0) - do this first to avoid index issues
 		if row == 0 {
 			pages.RemovePage(RAGPage)
@@ -385,7 +421,7 @@ func makeRAGTable(fileList []string) *tview.Flex {
 
 func makeLoadedRAGTable(fileList []string) *tview.Flex {
 	actions := []string{"delete"}
-	rows, cols := len(fileList), len(actions)+1
+	rows, cols := len(fileList), len(actions)+2
 	// Add 1 extra row for the "exit" option at the top
 	fileTable := tview.NewTable().
 		SetBorders(true)
@@ -400,39 +436,61 @@ func makeLoadedRAGTable(fileList []string) *tview.Flex {
 		AddItem(fileTable, 0, 60, true)
 	// Add the exit option as the first row (row 0)
 	fileTable.SetCell(0, 0,
-		tview.NewTableCell("Exit Loaded Files manager").
+		tview.NewTableCell("File Name").
 			SetTextColor(tcell.ColorWhite).
 			SetAlign(tview.AlignCenter).
 			SetSelectable(false))
 	fileTable.SetCell(0, 1,
-		tview.NewTableCell("(Close without action)").
-			SetTextColor(tcell.ColorGray).
+		tview.NewTableCell("Preview").
+			SetTextColor(tcell.ColorWhite).
 			SetAlign(tview.AlignCenter).
 			SetSelectable(false))
 	fileTable.SetCell(0, 2,
-		tview.NewTableCell("exit").
-			SetTextColor(tcell.ColorGray).
-			SetAlign(tview.AlignCenter))
+		tview.NewTableCell("Load").
+			SetTextColor(tcell.ColorWhite).
+			SetAlign(tview.AlignCenter).
+			SetSelectable(false))
+	fileTable.SetCell(0, 3,
+		tview.NewTableCell("Delete").
+			SetTextColor(tcell.ColorWhite).
+			SetAlign(tview.AlignCenter).
+			SetSelectable(false))
 	// Add the file rows starting from row 1
 	for r := 0; r < rows; r++ {
 		for c := 0; c < cols; c++ {
 			color := tcell.ColorWhite
 			switch {
-			case c < 1:
-				fileTable.SetCell(r+1, c, // +1 to account for the exit row at index 0
+			case c == 0:
+				fileTable.SetCell(r+1, c,
 					tview.NewTableCell(fileList[r]).
 						SetTextColor(color).
 						SetAlign(tview.AlignCenter).
 						SetSelectable(false))
-			case c == 1: // Action description column - not selectable
-				fileTable.SetCell(r+1, c, // +1 to account for the exit row at index 0
-					tview.NewTableCell("(Action)").
+			case c == 1:
+				if fi, err := os.Stat(fileList[r]); err == nil {
+					size := fi.Size()
+					modTime := fi.ModTime()
+					preview := fmt.Sprintf("%s | %s", formatSize(size), modTime.Format("2006-01-02 15:04"))
+					fileTable.SetCell(r+1, c,
+						tview.NewTableCell(preview).
+							SetTextColor(color).
+							SetAlign(tview.AlignCenter).
+							SetSelectable(false))
+				} else {
+					fileTable.SetCell(r+1, c,
+						tview.NewTableCell("error").
+							SetTextColor(color).
+							SetAlign(tview.AlignCenter).
+							SetSelectable(false))
+				}
+			case c == 2:
+				fileTable.SetCell(r+1, c,
+					tview.NewTableCell("load").
 						SetTextColor(color).
-						SetAlign(tview.AlignCenter).
-						SetSelectable(false))
-			default: // Action button column - selectable
-				fileTable.SetCell(r+1, c, // +1 to account for the exit row at index 0
-					tview.NewTableCell(actions[c-1]).
+						SetAlign(tview.AlignCenter))
+			default:
+				fileTable.SetCell(r+1, c,
+					tview.NewTableCell("delete").
 						SetTextColor(color).
 						SetAlign(tview.AlignCenter))
 			}
@@ -440,7 +498,7 @@ func makeLoadedRAGTable(fileList []string) *tview.Flex {
 	}
 	fileTable.Select(0, 0).
 		SetFixed(1, 1).
-		SetSelectable(true, false).
+		SetSelectable(true, true).
 		SetSelectedStyle(tcell.StyleDefault.Background(tcell.ColorGray).Foreground(tcell.ColorWhite)).
 		SetDoneFunc(func(key tcell.Key) {
 			if key == tcell.KeyEsc || key == tcell.KeyF1 || key == tcell.Key('x') || key == tcell.KeyCtrlX {
@@ -456,6 +514,8 @@ func makeLoadedRAGTable(fileList []string) *tview.Flex {
 			return
 		}
 		tc := fileTable.GetCell(row, column)
+		tc.SetTextColor(tcell.ColorRed)
+		fileTable.SetSelectable(false, false)
 		// Check if the selected row is the exit row (row 0) - do this first to avoid index issues
 		if row == 0 {
 			pages.RemovePage(RAGLoadedPage)
@@ -533,7 +593,7 @@ func makeAgentTable(agentList []string) *tview.Table {
 	}
 	chatActTable.Select(0, 0).
 		SetFixed(1, 1).
-		SetSelectable(true, false).
+		SetSelectable(true, true).
 		SetSelectedStyle(tcell.StyleDefault.Background(tcell.ColorGray).Foreground(tcell.ColorWhite)).
 		SetDoneFunc(func(key tcell.Key) {
 			if key == tcell.KeyEsc || key == tcell.KeyF1 || key == tcell.Key('x') {
@@ -549,6 +609,8 @@ func makeAgentTable(agentList []string) *tview.Table {
 			return
 		}
 		tc := chatActTable.GetCell(row, column)
+		tc.SetTextColor(tcell.ColorRed)
+		chatActTable.SetSelectable(false, false)
 		selected := agentList[row]
 		// notification := fmt.Sprintf("chat: %s; action: %s", selectedChat, tc.Text)
 		switch tc.Text {
@@ -630,7 +692,7 @@ func makeCodeBlockTable(codeBlocks []string) *tview.Table {
 	}
 	table.Select(0, 0).
 		SetFixed(1, 1).
-		SetSelectable(true, false).
+		SetSelectable(true, true).
 		SetSelectedStyle(tcell.StyleDefault.Background(tcell.ColorGray).Foreground(tcell.ColorWhite)).
 		SetDoneFunc(func(key tcell.Key) {
 			if key == tcell.KeyEsc || key == tcell.KeyF1 || key == tcell.Key('x') {
@@ -646,6 +708,8 @@ func makeCodeBlockTable(codeBlocks []string) *tview.Table {
 			return
 		}
 		tc := table.GetCell(row, column)
+		tc.SetTextColor(tcell.ColorRed)
+		table.SetSelectable(false, false)
 		selected := codeBlocks[row]
 		// notification := fmt.Sprintf("chat: %s; action: %s", selectedChat, tc.Text)
 		switch tc.Text {
@@ -702,7 +766,7 @@ func makeImportChatTable(filenames []string) *tview.Table {
 	}
 	chatActTable.Select(0, 0).
 		SetFixed(1, 1).
-		SetSelectable(true, false).
+		SetSelectable(true, true).
 		SetSelectedStyle(tcell.StyleDefault.Background(tcell.ColorGray).Foreground(tcell.ColorWhite)).
 		SetDoneFunc(func(key tcell.Key) {
 			if key == tcell.KeyEsc || key == tcell.KeyF1 || key == tcell.Key('x') {
@@ -718,6 +782,8 @@ func makeImportChatTable(filenames []string) *tview.Table {
 			return
 		}
 		tc := chatActTable.GetCell(row, column)
+		tc.SetTextColor(tcell.ColorRed)
+		chatActTable.SetSelectable(false, false)
 		selected := filenames[row]
 		// notification := fmt.Sprintf("chat: %s; action: %s", selectedChat, tc.Text)
 		switch tc.Text {
