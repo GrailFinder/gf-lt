@@ -124,6 +124,9 @@ func LoadConfig(fn string) (*Config, error) {
 	if config.CompletionAPI != "" {
 		config.ApiLinks = append(config.ApiLinks, config.CompletionAPI)
 	}
+	if config.RAGDir == "" {
+		config.RAGDir = "ragimport"
+	}
 	// if any value is empty fill with default
 	return config, nil
 }
