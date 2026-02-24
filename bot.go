@@ -411,14 +411,21 @@ func fetchLCPModelsWithLoadStatus() ([]string, error) {
 		return nil, err
 	}
 	result := make([]string, 0, len(models.Data))
-	for _, m := range models.Data {
+	li := 0 // loaded index
+	for i, m := range models.Data {
 		modelName := m.ID
 		if m.Status.Value == "loaded" {
 			modelName = "(loaded) " + modelName
+			li = i
 		}
 		result = append(result, modelName)
 	}
-	return result, nil
+	if li == 0 {
+		return result, nil // no loaded models
+	}
+	loadedModel := result[li]
+	result = append(result[:li], result[li+1:]...)
+	return slices.Concat([]string{loadedModel}, result), nil
 }
 
 // fetchLCPModelsWithStatus returns the full LCPModels struct including status information.

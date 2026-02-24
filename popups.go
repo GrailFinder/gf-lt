@@ -51,7 +51,7 @@ func showModelSelectionPopup() {
 	// Find the current model index to set as selected
 	currentModelIndex := -1
 	for i, model := range modelList {
-		if model == chatBody.Model {
+		if strings.TrimPrefix(model, "(loaded) ") == chatBody.Model {
 			currentModelIndex = i
 		}
 		modelListWidget.AddItem(model, "", 0, nil)
