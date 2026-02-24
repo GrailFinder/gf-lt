@@ -7,6 +7,7 @@ import (
 var (
 	boolColors        = map[bool]string{true: "green", false: "red"}
 	botRespMode       = false
+	toolRunningMode   = false
 	editMode          = false
 	roleEditMode      = false
 	injectRole        = true

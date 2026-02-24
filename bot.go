@@ -830,11 +830,21 @@ func chatWatcher(ctx context.Context) {
 func showSpinner() {
 	spinners := []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
 	var i int
-	for botRespMode {
+	botPersona := cfg.AssistantRole
+	if cfg.WriteNextMsgAsCompletionAgent != "" {
+		botPersona = cfg.WriteNextMsgAsCompletionAgent
+	}
+	for botRespMode || toolRunningMode {
 		time.Sleep(100 * time.Millisecond)
 		spin := i % len(spinners)
 		app.QueueUpdateDraw(func() {
-			textArea.SetTitle(spinners[spin] + " input")
+			if toolRunningMode {
+				textArea.SetTitle(spinners[spin] + " tool")
+			} else if botRespMode {
+				textArea.SetTitle(spinners[spin] + " " + botPersona)
+			} else {
+				textArea.SetTitle(spinners[spin] + " input")
+			}
 		})
 		i++
 	}
@@ -1219,7 +1229,9 @@ func findCall(msg, toolCall string) bool {
 	}
 	// Show tool call progress indicator before execution
 	fmt.Fprintf(textView, "\n[yellow::i][tool: %s...][-:-:-]", fc.Name)
+	toolRunningMode = true
 	resp := callToolWithAgent(fc.Name, fc.Args)
+	toolRunningMode = false
 	toolMsg := string(resp) // Remove the "tool response: " prefix and %+v formatting
 	logger.Info("llm used a tool call", "tool_name", fc.Name, "too_args", fc.Args, "id", fc.ID, "tool_resp", toolMsg)
 	fmt.Fprintf(textView, "%s[-:-:b](%d) <%s>: [-:-:-]\n%s\n",
