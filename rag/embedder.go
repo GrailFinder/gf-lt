@@ -131,7 +131,6 @@ func (a *APIEmbedder) EmbedSlice(lines []string) ([][]float32, error) {
 		}
 		embeddings[data.Index] = data.Embedding
 	}
-
 	return embeddings, nil
 }
 

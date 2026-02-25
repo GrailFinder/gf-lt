@@ -287,7 +287,6 @@ func makeRAGTable(fileList []string, loadedFiles []string) *tview.Flex {
 			})
 		}
 	}
-
 	rows := len(ragFiles)
 	cols := 4 // File Name | Preview | Action | Delete
 	fileTable := tview.NewTable().

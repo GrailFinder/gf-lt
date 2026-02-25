@@ -32,7 +32,6 @@ func startModelColorUpdater() {
 
 		// Initial check
 		updateCachedModelColor()
-
 		for range ticker.C {
 			updateCachedModelColor()
 		}

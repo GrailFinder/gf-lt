@@ -28,7 +28,6 @@ func NewVectorStorage(logger *slog.Logger, store storage.FullRepo) *VectorStorag
 	}
 }
 
-
 // SerializeVector converts []float32 to binary blob
 func SerializeVector(vec []float32) []byte {
 	buf := make([]byte, len(vec)*4) // 4 bytes per float32
@@ -66,17 +65,14 @@ func (vs *VectorStorage) WriteVector(row *models.VectorRow) error {
 
 	// Serialize the embeddings to binary
 	serializedEmbeddings := SerializeVector(row.Embeddings)
-
 	query := fmt.Sprintf(
 		"INSERT INTO %s (embeddings, slug, raw_text, filename) VALUES (?, ?, ?, ?)",
 		tableName,
 	)
-
 	if _, err := vs.sqlxDB.Exec(query, serializedEmbeddings, row.Slug, row.RawText, row.FileName); err != nil {
 		vs.logger.Error("failed to write vector", "error", err, "slug", row.Slug)
 		return err
 	}
-
 	return nil
 }
 
@@ -86,20 +82,18 @@ func (vs *VectorStorage) getTableName(emb []float32) (string, error) {
 
 	// Check if we support this embedding size
 	supportedSizes := map[int]bool{
-		384:   true,
-		768:   true,
-		1024:  true,
-		1536:  true,
-		2048:  true,
-		3072:  true,
-		4096:  true,
-		5120:  true,
+		384:  true,
+		768:  true,
+		1024: true,
+		1536: true,
+		2048: true,
+		3072: true,
+		4096: true,
+		5120: true,
 	}
-
 	if supportedSizes[size] {
 		return fmt.Sprintf("embeddings_%d", size), nil
 	}
-
 	return "", fmt.Errorf("no table for embedding size of %d", size)
 }
 
@@ -126,9 +120,7 @@ func (vs *VectorStorage) SearchClosest(query []float32) ([]models.VectorRow, err
 		vector   models.VectorRow
 		distance float32
 	}
-
 	var topResults []SearchResult
-
 	// Process vectors one by one to avoid loading everything into memory
 	for rows.Next() {
 		var (
@@ -176,14 +168,12 @@ func (vs *VectorStorage) SearchClosest(query []float32) ([]models.VectorRow, err
 		result.vector.Distance = result.distance
 		results = append(results, result.vector)
 	}
-
 	return results, nil
 }
 
 // ListFiles returns a list of all loaded files
 func (vs *VectorStorage) ListFiles() ([]string, error) {
 	fileLists := make([][]string, 0)
-
 	// Query all supported tables and combine results
 	embeddingSizes := []int{384, 768, 1024, 1536, 2048, 3072, 4096, 5120}
 	for _, size := range embeddingSizes {
@@ -219,14 +209,12 @@ func (vs *VectorStorage) ListFiles() ([]string, error) {
 			}
 		}
 	}
-
 	return allFiles, nil
 }
 
 // RemoveEmbByFileName removes all embeddings associated with a specific filename
 func (vs *VectorStorage) RemoveEmbByFileName(filename string) error {
 	var errors []string
-
 	embeddingSizes := []int{384, 768, 1024, 1536, 2048, 3072, 4096, 5120}
 	for _, size := range embeddingSizes {
 		table := fmt.Sprintf("embeddings_%d", size)
@@ -235,11 +223,9 @@ func (vs *VectorStorage) RemoveEmbByFileName(filename string) error {
 			errors = append(errors, err.Error())
 		}
 	}
-
 	if len(errors) > 0 {
 		return fmt.Errorf("errors occurred: %s", strings.Join(errors, "; "))
 	}
-
 	return nil
 }
 
@@ -248,18 +234,15 @@ func cosineSimilarity(a, b []float32) float32 {
 	if len(a) != len(b) {
 		return 0.0
 	}
-
 	var dotProduct, normA, normB float32
 	for i := 0; i < len(a); i++ {
 		dotProduct += a[i] * b[i]
 		normA += a[i] * a[i]
 		normB += b[i] * b[i]
 	}
-
 	if normA == 0 || normB == 0 {
 		return 0.0
 	}
-
 	return dotProduct / (sqrt(normA) * sqrt(normB))
 }
 
@@ -275,4 +258,3 @@ func sqrt(f float32) float32 {
 	}
 	return guess
 }
-

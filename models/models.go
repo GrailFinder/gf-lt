@@ -400,7 +400,6 @@ func (m *RoleMsg) AddTextPart(text string) {
 		}
 		m.hasContentParts = true
 	}
-
 	textPart := TextContentPart{Type: "text", Text: text}
 	m.ContentParts = append(m.ContentParts, textPart)
 }
@@ -416,7 +415,6 @@ func (m *RoleMsg) AddImagePart(imageURL, imagePath string) {
 		}
 		m.hasContentParts = true
 	}
-
 	imagePart := ImageContentPart{
 		Type: "image_url",
 		Path: imagePath, // Store the original file path

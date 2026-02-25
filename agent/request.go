@@ -140,7 +140,6 @@ func (ag *AgentClient) LLMRequest(body io.Reader) ([]byte, error) {
 		ag.log.Error("failed to read request body", "error", err)
 		return nil, err
 	}
-
 	req, err := http.NewRequest("POST", ag.cfg.CurrentAPI, bytes.NewReader(bodyBytes))
 	if err != nil {
 		ag.log.Error("failed to create request", "error", err)
@@ -150,22 +149,18 @@ func (ag *AgentClient) LLMRequest(body io.Reader) ([]byte, error) {
 	req.Header.Add("Content-Type", "application/json")
 	req.Header.Add("Authorization", "Bearer "+ag.getToken())
 	req.Header.Set("Accept-Encoding", "gzip")
-
 	ag.log.Debug("agent LLM request", "url", ag.cfg.CurrentAPI, "body_preview", string(bodyBytes[:min(len(bodyBytes), 500)]))
-
 	resp, err := httpClient.Do(req)
 	if err != nil {
 		ag.log.Error("llamacpp api request failed", "error", err, "url", ag.cfg.CurrentAPI)
 		return nil, err
 	}
 	defer resp.Body.Close()
-
 	responseBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
 		ag.log.Error("failed to read response", "error", err)
 		return nil, err
 	}
-
 	if resp.StatusCode >= 400 {
 		ag.log.Error("agent LLM request failed", "status", resp.StatusCode, "response", string(responseBytes[:min(len(responseBytes), 1000)]))
 		return responseBytes, fmt.Errorf("HTTP %d: %s", resp.StatusCode, string(responseBytes[:min(len(responseBytes), 200)]))
@@ -178,7 +173,6 @@ func (ag *AgentClient) LLMRequest(body io.Reader) ([]byte, error) {
 		// Return raw response as fallback
 		return responseBytes, nil
 	}
-
 	return []byte(text), nil
 }
 

@@ -216,13 +216,11 @@ func (op LCPChat) ParseChunk(data []byte) (*models.TextChunk, error) {
 		logger.Warn("LCPChat ParseChunk: no choices in response", "data", string(data))
 		return &models.TextChunk{Finished: true}, nil
 	}
-
 	lastChoice := llmchunk.Choices[len(llmchunk.Choices)-1]
 	resp := &models.TextChunk{
 		Chunk:     lastChoice.Delta.Content,
 		Reasoning: lastChoice.Delta.ReasoningContent,
 	}
-
 	// Check for tool calls in all choices, not just the last one
 	for _, choice := range llmchunk.Choices {
 		if len(choice.Delta.ToolCalls) > 0 {
@@ -237,7 +235,6 @@ func (op LCPChat) ParseChunk(data []byte) (*models.TextChunk, error) {
 			break // Process only the first tool call
 		}
 	}
-
 	if lastChoice.FinishReason == "stop" {
 		if resp.Chunk != "" {
 			logger.Error("text inside of finish llmchunk", "chunk", llmchunk)

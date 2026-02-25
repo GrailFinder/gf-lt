@@ -73,12 +73,9 @@ func (p ProviderSQL) WriteVector(row *models.VectorRow) error {
 	if err != nil {
 		return err
 	}
-
 	serializedEmbeddings := SerializeVector(row.Embeddings)
-
 	query := fmt.Sprintf("INSERT INTO %s(embeddings, slug, raw_text, filename) VALUES (?, ?, ?, ?)", tableName)
 	_, err = p.db.Exec(query, serializedEmbeddings, row.Slug, row.RawText, row.FileName)
-
 	return err
 }
 
@@ -87,27 +84,22 @@ func (p ProviderSQL) SearchClosest(q []float32) ([]models.VectorRow, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	querySQL := "SELECT embeddings, slug, raw_text, filename FROM " + tableName
 	rows, err := p.db.Query(querySQL)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-
 	type SearchResult struct {
 		vector   models.VectorRow
 		distance float32
 	}
-
 	var topResults []SearchResult
-
 	for rows.Next() {
 		var (
-			embeddingsBlob []byte
+			embeddingsBlob          []byte
 			slug, rawText, fileName string
 		)
-
 		if err := rows.Scan(&embeddingsBlob, &slug, &rawText, &fileName); err != nil {
 			continue
 		}
@@ -152,7 +144,6 @@ func (p ProviderSQL) SearchClosest(q []float32) ([]models.VectorRow, error) {
 		result.vector.Distance = result.distance
 		results[i] = result.vector
 	}
-
 	return results, nil
 }
 
@@ -161,18 +152,15 @@ func cosineSimilarity(a, b []float32) float32 {
 	if len(a) != len(b) {
 		return 0.0
 	}
-
 	var dotProduct, normA, normB float32
 	for i := 0; i < len(a); i++ {
 		dotProduct += a[i] * b[i]
 		normA += a[i] * a[i]
 		normB += b[i] * b[i]
 	}
-
 	if normA == 0 || normB == 0 {
 		return 0.0
 	}
-
 	return dotProduct / (sqrt(normA) * sqrt(normB))
 }
 
@@ -229,13 +217,11 @@ func (p ProviderSQL) ListFiles() ([]string, error) {
 			}
 		}
 	}
-
 	return allFiles, nil
 }
 
 func (p ProviderSQL) RemoveEmbByFileName(filename string) error {
 	var errors []string
-
 	tableNames := []string{
 		"embeddings_384", "embeddings_768", "embeddings_1024", "embeddings_1536",
 		"embeddings_2048", "embeddings_3072", "embeddings_4096", "embeddings_5120",
@@ -246,10 +232,8 @@ func (p ProviderSQL) RemoveEmbByFileName(filename string) error {
 			errors = append(errors, err.Error())
 		}
 	}
-
 	if len(errors) > 0 {
 		return fmt.Errorf("errors occurred: %v", errors)
 	}
-
 	return nil
 }

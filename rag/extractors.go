@@ -95,9 +95,7 @@ func extractTextFromEpub(fpath string) (string, error) {
 		return "", fmt.Errorf("failed to open epub: %w", err)
 	}
 	defer r.Close()
-
 	var sb strings.Builder
-
 	for _, f := range r.File {
 		ext := strings.ToLower(path.Ext(f.Name))
 		if ext != ".xhtml" && ext != ".html" && ext != ".htm" && ext != ".xml" {
@@ -129,7 +127,6 @@ func extractTextFromEpub(fpath string) (string, error) {
 			sb.WriteString(stripHTML(string(buf)))
 		}
 	}
-
 	if sb.Len() == 0 {
 		return "", errors.New("no content extracted from epub")
 	}

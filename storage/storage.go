@@ -103,7 +103,6 @@ func NewProviderSQL(dbPath string, logger *slog.Logger) FullRepo {
 		return nil
 	}
 	p := ProviderSQL{db: db, logger: logger}
-
 	p.Migrate()
 	return p
 }

@@ -410,38 +410,30 @@ func updateWidgetColors(theme *tview.Theme) {
 	fgColor := theme.PrimaryTextColor
 	borderColor := theme.BorderColor
 	titleColor := theme.TitleColor
-
 	textView.SetBackgroundColor(bgColor)
 	textView.SetTextColor(fgColor)
 	textView.SetBorderColor(borderColor)
 	textView.SetTitleColor(titleColor)
-
 	textArea.SetBackgroundColor(bgColor)
 	textArea.SetBorderColor(borderColor)
 	textArea.SetTitleColor(titleColor)
 	textArea.SetTextStyle(tcell.StyleDefault.Background(bgColor).Foreground(fgColor))
 	textArea.SetPlaceholderStyle(tcell.StyleDefault.Background(bgColor).Foreground(fgColor))
-	// Force textarea refresh by restoring text (SetTextStyle doesn't trigger redraw)
 	textArea.SetText(textArea.GetText(), true)
-
 	editArea.SetBackgroundColor(bgColor)
 	editArea.SetBorderColor(borderColor)
 	editArea.SetTitleColor(titleColor)
 	editArea.SetTextStyle(tcell.StyleDefault.Background(bgColor).Foreground(fgColor))
 	editArea.SetPlaceholderStyle(tcell.StyleDefault.Background(bgColor).Foreground(fgColor))
-	// Force textarea refresh by restoring text (SetTextStyle doesn't trigger redraw)
 	editArea.SetText(editArea.GetText(), true)
-
 	statusLineWidget.SetBackgroundColor(bgColor)
 	statusLineWidget.SetTextColor(fgColor)
 	statusLineWidget.SetBorderColor(borderColor)
 	statusLineWidget.SetTitleColor(titleColor)
-
 	helpView.SetBackgroundColor(bgColor)
 	helpView.SetTextColor(fgColor)
 	helpView.SetBorderColor(borderColor)
 	helpView.SetTitleColor(titleColor)
-
 	searchField.SetBackgroundColor(bgColor)
 	searchField.SetBorderColor(borderColor)
 	searchField.SetTitleColor(titleColor)
@@ -468,7 +460,6 @@ func showColorschemeSelectionPopup() {
 	schemeListWidget := tview.NewList().ShowSecondaryText(false).
 		SetSelectedBackgroundColor(tcell.ColorGray)
 	schemeListWidget.SetTitle("Select Colorscheme").SetBorder(true)
-
 	currentScheme := "default"
 	for name := range colorschemes {
 		if tview.Styles == colorschemes[name] {
