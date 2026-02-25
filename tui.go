@@ -264,7 +264,7 @@ func init() {
 				pages.RemovePage(editMsgPage)
 				return nil
 			}
-			chatBody.Messages[selectedIndex].Content = editedMsg
+			chatBody.Messages[selectedIndex].SetText(editedMsg)
 			// change textarea
 			textView.SetText(chatToText(chatBody.Messages, cfg.ShowSys))
 			pages.RemovePage(editMsgPage)
@@ -352,13 +352,14 @@ func init() {
 			case editMode:
 				hideIndexBar() // Hide overlay first
 				pages.AddPage(editMsgPage, editArea, true, true)
-				editArea.SetText(m.Content, true)
+				editArea.SetText(m.GetText(), true)
 			default:
-				if err := copyToClipboard(m.Content); err != nil {
+				msgText := m.GetText()
+				if err := copyToClipboard(msgText); err != nil {
 					logger.Error("failed to copy to clipboard", "error", err)
 				}
-				previewLen := min(30, len(m.Content))
-				notification := fmt.Sprintf("msg '%s' was copied to the clipboard", m.Content[:previewLen])
+				previewLen := min(30, len(msgText))
+				notification := fmt.Sprintf("msg '%s' was copied to the clipboard", msgText[:previewLen])
 				if err := notifyUser("copied", notification); err != nil {
 					logger.Error("failed to send notification", "error", err)
 				}
@@ -648,11 +649,12 @@ func init() {
 			// copy msg to clipboard
 			editMode = false
 			m := chatBody.Messages[len(chatBody.Messages)-1]
-			if err := copyToClipboard(m.Content); err != nil {
+			msgText := m.GetText()
+			if err := copyToClipboard(msgText); err != nil {
 				logger.Error("failed to copy to clipboard", "error", err)
 			}
-			previewLen := min(30, len(m.Content))
-			notification := fmt.Sprintf("msg '%s' was copied to the clipboard", m.Content[:previewLen])
+			previewLen := min(30, len(msgText))
+			notification := fmt.Sprintf("msg '%s' was copied to the clipboard", msgText[:previewLen])
 			if err := notifyUser("copied", notification); err != nil {
 				logger.Error("failed to send notification", "error", err)
 			}
@@ -847,7 +849,7 @@ func init() {
 				// Stop any currently playing TTS first
 				TTSDoneChan <- true
 				lastMsg := chatBody.Messages[len(chatBody.Messages)-1]
-				cleanedText := models.CleanText(lastMsg.Content)
+				cleanedText := models.CleanText(lastMsg.GetText())
 				if cleanedText != "" {
 					// nolint: errcheck
 					go orator.Speak(cleanedText)

@@ -329,6 +329,66 @@ func (m *RoleMsg) Copy() RoleMsg {
 	}
 }
 
+// GetText returns the text content of the message, handling both
+// simple Content and multimodal ContentParts formats.
+func (m *RoleMsg) GetText() string {
+	if !m.hasContentParts {
+		return m.Content
+	}
+	var textParts []string
+	for _, part := range m.ContentParts {
+		switch p := part.(type) {
+		case TextContentPart:
+			if p.Type == "text" {
+				textParts = append(textParts, p.Text)
+			}
+		case map[string]any:
+			if partType, exists := p["type"]; exists {
+				if partType == "text" {
+					if textVal, textExists := p["text"]; textExists {
+						if textStr, isStr := textVal.(string); isStr {
+							textParts = append(textParts, textStr)
+						}
+					}
+				}
+			}
+		}
+	}
+	return strings.Join(textParts, " ")
+}
+
+// SetText updates the text content of the message. If the message has
+// ContentParts (multimodal), it updates the text parts while preserving
+// images. If not, it sets the simple Content field.
+func (m *RoleMsg) SetText(text string) {
+	if !m.hasContentParts {
+		m.Content = text
+		return
+	}
+	var newParts []any
+	for _, part := range m.ContentParts {
+		switch p := part.(type) {
+		case TextContentPart:
+			if p.Type == "text" {
+				p.Text = text
+				newParts = append(newParts, p)
+			} else {
+				newParts = append(newParts, p)
+			}
+		case map[string]any:
+			if partType, exists := p["type"]; exists && partType == "text" {
+				p["text"] = text
+				newParts = append(newParts, p)
+			} else {
+				newParts = append(newParts, p)
+			}
+		default:
+			newParts = append(newParts, part)
+		}
+	}
+	m.ContentParts = newParts
+}
+
 // AddTextPart adds a text content part to the message
 func (m *RoleMsg) AddTextPart(text string) {
 	if !m.hasContentParts {

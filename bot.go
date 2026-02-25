@@ -119,7 +119,7 @@ func processMessageTag(msg *models.RoleMsg) *models.RoleMsg {
 	}
 	// If KnownTo already set, assume tag already processed (content cleaned).
 	// However, we still check for new tags (maybe added later).
-	knownTo := parseKnownToTag(msg.Content)
+	knownTo := parseKnownToTag(msg.GetText())
 	// If tag found, replace KnownTo with new list (merge with existing?)
 	// For simplicity, if knownTo is not nil, replace.
 	if knownTo == nil {
@@ -1303,12 +1303,9 @@ func removeThinking(chatBody *models.ChatBody) {
 		if msg.Role == cfg.ToolRole {
 			continue
 		}
-		// find thinking and remove it
-		rm := models.RoleMsg{
-			Role:    msg.Role,
-			Content: thinkRE.ReplaceAllString(msg.Content, ""),
-		}
-		msgs = append(msgs, rm)
+		// find thinking and remove it - use SetText to preserve ContentParts
+		msg.SetText(thinkRE.ReplaceAllString(msg.GetText(), ""))
+		msgs = append(msgs, msg)
 	}
 	chatBody.Messages = msgs
 }

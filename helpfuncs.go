@@ -75,15 +75,16 @@ func stripThinkingFromMsg(msg *models.RoleMsg) *models.RoleMsg {
 	if !cfg.StripThinkingFromAPI {
 		return msg
 	}
-	// Skip user, tool, and system messages - they might contain thinking examples
+	// Skip user, tool, they might contain thinking and system messages - examples
 	if msg.Role == cfg.UserRole || msg.Role == cfg.ToolRole || msg.Role == "system" {
 		return msg
 	}
 	// Strip thinking from assistant messages
-	if thinkRE.MatchString(msg.Content) {
-		msg.Content = thinkRE.ReplaceAllString(msg.Content, "")
-		// Clean up any double newlines that might result
-		msg.Content = strings.TrimSpace(msg.Content)
+	msgText := msg.GetText()
+	if thinkRE.MatchString(msgText) {
+		cleanedText := thinkRE.ReplaceAllString(msgText, "")
+		cleanedText = strings.TrimSpace(cleanedText)
+		msg.SetText(cleanedText)
 	}
 	return msg
 }
