@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"gf-lt/rag"
+
 	"github.com/GrailFinder/searchagent/searcher"
 )
 
@@ -176,6 +177,7 @@ func init() {
 		logger.Warn("failed to init rag; rag_search tool will not be available", "error", err)
 	}
 }
+
 // getWebAgentClient returns a singleton AgentClient for web agents.
 func getWebAgentClient() *agent.AgentClient {
 	webAgentClientOnce.Do(func() {
@@ -195,6 +197,7 @@ func getWebAgentClient() *agent.AgentClient {
 	})
 	return webAgentClient
 }
+
 // registerWebAgents registers WebAgentB instances for websearch and read_url tools.
 func registerWebAgents() {
 	webAgentsOnce.Do(func() {
@@ -209,6 +212,7 @@ func registerWebAgents() {
 		agent.Register("summarize_chat", agent.NewWebAgentB(client, summarySysPrompt))
 	})
 }
+
 // web search (depends on extra server)
 func websearch(args map[string]string) []byte {
 	// make http request return bytes
@@ -242,6 +246,7 @@ func websearch(args map[string]string) []byte {
 	}
 	return data
 }
+
 // rag search (searches local document database)
 func ragsearch(args map[string]string) []byte {
 	query, ok := args["query"]
@@ -280,6 +285,7 @@ func ragsearch(args map[string]string) []byte {
 	}
 	return data
 }
+
 // web search raw (returns raw data without processing)
 func websearchRaw(args map[string]string) []byte {
 	// make http request return bytes
@@ -308,6 +314,7 @@ func websearchRaw(args map[string]string) []byte {
 	// Return raw response without any processing
 	return []byte(fmt.Sprintf("%+v", resp))
 }
+
 // retrieves url content (text)
 func readURL(args map[string]string) []byte {
 	// make http request return bytes
@@ -331,6 +338,7 @@ func readURL(args map[string]string) []byte {
 	}
 	return data
 }
+
 // retrieves url content raw (returns raw content without processing)
 func readURLRaw(args map[string]string) []byte {
 	// make http request return bytes
@@ -349,6 +357,7 @@ func readURLRaw(args map[string]string) []byte {
 	// Return raw response without any processing
 	return []byte(fmt.Sprintf("%+v", resp))
 }
+
 /*
 consider cases:
 - append mode (treat it like a journal appendix)
@@ -378,6 +387,7 @@ func memorise(args map[string]string) []byte {
 	msg := "info saved under the topic:" + args["topic"]
 	return []byte(msg)
 }
+
 func recall(args map[string]string) []byte {
 	agent := cfg.AssistantRole
 	if len(args) < 1 {
@@ -393,6 +403,7 @@ func recall(args map[string]string) []byte {
 	answer := fmt.Sprintf("under the topic: %s is stored:\n%s", args["topic"], mind)
 	return []byte(answer)
 }
+
 func recallTopics(args map[string]string) []byte {
 	agent := cfg.AssistantRole
 	topics, err := store.RecallTopics(agent)
@@ -403,6 +414,7 @@ func recallTopics(args map[string]string) []byte {
 	joinedS := strings.Join(topics, ";")
 	return []byte(joinedS)
 }
+
 // File Manipulation Tools
 func fileCreate(args map[string]string) []byte {
 	path, ok := args["path"]
@@ -424,6 +436,7 @@ func fileCreate(args map[string]string) []byte {
 	msg := "file created successfully at " + path
 	return []byte(msg)
 }
+
 func fileRead(args map[string]string) []byte {
 	path, ok := args["path"]
 	if !ok || path == "" {
@@ -450,6 +463,7 @@ func fileRead(args map[string]string) []byte {
 	}
 	return jsonResult
 }
+
 func fileWrite(args map[string]string) []byte {
 	path, ok := args["path"]
 	if !ok || path == "" {
@@ -470,6 +484,7 @@ func fileWrite(args map[string]string) []byte {
 	msg := "file written successfully at " + path
 	return []byte(msg)
 }
+
 func fileWriteAppend(args map[string]string) []byte {
 	path, ok := args["path"]
 	if !ok || path == "" {
@@ -490,6 +505,7 @@ func fileWriteAppend(args map[string]string) []byte {
 	msg := "file written successfully at " + path
 	return []byte(msg)
 }
+
 func fileDelete(args map[string]string) []byte {
 	path, ok := args["path"]
 	if !ok || path == "" {
@@ -506,6 +522,7 @@ func fileDelete(args map[string]string) []byte {
 	msg := "file deleted successfully at " + path
 	return []byte(msg)
 }
+
 func fileMove(args map[string]string) []byte {
 	src, ok := args["src"]
 	if !ok || src == "" {
@@ -529,6 +546,7 @@ func fileMove(args map[string]string) []byte {
 	msg := fmt.Sprintf("file moved successfully from %s to %s", src, dst)
 	return []byte(msg)
 }
+
 func fileCopy(args map[string]string) []byte {
 	src, ok := args["src"]
 	if !ok || src == "" {
@@ -552,6 +570,7 @@ func fileCopy(args map[string]string) []byte {
 	msg := fmt.Sprintf("file copied successfully from %s to %s", src, dst)
 	return []byte(msg)
 }
+
 func fileList(args map[string]string) []byte {
 	path, ok := args["path"]
 	if !ok || path == "" {
@@ -576,6 +595,7 @@ func fileList(args map[string]string) []byte {
 	}
 	return jsonResult
 }
+
 // Helper functions for file operations
 func resolvePath(p string) string {
 	if filepath.IsAbs(p) {
@@ -583,6 +603,7 @@ func resolvePath(p string) string {
 	}
 	return filepath.Join(cfg.FilePickerDir, p)
 }
+
 func readStringFromFile(filename string) (string, error) {
 	data, err := os.ReadFile(filename)
 	if err != nil {
@@ -590,9 +611,11 @@ func readStringFromFile(filename string) (string, error) {
 	}
 	return string(data), nil
 }
+
 func writeStringToFile(filename string, data string) error {
 	return os.WriteFile(filename, []byte(data), 0644)
 }
+
 func appendStringToFile(filename string, data string) error {
 	file, err := os.OpenFile(filename, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
@@ -602,9 +625,11 @@ func appendStringToFile(filename string, data string) error {
 	_, err = file.WriteString(data)
 	return err
 }
+
 func removeFile(filename string) error {
 	return os.Remove(filename)
 }
+
 func moveFile(src, dst string) error {
 	// First try with os.Rename (works within same filesystem)
 	if err := os.Rename(src, dst); err == nil {
@@ -613,6 +638,7 @@ func moveFile(src, dst string) error {
 	// If that fails (e.g., cross-filesystem), copy and delete
 	return copyAndRemove(src, dst)
 }
+
 func copyFile(src, dst string) error {
 	srcFile, err := os.Open(src)
 	if err != nil {
@@ -627,6 +653,7 @@ func copyFile(src, dst string) error {
 	_, err = io.Copy(dstFile, srcFile)
 	return err
 }
+
 func copyAndRemove(src, dst string) error {
 	// Copy the file
 	if err := copyFile(src, dst); err != nil {
@@ -635,6 +662,7 @@ func copyAndRemove(src, dst string) error {
 	// Remove the source file
 	return os.Remove(src)
 }
+
 func listDirectory(path string) ([]string, error) {
 	entries, err := os.ReadDir(path)
 	if err != nil {
@@ -650,6 +678,7 @@ func listDirectory(path string) ([]string, error) {
 	}
 	return files, nil
 }
+
 // Command Execution Tool
 func executeCommand(args map[string]string) []byte {
 	command, ok := args["command"]
@@ -698,6 +727,7 @@ func executeCommand(args map[string]string) []byte {
 	}
 	return output
 }
+
 // Helper functions for command execution
 // Todo structure
 type TodoItem struct {
@@ -708,10 +738,12 @@ type TodoItem struct {
 type TodoList struct {
 	Items []TodoItem `json:"items"`
 }
+
 // Global todo list storage
 var globalTodoList = TodoList{
 	Items: []TodoItem{},
 }
+
 // Todo Management Tools
 func todoCreate(args map[string]string) []byte {
 	task, ok := args["task"]
@@ -742,6 +774,7 @@ func todoCreate(args map[string]string) []byte {
 	}
 	return jsonResult
 }
+
 func todoRead(args map[string]string) []byte {
 	id, ok := args["id"]
 	if ok && id != "" {
@@ -784,6 +817,7 @@ func todoRead(args map[string]string) []byte {
 	}
 	return jsonResult
 }
+
 func todoUpdate(args map[string]string) []byte {
 	id, ok := args["id"]
 	if !ok || id == "" {
@@ -846,6 +880,7 @@ func todoUpdate(args map[string]string) []byte {
 	}
 	return jsonResult
 }
+
 func todoDelete(args map[string]string) []byte {
 	id, ok := args["id"]
 	if !ok || id == "" {
@@ -883,6 +918,7 @@ func todoDelete(args map[string]string) []byte {
 	}
 	return jsonResult
 }
+
 var gitReadSubcommands = map[string]bool{
 	"status":    true,
 	"log":       true,
@@ -894,6 +930,7 @@ var gitReadSubcommands = map[string]bool{
 	"shortlog":  true,
 	"describe":  true,
 }
+
 func isCommandAllowed(command string, args ...string) bool {
 	allowedCommands := map[string]bool{
 		"grep":   true,
@@ -934,6 +971,7 @@ func isCommandAllowed(command string, args ...string) bool {
 	}
 	return true
 }
+
 func summarizeChat(args map[string]string) []byte {
 	if len(chatBody.Messages) == 0 {
 		return []byte("No chat history to summarize.")
@@ -942,7 +980,9 @@ func summarizeChat(args map[string]string) []byte {
 	chatText := chatToText(chatBody.Messages, true) // include system and tool messages
 	return []byte(chatText)
 }
+
 type fnSig func(map[string]string) []byte
+
 var fnMap = map[string]fnSig{
 	"recall":            recall,
 	"recall_topics":     recallTopics,
@@ -967,6 +1007,7 @@ var fnMap = map[string]fnSig{
 	"todo_delete":       todoDelete,
 	"summarize_chat":    summarizeChat,
 }
+
 // callToolWithAgent calls the tool and applies any registered agent.
 func callToolWithAgent(name string, args map[string]string) []byte {
 	registerWebAgents()
@@ -980,6 +1021,7 @@ func callToolWithAgent(name string, args map[string]string) []byte {
 	}
 	return raw
 }
+
 // openai style def
 var baseTools = []models.Tool{
 	// rag_search
