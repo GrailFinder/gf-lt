@@ -1,0 +1,153 @@
+package rag
+
+import (
+	"bytes"
+	"errors"
+	"fmt"
+	"io"
+	"os"
+	"os/exec"
+	"path"
+	"strings"
+
+	"github.com/huantt/plaintext-extractor"
+	"github.com/ledongthuc/pdf"
+	"github.com/n3integration/epub"
+)
+
+func ExtractText(fpath string) (string, error) {
+	ext := strings.ToLower(path.Ext(fpath))
+
+	switch ext {
+	case ".txt":
+		return extractTextFromFile(fpath)
+	case ".md", ".markdown":
+		return extractTextFromMarkdown(fpath)
+	case ".html", ".htm":
+		return extractTextFromHtml(fpath)
+	case ".epub":
+		return extractTextFromEpub(fpath)
+	case ".pdf":
+		return extractTextFromPdf(fpath)
+	default:
+		return "", fmt.Errorf("unsupported file format: %s", ext)
+	}
+}
+
+func extractTextFromFile(fpath string) (string, error) {
+	data, err := os.ReadFile(fpath)
+	if err != nil {
+		return "", err
+	}
+	return string(data), nil
+}
+
+func extractTextFromMarkdown(fpath string) (string, error) {
+	data, err := os.ReadFile(fpath)
+	if err != nil {
+		return "", err
+	}
+	extractor := plaintext.NewMarkdownExtractor()
+	text, err := extractor.PlainText(string(data))
+	if err != nil {
+		return "", err
+	}
+	return *text, nil
+}
+
+func extractTextFromHtml(fpath string) (string, error) {
+	data, err := os.ReadFile(fpath)
+	if err != nil {
+		return "", err
+	}
+	extractor := plaintext.NewHtmlExtractor()
+	text, err := extractor.PlainText(string(data))
+	if err != nil {
+		return "", err
+	}
+	return *text, nil
+}
+
+func extractTextFromEpub(fpath string) (string, error) {
+	book, err := epub.Open(fpath)
+	if err != nil {
+		return "", fmt.Errorf("failed to open epub: %w", err)
+	}
+	defer book.Close()
+
+	var sb strings.Builder
+
+	err = book.Each(func(title string, xhtml io.ReadCloser) {
+		if sb.Len() > 0 {
+			sb.WriteString("\n\n")
+		}
+		sb.WriteString(title)
+		sb.WriteString("\n")
+
+		buf, readErr := io.ReadAll(xhtml)
+		if readErr == nil {
+			sb.WriteString(stripHTML(string(buf)))
+		}
+	})
+
+	if err != nil {
+		return "", fmt.Errorf("failed to iterate epub chapters: %w", err)
+	}
+
+	if sb.Len() == 0 {
+		return "", errors.New("no content extracted from epub")
+	}
+
+	return sb.String(), nil
+}
+
+func stripHTML(html string) string {
+	var sb strings.Builder
+	inTag := false
+	for _, r := range html {
+		switch r {
+		case '<':
+			inTag = true
+		case '>':
+			inTag = false
+		default:
+			if !inTag {
+				sb.WriteRune(r)
+			}
+		}
+	}
+	return sb.String()
+}
+
+func extractTextFromPdf(fpath string) (string, error) {
+	_, err := exec.LookPath("pdftotext")
+	if err == nil {
+		out, err := exec.Command("pdftotext", "-layout", fpath, "-").Output()
+		if err == nil && len(out) > 0 {
+			return string(out), nil
+		}
+	}
+
+	return extractTextFromPdfPureGo(fpath)
+}
+
+func extractTextFromPdfPureGo(fpath string) (string, error) {
+	df, r, err := pdf.Open(fpath)
+	if err != nil {
+		return "", fmt.Errorf("failed to open pdf: %w", err)
+	}
+	defer df.Close()
+
+	textReader, err := r.GetPlainText()
+	if err != nil {
+		return "", fmt.Errorf("failed to extract text from pdf: %w", err)
+	}
+
+	var buf bytes.Buffer
+	_, err = io.Copy(&buf, textReader)
+	if err != nil {
+		return "", fmt.Errorf("failed to read pdf text: %w", err)
+	}
+
+	return buf.String(), nil
+}

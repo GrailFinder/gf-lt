@@ -10,7 +10,10 @@ require (
 	github.com/glebarez/go-sqlite v1.22.0
 	github.com/gopxl/beep/v2 v2.1.1
 	github.com/gordonklaus/portaudio v0.0.0-20250206071425-98a94950218b
+	github.com/huantt/plaintext-extractor v1.1.0
 	github.com/jmoiron/sqlx v1.4.0
+	github.com/ledongthuc/pdf v0.0.0-20250511090121-5959a4027728
+	github.com/n3integration/epub v0.2.0
 	github.com/neurosnap/sentences v1.1.2
 	github.com/rivo/tview v0.42.0
 )

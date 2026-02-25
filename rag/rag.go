@@ -7,7 +7,6 @@ import (
 	"gf-lt/models"
 	"gf-lt/storage"
 	"log/slog"
-	"os"
 	"path"
 	"regexp"
 	"sort"
@@ -58,7 +57,7 @@ func wordCounter(sentence string) int {
 func (r *RAG) LoadRAG(fpath string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	data, err := os.ReadFile(fpath)
+	fileText, err := ExtractText(fpath)
 	if err != nil {
 		return err
 	}
@@ -68,7 +67,6 @@ func (r *RAG) LoadRAG(fpath string) error {
 	default:
 		r.logger.Warn("LongJobStatusCh channel is full or closed, dropping status message", "message", LoadedFileRAGStatus)
 	}
-	fileText := string(data)
 	tokenizer, err := english.NewSentenceTokenizer(nil)
 	if err != nil {
 		return err
