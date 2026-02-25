@@ -327,8 +327,8 @@ func makeRAGTable(fileList []string, loadedFiles []string) *tview.Flex {
 		f := ragFiles[r]
 		for c := 0; c < cols; c++ {
 			color := tcell.ColorWhite
-			switch {
-			case c == 0:
+			switch c {
+			case 0:
 				displayName := f.name
 				if !f.inRAGDir {
 					displayName = f.name + " (orphaned)"
@@ -338,7 +338,7 @@ func makeRAGTable(fileList []string, loadedFiles []string) *tview.Flex {
 						SetTextColor(color).
 						SetAlign(tview.AlignCenter).
 						SetSelectable(false))
-			case c == 1:
+			case 1:
 				if !f.inRAGDir {
 					// Orphaned file - no preview available
 					fileTable.SetCell(r+1, c,
@@ -362,7 +362,7 @@ func makeRAGTable(fileList []string, loadedFiles []string) *tview.Flex {
 							SetAlign(tview.AlignCenter).
 							SetSelectable(false))
 				}
-			case c == 2:
+			case 2:
 				actionText := "load"
 				if f.isLoaded {
 					actionText = "unload"
@@ -375,7 +375,7 @@ func makeRAGTable(fileList []string, loadedFiles []string) *tview.Flex {
 					tview.NewTableCell(actionText).
 						SetTextColor(color).
 						SetAlign(tview.AlignCenter))
-			case c == 3:
+			case 3:
 				if !f.inRAGDir {
 					// Orphaned file - cannot delete from ragdir (not there)
 					fileTable.SetCell(r+1, c,
@@ -513,138 +513,6 @@ func makeRAGTable(fileList []string, loadedFiles []string) *tview.Flex {
 	return ragflex
 }
 
-func makeLoadedRAGTable(fileList []string) *tview.Flex {
-	actions := []string{"delete"}
-	rows, cols := len(fileList), len(actions)+2
-	// Add 1 extra row for the "exit" option at the top
-	fileTable := tview.NewTable().
-		SetBorders(true)
-	longStatusView := tview.NewTextView()
-	longStatusView.SetText("Loaded RAG files list")
-	longStatusView.SetBorder(true).SetTitle("status")
-	longStatusView.SetChangedFunc(func() {
-		app.Draw()
-	})
-	ragflex := tview.NewFlex().SetDirection(tview.FlexRow).
-		AddItem(longStatusView, 0, 10, false).
-		AddItem(fileTable, 0, 60, true)
-	// Add the exit option as the first row (row 0)
-	fileTable.SetCell(0, 0,
-		tview.NewTableCell("File Name").
-			SetTextColor(tcell.ColorWhite).
-			SetAlign(tview.AlignCenter).
-			SetSelectable(false))
-	fileTable.SetCell(0, 1,
-		tview.NewTableCell("Preview").
-			SetTextColor(tcell.ColorWhite).
-			SetAlign(tview.AlignCenter).
-			SetSelectable(false))
-	fileTable.SetCell(0, 2,
-		tview.NewTableCell("Load").
-			SetTextColor(tcell.ColorWhite).
-			SetAlign(tview.AlignCenter).
-			SetSelectable(false))
-	fileTable.SetCell(0, 3,
-		tview.NewTableCell("Delete").
-			SetTextColor(tcell.ColorWhite).
-			SetAlign(tview.AlignCenter).
-			SetSelectable(false))
-	// Add the file rows starting from row 1
-	for r := 0; r < rows; r++ {
-		for c := 0; c < cols; c++ {
-			color := tcell.ColorWhite
-			switch {
-			case c == 0:
-				fileTable.SetCell(r+1, c,
-					tview.NewTableCell(fileList[r]).
-						SetTextColor(color).
-						SetAlign(tview.AlignCenter).
-						SetSelectable(false))
-			case c == 1:
-				if fi, err := os.Stat(fileList[r]); err == nil {
-					size := fi.Size()
-					modTime := fi.ModTime()
-					preview := fmt.Sprintf("%s | %s", formatSize(size), modTime.Format("2006-01-02 15:04"))
-					fileTable.SetCell(r+1, c,
-						tview.NewTableCell(preview).
-							SetTextColor(color).
-							SetAlign(tview.AlignCenter).
-							SetSelectable(false))
-				} else {
-					fileTable.SetCell(r+1, c,
-						tview.NewTableCell("error").
-							SetTextColor(color).
-							SetAlign(tview.AlignCenter).
-							SetSelectable(false))
-				}
-			case c == 2:
-				fileTable.SetCell(r+1, c,
-					tview.NewTableCell("load").
-						SetTextColor(color).
-						SetAlign(tview.AlignCenter))
-			default:
-				fileTable.SetCell(r+1, c,
-					tview.NewTableCell("delete").
-						SetTextColor(color).
-						SetAlign(tview.AlignCenter))
-			}
-		}
-	}
-	fileTable.Select(0, 0).
-		SetFixed(1, 1).
-		SetSelectable(true, true).
-		SetSelectedStyle(tcell.StyleDefault.Background(tcell.ColorGray).Foreground(tcell.ColorWhite)).
-		SetDoneFunc(func(key tcell.Key) {
-			if key == tcell.KeyEsc || key == tcell.KeyF1 || key == tcell.Key('x') || key == tcell.KeyCtrlX {
-				pages.RemovePage(RAGLoadedPage)
-				return
-			}
-		}).SetSelectedFunc(func(row int, column int) {
-		// If user selects a non-actionable column (0 or 1), move to first action column (2)
-		if column <= 1 {
-			if fileTable.GetColumnCount() > 2 {
-				fileTable.Select(row, 2) // Select first action column
-			}
-			return
-		}
-		tc := fileTable.GetCell(row, column)
-		tc.SetTextColor(tcell.ColorRed)
-		fileTable.SetSelectable(false, false)
-		// Check if the selected row is the exit row (row 0) - do this first to avoid index issues
-		if row == 0 {
-			pages.RemovePage(RAGLoadedPage)
-			return
-		}
-		// For file rows, get the filename (row index - 1 because of the exit row at index 0)
-		fpath := fileList[row-1] // -1 to account for the exit row at index 0
-		switch tc.Text {
-		case "delete":
-			if err := ragger.RemoveFile(fpath); err != nil {
-				logger.Error("failed to delete file from RAG", "filename", fpath, "error", err)
-				longStatusView.SetText(fmt.Sprintf("Error deleting file: %v", err))
-				return
-			}
-			if err := notifyUser("RAG file deleted", fpath+" was deleted from RAG system"); err != nil {
-				logger.Error("failed to send notification", "error", err)
-			}
-			longStatusView.SetText(fpath + " was deleted from RAG system")
-			return
-		default:
-			pages.RemovePage(RAGLoadedPage)
-			return
-		}
-	})
-	// Add input capture to the flex container to handle 'x' key for closing
-	ragflex.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		if event.Key() == tcell.KeyRune && event.Rune() == 'x' {
-			pages.RemovePage(RAGLoadedPage)
-			return nil
-		}
-		return event
-	})
-	return ragflex
-}
-
 func makeAgentTable(agentList []string) *tview.Table {
 	actions := []string{"filepath", "load"}
 	rows, cols := len(agentList), len(actions)+1
@@ -653,14 +521,14 @@ func makeAgentTable(agentList []string) *tview.Table {
 	for r := 0; r < rows; r++ {
 		for c := 0; c < cols; c++ {
 			color := tcell.ColorWhite
-			switch {
-			case c < 1:
+			switch c {
+			case 0:
 				chatActTable.SetCell(r, c,
 					tview.NewTableCell(agentList[r]).
 						SetTextColor(color).
 						SetAlign(tview.AlignCenter).
 						SetSelectable(false))
-			case c == 1:
+			case 1:
 				if actions[c-1] == "filepath" {
 					cc, ok := sysMap[agentList[r]]
 					if !ok {
