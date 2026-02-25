@@ -820,6 +820,7 @@ func makeFilePicker() *tview.Flex {
 	// --- NEW: search state ---
 	searching := false
 	searchQuery := ""
+	searchInputMode := false
 	// Helper function to check if a file has an allowed extension from config
 	hasAllowedExtension := func(filename string) bool {
 		if cfg.FilePickerExts == "" {
@@ -1012,6 +1013,7 @@ func makeFilePicker() *tview.Flex {
 			case tcell.KeyEsc:
 				// Exit search, clear filter
 				searching = false
+				searchInputMode = false
 				searchQuery = ""
 				refreshList(currentDisplayDir, "")
 				return nil
@@ -1021,16 +1023,80 @@ func makeFilePicker() *tview.Flex {
 					refreshList(currentDisplayDir, searchQuery)
 				}
 				return nil
-			case tcell.KeyRune:
-				r := event.Rune()
-				if r != 0 {
-					searchQuery += string(r)
-					refreshList(currentDisplayDir, searchQuery)
+			case tcell.KeyEnter:
+				// Exit search input mode and let normal processing handle selection
+				searchInputMode = false
+				// Get the currently highlighted item in the list
+				itemIndex := listView.GetCurrentItem()
+				if itemIndex >= 0 && itemIndex < listView.GetItemCount() {
+					itemText, _ := listView.GetItemText(itemIndex)
+					// Check for the exit option first
+					if strings.HasPrefix(itemText, "Exit file picker") {
+						pages.RemovePage(filePickerPage)
+						return nil
+					}
+					// Extract the actual filename/directory name by removing the type info
+					actualItemName := itemText
+					if bracketPos := strings.Index(itemText, " ["); bracketPos != -1 {
+						actualItemName = itemText[:bracketPos]
+					}
+					// Check if it's a directory (ends with /)
+					if strings.HasSuffix(actualItemName, "/") {
+						var targetDir string
+						if strings.HasPrefix(actualItemName, "../") {
+							// Parent directory
+							targetDir = path.Dir(currentDisplayDir)
+							if targetDir == currentDisplayDir && currentDisplayDir == "/" {
+								return nil
+							}
+						} else {
+							// Regular subdirectory
+							dirName := strings.TrimSuffix(actualItemName, "/")
+							targetDir = path.Join(currentDisplayDir, dirName)
+						}
+						// Navigate – clear search
+						if cfg.ImagePreview && imgPreview != nil {
+							imgPreview.SetImage(nil)
+						}
+						searching = false
+						searchInputMode = false
+						searchQuery = ""
+						refreshList(targetDir, "")
+						dirStack = append(dirStack, targetDir)
+						currentStackPos = len(dirStack) - 1
+						statusView.SetText("Current: " + targetDir)
+						return nil
+					} else {
+						// It's a file
+						filePath := path.Join(currentDisplayDir, actualItemName)
+						if info, err := os.Stat(filePath); err == nil && !info.IsDir() {
+							if isImageFile(actualItemName) {
+								SetImageAttachment(filePath)
+								statusView.SetText("Image attached: " + filePath + " (will be sent with next message)")
+								pages.RemovePage(filePickerPage)
+							} else {
+								textArea.SetText(filePath, true)
+								app.SetFocus(textArea)
+								pages.RemovePage(filePickerPage)
+							}
+						}
+						return nil
+					}
 				}
 				return nil
+			case tcell.KeyRune:
+				r := event.Rune()
+				if searchInputMode && r != 0 {
+					searchQuery += string(r)
+					refreshList(currentDisplayDir, searchQuery)
+					return nil
+				}
+				// If not in search input mode, pass through for navigation
+				return event
 			default:
-				// Pass all other keys (arrows, Enter, etc.) to normal processing
-				// This allows selecting items while still in search mode
+				// Exit search input mode but keep filter active for navigation
+				searchInputMode = false
+				// Pass all other keys (arrows, etc.) to normal processing
 				return event
 			}
 		}
@@ -1058,6 +1124,7 @@ func makeFilePicker() *tview.Flex {
 			if event.Rune() == '/' {
 				// Enter search mode
 				searching = true
+				searchInputMode = true
 				searchQuery = ""
 				refreshList(currentDisplayDir, "")
 				return nil
