@@ -1,12 +1,10 @@
 package main
-
 import (
 	"gf-lt/config"
 	"gf-lt/models"
 	"reflect"
 	"testing"
 )
-
 func TestConsolidateConsecutiveAssistantMessages(t *testing.T) {
 	// Mock config for testing
 	testCfg := &config.Config{
@@ -14,7 +12,6 @@ func TestConsolidateConsecutiveAssistantMessages(t *testing.T) {
 		WriteNextMsgAsCompletionAgent: "",
 	}
 	cfg = testCfg
-
 	tests := []struct {
 		name     string
 		input    []models.RoleMsg
@@ -114,38 +111,31 @@ func TestConsolidateConsecutiveAssistantMessages(t *testing.T) {
 			},
 		},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := consolidateAssistantMessages(tt.input)
-
 			if len(result) != len(tt.expected) {
 				t.Errorf("Expected %d messages, got %d", len(tt.expected), len(result))
 				t.Logf("Result: %+v", result)
 				t.Logf("Expected: %+v", tt.expected)
 				return
 			}
-
 			for i, expectedMsg := range tt.expected {
 				if i >= len(result) {
 					t.Errorf("Result has fewer messages than expected at index %d", i)
 					continue
 				}
-
 				actualMsg := result[i]
 				if actualMsg.Role != expectedMsg.Role {
 					t.Errorf("Message %d: expected role '%s', got '%s'", i, expectedMsg.Role, actualMsg.Role)
 				}
-
 				if actualMsg.Content != expectedMsg.Content {
 					t.Errorf("Message %d: expected content '%s', got '%s'", i, expectedMsg.Content, actualMsg.Content)
 				}
-
 				if actualMsg.ToolCallID != expectedMsg.ToolCallID {
 					t.Errorf("Message %d: expected ToolCallID '%s', got '%s'", i, expectedMsg.ToolCallID, actualMsg.ToolCallID)
 				}
 			}
-
 			// Additional check: ensure no messages were lost
 			if !reflect.DeepEqual(result, tt.expected) {
 				t.Errorf("Result does not match expected:\nResult:   %+v\nExpected: %+v", result, tt.expected)
@@ -153,7 +143,6 @@ func TestConsolidateConsecutiveAssistantMessages(t *testing.T) {
 		})
 	}
 }
-
 func TestUnmarshalFuncCall(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -213,7 +202,6 @@ func TestUnmarshalFuncCall(t *testing.T) {
 			wantErr: true,
 		},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := unmarshalFuncCall(tt.jsonStr)
@@ -238,7 +226,6 @@ func TestUnmarshalFuncCall(t *testing.T) {
 		})
 	}
 }
-
 func TestConvertJSONToMapStringString(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -265,7 +252,6 @@ func TestConvertJSONToMapStringString(t *testing.T) {
 			wantErr: true,
 		},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := convertJSONToMapStringString(tt.jsonStr)
@@ -287,7 +273,6 @@ func TestConvertJSONToMapStringString(t *testing.T) {
 		})
 	}
 }
-
 func TestParseKnownToTag(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -378,7 +363,6 @@ func TestParseKnownToTag(t *testing.T) {
 			wantKnownTo: []string{"Alice", "Bob", "Carl"},
 		},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Set up config
@@ -402,7 +386,6 @@ func TestParseKnownToTag(t *testing.T) {
 		})
 	}
 }
-
 func TestProcessMessageTag(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -498,7 +481,6 @@ func TestProcessMessageTag(t *testing.T) {
 			},
 		},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			testCfg := &config.Config{
@@ -529,7 +511,6 @@ func TestProcessMessageTag(t *testing.T) {
 		})
 	}
 }
-
 func TestFilterMessagesForCharacter(t *testing.T) {
 	messages := []models.RoleMsg{
 		{Role: "system", Content: "System message", KnownTo: nil}, // visible to all
@@ -539,7 +520,6 @@ func TestFilterMessagesForCharacter(t *testing.T) {
 		{Role: "Alice", Content: "Private to Carl", KnownTo: []string{"Alice", "Carl"}},
 		{Role: "Carl", Content: "Hi all", KnownTo: nil}, // visible to all
 	}
-
 	tests := []struct {
 		name        string
 		enabled     bool
@@ -583,7 +563,6 @@ func TestFilterMessagesForCharacter(t *testing.T) {
 			wantIndices: []int{0, 1, 5},
 		},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			testCfg := &config.Config{
@@ -591,15 +570,12 @@ func TestFilterMessagesForCharacter(t *testing.T) {
 				CharSpecificContextTag:     "@",
 			}
 			cfg = testCfg
-
 			got := filterMessagesForCharacter(messages, tt.character)
-
 			if len(got) != len(tt.wantIndices) {
 				t.Errorf("filterMessagesForCharacter() returned %d messages, want %d", len(got), len(tt.wantIndices))
 				t.Logf("got: %v", got)
 				return
 			}
-
 			for i, idx := range tt.wantIndices {
 				if got[i].Content != messages[idx].Content {
 					t.Errorf("filterMessagesForCharacter() message %d content = %q, want %q", i, got[i].Content, messages[idx].Content)
@@ -608,7 +584,6 @@ func TestFilterMessagesForCharacter(t *testing.T) {
 		})
 	}
 }
-
 func TestRoleMsgCopyPreservesKnownTo(t *testing.T) {
 	// Test that the Copy() method preserves the KnownTo field
 	originalMsg := models.RoleMsg{
@@ -616,9 +591,7 @@ func TestRoleMsgCopyPreservesKnownTo(t *testing.T) {
 		Content: "Test message",
 		KnownTo: []string{"Bob", "Charlie"},
 	}
-
 	copiedMsg := originalMsg.Copy()
-
 	if copiedMsg.Role != originalMsg.Role {
 		t.Errorf("Copy() failed to preserve Role: got %q, want %q", copiedMsg.Role, originalMsg.Role)
 	}
@@ -635,7 +608,6 @@ func TestRoleMsgCopyPreservesKnownTo(t *testing.T) {
 		t.Errorf("Copy() failed to preserve hasContentParts flag")
 	}
 }
-
 func TestKnownToFieldPreservationScenario(t *testing.T) {
 	// Test the specific scenario from the log where KnownTo field was getting lost
 	originalMsg := models.RoleMsg{
@@ -643,28 +615,22 @@ func TestKnownToFieldPreservationScenario(t *testing.T) {
 		Content: `Alice: "Okay, Bob. The word is... **'Ephemeral'**. (ooc: @Bob@)"`,
 		KnownTo: []string{"Bob"}, // This was detected in the log
 	}
-
 	t.Logf("Original message - Role: %s, Content: %s, KnownTo: %v",
 		originalMsg.Role, originalMsg.Content, originalMsg.KnownTo)
-
 	// Simulate what happens when the message gets copied during processing
 	copiedMsg := originalMsg.Copy()
-
 	t.Logf("Copied message - Role: %s, Content: %s, KnownTo: %v",
 		copiedMsg.Role, copiedMsg.Content, copiedMsg.KnownTo)
-
 	// Check if KnownTo field survived the copy
 	if len(copiedMsg.KnownTo) == 0 {
 		t.Error("ERROR: KnownTo field was lost during copy!")
 	} else {
 		t.Log("SUCCESS: KnownTo field was preserved during copy!")
 	}
-
 	// Verify the content is the same
 	if copiedMsg.Content != originalMsg.Content {
 		t.Errorf("Content was changed during copy: got %s, want %s", copiedMsg.Content, originalMsg.Content)
 	}
-
 	// Verify the KnownTo slice is properly copied
 	if !reflect.DeepEqual(copiedMsg.KnownTo, originalMsg.KnownTo) {
 		t.Errorf("KnownTo was not properly copied: got %v, want %v", copiedMsg.KnownTo, originalMsg.KnownTo)

@@ -1,10 +1,8 @@
 package models
-
 import (
 	"strings"
 	"testing"
 )
-
 func TestRoleMsgToTextWithImages(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -92,7 +90,6 @@ func TestRoleMsgToTextWithImages(t *testing.T) {
 			expected: "[orange::i][image: /old/path/photo.jpg][-:-:-]",
 		},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := tt.msg.ToText(tt.index)
@@ -110,12 +107,10 @@ func TestRoleMsgToTextWithImages(t *testing.T) {
 		})
 	}
 }
-
 func TestExtractDisplayPath(t *testing.T) {
 	// Save original base dir
 	originalBaseDir := imageBaseDir
 	defer func() { imageBaseDir = originalBaseDir }()
-
 	tests := []struct {
 		name     string
 		baseDir  string
@@ -153,7 +148,6 @@ func TestExtractDisplayPath(t *testing.T) {
 			expected: "..._that_exceeds_sixty_characters_limit_yes_it_is_very_long.jpg",
 		},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			imageBaseDir = tt.baseDir

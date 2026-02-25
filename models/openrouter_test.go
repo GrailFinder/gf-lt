@@ -62,7 +62,6 @@ func TestORModelsListModels(t *testing.T) {
 			t.Errorf("expected 4 total models, got %d", len(allModels))
 		}
 	})
-
 	t.Run("integration with or_models.json", func(t *testing.T) {
 		// Attempt to load the real data file from the project root
 		path := filepath.Join("..", "or_models.json")
