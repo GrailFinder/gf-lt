@@ -913,6 +913,7 @@ func init() {
 					return nil
 				}
 			}
+			// Get files from ragdir
 			fileList := []string{}
 			for _, f := range files {
 				if f.IsDir() {
@@ -920,22 +921,14 @@ func init() {
 				}
 				fileList = append(fileList, f.Name())
 			}
-			chatRAGTable := makeRAGTable(fileList)
-			pages.AddPage(RAGPage, chatRAGTable, true, true)
-			return nil
-		}
-		if event.Key() == tcell.KeyCtrlY { // Use Ctrl+Y to list loaded RAG files
-			// List files already loaded into the RAG system
-			fileList, err := ragger.ListLoaded()
+			// Get loaded files from vector DB
+			loadedFiles, err := ragger.ListLoaded()
 			if err != nil {
 				logger.Error("failed to list loaded RAG files", "error", err)
-				if notifyerr := notifyUser("failed to list RAG files", err.Error()); notifyerr != nil {
-					logger.Error("failed to send notification", "error", notifyerr)
-				}
-				return nil
+				loadedFiles = []string{} // Continue with empty list on error
 			}
-			chatLoadedRAGTable := makeLoadedRAGTable(fileList)
-			pages.AddPage(RAGLoadedPage, chatLoadedRAGTable, true, true)
+			chatRAGTable := makeRAGTable(fileList, loadedFiles)
+			pages.AddPage(RAGPage, chatRAGTable, true, true)
 			return nil
 		}
 		if event.Key() == tcell.KeyRune && event.Modifiers() == tcell.ModAlt && event.Rune() == '1' {

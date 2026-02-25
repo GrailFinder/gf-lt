@@ -247,9 +247,49 @@ func formatSize(size int64) string {
 	return fmt.Sprintf("%.1f%s", s, units[i])
 }
 
-func makeRAGTable(fileList []string) *tview.Flex {
-	actions := []string{"load", "delete"}
-	rows, cols := len(fileList), len(actions)+2
+type ragFileInfo struct {
+	name     string
+	inRAGDir bool
+	isLoaded bool
+	fullPath string
+}
+
+func makeRAGTable(fileList []string, loadedFiles []string) *tview.Flex {
+	// Build set of loaded files for quick lookup
+	loadedSet := make(map[string]bool)
+	for _, f := range loadedFiles {
+		loadedSet[f] = true
+	}
+
+	// Build merged list: files from ragdir + orphaned files from DB
+	ragFiles := make([]ragFileInfo, 0, len(fileList)+len(loadedFiles))
+	seen := make(map[string]bool)
+
+	// Add files from ragdir
+	for _, f := range fileList {
+		ragFiles = append(ragFiles, ragFileInfo{
+			name:     f,
+			inRAGDir: true,
+			isLoaded: loadedSet[f],
+			fullPath: path.Join(cfg.RAGDir, f),
+		})
+		seen[f] = true
+	}
+
+	// Add orphaned files (in DB but not in ragdir)
+	for _, f := range loadedFiles {
+		if !seen[f] {
+			ragFiles = append(ragFiles, ragFileInfo{
+				name:     f,
+				inRAGDir: false,
+				isLoaded: true,
+				fullPath: "",
+			})
+		}
+	}
+
+	rows := len(ragFiles)
+	cols := 4 // File Name | Preview | Action | Delete
 	fileTable := tview.NewTable().
 		SetBorders(true)
 	longStatusView := tview.NewTextView()
@@ -273,7 +313,7 @@ func makeRAGTable(fileList []string) *tview.Flex {
 			SetAlign(tview.AlignCenter).
 			SetSelectable(false))
 	fileTable.SetCell(0, 2,
-		tview.NewTableCell("Load").
+		tview.NewTableCell("Load/Unload").
 			SetTextColor(tcell.ColorWhite).
 			SetAlign(tview.AlignCenter).
 			SetSelectable(false))
@@ -284,18 +324,29 @@ func makeRAGTable(fileList []string) *tview.Flex {
 			SetSelectable(false))
 	// Add the file rows starting from row 1
 	for r := 0; r < rows; r++ {
+		f := ragFiles[r]
 		for c := 0; c < cols; c++ {
 			color := tcell.ColorWhite
 			switch {
 			case c == 0:
+				displayName := f.name
+				if !f.inRAGDir {
+					displayName = f.name + " (orphaned)"
+				}
 				fileTable.SetCell(r+1, c,
-					tview.NewTableCell(fileList[r]).
+					tview.NewTableCell(displayName).
 						SetTextColor(color).
 						SetAlign(tview.AlignCenter).
 						SetSelectable(false))
 			case c == 1:
-				fpath := path.Join(cfg.RAGDir, fileList[r])
-				if fi, err := os.Stat(fpath); err == nil {
+				if !f.inRAGDir {
+					// Orphaned file - no preview available
+					fileTable.SetCell(r+1, c,
+						tview.NewTableCell("not in ragdir").
+							SetTextColor(tcell.ColorYellow).
+							SetAlign(tview.AlignCenter).
+							SetSelectable(false))
+				} else if fi, err := os.Stat(f.fullPath); err == nil {
 					size := fi.Size()
 					modTime := fi.ModTime()
 					preview := fmt.Sprintf("%s | %s", formatSize(size), modTime.Format("2006-01-02 15:04"))
@@ -312,15 +363,32 @@ func makeRAGTable(fileList []string) *tview.Flex {
 							SetSelectable(false))
 				}
 			case c == 2:
+				actionText := "load"
+				if f.isLoaded {
+					actionText = "unload"
+				}
+				if !f.inRAGDir {
+					// Orphaned file - can only unload
+					actionText = "unload"
+				}
 				fileTable.SetCell(r+1, c,
-					tview.NewTableCell("load").
+					tview.NewTableCell(actionText).
 						SetTextColor(color).
 						SetAlign(tview.AlignCenter))
-			default:
-				fileTable.SetCell(r+1, c,
-					tview.NewTableCell("delete").
-						SetTextColor(color).
-						SetAlign(tview.AlignCenter))
+			case c == 3:
+				if !f.inRAGDir {
+					// Orphaned file - cannot delete from ragdir (not there)
+					fileTable.SetCell(r+1, c,
+						tview.NewTableCell("-").
+							SetTextColor(tcell.ColorDarkGray).
+							SetAlign(tview.AlignCenter).
+							SetSelectable(false))
+				} else {
+					fileTable.SetCell(r+1, c,
+						tview.NewTableCell("delete").
+							SetTextColor(color).
+							SetAlign(tview.AlignCenter))
+				}
 			}
 		}
 	}
@@ -376,12 +444,16 @@ func makeRAGTable(fileList []string) *tview.Flex {
 			pages.RemovePage(RAGPage)
 			return
 		}
-		// For file rows, get the filename (row index - 1 because of the exit row at index 0)
-		fpath := fileList[row-1] // -1 to account for the exit row at index 0
-		// notification := fmt.Sprintf("chat: %s; action: %s", fpath, tc.Text)
+		// For file rows, get the file info (row index - 1 because of the exit row at index 0)
+		f := ragFiles[row-1]
+		// Handle "-" case (orphaned file with no delete option)
+		if tc.Text == "-" {
+			pages.RemovePage(RAGPage)
+			return
+		}
 		switch tc.Text {
 		case "load":
-			fpath = path.Join(cfg.RAGDir, fpath)
+			fpath := path.Join(cfg.RAGDir, f.name)
 			longStatusView.SetText("clicked load")
 			go func() {
 				if err := ragger.LoadRAG(fpath); err != nil {
@@ -398,8 +470,25 @@ func makeRAGTable(fileList []string) *tview.Flex {
 				})
 			}()
 			return
+		case "unload":
+			longStatusView.SetText("clicked unload")
+			go func() {
+				if err := ragger.RemoveFile(f.name); err != nil {
+					logger.Error("failed to unload file from RAG", "filename", f.name, "error", err)
+					_ = notifyUser("RAG", "failed to unload file; error: "+err.Error())
+					app.QueueUpdate(func() {
+						pages.RemovePage(RAGPage)
+					})
+					return
+				}
+				_ = notifyUser("RAG", "file unloaded successfully")
+				app.QueueUpdate(func() {
+					pages.RemovePage(RAGPage)
+				})
+			}()
+			return
 		case "delete":
-			fpath = path.Join(cfg.RAGDir, fpath)
+			fpath := path.Join(cfg.RAGDir, f.name)
 			if err := os.Remove(fpath); err != nil {
 				logger.Error("failed to delete file", "filename", fpath, "error", err)
 				return
