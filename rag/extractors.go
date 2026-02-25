@@ -1,6 +1,7 @@
 package rag
 
 import (
+	"archive/zip"
 	"bytes"
 	"errors"
 	"fmt"
@@ -12,7 +13,6 @@ import (
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/ledongthuc/pdf"
-	"github.com/n3integration/epub"
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/extension"
 	"github.com/yuin/goldmark/parser"
@@ -90,26 +90,46 @@ func extractTextFromMarkdown(fpath string) (string, error) {
 }
 
 func extractTextFromEpub(fpath string) (string, error) {
-	book, err := epub.Open(fpath)
+	r, err := zip.OpenReader(fpath)
 	if err != nil {
 		return "", fmt.Errorf("failed to open epub: %w", err)
 	}
-	defer book.Close()
+	defer r.Close()
+
 	var sb strings.Builder
-	err = book.Each(func(title string, xhtml io.ReadCloser) {
+
+	for _, f := range r.File {
+		ext := strings.ToLower(path.Ext(f.Name))
+		if ext != ".xhtml" && ext != ".html" && ext != ".htm" && ext != ".xml" {
+			continue
+		}
+
+		// Skip manifest, toc, ncx files - they don't contain book content
+		nameLower := strings.ToLower(f.Name)
+		if strings.Contains(nameLower, "toc") || strings.Contains(nameLower, "nav") ||
+			strings.Contains(nameLower, "manifest") || strings.Contains(nameLower, ".opf") ||
+			strings.HasSuffix(nameLower, ".ncx") {
+			continue
+		}
+
+		rc, err := f.Open()
+		if err != nil {
+			continue
+		}
+
 		if sb.Len() > 0 {
 			sb.WriteString("\n\n")
 		}
-		sb.WriteString(title)
+		sb.WriteString(f.Name)
 		sb.WriteString("\n")
-		buf, readErr := io.ReadAll(xhtml)
+
+		buf, readErr := io.ReadAll(rc)
+		rc.Close()
 		if readErr == nil {
 			sb.WriteString(stripHTML(string(buf)))
 		}
-	})
-	if err != nil {
-		return "", fmt.Errorf("failed to iterate epub chapters: %w", err)
 	}
+
 	if sb.Len() == 0 {
 		return "", errors.New("no content extracted from epub")
 	}

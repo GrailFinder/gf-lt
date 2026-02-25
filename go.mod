@@ -13,7 +13,6 @@ require (
 	github.com/gordonklaus/portaudio v0.0.0-20250206071425-98a94950218b
 	github.com/jmoiron/sqlx v1.4.0
 	github.com/ledongthuc/pdf v0.0.0-20250511090121-5959a4027728
-	github.com/n3integration/epub v0.2.0
 	github.com/neurosnap/sentences v1.1.2
 	github.com/rivo/tview v0.42.0
 	github.com/yuin/goldmark v1.4.13
