@@ -714,6 +714,7 @@ func executeCommand(args map[string]string) []byte {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, command, cmdArgs...)
+	cmd.Dir = cfg.FilePickerDir
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		msg := fmt.Sprintf("command '%s' failed; error: %v; output: %s", command, err, string(output))

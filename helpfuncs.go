@@ -474,6 +474,7 @@ func executeCommandAndDisplay(cmdText string) {
 	}
 	// Create the command execution
 	cmd := exec.Command(command, args...)
+	cmd.Dir = cfg.FilePickerDir
 	// Execute the command and get output
 	output, err := cmd.CombinedOutput()
 	// Add the command being executed to the chat
