@@ -197,37 +197,6 @@ func init() {
 	textArea = tview.NewTextArea().
 		SetPlaceholder("input is multiline; press <Enter> to start the next line;\npress <Esc> to send the message.")
 	textArea.SetBorder(true).SetTitle("input")
-	// Add input capture for @ completion
-	textArea.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		if !shellMode {
-			return event
-		}
-		// Handle Tab key for file completion
-		if event.Key() == tcell.KeyTab {
-			currentText := textArea.GetText()
-			row, col, _, _ := textArea.GetCursor()
-			// Calculate absolute position from row/col
-			lines := strings.Split(currentText, "\n")
-			cursorPos := 0
-			for i := 0; i < row && i < len(lines); i++ {
-				cursorPos += len(lines[i]) + 1 // +1 for newline
-			}
-			cursorPos += col
-			// Look backwards from cursor to find @
-			if cursorPos > 0 {
-				// Find the last @ before cursor
-				textBeforeCursor := currentText[:cursorPos]
-				atIndex := strings.LastIndex(textBeforeCursor, "@")
-				if atIndex >= 0 {
-					// Extract the partial match text after @
-					filter := textBeforeCursor[atIndex+1:]
-					showFileCompletionPopup(filter)
-					return nil // Consume the Tab event
-				}
-			}
-		}
-		return event
-	})
 	textView = tview.NewTextView().
 		SetDynamicColors(true).
 		SetRegions(true).

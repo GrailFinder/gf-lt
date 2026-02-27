@@ -452,11 +452,12 @@ func updateFlexLayout() {
 	}
 	// Keep focus on currently focused widget
 	focused := app.GetFocus()
-	if focused == textView {
+	switch {
+	case focused == textView:
 		app.SetFocus(textView)
-	} else if shellMode {
+	case shellMode:
 		app.SetFocus(shellInput)
-	} else {
+	default:
 		app.SetFocus(textArea)
 	}
 }
@@ -483,7 +484,8 @@ func executeCommandAndDisplay(cmdText string) {
 	// Execute the command and get output
 	output, err := cmd.CombinedOutput()
 	// Add the command being executed to the chat
-	fmt.Fprintf(textView, "\n[yellow]$ %s[-:-:-]\n", cmdText)
+	fmt.Fprintf(textView, "\n[-:-:b](%d) <%s>: [-:-:-]\n$ %s\n",
+		len(chatBody.Messages), cfg.ToolRole, cmdText)
 	var outputContent string
 	if err != nil {
 		// Include both output and error
