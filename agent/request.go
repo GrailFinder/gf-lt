@@ -71,8 +71,8 @@ func (ag *AgentClient) buildRequest(sysprompt, msg string) ([]byte, error) {
 	// Build prompt for completion endpoints
 	if isCompletion {
 		var sb strings.Builder
-		for _, m := range messages {
-			sb.WriteString(m.ToPrompt())
+		for i := range messages {
+			sb.WriteString(messages[i].ToPrompt())
 			sb.WriteString("\n")
 		}
 		prompt := strings.TrimSpace(sb.String())

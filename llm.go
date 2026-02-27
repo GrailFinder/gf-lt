@@ -14,8 +14,8 @@ var lastImg string             // for ctrl+j
 
 // containsToolSysMsg checks if the toolSysMsg already exists in the chat body
 func containsToolSysMsg() bool {
-	for _, msg := range chatBody.Messages {
-		if msg.Role == cfg.ToolRole && msg.Content == toolSysMsg {
+	for i := range chatBody.Messages {
+		if chatBody.Messages[i].Role == cfg.ToolRole && chatBody.Messages[i].Content == toolSysMsg {
 			return true
 		}
 	}
@@ -147,8 +147,8 @@ func (lcp LCPCompletion) FormMsg(msg, role string, resume bool) (io.Reader, erro
 	}
 	filteredMessages, botPersona := filterMessagesForCurrentCharacter(chatBody.Messages)
 	messages := make([]string, len(filteredMessages))
-	for i, m := range filteredMessages {
-		messages[i] = stripThinkingFromMsg(&m).ToPrompt()
+	for i := range filteredMessages {
+		messages[i] = stripThinkingFromMsg(&filteredMessages[i]).ToPrompt()
 	}
 	prompt := strings.Join(messages, "\n")
 	// Add multimodal media markers to the prompt text when multimodal data is present
@@ -284,12 +284,12 @@ func (op LCPChat) FormMsg(msg, role string, resume bool) (io.Reader, error) {
 	filteredMessages, _ := filterMessagesForCurrentCharacter(chatBody.Messages)
 	// Filter out tool call indicators (assistant messages with ToolCallID but empty content)
 	var filteredForLLM []models.RoleMsg
-	for _, msg := range filteredMessages {
-		isToolCallIndicator := msg.Role != "system" && msg.ToolCallID != "" && msg.Content == "" && len(msg.ToolCalls) > 0
+	for i := range filteredMessages {
+		isToolCallIndicator := filteredMessages[i].Role != "system" && filteredMessages[i].ToolCallID != "" && filteredMessages[i].Content == "" && len(filteredMessages[i].ToolCalls) > 0
 		if isToolCallIndicator {
 			continue
 		}
-		filteredForLLM = append(filteredForLLM, msg)
+		filteredForLLM = append(filteredForLLM, filteredMessages[i])
 	}
 	// openai /v1/chat does not support custom roles; needs to be user, assistant, system
 	// Add persona suffix to the last user message to indicate who the assistant should reply as
@@ -298,18 +298,19 @@ func (op LCPChat) FormMsg(msg, role string, resume bool) (io.Reader, error) {
 		Model:    chatBody.Model,
 		Stream:   chatBody.Stream,
 	}
-	for i, msg := range filteredForLLM {
-		strippedMsg := *stripThinkingFromMsg(&msg)
-		if strippedMsg.Role == cfg.UserRole {
+	for i := range filteredForLLM {
+		strippedMsg := *stripThinkingFromMsg(&filteredForLLM[i])
+		switch strippedMsg.Role {
+		case cfg.UserRole:
 			bodyCopy.Messages[i] = strippedMsg
 			bodyCopy.Messages[i].Role = "user"
-		} else if strippedMsg.Role == cfg.AssistantRole {
+		case cfg.AssistantRole:
 			bodyCopy.Messages[i] = strippedMsg
 			bodyCopy.Messages[i].Role = "assistant"
-		} else if strippedMsg.Role == cfg.ToolRole {
+		case cfg.ToolRole:
 			bodyCopy.Messages[i] = strippedMsg
 			bodyCopy.Messages[i].Role = "tool"
-		} else {
+		default:
 			bodyCopy.Messages[i] = strippedMsg
 		}
 		// Clear ToolCalls - they're stored in chat history for display but not sent to LLM
@@ -375,8 +376,8 @@ func (ds DeepSeekerCompletion) FormMsg(msg, role string, resume bool) (io.Reader
 	}
 	filteredMessages, botPersona := filterMessagesForCurrentCharacter(chatBody.Messages)
 	messages := make([]string, len(filteredMessages))
-	for i, m := range filteredMessages {
-		messages[i] = stripThinkingFromMsg(&m).ToPrompt()
+	for i := range filteredMessages {
+		messages[i] = stripThinkingFromMsg(&filteredMessages[i]).ToPrompt()
 	}
 	prompt := strings.Join(messages, "\n")
 	// strings builder?
@@ -442,12 +443,12 @@ func (ds DeepSeekerChat) FormMsg(msg, role string, resume bool) (io.Reader, erro
 	filteredMessages, _ := filterMessagesForCurrentCharacter(chatBody.Messages)
 	// Filter out tool call indicators (assistant messages with ToolCallID but empty content)
 	var filteredForLLM []models.RoleMsg
-	for _, msg := range filteredMessages {
-		isToolCallIndicator := msg.Role != "system" && msg.ToolCallID != "" && msg.Content == "" && len(msg.ToolCalls) > 0
+	for i := range filteredMessages {
+		isToolCallIndicator := filteredMessages[i].Role != "system" && filteredMessages[i].ToolCallID != "" && filteredMessages[i].Content == "" && len(filteredMessages[i].ToolCalls) > 0
 		if isToolCallIndicator {
 			continue
 		}
-		filteredForLLM = append(filteredForLLM, msg)
+		filteredForLLM = append(filteredForLLM, filteredMessages[i])
 	}
 	// Add persona suffix to the last user message to indicate who the assistant should reply as
 	bodyCopy := &models.ChatBody{
@@ -455,18 +456,23 @@ func (ds DeepSeekerChat) FormMsg(msg, role string, resume bool) (io.Reader, erro
 		Model:    chatBody.Model,
 		Stream:   chatBody.Stream,
 	}
-	for i, msg := range filteredForLLM {
-		strippedMsg := *stripThinkingFromMsg(&msg)
-		if strippedMsg.Role == cfg.UserRole || i == 1 {
-			bodyCopy.Messages[i] = strippedMsg
-			bodyCopy.Messages[i].Role = "user"
-		} else if strippedMsg.Role == cfg.AssistantRole {
+	for i := range filteredForLLM {
+		strippedMsg := *stripThinkingFromMsg(&filteredForLLM[i])
+		switch strippedMsg.Role {
+		case cfg.UserRole:
+			if i == 1 {
+				bodyCopy.Messages[i] = strippedMsg
+				bodyCopy.Messages[i].Role = "user"
+			} else {
+				bodyCopy.Messages[i] = strippedMsg
+			}
+		case cfg.AssistantRole:
 			bodyCopy.Messages[i] = strippedMsg
 			bodyCopy.Messages[i].Role = "assistant"
-		} else if strippedMsg.Role == cfg.ToolRole {
+		case cfg.ToolRole:
 			bodyCopy.Messages[i] = strippedMsg
 			bodyCopy.Messages[i].Role = "tool"
-		} else {
+		default:
 			bodyCopy.Messages[i] = strippedMsg
 		}
 		// Clear ToolCalls - they're stored in chat history for display but not sent to LLM
@@ -523,8 +529,8 @@ func (or OpenRouterCompletion) FormMsg(msg, role string, resume bool) (io.Reader
 	}
 	filteredMessages, botPersona := filterMessagesForCurrentCharacter(chatBody.Messages)
 	messages := make([]string, len(filteredMessages))
-	for i, m := range filteredMessages {
-		messages[i] = stripThinkingFromMsg(&m).ToPrompt()
+	for i := range filteredMessages {
+		messages[i] = stripThinkingFromMsg(&filteredMessages[i]).ToPrompt()
 	}
 	prompt := strings.Join(messages, "\n")
 	// strings builder?
@@ -623,12 +629,12 @@ func (or OpenRouterChat) FormMsg(msg, role string, resume bool) (io.Reader, erro
 	filteredMessages, _ := filterMessagesForCurrentCharacter(chatBody.Messages)
 	// Filter out tool call indicators (assistant messages with ToolCallID but empty content)
 	var filteredForLLM []models.RoleMsg
-	for _, msg := range filteredMessages {
-		isToolCallIndicator := msg.Role != "system" && msg.ToolCallID != "" && msg.Content == "" && len(msg.ToolCalls) > 0
+	for i := range filteredMessages {
+		isToolCallIndicator := filteredMessages[i].Role != "system" && filteredMessages[i].ToolCallID != "" && filteredMessages[i].Content == "" && len(filteredMessages[i].ToolCalls) > 0
 		if isToolCallIndicator {
 			continue
 		}
-		filteredForLLM = append(filteredForLLM, msg)
+		filteredForLLM = append(filteredForLLM, filteredMessages[i])
 	}
 	// Add persona suffix to the last user message to indicate who the assistant should reply as
 	bodyCopy := &models.ChatBody{
@@ -636,18 +642,19 @@ func (or OpenRouterChat) FormMsg(msg, role string, resume bool) (io.Reader, erro
 		Model:    chatBody.Model,
 		Stream:   chatBody.Stream,
 	}
-	for i, msg := range filteredForLLM {
-		strippedMsg := *stripThinkingFromMsg(&msg)
-		if strippedMsg.Role == cfg.UserRole {
+	for i := range filteredForLLM {
+		strippedMsg := *stripThinkingFromMsg(&filteredForLLM[i])
+		switch strippedMsg.Role {
+		case cfg.UserRole:
 			bodyCopy.Messages[i] = strippedMsg
 			bodyCopy.Messages[i].Role = "user"
-		} else if strippedMsg.Role == cfg.AssistantRole {
+		case cfg.AssistantRole:
 			bodyCopy.Messages[i] = strippedMsg
 			bodyCopy.Messages[i].Role = "assistant"
-		} else if strippedMsg.Role == cfg.ToolRole {
+		case cfg.ToolRole:
 			bodyCopy.Messages[i] = strippedMsg
 			bodyCopy.Messages[i].Role = "tool"
-		} else {
+		default:
 			bodyCopy.Messages[i] = strippedMsg
 		}
 		// Clear ToolCalls - they're stored in chat history for display but not sent to LLM

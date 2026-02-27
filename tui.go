@@ -565,7 +565,7 @@ func init() {
 			return nil
 		}
 		// Handle Ctrl+T to toggle tool call/response visibility
-		if event.Key() == tcell.KeyRune && event.Rune() == 't' && event.Modifiers()&tcell.ModCtrl != 0 {
+		if event.Key() == tcell.KeyCtrlT {
 			toolCollapsed = !toolCollapsed
 			textView.SetText(chatToText(chatBody.Messages, cfg.ShowSys))
 			colorText()
@@ -794,14 +794,6 @@ func init() {
 			}
 			// Show model selection popup instead of rotating models
 			showModelSelectionPopup()
-			return nil
-		}
-		if event.Key() == tcell.KeyCtrlT {
-			// clear context
-			// remove tools and thinking
-			removeThinking(chatBody)
-			textView.SetText(chatToText(chatBody.Messages, cfg.ShowSys))
-			colorText()
 			return nil
 		}
 		if event.Key() == tcell.KeyCtrlV {

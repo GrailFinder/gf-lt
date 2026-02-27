@@ -143,16 +143,16 @@ func filterMessagesForCharacter(messages []models.RoleMsg, character string) []m
 		return messages
 	}
 	filtered := make([]models.RoleMsg, 0, len(messages))
-	for _, msg := range messages {
+	for i := range messages {
 		// If KnownTo is nil or empty, message is visible to all
 		// system msg cannot be filtered
-		if len(msg.KnownTo) == 0 || msg.Role == "system" {
-			filtered = append(filtered, msg)
+		if len(messages[i].KnownTo) == 0 || messages[i].Role == "system" {
+			filtered = append(filtered, messages[i])
 			continue
 		}
-		if slices.Contains(msg.KnownTo, character) {
+		if slices.Contains(messages[i].KnownTo, character) {
 			// Check if character is in KnownTo lis
-			filtered = append(filtered, msg)
+			filtered = append(filtered, messages[i])
 		}
 	}
 	return filtered
@@ -164,11 +164,11 @@ func cleanToolCalls(messages []models.RoleMsg) []models.RoleMsg {
 		return consolidateAssistantMessages(messages)
 	}
 	cleaned := make([]models.RoleMsg, 0, len(messages))
-	for i, msg := range messages {
+	for i := range messages {
 		// recognize the message as the tool call and remove it
 		// tool call in last msg should stay
-		if msg.ToolCallID == "" || i == len(messages)-1 {
-			cleaned = append(cleaned, msg)
+		if messages[i].ToolCallID == "" || i == len(messages)-1 {
+			cleaned = append(cleaned, messages[i])
 		}
 	}
 	return consolidateAssistantMessages(cleaned)
@@ -1207,25 +1207,25 @@ func findCall(msg, toolCall string) bool {
 
 func chatToTextSlice(messages []models.RoleMsg, showSys bool) []string {
 	resp := make([]string, len(messages))
-	for i, msg := range messages {
+	for i := range messages {
 		// Handle tool call indicators (assistant messages with tool call but empty content)
-		if (msg.Role == cfg.AssistantRole || msg.Role == "assistant") && msg.ToolCallID != "" && msg.Content == "" && len(msg.ToolCalls) > 0 {
+		if (messages[i].Role == cfg.AssistantRole || messages[i].Role == "assistant") && messages[i].ToolCallID != "" && messages[i].Content == "" && len(messages[i].ToolCalls) > 0 {
 			// This is a tool call indicator - show collapsed
 			if toolCollapsed {
-				toolName := msg.ToolCalls[0].Name
+				toolName := messages[i].ToolCalls[0].Name
 				resp[i] = fmt.Sprintf("[yellow::i][tool call: %s (press Ctrl+T to expand)][-:-:-]", toolName)
 			} else {
 				// Show full tool call info
-				toolName := msg.ToolCalls[0].Name
-				resp[i] = fmt.Sprintf("[yellow::i][tool call: %s][-:-:-]\nargs: %s", toolName, msg.ToolCalls[0].Args)
+				toolName := messages[i].ToolCalls[0].Name
+				resp[i] = fmt.Sprintf("[yellow::i][tool call: %s][-:-:-]\nargs: %s", toolName, messages[i].ToolCalls[0].Args)
 			}
 			continue
 		}
 		// Handle tool responses
-		if msg.Role == cfg.ToolRole || msg.Role == "tool" {
+		if messages[i].Role == cfg.ToolRole || messages[i].Role == "tool" {
 			// Always show shell commands
-			if msg.IsShellCommand {
-				resp[i] = msg.ToText(i)
+			if messages[i].IsShellCommand {
+				resp[i] = messages[i].ToText(i)
 				continue
 			}
 			// Hide non-shell tool responses when collapsed
@@ -1233,14 +1233,14 @@ func chatToTextSlice(messages []models.RoleMsg, showSys bool) []string {
 				continue
 			}
 			// When expanded, show tool responses
-			resp[i] = msg.ToText(i)
+			resp[i] = messages[i].ToText(i)
 			continue
 		}
 		// INFO: skips system msg when showSys is false
-		if !showSys && msg.Role == "system" {
+		if !showSys && messages[i].Role == "system" {
 			continue
 		}
-		resp[i] = msg.ToText(i)
+		resp[i] = messages[i].ToText(i)
 	}
 	return resp
 }
@@ -1272,20 +1272,6 @@ func chatToText(messages []models.RoleMsg, showSys bool) string {
 		}
 	}
 	return text
-}
-
-func removeThinking(chatBody *models.ChatBody) {
-	msgs := []models.RoleMsg{}
-	for _, msg := range chatBody.Messages {
-		// Filter out tool messages and thinking markers
-		if msg.Role == cfg.ToolRole {
-			continue
-		}
-		// find thinking and remove it - use SetText to preserve ContentParts
-		msg.SetText(thinkRE.ReplaceAllString(msg.GetText(), ""))
-		msgs = append(msgs, msg)
-	}
-	chatBody.Messages = msgs
 }
 
 func addNewChat(chatName string) {

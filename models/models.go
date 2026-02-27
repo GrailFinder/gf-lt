@@ -523,16 +523,16 @@ type ChatBody struct {
 }
 
 func (cb *ChatBody) Rename(oldname, newname string) {
-	for i, m := range cb.Messages {
-		cb.Messages[i].Content = strings.ReplaceAll(m.Content, oldname, newname)
-		cb.Messages[i].Role = strings.ReplaceAll(m.Role, oldname, newname)
+	for i := range cb.Messages {
+		cb.Messages[i].Content = strings.ReplaceAll(cb.Messages[i].Content, oldname, newname)
+		cb.Messages[i].Role = strings.ReplaceAll(cb.Messages[i].Role, oldname, newname)
 	}
 }
 
 func (cb *ChatBody) ListRoles() []string {
 	namesMap := make(map[string]struct{})
-	for _, m := range cb.Messages {
-		namesMap[m.Role] = struct{}{}
+	for i := range cb.Messages {
+		namesMap[cb.Messages[i].Role] = struct{}{}
 	}
 	resp := make([]string, len(namesMap))
 	i := 0

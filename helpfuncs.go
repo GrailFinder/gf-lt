@@ -15,8 +15,6 @@ import (
 	"time"
 	"unicode"
 
-	"math/rand/v2"
-
 	"github.com/rivo/tview"
 )
 
@@ -373,16 +371,6 @@ func makeStatusLine() string {
 		statusLine += roleInject
 	}
 	return statusLine + imageInfo + shellModeInfo
-}
-
-var letters = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
-
-func randString(n int) string {
-	b := make([]rune, n)
-	for i := range b {
-		b[i] = letters[rand.IntN(len(letters))]
-	}
-	return string(b)
 }
 
 // set of roles within card definition and mention in chat history
