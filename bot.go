@@ -1208,16 +1208,17 @@ func findCall(msg, toolCall string) bool {
 func chatToTextSlice(messages []models.RoleMsg, showSys bool) []string {
 	resp := make([]string, len(messages))
 	for i := range messages {
+		icon := fmt.Sprintf("[-:-:b](%d) <%s>:[-:-:-]", i, messages[i].Role)
 		// Handle tool call indicators (assistant messages with tool call but empty content)
-		if (messages[i].Role == cfg.AssistantRole || messages[i].Role == "assistant") && messages[i].ToolCallID != "" && messages[i].Content == "" && len(messages[i].ToolCalls) > 0 {
+		if messages[i].Role == cfg.AssistantRole && len(messages[i].ToolCalls) > 0 {
 			// This is a tool call indicator - show collapsed
 			if toolCollapsed {
 				toolName := messages[i].ToolCalls[0].Name
-				resp[i] = fmt.Sprintf("[yellow::i][tool call: %s (press Ctrl+T to expand)][-:-:-]", toolName)
+				resp[i] = fmt.Sprintf("%s\n[yellow::i][tool call: %s (press Ctrl+T to expand)][-:-:-]", icon, toolName)
 			} else {
 				// Show full tool call info
 				toolName := messages[i].ToolCalls[0].Name
-				resp[i] = fmt.Sprintf("[yellow::i][tool call: %s][-:-:-]\nargs: %s", toolName, messages[i].ToolCalls[0].Args)
+				resp[i] = fmt.Sprintf("%s\n[yellow::i][tool call: %s][-:-:-]\nargs: %s", icon, toolName, messages[i].ToolCalls[0].Args)
 			}
 			continue
 		}
@@ -1230,6 +1231,7 @@ func chatToTextSlice(messages []models.RoleMsg, showSys bool) []string {
 			}
 			// Hide non-shell tool responses when collapsed
 			if toolCollapsed {
+				resp[i] = icon + "\n[yellow::i][tool resp (press Ctrl+T to expand)][-:-:-]\n"
 				continue
 			}
 			// When expanded, show tool responses

@@ -80,7 +80,7 @@ var (
 [yellow]Ctrl+p[white]: props edit form (min-p, dry, etc.)
 [yellow]Ctrl+v[white]: show API link selection popup to choose current API
 [yellow]Ctrl+r[white]: start/stop recording from your microphone (needs stt server or whisper binary)
-[yellow]Ctrl+t[white]: remove thinking (<think>) and tool messages from context (delete from chat)
+[yellow]Ctrl+t[white]: (un)collapse tool messages
 [yellow]Ctrl+l[white]: show model selection popup to choose current model
 [yellow]Ctrl+k[white]: switch tool use (recommend tool use to llm after user msg)
 [yellow]Ctrl+a[white]: interrupt tts (needs tts server)
