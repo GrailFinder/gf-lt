@@ -784,7 +784,7 @@ func showSpinner() {
 			case toolRunningMode:
 				textArea.SetTitle(spinners[spin] + " tool")
 			case botRespMode:
-				textArea.SetTitle(spinners[spin] + " " + botPersona)
+				textArea.SetTitle(spinners[spin] + " " + botPersona + " (F6 to interrupt)")
 			default:
 				textArea.SetTitle(spinners[spin] + " input")
 			}

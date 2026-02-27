@@ -359,7 +359,7 @@ func makeStatusLine() string {
 	}
 	// Get model color based on load status for local llama.cpp models
 	modelColor := getModelColor()
-	statusLine := fmt.Sprintf(statusLineTempl, boolColors[botRespMode], activeChatName,
+	statusLine := fmt.Sprintf(statusLineTempl, activeChatName,
 		boolColors[cfg.ToolUse], modelColor, chatBody.Model, boolColors[cfg.SkipLLMResp],
 		cfg.CurrentAPI, persona, botPersona)
 	if cfg.STT_ENABLED {

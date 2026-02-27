@@ -115,33 +115,39 @@ type RoleMsg struct {
 }
 
 // MarshalJSON implements custom JSON marshaling for RoleMsg
-func (m *RoleMsg) MarshalJSON() ([]byte, error) {
+//
+//nolint:gocritic
+func (m RoleMsg) MarshalJSON() ([]byte, error) {
 	if m.hasContentParts {
 		// Use structured content format
 		aux := struct {
-			Role       string   `json:"role"`
-			Content    []any    `json:"content"`
-			ToolCallID string   `json:"tool_call_id,omitempty"`
-			KnownTo    []string `json:"known_to,omitempty"`
+			Role       string         `json:"role"`
+			Content    []any          `json:"content"`
+			ToolCallID string         `json:"tool_call_id,omitempty"`
+			KnownTo    []string       `json:"known_to,omitempty"`
+			Stats      *ResponseStats `json:"stats,omitempty"`
 		}{
 			Role:       m.Role,
 			Content:    m.ContentParts,
 			ToolCallID: m.ToolCallID,
 			KnownTo:    m.KnownTo,
+			Stats:      m.Stats,
 		}
 		return json.Marshal(aux)
 	} else {
 		// Use simple content format
 		aux := struct {
-			Role       string   `json:"role"`
-			Content    string   `json:"content"`
-			ToolCallID string   `json:"tool_call_id,omitempty"`
-			KnownTo    []string `json:"known_to,omitempty"`
+			Role       string         `json:"role"`
+			Content    string         `json:"content"`
+			ToolCallID string         `json:"tool_call_id,omitempty"`
+			KnownTo    []string       `json:"known_to,omitempty"`
+			Stats      *ResponseStats `json:"stats,omitempty"`
 		}{
 			Role:       m.Role,
 			Content:    m.Content,
 			ToolCallID: m.ToolCallID,
 			KnownTo:    m.KnownTo,
+			Stats:      m.Stats,
 		}
 		return json.Marshal(aux)
 	}
@@ -151,26 +157,29 @@ func (m *RoleMsg) MarshalJSON() ([]byte, error) {
 func (m *RoleMsg) UnmarshalJSON(data []byte) error {
 	// First, try to unmarshal as structured content format
 	var structured struct {
-		Role       string   `json:"role"`
-		Content    []any    `json:"content"`
-		ToolCallID string   `json:"tool_call_id,omitempty"`
-		KnownTo    []string `json:"known_to,omitempty"`
+		Role       string         `json:"role"`
+		Content    []any          `json:"content"`
+		ToolCallID string         `json:"tool_call_id,omitempty"`
+		KnownTo    []string       `json:"known_to,omitempty"`
+		Stats      *ResponseStats `json:"stats,omitempty"`
 	}
 	if err := json.Unmarshal(data, &structured); err == nil && len(structured.Content) > 0 {
 		m.Role = structured.Role
 		m.ContentParts = structured.Content
 		m.ToolCallID = structured.ToolCallID
 		m.KnownTo = structured.KnownTo
+		m.Stats = structured.Stats
 		m.hasContentParts = true
 		return nil
 	}
 
 	// Otherwise, unmarshal as simple content format
 	var simple struct {
-		Role       string   `json:"role"`
-		Content    string   `json:"content"`
-		ToolCallID string   `json:"tool_call_id,omitempty"`
-		KnownTo    []string `json:"known_to,omitempty"`
+		Role       string         `json:"role"`
+		Content    string         `json:"content"`
+		ToolCallID string         `json:"tool_call_id,omitempty"`
+		KnownTo    []string       `json:"known_to,omitempty"`
+		Stats      *ResponseStats `json:"stats,omitempty"`
 	}
 	if err := json.Unmarshal(data, &simple); err != nil {
 		return err
@@ -179,6 +188,7 @@ func (m *RoleMsg) UnmarshalJSON(data []byte) error {
 	m.Content = simple.Content
 	m.ToolCallID = simple.ToolCallID
 	m.KnownTo = simple.KnownTo
+	m.Stats = simple.Stats
 	m.hasContentParts = false
 	return nil
 }
