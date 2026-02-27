@@ -211,8 +211,10 @@ func startNewChat(keepSysP bool) {
 	chatBody.Messages = chatBody.Messages[:2]
 	textView.SetText(chatToText(chatBody.Messages, cfg.ShowSys))
 	newChat := &models.Chat{
-		ID:   id + 1,
-		Name: fmt.Sprintf("%d_%s", id+1, cfg.AssistantRole),
+		ID:        id + 1,
+		Name:      fmt.Sprintf("%d_%s", id+1, cfg.AssistantRole),
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
 		// chat is written to db when we get first llm response (or any)
 		// actual chat history (messages) would be parsed then
 		Msgs:  "",
