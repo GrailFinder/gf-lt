@@ -1130,35 +1130,11 @@ func makeFilePicker() *tview.Flex {
 			}
 			if event.Rune() == 's' {
 				// Set FilePickerDir to current directory
-				itemIndex := listView.GetCurrentItem()
-				if itemIndex >= 0 && itemIndex < listView.GetItemCount() {
-					itemText, _ := listView.GetItemText(itemIndex)
-					// Get the actual directory path
-					var targetDir string
-					if strings.HasPrefix(itemText, "Exit") || strings.HasPrefix(itemText, "Select this directory") {
-						targetDir = currentDisplayDir
-					} else {
-						actualItemName := itemText
-						if bracketPos := strings.Index(itemText, " ["); bracketPos != -1 {
-							actualItemName = itemText[:bracketPos]
-						}
-						// nolint: gocritic
-						if strings.HasPrefix(actualItemName, "../") {
-							targetDir = path.Dir(currentDisplayDir)
-						} else if strings.HasSuffix(actualItemName, "/") {
-							dirName := strings.TrimSuffix(actualItemName, "/")
-							targetDir = path.Join(currentDisplayDir, dirName)
-						} else {
-							targetDir = currentDisplayDir
-						}
-					}
-					cfg.FilePickerDir = targetDir
-					if err := notifyUser("FilePickerDir", "Set to: "+targetDir); err != nil {
-						logger.Error("failed to notify user", "error", err)
-					}
-					// pages.RemovePage(filePickerPage)
-					return nil
-				}
+				// Get the actual directory path
+				cfg.FilePickerDir = currentDisplayDir
+				listView.SetTitle("Files & Directories [s: set FilePickerDir]. Current base dir: " + cfg.FilePickerDir)
+				// pages.RemovePage(filePickerPage)
+				return nil
 			}
 		case tcell.KeyEnter:
 			// Get the currently highlighted item in the list
