@@ -34,6 +34,7 @@ var (
 	indexPickWindow    *tview.InputField
 	renameWindow       *tview.InputField
 	roleEditWindow     *tview.InputField
+	shellInput         *tview.InputField
 	fullscreenMode     bool
 	positionVisible    bool = true
 	scrollToEndEnabled bool = true
@@ -124,12 +125,75 @@ Press <Enter> or 'x' to return
 `
 )
 
+func setShellMode(enabled bool) {
+	shellMode = enabled
+	go func() {
+		app.QueueUpdateDraw(func() {
+			updateFlexLayout()
+		})
+	}()
+}
+
 func init() {
 	// Start background goroutine to update model color cache
 	startModelColorUpdater()
 	tview.Styles = colorschemes["default"]
 	app = tview.NewApplication()
 	pages = tview.NewPages()
+	shellInput = tview.NewInputField().
+		SetLabel(fmt.Sprintf("[%s]$ ", cfg.FilePickerDir)). // dynamic prompt
+		SetFieldWidth(0).
+		SetDoneFunc(func(key tcell.Key) {
+			if key == tcell.KeyEnter {
+				cmd := shellInput.GetText()
+				if cmd != "" {
+					executeCommandAndDisplay(cmd)
+				}
+				shellInput.SetText("")
+			}
+		})
+	// Copy your file completion logic to shellInput's InputCapture
+	shellInput.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		if !shellMode {
+			return event
+		}
+		// Handle Up arrow for history previous
+		if event.Key() == tcell.KeyUp {
+			if len(shellHistory) > 0 {
+				if shellHistoryPos < len(shellHistory)-1 {
+					shellHistoryPos++
+					shellInput.SetText(shellHistory[len(shellHistory)-1-shellHistoryPos])
+				}
+			}
+			return nil
+		}
+		// Handle Down arrow for history next
+		if event.Key() == tcell.KeyDown {
+			if shellHistoryPos > 0 {
+				shellHistoryPos--
+				shellInput.SetText(shellHistory[len(shellHistory)-1-shellHistoryPos])
+			} else if shellHistoryPos == 0 {
+				shellHistoryPos = -1
+				shellInput.SetText("")
+			}
+			return nil
+		}
+		// Reset history position when user types
+		if event.Key() == tcell.KeyRune {
+			shellHistoryPos = -1
+		}
+		// Handle Tab key for @ file completion
+		if event.Key() == tcell.KeyTab {
+			currentText := shellInput.GetText()
+			atIndex := strings.LastIndex(currentText, "@")
+			if atIndex >= 0 {
+				filter := currentText[atIndex+1:]
+				showShellFileCompletionPopup(filter)
+			}
+			return nil
+		}
+		return event
+	})
 	textArea = tview.NewTextArea().
 		SetPlaceholder("input is multiline; press <Enter> to start the next line;\npress <Esc> to send the message.")
 	textArea.SetBorder(true).SetTitle("input")
@@ -948,14 +1012,16 @@ func init() {
 		}
 		// cannot send msg in editMode or botRespMode
 		if event.Key() == tcell.KeyEscape && !editMode && !botRespMode {
-			msgText := textArea.GetText()
-			if shellMode && msgText != "" {
-				// In shell mode, execute command instead of sending to LLM
-				executeCommandAndDisplay(msgText)
-				textArea.SetText("", true) // Clear the input area
+			if shellMode {
+				cmdText := shellInput.GetText()
+				if cmdText != "" {
+					executeCommandAndDisplay(cmdText)
+					shellInput.SetText("")
+				}
 				return nil
-			} else if !shellMode {
-				// Normal mode - send to LLM
+			}
+			msgText := textArea.GetText()
+			if msgText != "" {
 				nl := "\n\n" // keep empty lines between messages
 				prevText := textView.GetText(true)
 				persona := cfg.UserRole

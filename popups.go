@@ -405,6 +405,66 @@ func showFileCompletionPopup(filter string) {
 	app.SetFocus(widget)
 }
 
+func showShellFileCompletionPopup(filter string) {
+	baseDir := cfg.FilePickerDir
+	if baseDir == "" {
+		baseDir = "."
+	}
+	complMatches := scanFiles(baseDir, filter)
+	if len(complMatches) == 0 {
+		return
+	}
+	if len(complMatches) == 1 {
+		currentText := shellInput.GetText()
+		atIdx := strings.LastIndex(currentText, "@")
+		if atIdx >= 0 {
+			before := currentText[:atIdx]
+			shellInput.SetText(before + complMatches[0])
+		}
+		return
+	}
+	widget := tview.NewList().ShowSecondaryText(false).
+		SetSelectedBackgroundColor(tcell.ColorGray)
+	widget.SetTitle("file completion").SetBorder(true)
+	for _, m := range complMatches {
+		widget.AddItem(m, "", 0, nil)
+	}
+	widget.SetSelectedFunc(func(index int, mainText string, secondaryText string, shortcut rune) {
+		currentText := shellInput.GetText()
+		atIdx := strings.LastIndex(currentText, "@")
+		if atIdx >= 0 {
+			before := currentText[:atIdx]
+			shellInput.SetText(before + mainText)
+		}
+		pages.RemovePage("shellFileCompletionPopup")
+		app.SetFocus(shellInput)
+	})
+	widget.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		if event.Key() == tcell.KeyEscape {
+			pages.RemovePage("shellFileCompletionPopup")
+			app.SetFocus(shellInput)
+			return nil
+		}
+		if event.Key() == tcell.KeyRune && event.Rune() == 'x' {
+			pages.RemovePage("shellFileCompletionPopup")
+			app.SetFocus(shellInput)
+			return nil
+		}
+		return event
+	})
+	modal := func(p tview.Primitive, width, height int) tview.Primitive {
+		return tview.NewFlex().
+			AddItem(nil, 0, 1, false).
+			AddItem(tview.NewFlex().SetDirection(tview.FlexRow).
+				AddItem(nil, 0, 1, false).
+				AddItem(p, height, 1, true).
+				AddItem(nil, 0, 1, false), width, 1, true).
+			AddItem(nil, 0, 1, false)
+	}
+	pages.AddPage("shellFileCompletionPopup", modal(widget, 80, 20), true, true)
+	app.SetFocus(widget)
+}
+
 func updateWidgetColors(theme *tview.Theme) {
 	bgColor := theme.PrimitiveBackgroundColor
 	fgColor := theme.PrimaryTextColor

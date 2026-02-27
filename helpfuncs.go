@@ -426,12 +426,11 @@ func deepseekModelValidator() error {
 
 func toggleShellMode() {
 	shellMode = !shellMode
+	setShellMode(shellMode)
 	if shellMode {
-		// Update input placeholder to indicate shell mode
-		textArea.SetPlaceholder("SHELL MODE: Enter command and press <Esc> to execute")
+		shellInput.SetLabel(fmt.Sprintf("[%s]$ ", cfg.FilePickerDir))
 	} else {
-		// Reset to normal mode
-		textArea.SetPlaceholder("input is multiline; press <Enter> to start the next line;\npress <Esc> to send the message. Alt+1 to exit shell mode")
+		textArea.SetPlaceholder("input is multiline; press <Enter> to start the next line;\npress <Esc> to send the message.")
 	}
 	updateStatusLine()
 }
@@ -443,7 +442,11 @@ func updateFlexLayout() {
 	}
 	flex.Clear()
 	flex.AddItem(textView, 0, 40, false)
-	flex.AddItem(textArea, 0, 10, false)
+	if shellMode {
+		flex.AddItem(shellInput, 0, 10, false)
+	} else {
+		flex.AddItem(textArea, 0, 10, false)
+	}
 	if positionVisible {
 		flex.AddItem(statusLineWidget, 0, 2, false)
 	}
@@ -451,6 +454,8 @@ func updateFlexLayout() {
 	focused := app.GetFocus()
 	if focused == textView {
 		app.SetFocus(textView)
+	} else if shellMode {
+		app.SetFocus(shellInput)
 	} else {
 		app.SetFocus(textArea)
 	}
@@ -515,6 +520,11 @@ func executeCommandAndDisplay(cmdText string) {
 		textView.ScrollToEnd()
 	}
 	colorText()
+	// Add command to history (avoid duplicates at the end)
+	if len(shellHistory) == 0 || shellHistory[len(shellHistory)-1] != cmdText {
+		shellHistory = append(shellHistory, cmdText)
+	}
+	shellHistoryPos = -1
 }
 
 // parseCommand splits command string handling quotes properly
