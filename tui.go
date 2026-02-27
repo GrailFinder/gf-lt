@@ -99,6 +99,7 @@ var (
 [yellow]Alt+8[white]: show char img or last picked img
 [yellow]Alt+9[white]: warm up (load) selected llama.cpp model
 [yellow]Alt+t[white]: toggle thinking blocks visibility (collapse/expand <think> blocks)
+[yellow]Ctrl+t[white]: toggle tool call/response visibility (collapse/expand tool calls and non-shell tool responses)
 [yellow]Alt+i[white]: show colorscheme selection popup
 
 === scrolling chat window (some keys similar to vim) ===
@@ -559,6 +560,20 @@ func init() {
 				status = "collapsed"
 			}
 			if err := notifyUser("thinking", "Thinking blocks "+status); err != nil {
+				logger.Error("failed to send notification", "error", err)
+			}
+			return nil
+		}
+		// Handle Ctrl+T to toggle tool call/response visibility
+		if event.Key() == tcell.KeyRune && event.Rune() == 't' && event.Modifiers()&tcell.ModCtrl != 0 {
+			toolCollapsed = !toolCollapsed
+			textView.SetText(chatToText(chatBody.Messages, cfg.ShowSys))
+			colorText()
+			status := "expanded"
+			if toolCollapsed {
+				status = "collapsed"
+			}
+			if err := notifyUser("tools", "Tool calls/responses "+status); err != nil {
 				logger.Error("failed to send notification", "error", err)
 			}
 			return nil

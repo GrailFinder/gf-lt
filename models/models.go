@@ -27,6 +27,12 @@ type FuncCall struct {
 	Args map[string]string `json:"args"`
 }
 
+type ToolCall struct {
+	ID   string `json:"id,omitempty"`
+	Name string `json:"name"`
+	Args string `json:"arguments"`
+}
+
 type LLMResp struct {
 	Choices []struct {
 		FinishReason string `json:"finish_reason"`
@@ -108,7 +114,9 @@ type RoleMsg struct {
 	Role            string         `json:"role"`
 	Content         string         `json:"-"`
 	ContentParts    []any          `json:"-"`
-	ToolCallID      string         `json:"tool_call_id,omitempty"` // For tool response messages
+	ToolCallID      string         `json:"tool_call_id,omitempty"`     // For tool response messages
+	ToolCalls       []ToolCall     `json:"tool_calls,omitempty"`       // For assistant messages with tool calls
+	IsShellCommand  bool           `json:"is_shell_command,omitempty"` // True for shell command outputs (always shown)
 	KnownTo         []string       `json:"known_to,omitempty"`
 	Stats           *ResponseStats `json:"stats"`
 	hasContentParts bool           // Flag to indicate which content type to marshal
@@ -121,33 +129,41 @@ func (m RoleMsg) MarshalJSON() ([]byte, error) {
 	if m.hasContentParts {
 		// Use structured content format
 		aux := struct {
-			Role       string         `json:"role"`
-			Content    []any          `json:"content"`
-			ToolCallID string         `json:"tool_call_id,omitempty"`
-			KnownTo    []string       `json:"known_to,omitempty"`
-			Stats      *ResponseStats `json:"stats,omitempty"`
+			Role           string         `json:"role"`
+			Content        []any          `json:"content"`
+			ToolCallID     string         `json:"tool_call_id,omitempty"`
+			ToolCalls      []ToolCall     `json:"tool_calls,omitempty"`
+			IsShellCommand bool           `json:"is_shell_command,omitempty"`
+			KnownTo        []string       `json:"known_to,omitempty"`
+			Stats          *ResponseStats `json:"stats,omitempty"`
 		}{
-			Role:       m.Role,
-			Content:    m.ContentParts,
-			ToolCallID: m.ToolCallID,
-			KnownTo:    m.KnownTo,
-			Stats:      m.Stats,
+			Role:           m.Role,
+			Content:        m.ContentParts,
+			ToolCallID:     m.ToolCallID,
+			ToolCalls:      m.ToolCalls,
+			IsShellCommand: m.IsShellCommand,
+			KnownTo:        m.KnownTo,
+			Stats:          m.Stats,
 		}
 		return json.Marshal(aux)
 	} else {
 		// Use simple content format
 		aux := struct {
-			Role       string         `json:"role"`
-			Content    string         `json:"content"`
-			ToolCallID string         `json:"tool_call_id,omitempty"`
-			KnownTo    []string       `json:"known_to,omitempty"`
-			Stats      *ResponseStats `json:"stats,omitempty"`
+			Role           string         `json:"role"`
+			Content        string         `json:"content"`
+			ToolCallID     string         `json:"tool_call_id,omitempty"`
+			ToolCalls      []ToolCall     `json:"tool_calls,omitempty"`
+			IsShellCommand bool           `json:"is_shell_command,omitempty"`
+			KnownTo        []string       `json:"known_to,omitempty"`
+			Stats          *ResponseStats `json:"stats,omitempty"`
 		}{
-			Role:       m.Role,
-			Content:    m.Content,
-			ToolCallID: m.ToolCallID,
-			KnownTo:    m.KnownTo,
-			Stats:      m.Stats,
+			Role:           m.Role,
+			Content:        m.Content,
+			ToolCallID:     m.ToolCallID,
+			ToolCalls:      m.ToolCalls,
+			IsShellCommand: m.IsShellCommand,
+			KnownTo:        m.KnownTo,
+			Stats:          m.Stats,
 		}
 		return json.Marshal(aux)
 	}
@@ -157,16 +173,20 @@ func (m RoleMsg) MarshalJSON() ([]byte, error) {
 func (m *RoleMsg) UnmarshalJSON(data []byte) error {
 	// First, try to unmarshal as structured content format
 	var structured struct {
-		Role       string         `json:"role"`
-		Content    []any          `json:"content"`
-		ToolCallID string         `json:"tool_call_id,omitempty"`
-		KnownTo    []string       `json:"known_to,omitempty"`
-		Stats      *ResponseStats `json:"stats,omitempty"`
+		Role           string         `json:"role"`
+		Content        []any          `json:"content"`
+		ToolCallID     string         `json:"tool_call_id,omitempty"`
+		ToolCalls      []ToolCall     `json:"tool_calls,omitempty"`
+		IsShellCommand bool           `json:"is_shell_command,omitempty"`
+		KnownTo        []string       `json:"known_to,omitempty"`
+		Stats          *ResponseStats `json:"stats,omitempty"`
 	}
 	if err := json.Unmarshal(data, &structured); err == nil && len(structured.Content) > 0 {
 		m.Role = structured.Role
 		m.ContentParts = structured.Content
 		m.ToolCallID = structured.ToolCallID
+		m.ToolCalls = structured.ToolCalls
+		m.IsShellCommand = structured.IsShellCommand
 		m.KnownTo = structured.KnownTo
 		m.Stats = structured.Stats
 		m.hasContentParts = true
@@ -175,11 +195,13 @@ func (m *RoleMsg) UnmarshalJSON(data []byte) error {
 
 	// Otherwise, unmarshal as simple content format
 	var simple struct {
-		Role       string         `json:"role"`
-		Content    string         `json:"content"`
-		ToolCallID string         `json:"tool_call_id,omitempty"`
-		KnownTo    []string       `json:"known_to,omitempty"`
-		Stats      *ResponseStats `json:"stats,omitempty"`
+		Role           string         `json:"role"`
+		Content        string         `json:"content"`
+		ToolCallID     string         `json:"tool_call_id,omitempty"`
+		ToolCalls      []ToolCall     `json:"tool_calls,omitempty"`
+		IsShellCommand bool           `json:"is_shell_command,omitempty"`
+		KnownTo        []string       `json:"known_to,omitempty"`
+		Stats          *ResponseStats `json:"stats,omitempty"`
 	}
 	if err := json.Unmarshal(data, &simple); err != nil {
 		return err
@@ -187,6 +209,8 @@ func (m *RoleMsg) UnmarshalJSON(data []byte) error {
 	m.Role = simple.Role
 	m.Content = simple.Content
 	m.ToolCallID = simple.ToolCallID
+	m.ToolCalls = simple.ToolCalls
+	m.IsShellCommand = simple.IsShellCommand
 	m.KnownTo = simple.KnownTo
 	m.Stats = simple.Stats
 	m.hasContentParts = false

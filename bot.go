@@ -777,7 +777,7 @@ func showSpinner() {
 		botPersona = cfg.WriteNextMsgAsCompletionAgent
 	}
 	for botRespMode || toolRunningMode {
-		time.Sleep(100 * time.Millisecond)
+		time.Sleep(400 * time.Millisecond)
 		spin := i % len(spinners)
 		app.QueueUpdateDraw(func() {
 			switch {
@@ -1096,12 +1096,9 @@ func findCall(msg, toolCall string) bool {
 		}
 		lastToolCall.Args = openAIToolMap
 		fc = lastToolCall
-		// Set lastToolCall.ID from parsed tool call ID if available
-		if len(openAIToolMap) > 0 {
-			if id, exists := openAIToolMap["id"]; exists {
-				lastToolCall.ID = id
-			}
-		}
+		// NOTE: We do NOT override lastToolCall.ID from arguments.
+		// The ID should come from the streaming response (chunk.ToolID) set earlier.
+		// Some tools like todo_create have "id" in their arguments which is NOT the tool call ID.
 	} else {
 		jsStr := toolCallRE.FindString(msg)
 		if jsStr == "" { // no tool call case
@@ -1138,14 +1135,21 @@ func findCall(msg, toolCall string) bool {
 		lastToolCall.Args = fc.Args
 	}
 	// we got here => last msg recognized as a tool call (correct or not)
-	// make sure it has ToolCallID
-	if chatBody.Messages[len(chatBody.Messages)-1].ToolCallID == "" {
-		// Tool call IDs should be alphanumeric strings with length 9!
-		chatBody.Messages[len(chatBody.Messages)-1].ToolCallID = randString(9)
+	// Use the tool call ID from streaming response (lastToolCall.ID)
+	// Don't generate random ID - the ID should match between assistant message and tool response
+	lastMsgIdx := len(chatBody.Messages) - 1
+	if lastToolCall.ID != "" {
+		chatBody.Messages[lastMsgIdx].ToolCallID = lastToolCall.ID
 	}
-	// Ensure lastToolCall.ID is set, fallback to assistant message's ToolCallID
-	if lastToolCall.ID == "" {
-		lastToolCall.ID = chatBody.Messages[len(chatBody.Messages)-1].ToolCallID
+	// Store tool call info in the assistant message
+	// Convert Args map to JSON string for storage
+	argsJSON, _ := json.Marshal(lastToolCall.Args)
+	chatBody.Messages[lastMsgIdx].ToolCalls = []models.ToolCall{
+		{
+			ID:   lastToolCall.ID,
+			Name: lastToolCall.Name,
+			Args: string(argsJSON),
+		},
 	}
 	// call a func
 	_, ok := fnMap[fc.Name]
@@ -1175,15 +1179,18 @@ func findCall(msg, toolCall string) bool {
 	toolRunningMode = true
 	resp := callToolWithAgent(fc.Name, fc.Args)
 	toolRunningMode = false
-	toolMsg := string(resp) // Remove the "tool response: " prefix and %+v formatting
+	toolMsg := string(resp)
 	logger.Info("llm used a tool call", "tool_name", fc.Name, "too_args", fc.Args, "id", fc.ID, "tool_resp", toolMsg)
 	fmt.Fprintf(textView, "%s[-:-:b](%d) <%s>: [-:-:-]\n%s\n",
 		"\n\n", len(chatBody.Messages), cfg.ToolRole, toolMsg)
 	// Create tool response message with the proper tool_call_id
+	// Mark shell commands as always visible
+	isShellCommand := fc.Name == "execute_command"
 	toolResponseMsg := models.RoleMsg{
-		Role:       cfg.ToolRole,
-		Content:    toolMsg,
-		ToolCallID: lastToolCall.ID, // Use the stored tool call ID
+		Role:           cfg.ToolRole,
+		Content:        toolMsg,
+		ToolCallID:     lastToolCall.ID,
+		IsShellCommand: isShellCommand,
 	}
 	chatBody.Messages = append(chatBody.Messages, toolResponseMsg)
 	logger.Debug("findCall: added actual tool response", "role", toolResponseMsg.Role, "content_len", len(toolResponseMsg.Content), "tool_call_id", toolResponseMsg.ToolCallID, "message_count_after_add", len(chatBody.Messages))
@@ -1201,8 +1208,36 @@ func findCall(msg, toolCall string) bool {
 func chatToTextSlice(messages []models.RoleMsg, showSys bool) []string {
 	resp := make([]string, len(messages))
 	for i, msg := range messages {
-		// INFO: skips system msg and tool msg
-		if !showSys && (msg.Role == cfg.ToolRole || msg.Role == "system") {
+		// Handle tool call indicators (assistant messages with tool call but empty content)
+		if (msg.Role == cfg.AssistantRole || msg.Role == "assistant") && msg.ToolCallID != "" && msg.Content == "" && len(msg.ToolCalls) > 0 {
+			// This is a tool call indicator - show collapsed
+			if toolCollapsed {
+				toolName := msg.ToolCalls[0].Name
+				resp[i] = fmt.Sprintf("[yellow::i][tool call: %s (press Ctrl+T to expand)][-:-:-]", toolName)
+			} else {
+				// Show full tool call info
+				toolName := msg.ToolCalls[0].Name
+				resp[i] = fmt.Sprintf("[yellow::i][tool call: %s][-:-:-]\nargs: %s", toolName, msg.ToolCalls[0].Args)
+			}
+			continue
+		}
+		// Handle tool responses
+		if msg.Role == cfg.ToolRole || msg.Role == "tool" {
+			// Always show shell commands
+			if msg.IsShellCommand {
+				resp[i] = msg.ToText(i)
+				continue
+			}
+			// Hide non-shell tool responses when collapsed
+			if toolCollapsed {
+				continue
+			}
+			// When expanded, show tool responses
+			resp[i] = msg.ToText(i)
+			continue
+		}
+		// INFO: skips system msg when showSys is false
+		if !showSys && msg.Role == "system" {
 			continue
 		}
 		resp[i] = msg.ToText(i)
