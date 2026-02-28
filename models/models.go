@@ -5,21 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 )
-
-var (
-	// imageBaseDir is the base directory for displaying image paths.
-	// If set, image paths will be shown relative to this directory.
-	imageBaseDir = ""
-)
-
-// SetImageBaseDir sets the base directory for displaying image paths.
-// If dir is empty, full paths will be shown.
-func SetImageBaseDir(dir string) {
-	imageBaseDir = dir
-}
 
 type FuncCall struct {
 	ID   string            `json:"id,omitempty"`
@@ -119,14 +106,14 @@ type RoleMsg struct {
 	IsShellCommand  bool           `json:"is_shell_command,omitempty"` // True for shell command outputs (always shown)
 	KnownTo         []string       `json:"known_to,omitempty"`
 	Stats           *ResponseStats `json:"stats"`
-	hasContentParts bool           // Flag to indicate which content type to marshal
+	HasContentParts bool           // Flag to indicate which content type to marshal
 }
 
 // MarshalJSON implements custom JSON marshaling for RoleMsg
 //
 //nolint:gocritic
 func (m RoleMsg) MarshalJSON() ([]byte, error) {
-	if m.hasContentParts {
+	if m.HasContentParts {
 		// Use structured content format
 		aux := struct {
 			Role           string         `json:"role"`
@@ -189,7 +176,7 @@ func (m *RoleMsg) UnmarshalJSON(data []byte) error {
 		m.IsShellCommand = structured.IsShellCommand
 		m.KnownTo = structured.KnownTo
 		m.Stats = structured.Stats
-		m.hasContentParts = true
+		m.HasContentParts = true
 		return nil
 	}
 
@@ -213,77 +200,13 @@ func (m *RoleMsg) UnmarshalJSON(data []byte) error {
 	m.IsShellCommand = simple.IsShellCommand
 	m.KnownTo = simple.KnownTo
 	m.Stats = simple.Stats
-	m.hasContentParts = false
+	m.HasContentParts = false
 	return nil
-}
-
-func (m *RoleMsg) ToText(i int) string {
-	var contentStr string
-	var imageIndicators []string
-	if !m.hasContentParts {
-		contentStr = m.Content
-	} else {
-		var textParts []string
-		for _, part := range m.ContentParts {
-			switch p := part.(type) {
-			case TextContentPart:
-				if p.Type == "text" {
-					textParts = append(textParts, p.Text)
-				}
-			case ImageContentPart:
-				displayPath := p.Path
-				if displayPath == "" {
-					displayPath = "image"
-				} else {
-					displayPath = extractDisplayPath(displayPath)
-				}
-				imageIndicators = append(imageIndicators, fmt.Sprintf("[orange::i][image: %s][-:-:-]", displayPath))
-			case map[string]any:
-				if partType, exists := p["type"]; exists {
-					switch partType {
-					case "text":
-						if textVal, textExists := p["text"]; textExists {
-							if textStr, isStr := textVal.(string); isStr {
-								textParts = append(textParts, textStr)
-							}
-						}
-					case "image_url":
-						var displayPath string
-						if pathVal, pathExists := p["path"]; pathExists {
-							if pathStr, isStr := pathVal.(string); isStr && pathStr != "" {
-								displayPath = extractDisplayPath(pathStr)
-							}
-						}
-						if displayPath == "" {
-							displayPath = "image"
-						}
-						imageIndicators = append(imageIndicators, fmt.Sprintf("[orange::i][image: %s][-:-:-]", displayPath))
-					}
-				}
-			}
-		}
-		contentStr = strings.Join(textParts, " ") + " "
-	}
-	contentStr, _ = strings.CutPrefix(contentStr, m.Role+":")
-	icon := fmt.Sprintf("(%d) <%s>: ", i, m.Role)
-	var finalContent strings.Builder
-	if len(imageIndicators) > 0 {
-		for _, indicator := range imageIndicators {
-			finalContent.WriteString(indicator)
-			finalContent.WriteString("\n")
-		}
-	}
-	finalContent.WriteString(contentStr)
-	if m.Stats != nil {
-		fmt.Fprintf(&finalContent, "\n[gray::i][%d tok, %.1fs, %.1f t/s][-:-:-]", m.Stats.Tokens, m.Stats.Duration, m.Stats.TokensPerSec)
-	}
-	textMsg := fmt.Sprintf("[-:-:b]%s[-:-:-]\n%s\n", icon, finalContent.String())
-	return strings.ReplaceAll(textMsg, "\n\n", "\n")
 }
 
 func (m *RoleMsg) ToPrompt() string {
 	var contentStr string
-	if !m.hasContentParts {
+	if !m.HasContentParts {
 		contentStr = m.Content
 	} else {
 		// For structured content, just take the text parts
@@ -316,7 +239,7 @@ func NewRoleMsg(role, content string) RoleMsg {
 	return RoleMsg{
 		Role:            role,
 		Content:         content,
-		hasContentParts: false,
+		HasContentParts: false,
 	}
 }
 
@@ -325,7 +248,7 @@ func NewMultimodalMsg(role string, contentParts []any) RoleMsg {
 	return RoleMsg{
 		Role:            role,
 		ContentParts:    contentParts,
-		hasContentParts: true,
+		HasContentParts: true,
 	}
 }
 
@@ -334,7 +257,7 @@ func (m *RoleMsg) HasContent() bool {
 	if m.Content != "" {
 		return true
 	}
-	if m.hasContentParts && len(m.ContentParts) > 0 {
+	if m.HasContentParts && len(m.ContentParts) > 0 {
 		return true
 	}
 	return false
@@ -342,7 +265,7 @@ func (m *RoleMsg) HasContent() bool {
 
 // IsContentParts returns true if the message uses structured content parts
 func (m *RoleMsg) IsContentParts() bool {
-	return m.hasContentParts
+	return m.HasContentParts
 }
 
 // GetContentParts returns the content parts of the message
@@ -359,14 +282,14 @@ func (m *RoleMsg) Copy() RoleMsg {
 		ToolCallID:      m.ToolCallID,
 		KnownTo:         m.KnownTo,
 		Stats:           m.Stats,
-		hasContentParts: m.hasContentParts,
+		HasContentParts: m.HasContentParts,
 	}
 }
 
 // GetText returns the text content of the message, handling both
 // simple Content and multimodal ContentParts formats.
 func (m *RoleMsg) GetText() string {
-	if !m.hasContentParts {
+	if !m.HasContentParts {
 		return m.Content
 	}
 	var textParts []string
@@ -395,7 +318,7 @@ func (m *RoleMsg) GetText() string {
 // ContentParts (multimodal), it updates the text parts while preserving
 // images. If not, it sets the simple Content field.
 func (m *RoleMsg) SetText(text string) {
-	if !m.hasContentParts {
+	if !m.HasContentParts {
 		m.Content = text
 		return
 	}
@@ -425,14 +348,14 @@ func (m *RoleMsg) SetText(text string) {
 
 // AddTextPart adds a text content part to the message
 func (m *RoleMsg) AddTextPart(text string) {
-	if !m.hasContentParts {
+	if !m.HasContentParts {
 		// Convert to content parts format
 		if m.Content != "" {
 			m.ContentParts = []any{TextContentPart{Type: "text", Text: m.Content}}
 		} else {
 			m.ContentParts = []any{}
 		}
-		m.hasContentParts = true
+		m.HasContentParts = true
 	}
 	textPart := TextContentPart{Type: "text", Text: text}
 	m.ContentParts = append(m.ContentParts, textPart)
@@ -440,14 +363,14 @@ func (m *RoleMsg) AddTextPart(text string) {
 
 // AddImagePart adds an image content part to the message
 func (m *RoleMsg) AddImagePart(imageURL, imagePath string) {
-	if !m.hasContentParts {
+	if !m.HasContentParts {
 		// Convert to content parts format
 		if m.Content != "" {
 			m.ContentParts = []any{TextContentPart{Type: "text", Text: m.Content}}
 		} else {
 			m.ContentParts = []any{}
 		}
-		m.hasContentParts = true
+		m.HasContentParts = true
 	}
 	imagePart := ImageContentPart{
 		Type: "image_url",
@@ -489,31 +412,6 @@ func CreateImageURLFromPath(imagePath string) (string, error) {
 
 	// Create data URL
 	return fmt.Sprintf("data:%s;base64,%s", mimeType, encoded), nil
-}
-
-// extractDisplayPath returns a path suitable for display, potentially relative to imageBaseDir
-func extractDisplayPath(p string) string {
-	if p == "" {
-		return ""
-	}
-
-	// If base directory is set, try to make path relative to it
-	if imageBaseDir != "" {
-		if rel, err := filepath.Rel(imageBaseDir, p); err == nil {
-			// Check if relative path doesn't start with ".." (meaning it's within base dir)
-			// If it starts with "..", we might still want to show it as relative
-			// but for now we show full path if it goes outside base dir
-			if !strings.HasPrefix(rel, "..") {
-				p = rel
-			}
-		}
-	}
-
-	// Truncate long paths to last 60 characters if needed
-	if len(p) > 60 {
-		return "..." + p[len(p)-60:]
-	}
-	return p
 }
 
 type ChatBody struct {

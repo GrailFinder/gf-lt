@@ -794,3 +794,91 @@ func scanFiles(dir, filter string) []string {
 	scanRecursive(dir, 0, "")
 	return files
 }
+
+// models logic that is too complex for models package
+func MsgToText(i int, m *models.RoleMsg) string {
+	var contentStr string
+	var imageIndicators []string
+	if !m.HasContentParts {
+		contentStr = m.Content
+	} else {
+		var textParts []string
+		for _, part := range m.ContentParts {
+			switch p := part.(type) {
+			case models.TextContentPart:
+				if p.Type == "text" {
+					textParts = append(textParts, p.Text)
+				}
+			case models.ImageContentPart:
+				displayPath := p.Path
+				if displayPath == "" {
+					displayPath = "image"
+				} else {
+					displayPath = extractDisplayPath(displayPath, cfg.FilePickerDir)
+				}
+				imageIndicators = append(imageIndicators, fmt.Sprintf("[orange::i][image: %s][-:-:-]", displayPath))
+			case map[string]any:
+				if partType, exists := p["type"]; exists {
+					switch partType {
+					case "text":
+						if textVal, textExists := p["text"]; textExists {
+							if textStr, isStr := textVal.(string); isStr {
+								textParts = append(textParts, textStr)
+							}
+						}
+					case "image_url":
+						var displayPath string
+						if pathVal, pathExists := p["path"]; pathExists {
+							if pathStr, isStr := pathVal.(string); isStr && pathStr != "" {
+								displayPath = extractDisplayPath(pathStr, cfg.FilePickerDir)
+							}
+						}
+						if displayPath == "" {
+							displayPath = "image"
+						}
+						imageIndicators = append(imageIndicators, fmt.Sprintf("[orange::i][image: %s][-:-:-]", displayPath))
+					}
+				}
+			}
+		}
+		contentStr = strings.Join(textParts, " ") + " "
+	}
+	contentStr, _ = strings.CutPrefix(contentStr, m.Role+":")
+	icon := fmt.Sprintf("(%d) <%s>: ", i, m.Role)
+	var finalContent strings.Builder
+	if len(imageIndicators) > 0 {
+		for _, indicator := range imageIndicators {
+			finalContent.WriteString(indicator)
+			finalContent.WriteString("\n")
+		}
+	}
+	finalContent.WriteString(contentStr)
+	if m.Stats != nil {
+		fmt.Fprintf(&finalContent, "\n[gray::i][%d tok, %.1fs, %.1f t/s][-:-:-]", m.Stats.Tokens, m.Stats.Duration, m.Stats.TokensPerSec)
+	}
+	textMsg := fmt.Sprintf("[-:-:b]%s[-:-:-]\n%s\n", icon, finalContent.String())
+	return strings.ReplaceAll(textMsg, "\n\n", "\n")
+}
+
+// extractDisplayPath returns a path suitable for display, potentially relative to imageBaseDir
+func extractDisplayPath(p, bp string) string {
+	if p == "" {
+		return ""
+	}
+	// If base directory is set, try to make path relative to it
+	if bp != "" {
+		if rel, err := filepath.Rel(bp, p); err == nil {
+			// Check if relative path doesn't start with ".." (meaning it's within base dir)
+			// If it starts with "..", we might still want to show it as relative
+			// but for now we show full path if it goes outside base dir
+			if !strings.HasPrefix(rel, "..") {
+				p = rel
+			}
+		}
+	}
+	// Truncate long paths to last 60 characters if needed
+	if len(p) > 60 {
+		return "..." + p[len(p)-60:]
+	}
+	return p
+}

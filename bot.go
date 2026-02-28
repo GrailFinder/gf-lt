@@ -1226,7 +1226,7 @@ func chatToTextSlice(messages []models.RoleMsg, showSys bool) []string {
 		if messages[i].Role == cfg.ToolRole || messages[i].Role == "tool" {
 			// Always show shell commands
 			if messages[i].IsShellCommand {
-				resp[i] = messages[i].ToText(i)
+				resp[i] = MsgToText(i, &messages[i])
 				continue
 			}
 			// Hide non-shell tool responses when collapsed
@@ -1235,14 +1235,14 @@ func chatToTextSlice(messages []models.RoleMsg, showSys bool) []string {
 				continue
 			}
 			// When expanded, show tool responses
-			resp[i] = messages[i].ToText(i)
+			resp[i] = MsgToText(i, &messages[i])
 			continue
 		}
 		// INFO: skips system msg when showSys is false
 		if !showSys && messages[i].Role == "system" {
 			continue
 		}
-		resp[i] = messages[i].ToText(i)
+		resp[i] = MsgToText(i, &messages[i])
 	}
 	return resp
 }
@@ -1397,15 +1397,6 @@ func init() {
 		os.Exit(1)
 		return
 	}
-	// Set image base directory for path display
-	baseDir := cfg.FilePickerDir
-	if baseDir == "" || baseDir == "." {
-		// Resolve "." to current working directory
-		if wd, err := os.Getwd(); err == nil {
-			baseDir = wd
-		}
-	}
-	models.SetImageBaseDir(baseDir)
 	defaultStarter = []models.RoleMsg{
 		{Role: "system", Content: basicSysMsg},
 		{Role: cfg.AssistantRole, Content: defaultFirstMsg},
