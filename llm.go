@@ -282,24 +282,15 @@ func (op LCPChat) FormMsg(msg, role string, resume bool) (io.Reader, error) {
 			"content_len", len(newMsg.Content), "message_count_after_add", len(chatBody.Messages))
 	}
 	filteredMessages, _ := filterMessagesForCurrentCharacter(chatBody.Messages)
-	// Filter out tool call indicators (assistant messages with ToolCallID but empty content)
-	var filteredForLLM []models.RoleMsg
-	for i := range filteredMessages {
-		isToolCallIndicator := filteredMessages[i].Role != "system" && filteredMessages[i].ToolCallID != "" && filteredMessages[i].Content == "" && len(filteredMessages[i].ToolCalls) > 0
-		if isToolCallIndicator {
-			continue
-		}
-		filteredForLLM = append(filteredForLLM, filteredMessages[i])
-	}
 	// openai /v1/chat does not support custom roles; needs to be user, assistant, system
 	// Add persona suffix to the last user message to indicate who the assistant should reply as
 	bodyCopy := &models.ChatBody{
-		Messages: make([]models.RoleMsg, len(filteredForLLM)),
+		Messages: make([]models.RoleMsg, len(filteredMessages)),
 		Model:    chatBody.Model,
 		Stream:   chatBody.Stream,
 	}
-	for i := range filteredForLLM {
-		strippedMsg := *stripThinkingFromMsg(&filteredForLLM[i])
+	for i := range filteredMessages {
+		strippedMsg := *stripThinkingFromMsg(&filteredMessages[i])
 		switch strippedMsg.Role {
 		case cfg.UserRole:
 			bodyCopy.Messages[i] = strippedMsg
@@ -314,7 +305,7 @@ func (op LCPChat) FormMsg(msg, role string, resume bool) (io.Reader, error) {
 			bodyCopy.Messages[i] = strippedMsg
 		}
 		// Clear ToolCalls - they're stored in chat history for display but not sent to LLM
-		bodyCopy.Messages[i].ToolCalls = nil
+		// bodyCopy.Messages[i].ToolCall = nil
 	}
 	// Clean null/empty messages to prevent API issues
 	bodyCopy.Messages = consolidateAssistantMessages(bodyCopy.Messages)
@@ -441,23 +432,14 @@ func (ds DeepSeekerChat) FormMsg(msg, role string, resume bool) (io.Reader, erro
 	}
 	// Create copy of chat body with standardized user role
 	filteredMessages, _ := filterMessagesForCurrentCharacter(chatBody.Messages)
-	// Filter out tool call indicators (assistant messages with ToolCallID but empty content)
-	var filteredForLLM []models.RoleMsg
-	for i := range filteredMessages {
-		isToolCallIndicator := filteredMessages[i].Role != "system" && filteredMessages[i].ToolCallID != "" && filteredMessages[i].Content == "" && len(filteredMessages[i].ToolCalls) > 0
-		if isToolCallIndicator {
-			continue
-		}
-		filteredForLLM = append(filteredForLLM, filteredMessages[i])
-	}
 	// Add persona suffix to the last user message to indicate who the assistant should reply as
 	bodyCopy := &models.ChatBody{
-		Messages: make([]models.RoleMsg, len(filteredForLLM)),
+		Messages: make([]models.RoleMsg, len(filteredMessages)),
 		Model:    chatBody.Model,
 		Stream:   chatBody.Stream,
 	}
-	for i := range filteredForLLM {
-		strippedMsg := *stripThinkingFromMsg(&filteredForLLM[i])
+	for i := range filteredMessages {
+		strippedMsg := *stripThinkingFromMsg(&filteredMessages[i])
 		switch strippedMsg.Role {
 		case cfg.UserRole:
 			if i == 1 {
@@ -476,7 +458,7 @@ func (ds DeepSeekerChat) FormMsg(msg, role string, resume bool) (io.Reader, erro
 			bodyCopy.Messages[i] = strippedMsg
 		}
 		// Clear ToolCalls - they're stored in chat history for display but not sent to LLM
-		bodyCopy.Messages[i].ToolCalls = nil
+		// bodyCopy.Messages[i].ToolCall = nil
 	}
 	// Clean null/empty messages to prevent API issues
 	bodyCopy.Messages = consolidateAssistantMessages(bodyCopy.Messages)
@@ -627,23 +609,14 @@ func (or OpenRouterChat) FormMsg(msg, role string, resume bool) (io.Reader, erro
 	}
 	// Create copy of chat body with standardized user role
 	filteredMessages, _ := filterMessagesForCurrentCharacter(chatBody.Messages)
-	// Filter out tool call indicators (assistant messages with ToolCallID but empty content)
-	var filteredForLLM []models.RoleMsg
-	for i := range filteredMessages {
-		isToolCallIndicator := filteredMessages[i].Role != "system" && filteredMessages[i].ToolCallID != "" && filteredMessages[i].Content == "" && len(filteredMessages[i].ToolCalls) > 0
-		if isToolCallIndicator {
-			continue
-		}
-		filteredForLLM = append(filteredForLLM, filteredMessages[i])
-	}
 	// Add persona suffix to the last user message to indicate who the assistant should reply as
 	bodyCopy := &models.ChatBody{
-		Messages: make([]models.RoleMsg, len(filteredForLLM)),
+		Messages: make([]models.RoleMsg, len(filteredMessages)),
 		Model:    chatBody.Model,
 		Stream:   chatBody.Stream,
 	}
-	for i := range filteredForLLM {
-		strippedMsg := *stripThinkingFromMsg(&filteredForLLM[i])
+	for i := range filteredMessages {
+		strippedMsg := *stripThinkingFromMsg(&filteredMessages[i])
 		switch strippedMsg.Role {
 		case cfg.UserRole:
 			bodyCopy.Messages[i] = strippedMsg
@@ -658,7 +631,8 @@ func (or OpenRouterChat) FormMsg(msg, role string, resume bool) (io.Reader, erro
 			bodyCopy.Messages[i] = strippedMsg
 		}
 		// Clear ToolCalls - they're stored in chat history for display but not sent to LLM
-		bodyCopy.Messages[i].ToolCalls = nil
+		// literally deletes data that we need
+		// bodyCopy.Messages[i].ToolCall = nil
 	}
 	// Clean null/empty messages to prevent API issues
 	bodyCopy.Messages = consolidateAssistantMessages(bodyCopy.Messages)

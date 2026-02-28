@@ -1144,12 +1144,10 @@ func findCall(msg, toolCall string) bool {
 	// Store tool call info in the assistant message
 	// Convert Args map to JSON string for storage
 	argsJSON, _ := json.Marshal(lastToolCall.Args)
-	chatBody.Messages[lastMsgIdx].ToolCalls = []models.ToolCall{
-		{
-			ID:   lastToolCall.ID,
-			Name: lastToolCall.Name,
-			Args: string(argsJSON),
-		},
+	chatBody.Messages[lastMsgIdx].ToolCall = &models.ToolCall{
+		ID:   lastToolCall.ID,
+		Name: lastToolCall.Name,
+		Args: string(argsJSON),
 	}
 	// call a func
 	_, ok := fnMap[fc.Name]
@@ -1210,15 +1208,15 @@ func chatToTextSlice(messages []models.RoleMsg, showSys bool) []string {
 	for i := range messages {
 		icon := fmt.Sprintf("[-:-:b](%d) <%s>:[-:-:-]", i, messages[i].Role)
 		// Handle tool call indicators (assistant messages with tool call but empty content)
-		if messages[i].Role == cfg.AssistantRole && len(messages[i].ToolCalls) > 0 {
+		if messages[i].Role == cfg.AssistantRole && messages[i].ToolCall != nil && messages[i].ToolCall.ID != "" {
 			// This is a tool call indicator - show collapsed
 			if toolCollapsed {
-				toolName := messages[i].ToolCalls[0].Name
-				resp[i] = fmt.Sprintf("%s\n[yellow::i][tool call: %s (press Ctrl+T to expand)][-:-:-]", icon, toolName)
+				toolName := messages[i].ToolCall.Name
+				resp[i] = fmt.Sprintf("%s\n[yellow::i][tool call: %s (press Ctrl+T to expand)][-:-:-]\n", icon, toolName)
 			} else {
 				// Show full tool call info
-				toolName := messages[i].ToolCalls[0].Name
-				resp[i] = fmt.Sprintf("%s\n[yellow::i][tool call: %s][-:-:-]\nargs: %s", icon, toolName, messages[i].ToolCalls[0].Args)
+				toolName := messages[i].ToolCall.Name
+				resp[i] = fmt.Sprintf("%s\n%s\n[yellow::i][tool call: %s][-:-:-]\nargs: %s\nid: %s\n", icon, messages[i].GetText(), toolName, messages[i].ToolCall.Args, messages[i].ToolCall.ID)
 			}
 			continue
 		}
