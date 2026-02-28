@@ -1116,11 +1116,10 @@ func findCall(msg, toolCall string) bool {
 	}
 	// Store tool call info in the assistant message
 	// Convert Args map to JSON string for storage
-	argsJSON, _ := json.Marshal(lastToolCall.Args)
 	chatBody.Messages[lastMsgIdx].ToolCall = &models.ToolCall{
 		ID:   lastToolCall.ID,
 		Name: lastToolCall.Name,
-		Args: string(argsJSON),
+		Args: mapToString(lastToolCall.Args),
 	}
 	// call a func
 	_, ok := fnMap[fc.Name]

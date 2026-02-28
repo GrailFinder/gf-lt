@@ -66,6 +66,14 @@ func isASCII(s string) bool {
 	return true
 }
 
+func mapToString[V any](m map[string]V) string {
+	rs := strings.Builder{}
+	for k, v := range m {
+		fmt.Fprintf(&rs, "%v: %v\n", k, v)
+	}
+	return rs.String()
+}
+
 // stripThinkingFromMsg removes thinking blocks from assistant messages.
 // Skips user, tool, and system messages as they may contain thinking examples.
 func stripThinkingFromMsg(msg *models.RoleMsg) *models.RoleMsg {
@@ -453,9 +461,8 @@ func updateFlexLayout() {
 }
 
 func executeCommandAndDisplay(cmdText string) {
-	// Parse the command (split by spaces, but handle quoted arguments)
-	cmdParts := parseCommand(cmdText)
-	if len(cmdParts) == 0 {
+	cmdText = strings.TrimSpace(cmdText)
+	if cmdText == "" {
 		fmt.Fprintf(textView, "\n[red]Error: No command provided[-:-:-]\n")
 		if scrollToEndEnabled {
 			textView.ScrollToEnd()
@@ -463,14 +470,58 @@ func executeCommandAndDisplay(cmdText string) {
 		colorText()
 		return
 	}
-	command := cmdParts[0]
-	args := []string{}
-	if len(cmdParts) > 1 {
-		args = cmdParts[1:]
+	workingDir := cfg.FilePickerDir
+	// Handle cd command specially to update working directory
+	if strings.HasPrefix(cmdText, "cd ") {
+		newDir := strings.TrimPrefix(cmdText, "cd ")
+		newDir = strings.TrimSpace(newDir)
+		// Handle cd ~ or cdHOME
+		if strings.HasPrefix(newDir, "~") {
+			home := os.Getenv("HOME")
+			newDir = strings.Replace(newDir, "~", home, 1)
+		}
+		// Check if directory exists
+		if _, err := os.Stat(newDir); err == nil {
+			workingDir = newDir
+			cfg.FilePickerDir = workingDir
+			// Update shell input label with new directory
+			shellInput.SetLabel(fmt.Sprintf("[%s]$ ", cfg.FilePickerDir))
+			outputContent := workingDir
+			// Add the command being executed to the chat
+			fmt.Fprintf(textView, "\n[-:-:b](%d) <%s>: [-:-:-]\n$ %s\n",
+				len(chatBody.Messages), cfg.ToolRole, cmdText)
+			fmt.Fprintf(textView, "%s\n", outputContent)
+			combinedMsg := models.RoleMsg{
+				Role:    cfg.ToolRole,
+				Content: "$ " + cmdText + "\n\n" + outputContent,
+			}
+			chatBody.Messages = append(chatBody.Messages, combinedMsg)
+			if scrollToEndEnabled {
+				textView.ScrollToEnd()
+			}
+			colorText()
+			return
+		} else {
+			outputContent := "cd: " + newDir + ": No such file or directory"
+			fmt.Fprintf(textView, "\n[-:-:b](%d) <%s>: [-:-:-]\n$ %s\n",
+				len(chatBody.Messages), cfg.ToolRole, cmdText)
+			fmt.Fprintf(textView, "[red]%s[-:-:-]\n", outputContent)
+			combinedMsg := models.RoleMsg{
+				Role:    cfg.ToolRole,
+				Content: "$ " + cmdText + "\n\n" + outputContent,
+			}
+			chatBody.Messages = append(chatBody.Messages, combinedMsg)
+			if scrollToEndEnabled {
+				textView.ScrollToEnd()
+			}
+			colorText()
+			return
+		}
 	}
-	// Create the command execution
-	cmd := exec.Command(command, args...)
-	cmd.Dir = cfg.FilePickerDir
+
+	// Use /bin/sh to support pipes, redirects, etc.
+	cmd := exec.Command("/bin/sh", "-c", cmdText)
+	cmd.Dir = workingDir
 	// Execute the command and get output
 	output, err := cmd.CombinedOutput()
 	// Add the command being executed to the chat
@@ -517,42 +568,6 @@ func executeCommandAndDisplay(cmdText string) {
 		shellHistory = append(shellHistory, cmdText)
 	}
 	shellHistoryPos = -1
-}
-
-// parseCommand splits command string handling quotes properly
-func parseCommand(cmd string) []string {
-	var args []string
-	var current string
-	var inQuotes bool
-	var quoteChar rune
-	for _, r := range cmd {
-		switch r {
-		case '"', '\'':
-			if inQuotes {
-				if r == quoteChar {
-					inQuotes = false
-				} else {
-					current += string(r)
-				}
-			} else {
-				inQuotes = true
-				quoteChar = r
-			}
-		case ' ', '\t':
-			if inQuotes {
-				current += string(r)
-			} else if current != "" {
-				args = append(args, current)
-				current = ""
-			}
-		default:
-			current += string(r)
-		}
-	}
-	if current != "" {
-		args = append(args, current)
-	}
-	return args
 }
 
 // == search ==
