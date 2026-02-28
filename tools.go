@@ -95,6 +95,11 @@ Your current tools:
 "when_to_use": "when asked to append content to a file; use sed to edit content"
 },
 {
+"name":"file_edit",
+"args": ["path", "oldString", "newString", "lineNumber"],
+"when_to_use": "when you need to make targeted changes to a specific section of a file without rewriting the entire file; lineNumber is optional - if provided, only edits that specific line; if not provided, replaces all occurrences of oldString"
+},
+{
 "name":"file_delete",
 "args": ["path"],
 "when_to_use": "when asked to delete a file"
@@ -503,6 +508,85 @@ func fileWriteAppend(args map[string]string) []byte {
 		return []byte(msg)
 	}
 	msg := "file written successfully at " + path
+	return []byte(msg)
+}
+
+func fileEdit(args map[string]string) []byte {
+	path, ok := args["path"]
+	if !ok || path == "" {
+		msg := "path not provided to file_edit tool"
+		logger.Error(msg)
+		return []byte(msg)
+	}
+	path = resolvePath(path)
+
+	oldString, ok := args["oldString"]
+	if !ok || oldString == "" {
+		msg := "oldString not provided to file_edit tool"
+		logger.Error(msg)
+		return []byte(msg)
+	}
+
+	newString, ok := args["newString"]
+	if !ok {
+		newString = ""
+	}
+
+	lineNumberStr, hasLineNumber := args["lineNumber"]
+
+	// Read file content
+	content, err := os.ReadFile(path)
+	if err != nil {
+		msg := "failed to read file: " + err.Error()
+		logger.Error(msg)
+		return []byte(msg)
+	}
+
+	fileContent := string(content)
+	var replacementCount int
+
+	if hasLineNumber && lineNumberStr != "" {
+		// Line-number based edit
+		lineNum, err := strconv.Atoi(lineNumberStr)
+		if err != nil {
+			msg := "invalid lineNumber: must be a valid integer"
+			logger.Error(msg)
+			return []byte(msg)
+		}
+		lines := strings.Split(fileContent, "\n")
+		if lineNum < 1 || lineNum > len(lines) {
+			msg := fmt.Sprintf("lineNumber %d out of range (file has %d lines)", lineNum, len(lines))
+			logger.Error(msg)
+			return []byte(msg)
+		}
+		// Find oldString in the specific line
+		targetLine := lines[lineNum-1]
+		if !strings.Contains(targetLine, oldString) {
+			msg := fmt.Sprintf("oldString not found on line %d", lineNum)
+			logger.Error(msg)
+			return []byte(msg)
+		}
+		lines[lineNum-1] = strings.Replace(targetLine, oldString, newString, 1)
+		replacementCount = 1
+		fileContent = strings.Join(lines, "\n")
+	} else {
+		// Replace all occurrences
+		if !strings.Contains(fileContent, oldString) {
+			msg := "oldString not found in file"
+			logger.Error(msg)
+			return []byte(msg)
+		}
+		fileContent = strings.ReplaceAll(fileContent, oldString, newString)
+		replacementCount = strings.Count(fileContent, newString)
+	}
+
+	if err := os.WriteFile(path, []byte(fileContent), 0644); err != nil {
+		msg := "failed to write file: " + err.Error()
+		logger.Error(msg)
+		return []byte(msg)
+	}
+
+	msg := fmt.Sprintf("file edited successfully at %s (%d replacement(s))", path, replacementCount)
 	return []byte(msg)
 }
 
@@ -998,6 +1082,7 @@ var fnMap = map[string]fnSig{
 	"file_read":         fileRead,
 	"file_write":        fileWrite,
 	"file_write_append": fileWriteAppend,
+	"file_edit":         fileEdit,
 	"file_delete":       fileDelete,
 	"file_move":         fileMove,
 	"file_copy":         fileCopy,
@@ -1260,6 +1345,36 @@ var baseTools = []models.Tool{
 					"content": models.ToolArgProps{
 						Type:        "string",
 						Description: "content to write to the file",
+					},
+				},
+			},
+		},
+	},
+	// file_edit
+	models.Tool{
+		Type: "function",
+		Function: models.ToolFunc{
+			Name:        "file_edit",
+			Description: "Edit a specific section of a file by replacing oldString with newString. Use for targeted changes without rewriting the entire file.",
+			Parameters: models.ToolFuncParams{
+				Type:     "object",
+				Required: []string{"path", "oldString", "newString"},
+				Properties: map[string]models.ToolArgProps{
+					"path": models.ToolArgProps{
+						Type:        "string",
+						Description: "path of the file to edit",
+					},
+					"oldString": models.ToolArgProps{
+						Type:        "string",
+						Description: "the exact string to find and replace",
+					},
+					"newString": models.ToolArgProps{
+						Type:        "string",
+						Description: "the string to replace oldString with",
+					},
+					"lineNumber": models.ToolArgProps{
+						Type:        "string",
+						Description: "optional line number (1-indexed) to edit - if provided, only that line is edited",
 					},
 				},
 			},

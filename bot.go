@@ -66,6 +66,8 @@ var (
 	LocalModels = []string{}
 )
 
+var thinkBlockRE = regexp.MustCompile(`(?s)<think>.*?</think>`)
+
 // parseKnownToTag extracts known_to list from content using configured tag.
 // Returns cleaned content and list of character names.
 func parseKnownToTag(content string) []string {
@@ -933,7 +935,9 @@ out:
 	if err := updateStorageChat(activeChatName, chatBody.Messages); err != nil {
 		logger.Warn("failed to update storage", "error", err, "name", activeChatName)
 	}
-	if findCall(respText.String(), toolResp.String()) {
+	// Strip think blocks before parsing for tool calls
+	respTextNoThink := thinkBlockRE.ReplaceAllString(respText.String(), "")
+	if findCall(respTextNoThink, toolResp.String()) {
 		return nil
 	}
 	// Check if this message was sent privately to specific characters
@@ -1077,11 +1081,30 @@ func findCall(msg, toolCall string) bool {
 		if jsStr == "" { // no tool call case
 			return false
 		}
-		prefix := "__tool_call__\n"
-		suffix := "\n__tool_call__"
-		jsStr = strings.TrimSuffix(strings.TrimPrefix(jsStr, prefix), suffix)
+		// Remove prefix/suffix with flexible whitespace handling
+		jsStr = strings.TrimSpace(jsStr)
+		jsStr = strings.TrimPrefix(jsStr, "__tool_call__")
+		jsStr = strings.TrimSuffix(jsStr, "__tool_call__")
+		jsStr = strings.TrimSpace(jsStr)
 		// HTML-decode the JSON string to handle encoded characters like &lt; -> <=
 		decodedJsStr := html.UnescapeString(jsStr)
+		// Try to find valid JSON bounds (first { to last })
+		start := strings.Index(decodedJsStr, "{")
+		end := strings.LastIndex(decodedJsStr, "}")
+		if start == -1 || end == -1 || end <= start {
+			logger.Error("failed to find valid JSON in tool call", "json_string", decodedJsStr)
+			toolResponseMsg := models.RoleMsg{
+				Role:    cfg.ToolRole,
+				Content: "Error processing tool call: no valid JSON found. Please check the JSON format.",
+			}
+			chatBody.Messages = append(chatBody.Messages, toolResponseMsg)
+			crr := &models.ChatRoundReq{
+				Role: cfg.AssistantRole,
+			}
+			chatRoundChan <- crr
+			return true
+		}
+		decodedJsStr = decodedJsStr[start : end+1]
 		var err error
 		fc, err = unmarshalFuncCall(decodedJsStr)
 		if err != nil {
