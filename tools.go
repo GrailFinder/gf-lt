@@ -117,7 +117,7 @@ Your current tools:
 {
 "name":"execute_command",
 "args": ["command", "args"],
-"when_to_use": "when asked to execute a system command; args is optional; allowed commands: grep, sed, awk, find, cat, head, tail, sort, uniq, wc, ls, echo, cut, tr, cp, mv, rm, mkdir, rmdir, pwd, df, free, ps, top, du, whoami, date, uname"
+"when_to_use": "when asked to execute a system command; args is optional; allowed commands: grep, sed, awk, find, cat, head, tail, sort, uniq, wc, ls, echo, cut, tr, cp, mv, rm, mkdir, rmdir, pwd, df, free, ps, top, du, whoami, date, uname, go"
 }
 ]
 </tools>
@@ -963,6 +963,7 @@ func isCommandAllowed(command string, args ...string) bool {
 		"date":   true,
 		"uname":  true,
 		"git":    true,
+		"go":     true,
 	}
 	if !allowedCommands[command] {
 		return false
@@ -1349,14 +1350,14 @@ var baseTools = []models.Tool{
 		Type: "function",
 		Function: models.ToolFunc{
 			Name:        "execute_command",
-			Description: "Execute a shell command safely. Use when you need to run system commands like grep sed awk find cat head tail sort uniq wc ls echo cut tr cp mv rm mkdir rmdir pwd df free ps top du whoami date uname. Git is allowed for read-only operations: status, log, diff, show, branch, reflog, rev-parse, shortlog, describe.",
+			Description: "Execute a shell command safely. Use when you need to run system commands like grep sed awk find cat head tail sort uniq wc ls echo cut tr cp mv rm mkdir rmdir pwd df free ps top du whoami date uname go. Git is allowed for read-only operations: status, log, diff, show, branch, reflog, rev-parse, shortlog, describe.",
 			Parameters: models.ToolFuncParams{
 				Type:     "object",
 				Required: []string{"command"},
 				Properties: map[string]models.ToolArgProps{
 					"command": models.ToolArgProps{
 						Type:        "string",
-						Description: "command to execute (only commands from whitelist are allowed: grep sed awk find cat head tail sort uniq wc ls echo cut tr cp mv rm mkdir rmdir pwd df free ps top du whoami date uname; git allowed for reads: status log diff show branch reflog rev-parse shortlog describe)",
+						Description: "command to execute (only commands from whitelist are allowed: grep sed awk find cat head tail sort uniq wc ls echo cut tr cp mv rm mkdir rmdir pwd df free ps top du whoami date uname go; git allowed for reads: status log diff show branch reflog rev-parse shortlog describe)",
 					},
 					"args": models.ToolArgProps{
 						Type:        "string",
