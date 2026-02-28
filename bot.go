@@ -136,6 +136,9 @@ func processMessageTag(msg *models.RoleMsg) *models.RoleMsg {
 // filterMessagesForCharacter returns messages visible to the specified character.
 // If CharSpecificContextEnabled is false, returns all messages.
 func filterMessagesForCharacter(messages []models.RoleMsg, character string) []models.RoleMsg {
+	if strings.Contains(cfg.CurrentAPI, "chat") {
+		return messages
+	}
 	if cfg == nil || !cfg.CharSpecificContextEnabled || character == "" {
 		return messages
 	}
@@ -158,82 +161,52 @@ func filterMessagesForCharacter(messages []models.RoleMsg, character string) []m
 	return filtered
 }
 
-func cleanToolCalls(messages []models.RoleMsg) []models.RoleMsg {
-	// If AutoCleanToolCallsFromCtx is false, keep tool call messages in context
-	if cfg != nil && !cfg.AutoCleanToolCallsFromCtx {
-		return consolidateAssistantMessages(messages)
-	}
-	cleaned := make([]models.RoleMsg, 0, len(messages))
-	for i := range messages {
-		// recognize the message as the tool call and remove it
-		// tool call in last msg should stay
-		if messages[i].ToolCallID == "" || i == len(messages)-1 {
-			cleaned = append(cleaned, messages[i])
-		}
-	}
-	return consolidateAssistantMessages(cleaned)
-}
-
-// consolidateAssistantMessages merges consecutive assistant messages into a single message
 func consolidateAssistantMessages(messages []models.RoleMsg) []models.RoleMsg {
 	if len(messages) == 0 {
 		return messages
 	}
-	consolidated := make([]models.RoleMsg, 0, len(messages))
-	currentAssistantMsg := models.RoleMsg{}
-	isBuildingAssistantMsg := false
-	for i := 0; i < len(messages); i++ {
-		msg := messages[i]
-		// assistant role only
-		if msg.Role == cfg.AssistantRole {
-			// If this is an assistant message, start or continue building
-			if !isBuildingAssistantMsg {
-				// Start accumulating assistant message
-				currentAssistantMsg = msg.Copy()
-				isBuildingAssistantMsg = true
-			} else {
-				// Continue accumulating - append content to the current assistant message
-				if currentAssistantMsg.IsContentParts() || msg.IsContentParts() {
-					// Handle structured content
-					if !currentAssistantMsg.IsContentParts() {
-						// Preserve the original ToolCallID before conversion
-						originalToolCallID := currentAssistantMsg.ToolCallID
-						// Convert existing content to content parts
-						currentAssistantMsg = models.NewMultimodalMsg(currentAssistantMsg.Role, []interface{}{models.TextContentPart{Type: "text", Text: currentAssistantMsg.Content}})
-						// Restore the original ToolCallID to preserve tool call linking
-						currentAssistantMsg.ToolCallID = originalToolCallID
-					}
-					if msg.IsContentParts() {
-						currentAssistantMsg.ContentParts = append(currentAssistantMsg.ContentParts, msg.GetContentParts()...)
-					} else if msg.Content != "" {
-						currentAssistantMsg.AddTextPart(msg.Content)
-					}
-				} else {
-					// Simple string content
-					if currentAssistantMsg.Content != "" {
-						currentAssistantMsg.Content += "\n" + msg.Content
-					} else {
-						currentAssistantMsg.Content = msg.Content
-					}
-					// ToolCallID is already preserved since we're not creating a new message object when just concatenating content
-				}
+	result := make([]models.RoleMsg, 0, len(messages))
+	for i := range messages {
+		// Non-assistant messages are appended as-is
+		if messages[i].Role != cfg.AssistantRole {
+			result = append(result, messages[i])
+			continue
+		}
+		// Assistant message: start a new block or merge with the last one
+		if len(result) == 0 || result[len(result)-1].Role != cfg.AssistantRole {
+			// First assistant in a block: append a copy (avoid mutating input)
+			result = append(result, messages[i].Copy())
+			continue
+		}
+		// Merge with the last assistant message
+		last := &result[len(result)-1]
+		// If either message has structured content, unify to ContentParts
+		if last.IsContentParts() || messages[i].IsContentParts() {
+			// Convert last to ContentParts if needed, preserving ToolCallID
+			if !last.IsContentParts() {
+				toolCallID := last.ToolCallID
+				*last = models.NewMultimodalMsg(last.Role, []interface{}{
+					models.TextContentPart{Type: "text", Text: last.Content},
+				})
+				last.ToolCallID = toolCallID
+			}
+			// Add current message's content to last
+			if messages[i].IsContentParts() {
+				last.ContentParts = append(last.ContentParts, messages[i].GetContentParts()...)
+			} else if messages[i].Content != "" {
+				last.AddTextPart(messages[i].Content)
 			}
 		} else {
-			// This is not an assistant message
-			// If we were building an assistant message, add it to the result
-			if isBuildingAssistantMsg {
-				consolidated = append(consolidated, currentAssistantMsg)
-				isBuildingAssistantMsg = false
+			// Both simple strings: concatenate with newline
+			if last.Content != "" && messages[i].Content != "" {
+				last.Content += "\n" + messages[i].Content
+			} else if messages[i].Content != "" {
+				last.Content = messages[i].Content
 			}
-			// Add the non-assistant message
-			consolidated = append(consolidated, msg)
+			// ToolCallID is already preserved in last
 		}
 	}
-	// Don't forget the last assistant message if we were building one
-	if isBuildingAssistantMsg {
-		consolidated = append(consolidated, currentAssistantMsg)
-	}
-	return consolidated
+	return result
 }
 
 // GetLogLevel returns the current log level as a string
@@ -982,7 +955,7 @@ func cleanChatBody() {
 	}
 	// Tool request cleaning is now configurable via AutoCleanToolCallsFromCtx (default false)
 	// /completion msg where part meant for user and other part tool call
-	chatBody.Messages = cleanToolCalls(chatBody.Messages)
+	// chatBody.Messages = cleanToolCalls(chatBody.Messages)
 	chatBody.Messages = consolidateAssistantMessages(chatBody.Messages)
 }
 

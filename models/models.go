@@ -283,6 +283,8 @@ func (m *RoleMsg) Copy() RoleMsg {
 		KnownTo:         m.KnownTo,
 		Stats:           m.Stats,
 		HasContentParts: m.HasContentParts,
+		ToolCall:        m.ToolCall,
+		IsShellCommand:  m.IsShellCommand,
 	}
 }
 
