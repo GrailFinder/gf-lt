@@ -789,6 +789,16 @@ func executeCommand(args map[string]string) []byte {
 			argNum++
 		}
 	}
+	// Handle commands passed as single string with spaces (e.g., "go run main.go")
+	// Split into base command and arguments
+	if strings.Contains(command, " ") {
+		parts := strings.Fields(command)
+		baseCmd := parts[0]
+		extraArgs := parts[1:]
+		// Prepend extra args to cmdArgs
+		cmdArgs = append(extraArgs, cmdArgs...)
+		command = baseCmd
+	}
 	if !isCommandAllowed(command, cmdArgs...) {
 		msg := fmt.Sprintf("command '%s' is not allowed", command)
 		logger.Error(msg)
@@ -1049,11 +1059,15 @@ func isCommandAllowed(command string, args ...string) bool {
 		"git":    true,
 		"go":     true,
 	}
-	if !allowedCommands[command] {
-		return false
+	// Allow all go subcommands (go run, go mod tidy, go test, etc.)
+	if strings.HasPrefix(command, "go ") && allowedCommands["go"] {
+		return true
 	}
 	if command == "git" && len(args) > 0 {
 		return gitReadSubcommands[args[0]]
+	}
+	if !allowedCommands[command] {
+		return false
 	}
 	return true
 }
