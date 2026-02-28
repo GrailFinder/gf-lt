@@ -131,13 +131,18 @@ func loadOldChatOrGetNew() []models.RoleMsg {
 	chat, err := store.GetLastChat()
 	if err != nil {
 		logger.Warn("failed to load history chat", "error", err)
+		maxID, err := store.ChatGetMaxID()
+		if err != nil {
+			logger.Error("failed to fetch max chat id", "error", err)
+		}
+		maxID++
 		chat := &models.Chat{
-			ID:        0,
+			ID:        maxID,
 			CreatedAt: time.Now(),
 			UpdatedAt: time.Now(),
 			Agent:     cfg.AssistantRole,
 		}
-		chat.Name = fmt.Sprintf("%s_%v", chat.Agent, chat.CreatedAt.Unix())
+		chat.Name = fmt.Sprintf("%s_%v", chat.Agent, chat.ID)
 		activeChatName = chat.Name
 		chatMap[chat.Name] = chat
 		return defaultStarter
@@ -149,10 +154,6 @@ func loadOldChatOrGetNew() []models.RoleMsg {
 		chatMap[chat.Name] = chat
 		return defaultStarter
 	}
-	// if chat.Name == "" {
-	// 	logger.Warn("empty chat name", "id", chat.ID)
-	// 	chat.Name = fmt.Sprintf("%s_%v", chat.Agent, chat.CreatedAt.Unix())
-	// }
 	chatMap[chat.Name] = chat
 	activeChatName = chat.Name
 	cfg.AssistantRole = chat.Agent

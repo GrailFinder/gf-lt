@@ -1,4 +1,4 @@
-.PHONY: setconfig run lint install-linters setup-whisper build-whisper download-whisper-model docker-up docker-down docker-logs noextra-run installdelve checkdelve
+.PHONY: setconfig run lint lintall install-linters setup-whisper build-whisper download-whisper-model docker-up docker-down docker-logs noextra-run installdelve checkdelve
 
 run: setconfig
 	go build -tags extra -o gf-lt && ./gf-lt
@@ -25,7 +25,10 @@ install-linters: ## Install additional linters (noblanks)
 	go install github.com/GrailFinder/noblanks-linter/cmd/noblanks@latest
 
 lint: ## Run linters. Use make install-linters first.
-	golangci-lint run -c .golangci.yml ./...; noblanks ./...
+	golangci-lint run -c .golangci.yml ./...
+
+lintall: lint
+	noblanks ./...
 
 # Whisper STT Setup (in batteries directory)
 setup-whisper: build-whisper download-whisper-model

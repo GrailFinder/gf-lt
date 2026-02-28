@@ -1411,8 +1411,6 @@ func init() {
 	}
 	// load cards
 	basicCard.Role = cfg.AssistantRole
-	// toolCard.Role = cfg.AssistantRole
-	//
 	logLevel.Set(slog.LevelInfo)
 	logger = slog.New(slog.NewTextHandler(logfile, &slog.HandlerOptions{Level: logLevel}))
 	store = storage.NewProviderSQL(cfg.DBPATH, logger)
