@@ -1546,9 +1546,22 @@ var baseTools = []models.Tool{
 			Name:        "todo_update",
 			Description: "Update a todo item by ID with new task or status. Status must be one of: pending, in_progress, completed.",
 			Parameters: models.ToolFuncParams{
-				Type:       "object",
-				Required:   []string{},
-				Properties: map[string]models.ToolArgProps{},
+				Type:     "object",
+				Required: []string{"id"},
+				Properties: map[string]models.ToolArgProps{
+					"id": models.ToolArgProps{
+						Type:        "string",
+						Description: "id of the todo item to update",
+					},
+					"task": models.ToolArgProps{
+						Type:        "string",
+						Description: "new task description (optional)",
+					},
+					"status": models.ToolArgProps{
+						Type:        "string",
+						Description: "new status: pending, in_progress, or completed (optional)",
+					},
+				},
 			},
 		},
 	},
