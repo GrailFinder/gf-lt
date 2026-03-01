@@ -1,6 +1,7 @@
 package main
 
 import (
+	"gf-lt/models"
 	"slices"
 	"strings"
 
@@ -51,7 +52,7 @@ func showModelSelectionPopup() {
 	// Find the current model index to set as selected
 	currentModelIndex := -1
 	for i, model := range modelList {
-		if strings.TrimPrefix(model, "(loaded) ") == chatBody.Model {
+		if strings.TrimPrefix(model, models.LoadedMark) == chatBody.Model {
 			currentModelIndex = i
 		}
 		modelListWidget.AddItem(model, "", 0, nil)
@@ -61,7 +62,7 @@ func showModelSelectionPopup() {
 		modelListWidget.SetCurrentItem(currentModelIndex)
 	}
 	modelListWidget.SetSelectedFunc(func(index int, mainText string, secondaryText string, shortcut rune) {
-		modelName := strings.TrimPrefix(mainText, "(loaded) ")
+		modelName := strings.TrimPrefix(mainText, models.LoadedMark)
 		chatBody.Model = modelName
 		cfg.CurrentModel = chatBody.Model
 		pages.RemovePage("modelSelectionPopup")

@@ -379,22 +379,22 @@ func fetchLCPModels() ([]string, error) {
 
 // fetchLCPModelsWithLoadStatus returns models with "(loaded)" indicator for loaded models
 func fetchLCPModelsWithLoadStatus() ([]string, error) {
-	models, err := fetchLCPModelsWithStatus()
+	modelList, err := fetchLCPModelsWithStatus()
 	if err != nil {
 		return nil, err
 	}
-	result := make([]string, 0, len(models.Data))
+	result := make([]string, 0, len(modelList.Data))
 	li := 0 // loaded index
-	for i, m := range models.Data {
+	for i, m := range modelList.Data {
 		modelName := m.ID
 		if m.Status.Value == "loaded" {
-			modelName = "(loaded) " + modelName
+			modelName = models.LoadedMark + modelName
 			li = i
 		}
 		result = append(result, modelName)
 	}
 	if li == 0 {
-		return result, nil // no loaded models
+		return result, nil // no loaded modelList
 	}
 	loadedModel := result[li]
 	result = append(result[:li], result[li+1:]...)
@@ -1323,10 +1323,26 @@ func updateModelLists() {
 	}
 	// if llama.cpp started after gf-lt?
 	localModelsMu.Lock()
-	LocalModels, err = fetchLCPModels()
+	LocalModels, err = fetchLCPModelsWithLoadStatus()
 	localModelsMu.Unlock()
 	if err != nil {
 		logger.Warn("failed to fetch llama.cpp models", "error", err)
+	}
+	// set already loaded model in llama.cpp
+	if strings.Contains(cfg.CurrentAPI, "localhost") || strings.Contains(cfg.CurrentAPI, "127.0.0.1") {
+		localModelsMu.Lock()
+		defer localModelsMu.Unlock()
+		for i := range LocalModels {
+			if strings.Contains(LocalModels[i], models.LoadedMark) {
+				m := strings.TrimPrefix(LocalModels[i], models.LoadedMark)
+				cfg.CurrentModel = m
+				chatBody.Model = m
+				cachedModelColor = "green"
+				updateStatusLine()
+				app.Draw()
+				return
+			}
+		}
 	}
 }
 

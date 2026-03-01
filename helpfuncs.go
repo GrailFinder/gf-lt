@@ -27,7 +27,6 @@ func startModelColorUpdater() {
 	go func() {
 		ticker := time.NewTicker(5 * time.Second)
 		defer ticker.Stop()
-
 		// Initial check
 		updateCachedModelColor()
 		for range ticker.C {
@@ -42,7 +41,6 @@ func updateCachedModelColor() {
 		cachedModelColor = "orange"
 		return
 	}
-
 	// Check if model is loaded
 	loaded, err := isModelLoaded(chatBody.Model)
 	if err != nil {

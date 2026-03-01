@@ -519,21 +519,17 @@ func fileEdit(args map[string]string) []byte {
 		return []byte(msg)
 	}
 	path = resolvePath(path)
-
 	oldString, ok := args["oldString"]
 	if !ok || oldString == "" {
 		msg := "oldString not provided to file_edit tool"
 		logger.Error(msg)
 		return []byte(msg)
 	}
-
 	newString, ok := args["newString"]
 	if !ok {
 		newString = ""
 	}
-
 	lineNumberStr, hasLineNumber := args["lineNumber"]
-
 	// Read file content
 	content, err := os.ReadFile(path)
 	if err != nil {
@@ -541,10 +537,8 @@ func fileEdit(args map[string]string) []byte {
 		logger.Error(msg)
 		return []byte(msg)
 	}
-
 	fileContent := string(content)
 	var replacementCount int
-
 	if hasLineNumber && lineNumberStr != "" {
 		// Line-number based edit
 		lineNum, err := strconv.Atoi(lineNumberStr)
@@ -579,13 +573,11 @@ func fileEdit(args map[string]string) []byte {
 		fileContent = strings.ReplaceAll(fileContent, oldString, newString)
 		replacementCount = strings.Count(fileContent, newString)
 	}
-
 	if err := os.WriteFile(path, []byte(fileContent), 0644); err != nil {
 		msg := "failed to write file: " + err.Error()
 		logger.Error(msg)
 		return []byte(msg)
 	}
-
 	msg := fmt.Sprintf("file edited successfully at %s (%d replacement(s))", path, replacementCount)
 	return []byte(msg)
 }
