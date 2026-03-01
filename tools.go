@@ -757,45 +757,35 @@ func listDirectory(path string) ([]string, error) {
 
 // Command Execution Tool
 func executeCommand(args map[string]string) []byte {
-	command, ok := args["command"]
-	if !ok || command == "" {
+	commandStr := args["command"]
+	if commandStr == "" {
 		msg := "command not provided to execute_command tool"
 		logger.Error(msg)
 		return []byte(msg)
 	}
-	// Get arguments - handle both single arg and multiple args
-	var cmdArgs []string
-	if args["args"] != "" {
-		// If args is provided as a single string, split by spaces
-		cmdArgs = strings.Fields(args["args"])
-	} else {
-		// If individual args are provided, collect them
-		argNum := 1
-		for {
-			argKey := fmt.Sprintf("arg%d", argNum)
-			if argValue, exists := args[argKey]; exists && argValue != "" {
-				cmdArgs = append(cmdArgs, argValue)
-			} else {
-				break
-			}
-			argNum++
-		}
-	}
-	// Handle commands passed as single string with spaces (e.g., "go run main.go")
+
+	// Handle commands passed as single string with spaces (e.g., "go run main.go" or "cd /tmp")
 	// Split into base command and arguments
-	if strings.Contains(command, " ") {
-		parts := strings.Fields(command)
-		baseCmd := parts[0]
-		extraArgs := parts[1:]
-		// Prepend extra args to cmdArgs
-		cmdArgs = append(extraArgs, cmdArgs...)
-		command = baseCmd
+	parts := strings.Fields(commandStr)
+	if len(parts) == 0 {
+		msg := "command not provided to execute_command tool"
+		logger.Error(msg)
+		return []byte(msg)
 	}
+	command := parts[0]
+	cmdArgs := parts[1:]
+
 	if !isCommandAllowed(command, cmdArgs...) {
 		msg := fmt.Sprintf("command '%s' is not allowed", command)
 		logger.Error(msg)
 		return []byte(msg)
 	}
+
+	// Special handling for cd command - update FilePickerDir
+	if command == "cd" {
+		return handleCdCommand(cmdArgs)
+	}
+
 	// Execute with timeout for safety
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -809,10 +799,56 @@ func executeCommand(args map[string]string) []byte {
 	}
 	// Check if output is empty and return success message
 	if len(output) == 0 {
-		successMsg := fmt.Sprintf("command '%s %s' executed successfully and exited with code 0", command, strings.Join(cmdArgs, " "))
+		successMsg := fmt.Sprintf("command '%s' executed successfully and exited with code 0", commandStr)
 		return []byte(successMsg)
 	}
 	return output
+}
+
+// handleCdCommand handles the cd command to update FilePickerDir
+func handleCdCommand(args []string) []byte {
+	var targetDir string
+	if len(args) == 0 {
+		// cd with no args goes to home directory
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			msg := "cd: cannot determine home directory: " + err.Error()
+			logger.Error(msg)
+			return []byte(msg)
+		}
+		targetDir = homeDir
+	} else {
+		targetDir = args[0]
+	}
+
+	// Resolve relative paths against current FilePickerDir
+	if !filepath.IsAbs(targetDir) {
+		targetDir = filepath.Join(cfg.FilePickerDir, targetDir)
+	}
+
+	// Verify the directory exists
+	info, err := os.Stat(targetDir)
+	if err != nil {
+		msg := "cd: " + targetDir + ": " + err.Error()
+		logger.Error(msg)
+		return []byte(msg)
+	}
+	if !info.IsDir() {
+		msg := "cd: " + targetDir + ": not a directory"
+		logger.Error(msg)
+		return []byte(msg)
+	}
+
+	// Update FilePickerDir
+	absDir, err := filepath.Abs(targetDir)
+	if err != nil {
+		msg := "cd: failed to resolve path: " + err.Error()
+		logger.Error(msg)
+		return []byte(msg)
+	}
+	cfg.FilePickerDir = absDir
+	msg := "FilePickerDir changed to: " + absDir
+	return []byte(msg)
 }
 
 // Helper functions for command execution
@@ -1002,6 +1038,7 @@ var gitReadSubcommands = map[string]bool{
 
 func isCommandAllowed(command string, args ...string) bool {
 	allowedCommands := map[string]bool{
+		"cd":     true,
 		"grep":   true,
 		"sed":    true,
 		"awk":    true,
@@ -1453,18 +1490,14 @@ var baseTools = []models.Tool{
 		Type: "function",
 		Function: models.ToolFunc{
 			Name:        "execute_command",
-			Description: "Execute a shell command safely. Use when you need to run system commands like grep sed awk find cat head tail sort uniq wc ls echo cut tr cp mv rm mkdir rmdir pwd df free ps top du whoami date uname go. Git is allowed for read-only operations: status, log, diff, show, branch, reflog, rev-parse, shortlog, describe.",
+			Description: "Execute a shell command safely. Use when you need to run system commands like cd grep sed awk find cat head tail sort uniq wc ls echo cut tr cp mv rm mkdir rmdir pwd df free ps top du whoami date uname go git. Git is allowed for read-only operations: status, log, diff, show, branch, reflog, rev-parse, shortlog, describe. Use 'cd /path' to change working directory.",
 			Parameters: models.ToolFuncParams{
 				Type:     "object",
 				Required: []string{"command"},
 				Properties: map[string]models.ToolArgProps{
 					"command": models.ToolArgProps{
 						Type:        "string",
-						Description: "command to execute (only commands from whitelist are allowed: grep sed awk find cat head tail sort uniq wc ls echo cut tr cp mv rm mkdir rmdir pwd df free ps top du whoami date uname go; git allowed for reads: status log diff show branch reflog rev-parse shortlog describe)",
-					},
-					"args": models.ToolArgProps{
-						Type:        "string",
-						Description: "command arguments as a single string (e.g., '-la {path}')",
+						Description: "command to execute with arguments (e.g., 'go run main.go', 'ls -la /tmp', 'cd /home/user'). Use a single string; arguments should be space-separated after the command.",
 					},
 				},
 			},
