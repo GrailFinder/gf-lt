@@ -1207,11 +1207,11 @@ func chatToTextSlice(messages []models.RoleMsg, showSys bool) []string {
 			// This is a tool call indicator - show collapsed
 			if toolCollapsed {
 				toolName := messages[i].ToolCall.Name
-				resp[i] = fmt.Sprintf("%s\n%s\n[yellow::i][tool call: %s (press Ctrl+T to expand)][-:-:-]\n", icon, messages[i].GetText(), toolName)
+				resp[i] = strings.ReplaceAll(fmt.Sprintf("%s\n%s\n[yellow::i][tool call: %s (press Ctrl+T to expand)][-:-:-]\n", icon, messages[i].GetText(), toolName), "\n\n", "\n")
 			} else {
 				// Show full tool call info
 				toolName := messages[i].ToolCall.Name
-				resp[i] = fmt.Sprintf("%s\n%s\n[yellow::i][tool call: %s][-:-:-]\nargs: %s\nid: %s\n", icon, messages[i].GetText(), toolName, messages[i].ToolCall.Args, messages[i].ToolCall.ID)
+				resp[i] = strings.ReplaceAll(fmt.Sprintf("%s\n%s\n[yellow::i][tool call: %s][-:-:-]\nargs: %s\nid: %s\n", icon, messages[i].GetText(), toolName, messages[i].ToolCall.Args, messages[i].ToolCall.ID), "\n\n", "\n")
 			}
 			continue
 		}

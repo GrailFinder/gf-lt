@@ -763,7 +763,6 @@ func executeCommand(args map[string]string) []byte {
 		logger.Error(msg)
 		return []byte(msg)
 	}
-
 	// Handle commands passed as single string with spaces (e.g., "go run main.go" or "cd /tmp")
 	// Split into base command and arguments
 	parts := strings.Fields(commandStr)
@@ -774,18 +773,15 @@ func executeCommand(args map[string]string) []byte {
 	}
 	command := parts[0]
 	cmdArgs := parts[1:]
-
 	if !isCommandAllowed(command, cmdArgs...) {
 		msg := fmt.Sprintf("command '%s' is not allowed", command)
 		logger.Error(msg)
 		return []byte(msg)
 	}
-
 	// Special handling for cd command - update FilePickerDir
 	if command == "cd" {
 		return handleCdCommand(cmdArgs)
 	}
-
 	// Execute with timeout for safety
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
