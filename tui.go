@@ -997,42 +997,40 @@ func init() {
 				return nil
 			}
 			msgText := textArea.GetText()
-			if msgText != "" {
-				nl := "\n\n" // keep empty lines between messages
-				prevText := textView.GetText(true)
-				persona := cfg.UserRole
-				// strings.LastIndex()
-				// newline is not needed is prev msg ends with one
-				if strings.HasSuffix(prevText, nl) {
-					nl = ""
-				} else if strings.HasSuffix(prevText, "\n") {
-					nl = "\n" // only one newline, add another
-				}
-				if msgText != "" {
-					// as what char user sends msg?
-					if cfg.WriteNextMsgAs != "" {
-						persona = cfg.WriteNextMsgAs
-					}
-					// check if plain text
-					if !injectRole {
-						matches := roleRE.FindStringSubmatch(msgText)
-						if len(matches) > 1 {
-							persona = matches[1]
-							msgText = strings.TrimLeft(msgText[len(matches[0]):], " ")
-						}
-					}
-					// add user icon before user msg
-					fmt.Fprintf(textView, "%s[-:-:b](%d) <%s>: [-:-:-]\n%s\n",
-						nl, len(chatBody.Messages), persona, msgText)
-					textArea.SetText("", true)
-					if scrollToEndEnabled {
-						textView.ScrollToEnd()
-					}
-					colorText()
-				}
-				// go chatRound(msgText, persona, textView, false, false)
-				chatRoundChan <- &models.ChatRoundReq{Role: persona, UserMsg: msgText}
+			nl := "\n\n" // keep empty lines between messages
+			prevText := textView.GetText(true)
+			persona := cfg.UserRole
+			// strings.LastIndex()
+			// newline is not needed is prev msg ends with one
+			if strings.HasSuffix(prevText, nl) {
+				nl = ""
+			} else if strings.HasSuffix(prevText, "\n") {
+				nl = "\n" // only one newline, add another
 			}
+			if msgText != "" {
+				// as what char user sends msg?
+				if cfg.WriteNextMsgAs != "" {
+					persona = cfg.WriteNextMsgAs
+				}
+				// check if plain text
+				if !injectRole {
+					matches := roleRE.FindStringSubmatch(msgText)
+					if len(matches) > 1 {
+						persona = matches[1]
+						msgText = strings.TrimLeft(msgText[len(matches[0]):], " ")
+					}
+				}
+				// add user icon before user msg
+				fmt.Fprintf(textView, "%s[-:-:b](%d) <%s>: [-:-:-]\n%s\n",
+					nl, len(chatBody.Messages), persona, msgText)
+				textArea.SetText("", true)
+				if scrollToEndEnabled {
+					textView.ScrollToEnd()
+				}
+				colorText()
+			}
+			// go chatRound(msgText, persona, textView, false, false)
+			chatRoundChan <- &models.ChatRoundReq{Role: persona, UserMsg: msgText}
 			return nil
 		}
 		if event.Key() == tcell.KeyPgUp || event.Key() == tcell.KeyPgDn {
