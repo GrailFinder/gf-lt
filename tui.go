@@ -35,6 +35,8 @@ var (
 	renameWindow       *tview.InputField
 	roleEditWindow     *tview.InputField
 	shellInput         *tview.InputField
+	confirmModal       *tview.Modal
+	confirmPageName    = "confirm"
 	fullscreenMode     bool
 	positionVisible    bool = true
 	scrollToEndEnabled bool = true
@@ -192,6 +194,40 @@ func init() {
 				showShellFileCompletionPopup(filter)
 			}
 			return nil
+		}
+		return event
+	})
+	confirmModal = tview.NewModal().
+		SetText("You are trying to send an empty message.\nIt makes sense if the last message in the chat is from you.\nAre you sure?").
+		AddButtons([]string{"Yes", "No"}).
+		SetButtonBackgroundColor(tcell.ColorBlack).
+		SetButtonTextColor(tcell.ColorWhite).
+		SetDoneFunc(func(buttonIndex int, buttonLabel string) {
+			if buttonLabel == "Yes" {
+				persona := cfg.UserRole
+				if cfg.WriteNextMsgAs != "" {
+					persona = cfg.WriteNextMsgAs
+				}
+				chatRoundChan <- &models.ChatRoundReq{Role: persona, UserMsg: ""}
+			} // In both Yes and No, go back to the main page
+			pages.SwitchToPage("main") // or whatever your main page is named
+		})
+	confirmModal.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		switch event.Key() {
+		case tcell.KeyRune:
+			switch event.Rune() {
+			case 'y', 'Y':
+				persona := cfg.UserRole
+				if cfg.WriteNextMsgAs != "" {
+					persona = cfg.WriteNextMsgAs
+				}
+				chatRoundChan <- &models.ChatRoundReq{Role: persona, UserMsg: ""}
+				pages.SwitchToPage("main")
+				return nil
+			case 'n', 'N', 'x', 'X':
+				pages.SwitchToPage("main")
+				return nil
+			}
 		}
 		return event
 	})
@@ -1028,6 +1064,9 @@ func init() {
 					textView.ScrollToEnd()
 				}
 				colorText()
+			} else {
+				pages.AddPage(confirmPageName, confirmModal, true, true)
+				return nil
 			}
 			// go chatRound(msgText, persona, textView, false, false)
 			chatRoundChan <- &models.ChatRoundReq{Role: persona, UserMsg: msgText}
