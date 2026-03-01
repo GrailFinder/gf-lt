@@ -39,7 +39,6 @@ type Config struct {
 	// rag settings
 	RAGEnabled   bool   `toml:"RAGEnabled"`
 	RAGDir       string `toml:"RAGDir"`
-	RAGWorkers   uint32 `toml:"RAGWorkers"`
 	RAGBatchSize int    `toml:"RAGBatchSize"`
 	RAGWordLimit uint32 `toml:"RAGWordLimit"`
 	// deepseek

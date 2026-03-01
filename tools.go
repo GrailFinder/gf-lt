@@ -834,6 +834,14 @@ type TodoList struct {
 	Items []TodoItem `json:"items"`
 }
 
+func (t TodoList) ToString() string {
+	sb := strings.Builder{}
+	for i := range t.Items {
+		fmt.Fprintf(&sb, "\n[%s] %s. %s\n", t.Items[i].Status, t.Items[i].ID, t.Items[i].Task)
+	}
+	return sb.String()
+}
+
 // Global todo list storage
 var globalTodoList = TodoList{
 	Items: []TodoItem{},
@@ -860,6 +868,7 @@ func todoCreate(args map[string]string) []byte {
 		"id":      id,
 		"task":    task,
 		"status":  "pending",
+		"todos":   globalTodoList.ToString(),
 	}
 	jsonResult, err := json.Marshal(result)
 	if err != nil {
@@ -871,38 +880,9 @@ func todoCreate(args map[string]string) []byte {
 }
 
 func todoRead(args map[string]string) []byte {
-	id, ok := args["id"]
-	if ok && id != "" {
-		// Find specific todo by ID
-		for _, item := range globalTodoList.Items {
-			if item.ID == id {
-				result := map[string]interface{}{
-					"todo": item,
-				}
-				jsonResult, err := json.Marshal(result)
-				if err != nil {
-					msg := "failed to marshal result; error: " + err.Error()
-					logger.Error(msg)
-					return []byte(msg)
-				}
-				return jsonResult
-			}
-		}
-		// ID not found
-		result := map[string]string{
-			"error": fmt.Sprintf("todo with id %s not found", id),
-		}
-		jsonResult, err := json.Marshal(result)
-		if err != nil {
-			msg := "failed to marshal result; error: " + err.Error()
-			logger.Error(msg)
-			return []byte(msg)
-		}
-		return jsonResult
-	}
 	// Return all todos if no ID specified
 	result := map[string]interface{}{
-		"todos": globalTodoList.Items,
+		"todos": globalTodoList.ToString(),
 	}
 	jsonResult, err := json.Marshal(result)
 	if err != nil {
@@ -953,6 +933,7 @@ func todoUpdate(args map[string]string) []byte {
 			result := map[string]string{
 				"message": "todo updated successfully",
 				"id":      id,
+				"todos":   globalTodoList.ToString(),
 			}
 			jsonResult, err := json.Marshal(result)
 			if err != nil {
@@ -991,6 +972,7 @@ func todoDelete(args map[string]string) []byte {
 			result := map[string]string{
 				"message": "todo deleted successfully",
 				"id":      id,
+				"todos":   globalTodoList.ToString(),
 			}
 			jsonResult, err := json.Marshal(result)
 			if err != nil {
@@ -1539,22 +1521,9 @@ var baseTools = []models.Tool{
 			Name:        "todo_update",
 			Description: "Update a todo item by ID with new task or status. Status must be one of: pending, in_progress, completed.",
 			Parameters: models.ToolFuncParams{
-				Type:     "object",
-				Required: []string{"id"},
-				Properties: map[string]models.ToolArgProps{
-					"id": models.ToolArgProps{
-						Type:        "string",
-						Description: "id of the todo item to update",
-					},
-					"task": models.ToolArgProps{
-						Type:        "string",
-						Description: "new task description (optional)",
-					},
-					"status": models.ToolArgProps{
-						Type:        "string",
-						Description: "new status for the todo: pending, in_progress, or completed (optional)",
-					},
-				},
+				Type:       "object",
+				Required:   []string{},
+				Properties: map[string]models.ToolArgProps{},
 			},
 		},
 	},

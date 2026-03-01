@@ -80,9 +80,6 @@ This document explains how to set up and configure the application using the `co
 #### RAGWordLimit (`80`)
 - Maximum number of words in a batch to tokenize and store.
 
-#### RAGWorkers (`2`)
-- Number of concurrent workers for RAG processing.
-
 #### RAGDir (`"ragimport"`)
 - Directory containing documents for RAG processing.
 
