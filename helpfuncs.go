@@ -384,7 +384,7 @@ func makeStatusLine() string {
 		maxCtx = 16384
 	}
 	if contextTokens > 0 {
-		contextInfo := fmt.Sprintf(" | context: [cyan:-:b]%d/%d[-:-:-]", contextTokens, maxCtx)
+		contextInfo := fmt.Sprintf(" | context-estim: [orange:-:b]%d/%d[-:-:-]", contextTokens, maxCtx)
 		statusLine += contextInfo
 	}
 	return statusLine + imageInfo + shellModeInfo
@@ -395,9 +395,13 @@ func getContextTokens() int {
 		return 0
 	}
 	total := 0
-	for _, msg := range chatBody.Messages {
-		if msg.Stats != nil {
+	messages := chatBody.Messages
+	for i := range messages {
+		msg := &messages[i]
+		if msg.Stats != nil && msg.Stats.Tokens > 0 {
 			total += msg.Stats.Tokens
+		} else if msg.GetText() != "" {
+			total += len(msg.GetText()) / 4
 		}
 	}
 	return total
@@ -410,19 +414,22 @@ func getMaxContextTokens() int {
 		return 0
 	}
 	modelName := chatBody.Model
-	if strings.Contains(cfg.CurrentAPI, "openrouter") {
+	switch {
+	case strings.Contains(cfg.CurrentAPI, "openrouter"):
 		if orModelsData != nil {
-			for _, m := range orModelsData.Data {
+			for i := range orModelsData.Data {
+				m := &orModelsData.Data[i]
 				if m.ID == modelName {
 					return m.ContextLength
 				}
 			}
 		}
-	} else if strings.Contains(cfg.CurrentAPI, "deepseek") {
+	case strings.Contains(cfg.CurrentAPI, "deepseek"):
 		return deepseekContext
-	} else {
+	default:
 		if localModelsData != nil {
-			for _, m := range localModelsData.Data {
+			for i := range localModelsData.Data {
+				m := &localModelsData.Data[i]
 				if m.ID == modelName {
 					for _, arg := range m.Status.Args {
 						if strings.HasPrefix(arg, "--ctx-size") {
@@ -433,9 +440,9 @@ func getMaxContextTokens() int {
 								}
 							} else {
 								idx := -1
-								for i, a := range m.Status.Args {
-									if a == "--ctx-size" && i+1 < len(m.Status.Args) {
-										idx = i + 1
+								for j, a := range m.Status.Args {
+									if a == "--ctx-size" && j+1 < len(m.Status.Args) {
+										idx = j + 1
 										break
 									}
 								}
