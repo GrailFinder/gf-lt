@@ -70,6 +70,8 @@ type Config struct {
 	CharSpecificContextEnabled bool   `toml:"CharSpecificContextEnabled"`
 	CharSpecificContextTag     string `toml:"CharSpecificContextTag"`
 	AutoTurn                   bool   `toml:"AutoTurn"`
+	// playwright browser
+	PlaywrightHeadless bool `toml:"PlaywrightHeadless"`
 }
 
 func LoadConfig(fn string) (*Config, error) {
