@@ -1177,7 +1177,6 @@ func findCall(msg, toolCall string) bool {
 	// Create tool response message with the proper tool_call_id
 	// Mark shell commands as always visible
 	isShellCommand := fc.Name == "execute_command"
-
 	// Check if response is multimodal content (image)
 	var toolResponseMsg models.RoleMsg
 	if strings.HasPrefix(strings.TrimSpace(toolMsg), `{"type":"multimodal_content"`) {

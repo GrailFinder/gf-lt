@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"gf-lt/models"
 	"io"
 	"strings"
@@ -119,25 +118,22 @@ func (lcp LCPCompletion) FormMsg(msg, role string, resume bool) (io.Reader, erro
 	logger.Debug("formmsg lcpcompletion", "link", cfg.CurrentAPI)
 	localImageAttachmentPath := imageAttachmentPath
 	var multimodalData []string
-	if localImageAttachmentPath != "" {
-		imageURL, err := models.CreateImageURLFromPath(localImageAttachmentPath)
-		if err != nil {
-			logger.Error("failed to create image URL from path for completion",
-				"error", err, "path", localImageAttachmentPath)
-			return nil, err
-		}
-		// Extract base64 part from data URL (e.g., "data:image/jpeg;base64,...")
-		parts := strings.SplitN(imageURL, ",", 2)
-		if len(parts) == 2 {
-			multimodalData = append(multimodalData, parts[1])
-		} else {
-			logger.Error("invalid image data URL format", "url", imageURL)
-			return nil, errors.New("invalid image data URL format")
-		}
-		imageAttachmentPath = "" // Clear the attachment after use
-	}
 	if msg != "" { // otherwise let the bot to continue
-		newMsg := models.RoleMsg{Role: role, Content: msg}
+		var newMsg models.RoleMsg
+		if localImageAttachmentPath != "" {
+			newMsg = models.NewMultimodalMsg(role, []any{})
+			newMsg.AddTextPart(msg)
+			imageURL, err := models.CreateImageURLFromPath(localImageAttachmentPath)
+			if err != nil {
+				logger.Error("failed to create image URL from path for completion",
+					"error", err, "path", localImageAttachmentPath)
+				return nil, err
+			}
+			newMsg.AddImagePart(imageURL, localImageAttachmentPath)
+			imageAttachmentPath = "" // Clear the attachment after use
+		} else { // not a multimodal msg or image passed in tool call
+			newMsg = models.RoleMsg{Role: role, Content: msg}
+		}
 		newMsg = *processMessageTag(&newMsg)
 		chatBody.Messages = append(chatBody.Messages, newMsg)
 	}
@@ -146,22 +142,40 @@ func (lcp LCPCompletion) FormMsg(msg, role string, resume bool) (io.Reader, erro
 		chatBody.Messages = append(chatBody.Messages, models.RoleMsg{Role: cfg.ToolRole, Content: toolSysMsg})
 	}
 	filteredMessages, botPersona := filterMessagesForCurrentCharacter(chatBody.Messages)
+	// Build prompt and extract images inline as we process each message
 	messages := make([]string, len(filteredMessages))
 	for i := range filteredMessages {
-		messages[i] = stripThinkingFromMsg(&filteredMessages[i]).ToPrompt()
+		m := stripThinkingFromMsg(&filteredMessages[i])
+		messages[i] = m.ToPrompt()
+		// Extract images from this message and add marker inline
+		if len(m.ContentParts) > 0 {
+			for _, part := range m.ContentParts {
+				var imgURL string
+				// Check for struct type
+				if imgPart, ok := part.(models.ImageContentPart); ok {
+					imgURL = imgPart.ImageURL.URL
+				} else if partMap, ok := part.(map[string]any); ok {
+					// Check for map type (from JSON unmarshaling)
+					if partType, exists := partMap["type"]; exists && partType == "image_url" {
+						if imgURLMap, ok := partMap["image_url"].(map[string]any); ok {
+							if url, ok := imgURLMap["url"].(string); ok {
+								imgURL = url
+							}
+						}
+					}
+				}
+				if imgURL != "" {
+					// Extract base64 part from data URL (e.g., "data:image/jpeg;base64,...")
+					parts := strings.SplitN(imgURL, ",", 2)
+					if len(parts) == 2 {
+						multimodalData = append(multimodalData, parts[1])
+						messages[i] += " <__media__>"
+					}
+				}
+			}
+		}
 	}
 	prompt := strings.Join(messages, "\n")
-	// Add multimodal media markers to the prompt text when multimodal data is present
-	// This is required by llama.cpp multimodal models so they know where to insert media
-	if len(multimodalData) > 0 {
-		// Add a media marker for each item in the multimodal data
-		var sb strings.Builder
-		sb.WriteString(prompt)
-		for range multimodalData {
-			sb.WriteString(" <__media__>") // llama.cpp default multimodal marker
-		}
-		prompt = sb.String()
-	}
 	// needs to be after <__media__> if there are images
 	if !resume {
 		botMsgStart := "\n" + botPersona + ":\n"
