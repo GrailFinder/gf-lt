@@ -726,6 +726,7 @@ func init() {
 		if event.Key() == tcell.KeyF6 {
 			interruptResp = true
 			botRespMode = false
+			toolRunningMode = false
 			return nil
 		}
 		if event.Key() == tcell.KeyF7 {

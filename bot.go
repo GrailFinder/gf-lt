@@ -745,7 +745,7 @@ func sendMsgToLLM(body io.Reader) {
 		}
 	interrupt:
 		if interruptResp { // read bytes, so it would not get into beginning of the next req
-			interruptResp = false
+			// interruptResp = false
 			logger.Info("interrupted bot response", "chunk_counter", counter)
 			streamDone <- true
 			break
@@ -799,6 +799,7 @@ func showSpinner() {
 }
 
 func chatRound(r *models.ChatRoundReq) error {
+	interruptResp = false
 	botRespMode = true
 	go showSpinner()
 	updateStatusLine()
@@ -964,6 +965,9 @@ out:
 	}
 	// Strip think blocks before parsing for tool calls
 	respTextNoThink := thinkBlockRE.ReplaceAllString(respText.String(), "")
+	if interruptResp {
+		return nil
+	}
 	if findCall(respTextNoThink, toolResp.String()) {
 		return nil
 	}
