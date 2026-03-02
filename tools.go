@@ -175,6 +175,27 @@ After that you are free to respond to the user.
 	webAgentsOnce      sync.Once
 )
 
+var windowToolSysMsg = `
+Additional window tools (available only if xdotool and maim are installed):
+[
+{
+"name":"list_windows",
+"args": [],
+"when_to_use": "when asked to list visible windows; returns map of window ID to window name"
+},
+{
+"name":"capture_window",
+"args": ["window"],
+"when_to_use": "when asked to take a screenshot of a specific window; saves to /tmp; window can be ID or name substring; returns file path"
+},
+{
+"name":"capture_window_and_view",
+"args": ["window"],
+"when_to_use": "when asked to take a screenshot of a specific window and show it; saves to /tmp and returns image for viewing; window can be ID or name substring"
+}
+]
+`
+
 var WebSearcher searcher.WebSurfer
 
 var (
@@ -1372,6 +1393,7 @@ func registerWindowTools() {
 				},
 			},
 		)
+		toolSysMsg += windowToolSysMsg
 	}
 }
 
