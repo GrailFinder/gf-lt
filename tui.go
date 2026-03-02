@@ -213,8 +213,7 @@ func init() {
 			pages.SwitchToPage("main") // or whatever your main page is named
 		})
 	confirmModal.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		switch event.Key() {
-		case tcell.KeyRune:
+		if event.Key() == tcell.KeyRune {
 			switch event.Rune() {
 			case 'y', 'Y':
 				persona := cfg.UserRole

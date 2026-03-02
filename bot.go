@@ -1213,19 +1213,19 @@ func findCall(msg, toolCall string) bool {
 			// Create RoleMsg with ContentParts
 			var contentParts []any
 			for _, part := range multimodalResp.Parts {
-				partType, ok := part["type"]
-				if !ok {
-					continue
-				}
-				if partType == "text" {
+				partType := part["type"]
+				switch partType {
+				case "text":
 					contentParts = append(contentParts, models.TextContentPart{Type: "text", Text: part["text"]})
-				} else if partType == "image_url" {
+				case "image_url":
 					contentParts = append(contentParts, models.ImageContentPart{
 						Type: "image_url",
 						ImageURL: struct {
 							URL string `json:"url"`
 						}{URL: part["url"]},
 					})
+				default:
+					continue
 				}
 			}
 			toolResponseMsg = models.RoleMsg{

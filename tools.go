@@ -250,8 +250,8 @@ func UpdateToolCapabilities() {
 		logger.Info("model has vision support", "model", cfg.CurrentModel, "api", cfg.CurrentAPI)
 	} else {
 		logger.Info("model does not have vision support", "model", cfg.CurrentModel, "api", cfg.CurrentAPI)
-		if windowToolsAvailable && !prevHasVision && modelHasVision == false {
-			notifyUser("window tools", "Window capture-and-view unavailable: model lacks vision support")
+		if windowToolsAvailable && !prevHasVision && !modelHasVision {
+			_ = notifyUser("window tools", "Window capture-and-view unavailable: model lacks vision support")
 		}
 	}
 	registerWindowTools()
