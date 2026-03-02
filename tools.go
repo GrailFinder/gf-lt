@@ -177,6 +177,12 @@ After that you are free to respond to the user.
 
 var WebSearcher searcher.WebSurfer
 
+var (
+	windowToolsAvailable bool
+	xdotoolPath          string
+	maimPath             string
+)
+
 func init() {
 	sa, err := searcher.NewWebSurfer(searcher.SearcherTypeScraper, "")
 	if err != nil {
@@ -185,6 +191,24 @@ func init() {
 	WebSearcher = sa
 	if err := rag.Init(cfg, logger, store); err != nil {
 		logger.Warn("failed to init rag; rag_search tool will not be available", "error", err)
+	}
+	checkWindowTools()
+	registerWindowTools()
+}
+
+func checkWindowTools() {
+	xdotoolPath, _ = exec.LookPath("xdotool")
+	maimPath, _ = exec.LookPath("maim")
+	windowToolsAvailable = xdotoolPath != "" && maimPath != ""
+	if windowToolsAvailable {
+		logger.Info("window tools available: xdotool and maim found")
+	} else {
+		if xdotoolPath == "" {
+			logger.Warn("xdotool not found, window listing tools will not be available")
+		}
+		if maimPath == "" {
+			logger.Warn("maim not found, window capture tools will not be available")
+		}
 	}
 }
 
@@ -1130,6 +1154,142 @@ func summarizeChat(args map[string]string) []byte {
 	return []byte(chatText)
 }
 
+func windowIDToHex(decimalID string) string {
+	id, err := strconv.ParseInt(decimalID, 10, 64)
+	if err != nil {
+		return decimalID
+	}
+	return fmt.Sprintf("0x%x", id)
+}
+
+func listWindows(args map[string]string) []byte {
+	if !windowToolsAvailable {
+		return []byte("window tools not available: xdotool or maim not found")
+	}
+	cmd := exec.Command(xdotoolPath, "search", "--name", ".")
+	output, err := cmd.Output()
+	if err != nil {
+		msg := "failed to list windows: " + err.Error()
+		logger.Error(msg)
+		return []byte(msg)
+	}
+	windowIDs := strings.Fields(string(output))
+	windows := make(map[string]string)
+	for _, id := range windowIDs {
+		id = strings.TrimSpace(id)
+		if id == "" {
+			continue
+		}
+		nameCmd := exec.Command(xdotoolPath, "getwindowname", id)
+		nameOutput, err := nameCmd.Output()
+		if err != nil {
+			continue
+		}
+		name := strings.TrimSpace(string(nameOutput))
+		windows[id] = name
+	}
+	data, err := json.Marshal(windows)
+	if err != nil {
+		msg := "failed to marshal window list: " + err.Error()
+		logger.Error(msg)
+		return []byte(msg)
+	}
+	return data
+}
+
+func captureWindow(args map[string]string) []byte {
+	if !windowToolsAvailable {
+		return []byte("window tools not available: xdotool or maim not found")
+	}
+	window, ok := args["window"]
+	if !ok || window == "" {
+		return []byte("window parameter required (window ID or name)")
+	}
+	var windowID string
+	if _, err := strconv.Atoi(window); err == nil {
+		windowID = window
+	} else {
+		cmd := exec.Command(xdotoolPath, "search", "--name", window)
+		output, err := cmd.Output()
+		if err != nil || len(strings.Fields(string(output))) == 0 {
+			return []byte("window not found: " + window)
+		}
+		windowID = strings.Fields(string(output))[0]
+	}
+	nameCmd := exec.Command(xdotoolPath, "getwindowname", windowID)
+	nameOutput, _ := nameCmd.Output()
+	windowName := strings.TrimSpace(string(nameOutput))
+	windowName = regexp.MustCompile(`[^a-zA-Z]+`).ReplaceAllString(windowName, "")
+	if windowName == "" {
+		windowName = "window"
+	}
+	timestamp := time.Now().Unix()
+	filename := fmt.Sprintf("/tmp/%s_%d.jpg", windowName, timestamp)
+	cmd := exec.Command(maimPath, "-i", windowIDToHex(windowID), filename)
+	if err := cmd.Run(); err != nil {
+		msg := "failed to capture window: " + err.Error()
+		logger.Error(msg)
+		return []byte(msg)
+	}
+	return []byte("screenshot saved: " + filename)
+}
+
+func captureWindowAndView(args map[string]string) []byte {
+	if !windowToolsAvailable {
+		return []byte("window tools not available: xdotool or maim not found")
+	}
+	window, ok := args["window"]
+	if !ok || window == "" {
+		return []byte("window parameter required (window ID or name)")
+	}
+	var windowID string
+	if _, err := strconv.Atoi(window); err == nil {
+		windowID = window
+	} else {
+		cmd := exec.Command(xdotoolPath, "search", "--name", window)
+		output, err := cmd.Output()
+		if err != nil || len(strings.Fields(string(output))) == 0 {
+			return []byte("window not found: " + window)
+		}
+		windowID = strings.Fields(string(output))[0]
+	}
+	nameCmd := exec.Command(xdotoolPath, "getwindowname", windowID)
+	nameOutput, _ := nameCmd.Output()
+	windowName := strings.TrimSpace(string(nameOutput))
+	windowName = regexp.MustCompile(`[^a-zA-Z]+`).ReplaceAllString(windowName, "")
+	if windowName == "" {
+		windowName = "window"
+	}
+	timestamp := time.Now().Unix()
+	filename := fmt.Sprintf("/tmp/%s_%d.jpg", windowName, timestamp)
+	captureCmd := exec.Command(maimPath, "-i", windowIDToHex(windowID), filename)
+	if err := captureCmd.Run(); err != nil {
+		msg := "failed to capture window: " + err.Error()
+		logger.Error(msg)
+		return []byte(msg)
+	}
+	dataURL, err := models.CreateImageURLFromPath(filename)
+	if err != nil {
+		msg := "failed to create image URL: " + err.Error()
+		logger.Error(msg)
+		return []byte(msg)
+	}
+	result := models.MultimodalToolResp{
+		Type: "multimodal_content",
+		Parts: []map[string]string{
+			{"type": "text", "text": "Screenshot saved: " + filename},
+			{"type": "image_url", "url": dataURL},
+		},
+	}
+	jsonResult, err := json.Marshal(result)
+	if err != nil {
+		msg := "failed to marshal result: " + err.Error()
+		logger.Error(msg)
+		return []byte(msg)
+	}
+	return jsonResult
+}
+
 type fnSig func(map[string]string) []byte
 
 var fnMap = map[string]fnSig{
@@ -1157,6 +1317,62 @@ var fnMap = map[string]fnSig{
 	"todo_update":       todoUpdate,
 	"todo_delete":       todoDelete,
 	"summarize_chat":    summarizeChat,
+}
+
+func registerWindowTools() {
+	if windowToolsAvailable {
+		fnMap["list_windows"] = listWindows
+		fnMap["capture_window"] = captureWindow
+		fnMap["capture_window_and_view"] = captureWindowAndView
+		baseTools = append(baseTools,
+			models.Tool{
+				Type: "function",
+				Function: models.ToolFunc{
+					Name:        "list_windows",
+					Description: "List all visible windows with their IDs and names. Returns a map of window ID to window name.",
+					Parameters: models.ToolFuncParams{
+						Type:       "object",
+						Required:   []string{},
+						Properties: map[string]models.ToolArgProps{},
+					},
+				},
+			},
+			models.Tool{
+				Type: "function",
+				Function: models.ToolFunc{
+					Name:        "capture_window",
+					Description: "Capture a screenshot of a specific window and save it to /tmp. Requires window parameter (window ID or name substring).",
+					Parameters: models.ToolFuncParams{
+						Type:     "object",
+						Required: []string{"window"},
+						Properties: map[string]models.ToolArgProps{
+							"window": models.ToolArgProps{
+								Type:        "string",
+								Description: "window ID or window name (partial match)",
+							},
+						},
+					},
+				},
+			},
+			models.Tool{
+				Type: "function",
+				Function: models.ToolFunc{
+					Name:        "capture_window_and_view",
+					Description: "Capture a screenshot of a specific window, save it to /tmp, and return the image for viewing. Requires window parameter (window ID or name substring).",
+					Parameters: models.ToolFuncParams{
+						Type:     "object",
+						Required: []string{"window"},
+						Properties: map[string]models.ToolArgProps{
+							"window": models.ToolArgProps{
+								Type:        "string",
+								Description: "window ID or window name (partial match)",
+							},
+						},
+					},
+				},
+			},
+		)
+	}
 }
 
 // callToolWithAgent calls the tool and applies any registered agent.
@@ -1640,4 +1856,57 @@ var baseTools = []models.Tool{
 			},
 		},
 	},
+}
+
+func init() {
+	if windowToolsAvailable {
+		baseTools = append(baseTools,
+			models.Tool{
+				Type: "function",
+				Function: models.ToolFunc{
+					Name:        "list_windows",
+					Description: "List all visible windows with their IDs and names. Returns a map of window ID to window name.",
+					Parameters: models.ToolFuncParams{
+						Type:       "object",
+						Required:   []string{},
+						Properties: map[string]models.ToolArgProps{},
+					},
+				},
+			},
+			models.Tool{
+				Type: "function",
+				Function: models.ToolFunc{
+					Name:        "capture_window",
+					Description: "Capture a screenshot of a specific window and save it to /tmp. Requires window parameter (window ID or name substring).",
+					Parameters: models.ToolFuncParams{
+						Type:     "object",
+						Required: []string{"window"},
+						Properties: map[string]models.ToolArgProps{
+							"window": models.ToolArgProps{
+								Type:        "string",
+								Description: "window ID or window name (partial match)",
+							},
+						},
+					},
+				},
+			},
+			models.Tool{
+				Type: "function",
+				Function: models.ToolFunc{
+					Name:        "capture_window_and_view",
+					Description: "Capture a screenshot of a specific window, save it to /tmp, and return the image for viewing. Requires window parameter (window ID or name substring).",
+					Parameters: models.ToolFuncParams{
+						Type:     "object",
+						Required: []string{"window"},
+						Properties: map[string]models.ToolArgProps{
+							"window": models.ToolArgProps{
+								Type:        "string",
+								Description: "window ID or window name (partial match)",
+							},
+						},
+					},
+				},
+			},
+		)
+	}
 }
