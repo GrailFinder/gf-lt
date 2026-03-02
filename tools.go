@@ -202,6 +202,7 @@ var (
 	windowToolsAvailable bool
 	xdotoolPath          string
 	maimPath             string
+	modelHasVision       bool
 )
 
 func init() {
@@ -231,6 +232,29 @@ func checkWindowTools() {
 			logger.Warn("maim not found, window capture tools will not be available")
 		}
 	}
+}
+
+func UpdateToolCapabilities() {
+	if !cfg.ToolUse {
+		return
+	}
+	modelHasVision = false
+	if cfg == nil || cfg.CurrentAPI == "" {
+		logger.Warn("cannot determine model capabilities: cfg or CurrentAPI is nil")
+		registerWindowTools()
+		return
+	}
+	prevHasVision := modelHasVision
+	modelHasVision = ModelHasVision(cfg.CurrentAPI, cfg.CurrentModel)
+	if modelHasVision {
+		logger.Info("model has vision support", "model", cfg.CurrentModel, "api", cfg.CurrentAPI)
+	} else {
+		logger.Info("model does not have vision support", "model", cfg.CurrentModel, "api", cfg.CurrentAPI)
+		if windowToolsAvailable && !prevHasVision && modelHasVision == false {
+			notifyUser("window tools", "Window capture-and-view unavailable: model lacks vision support")
+		}
+	}
+	registerWindowTools()
 }
 
 // getWebAgentClient returns a singleton AgentClient for web agents.
@@ -1344,9 +1368,8 @@ func registerWindowTools() {
 	if windowToolsAvailable {
 		fnMap["list_windows"] = listWindows
 		fnMap["capture_window"] = captureWindow
-		fnMap["capture_window_and_view"] = captureWindowAndView
-		baseTools = append(baseTools,
-			models.Tool{
+		windowTools := []models.Tool{
+			{
 				Type: "function",
 				Function: models.ToolFunc{
 					Name:        "list_windows",
@@ -1358,7 +1381,7 @@ func registerWindowTools() {
 					},
 				},
 			},
-			models.Tool{
+			{
 				Type: "function",
 				Function: models.ToolFunc{
 					Name:        "capture_window",
@@ -1375,7 +1398,10 @@ func registerWindowTools() {
 					},
 				},
 			},
-			models.Tool{
+		}
+		if modelHasVision {
+			fnMap["capture_window_and_view"] = captureWindowAndView
+			windowTools = append(windowTools, models.Tool{
 				Type: "function",
 				Function: models.ToolFunc{
 					Name:        "capture_window_and_view",
@@ -1391,8 +1417,9 @@ func registerWindowTools() {
 						},
 					},
 				},
-			},
-		)
+			})
+		}
+		baseTools = append(baseTools, windowTools...)
 		toolSysMsg += windowToolSysMsg
 	}
 }

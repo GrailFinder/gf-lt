@@ -433,6 +433,33 @@ func isModelLoaded(modelID string) (bool, error) {
 	return false, nil
 }
 
+func ModelHasVision(api, modelID string) bool {
+	switch {
+	case strings.Contains(api, "deepseek"):
+		return false
+	case strings.Contains(api, "openrouter"):
+		resp, err := http.Get("https://openrouter.ai/api/v1/models")
+		if err != nil {
+			logger.Warn("failed to fetch OR models for vision check", "error", err)
+			return false
+		}
+		defer resp.Body.Close()
+		orm := &models.ORModels{}
+		if err := json.NewDecoder(resp.Body).Decode(orm); err != nil {
+			logger.Warn("failed to decode OR models for vision check", "error", err)
+			return false
+		}
+		return orm.HasVision(modelID)
+	default:
+		models, err := fetchLCPModelsWithStatus()
+		if err != nil {
+			logger.Warn("failed to fetch LCP models for vision check", "error", err)
+			return false
+		}
+		return models.HasVision(modelID)
+	}
+}
+
 // monitorModelLoad starts a goroutine that periodically checks if the specified model is loaded.
 func monitorModelLoad(modelID string) {
 	go func() {
@@ -1381,6 +1408,7 @@ func updateModelLists() {
 				chatBody.Model = m
 				cachedModelColor = "green"
 				updateStatusLine()
+				UpdateToolCapabilities()
 				app.Draw()
 				return
 			}

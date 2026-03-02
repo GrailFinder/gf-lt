@@ -608,6 +608,20 @@ func (lcp *LCPModels) ListModels() []string {
 	return resp
 }
 
+func (lcp *LCPModels) HasVision(modelID string) bool {
+	for _, m := range lcp.Data {
+		if m.ID == modelID {
+			args := m.Status.Args
+			for i := 0; i < len(args)-1; i++ {
+				if args[i] == "--mmproj" {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
 type ResponseStats struct {
 	Tokens       int
 	Duration     float64

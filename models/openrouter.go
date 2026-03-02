@@ -172,3 +172,16 @@ func (orm *ORModels) ListModels(free bool) []string {
 	}
 	return resp
 }
+
+func (orm *ORModels) HasVision(modelID string) bool {
+	for i := range orm.Data {
+		if orm.Data[i].ID == modelID {
+			for _, mod := range orm.Data[i].Architecture.InputModalities {
+				if mod == "image" {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
