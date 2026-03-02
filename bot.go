@@ -1174,17 +1174,60 @@ func findCall(msg, toolCall string) bool {
 	toolRunningMode = false
 	toolMsg := string(resp)
 	logger.Info("llm used a tool call", "tool_name", fc.Name, "too_args", fc.Args, "id", fc.ID, "tool_resp", toolMsg)
-	fmt.Fprintf(textView, "%s[-:-:b](%d) <%s>: [-:-:-]\n%s\n",
-		"\n\n", len(chatBody.Messages), cfg.ToolRole, toolMsg)
 	// Create tool response message with the proper tool_call_id
 	// Mark shell commands as always visible
 	isShellCommand := fc.Name == "execute_command"
-	toolResponseMsg := models.RoleMsg{
-		Role:           cfg.ToolRole,
-		Content:        toolMsg,
-		ToolCallID:     lastToolCall.ID,
-		IsShellCommand: isShellCommand,
+
+	// Check if response is multimodal content (image)
+	var toolResponseMsg models.RoleMsg
+	if strings.HasPrefix(strings.TrimSpace(toolMsg), `{"type":"multimodal_content"`) {
+		// Parse multimodal content response
+		multimodalResp := models.MultimodalToolResp{}
+		if err := json.Unmarshal([]byte(toolMsg), &multimodalResp); err == nil && multimodalResp.Type == "multimodal_content" {
+			// Create RoleMsg with ContentParts
+			var contentParts []any
+			for _, part := range multimodalResp.Parts {
+				partType, ok := part["type"]
+				if !ok {
+					continue
+				}
+				if partType == "text" {
+					contentParts = append(contentParts, models.TextContentPart{Type: "text", Text: part["text"]})
+				} else if partType == "image_url" {
+					contentParts = append(contentParts, models.ImageContentPart{
+						Type: "image_url",
+						ImageURL: struct {
+							URL string `json:"url"`
+						}{URL: part["url"]},
+					})
+				}
+			}
+			toolResponseMsg = models.RoleMsg{
+				Role:            cfg.ToolRole,
+				ContentParts:    contentParts,
+				HasContentParts: true,
+				ToolCallID:      lastToolCall.ID,
+				IsShellCommand:  isShellCommand,
+			}
+		} else {
+			// Fallback to regular content
+			toolResponseMsg = models.RoleMsg{
+				Role:           cfg.ToolRole,
+				Content:        toolMsg,
+				ToolCallID:     lastToolCall.ID,
+				IsShellCommand: isShellCommand,
+			}
+		}
+	} else {
+		toolResponseMsg = models.RoleMsg{
+			Role:           cfg.ToolRole,
+			Content:        toolMsg,
+			ToolCallID:     lastToolCall.ID,
+			IsShellCommand: isShellCommand,
+		}
 	}
+	fmt.Fprintf(textView, "%s[-:-:b](%d) <%s>: [-:-:-]\n%s\n",
+		"\n\n", len(chatBody.Messages), cfg.ToolRole, toolResponseMsg.GetText())
 	chatBody.Messages = append(chatBody.Messages, toolResponseMsg)
 	logger.Debug("findCall: added actual tool response", "role", toolResponseMsg.Role, "content_len", len(toolResponseMsg.Content), "tool_call_id", toolResponseMsg.ToolCallID, "message_count_after_add", len(chatBody.Messages))
 	// Clear the stored tool call ID after using it

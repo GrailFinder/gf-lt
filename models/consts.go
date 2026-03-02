@@ -1,7 +1,8 @@
 package models
 
 const (
-	LoadedMark = "(loaded) "
+	LoadedMark        = "(loaded) "
+	ToolRespMultyType = "multimodel_content"
 )
 
 type APIType int

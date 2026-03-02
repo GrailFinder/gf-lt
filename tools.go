@@ -469,6 +469,43 @@ func fileRead(args map[string]string) []byte {
 	return jsonResult
 }
 
+func fileReadImage(args map[string]string) []byte {
+	path, ok := args["path"]
+	if !ok || path == "" {
+		msg := "path not provided to file_read_image tool"
+		logger.Error(msg)
+		return []byte(msg)
+	}
+	path = resolvePath(path)
+	dataURL, err := models.CreateImageURLFromPath(path)
+	if err != nil {
+		msg := "failed to read image; error: " + err.Error()
+		logger.Error(msg)
+		return []byte(msg)
+	}
+	// result := map[string]any{
+	// 	"type": "multimodal_content",
+	// 	"parts": []map[string]string{
+	// 		{"type": "text", "text": "Image at " + path},
+	// 		{"type": "image_url", "url": dataURL},
+	// 	},
+	// }
+	result := models.MultimodalToolResp{
+		Type: "multimodal_content",
+		Parts: []map[string]string{
+			{"type": "text", "text": "Image at " + path},
+			{"type": "image_url", "url": dataURL},
+		},
+	}
+	jsonResult, err := json.Marshal(result)
+	if err != nil {
+		msg := "failed to marshal result; error: " + err.Error()
+		logger.Error(msg)
+		return []byte(msg)
+	}
+	return jsonResult
+}
+
 func fileWrite(args map[string]string) []byte {
 	path, ok := args["path"]
 	if !ok || path == "" {
@@ -1101,6 +1138,7 @@ var fnMap = map[string]fnSig{
 	"read_url_raw":      readURLRaw,
 	"file_create":       fileCreate,
 	"file_read":         fileRead,
+	"file_read_image":   fileReadImage,
 	"file_write":        fileWrite,
 	"file_write_append": fileWriteAppend,
 	"file_edit":         fileEdit,
@@ -1322,6 +1360,24 @@ var baseTools = []models.Tool{
 					"path": models.ToolArgProps{
 						Type:        "string",
 						Description: "path of the file to read",
+					},
+				},
+			},
+		},
+	},
+	// file_read_image
+	models.Tool{
+		Type: "function",
+		Function: models.ToolFunc{
+			Name:        "file_read_image",
+			Description: "Read an image file and return it for multimodal LLM viewing. Supports png, jpg, jpeg, gif, webp formats. Use when you need the LLM to see and analyze an image.",
+			Parameters: models.ToolFuncParams{
+				Type:     "object",
+				Required: []string{"path"},
+				Properties: map[string]models.ToolArgProps{
+					"path": models.ToolArgProps{
+						Type:        "string",
+						Description: "path of the image file to read",
 					},
 				},
 			},

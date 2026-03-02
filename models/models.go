@@ -391,7 +391,6 @@ func CreateImageURLFromPath(imagePath string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-
 	// Determine the image format based on file extension
 	var mimeType string
 	switch {
@@ -408,10 +407,8 @@ func CreateImageURLFromPath(imagePath string) (string, error) {
 	default:
 		mimeType = "image/jpeg" // default
 	}
-
 	// Encode to base64
 	encoded := base64.StdEncoding.EncodeToString(data)
-
 	// Create data URL
 	return fmt.Sprintf("data:%s;base64,%s", mimeType, encoded), nil
 }
@@ -622,4 +619,9 @@ type ChatRoundReq struct {
 	Role    string
 	Regen   bool
 	Resume  bool
+}
+
+type MultimodalToolResp struct {
+	Type  string              `json:"type"`
+	Parts []map[string]string `json:"parts"`
 }
