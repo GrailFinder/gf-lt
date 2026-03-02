@@ -1071,6 +1071,18 @@ func init() {
 			chatRoundChan <- &models.ChatRoundReq{Role: persona, UserMsg: msgText}
 			return nil
 		}
+		if event.Key() == tcell.KeyTab {
+			currentF := app.GetFocus()
+			if currentF == textArea {
+				currentText := textArea.GetText()
+				atIndex := strings.LastIndex(currentText, "@")
+				if atIndex >= 0 {
+					filter := currentText[atIndex+1:]
+					showTextAreaFileCompletionPopup(filter)
+				}
+			}
+			return nil
+		}
 		if event.Key() == tcell.KeyPgUp || event.Key() == tcell.KeyPgDn {
 			currentF := app.GetFocus()
 			app.SetFocus(focusSwitcher[currentF])
