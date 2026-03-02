@@ -85,6 +85,11 @@ Your current tools:
 "when_to_use": "when asked to read the content of a file"
 },
 {
+"name":"file_read_image",
+"args": ["path"],
+"when_to_use": "when asked to read or view an image file"
+},
+{
 "name":"file_write",
 "args": ["path", "content"],
 "when_to_use": "when needed to overwrite content to a file"
