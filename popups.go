@@ -160,7 +160,7 @@ func showAPILinkSelectionPopup() {
 		newModelList := getModelListForAPI(cfg.CurrentAPI)
 		// Ensure chatBody.Model is in the new list; if not, set to first available model
 		if len(newModelList) > 0 && !slices.Contains(newModelList, chatBody.Model) {
-			chatBody.Model = newModelList[0]
+			chatBody.Model = strings.TrimPrefix(newModelList[0], models.LoadedMark)
 			cfg.CurrentModel = chatBody.Model
 		}
 		pages.RemovePage("apiLinkSelectionPopup")
