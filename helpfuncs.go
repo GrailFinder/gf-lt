@@ -11,6 +11,7 @@ import (
 	"path"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 	"unicode"
@@ -376,7 +377,81 @@ func makeStatusLine() string {
 		roleInject := fmt.Sprintf(" | [%s:-:b]role injection[-:-:-] (alt+7)", boolColors[injectRole])
 		statusLine += roleInject
 	}
+	// context tokens
+	contextTokens := getContextTokens()
+	maxCtx := getMaxContextTokens()
+	if maxCtx == 0 {
+		maxCtx = 16384
+	}
+	if contextTokens > 0 {
+		contextInfo := fmt.Sprintf(" | context: [cyan:-:b]%d/%d[-:-:-]", contextTokens, maxCtx)
+		statusLine += contextInfo
+	}
 	return statusLine + imageInfo + shellModeInfo
+}
+
+func getContextTokens() int {
+	if chatBody == nil || chatBody.Messages == nil {
+		return 0
+	}
+	total := 0
+	for _, msg := range chatBody.Messages {
+		if msg.Stats != nil {
+			total += msg.Stats.Tokens
+		}
+	}
+	return total
+}
+
+const deepseekContext = 128000
+
+func getMaxContextTokens() int {
+	if chatBody == nil || chatBody.Model == "" {
+		return 0
+	}
+	modelName := chatBody.Model
+	if strings.Contains(cfg.CurrentAPI, "openrouter") {
+		if orModelsData != nil {
+			for _, m := range orModelsData.Data {
+				if m.ID == modelName {
+					return m.ContextLength
+				}
+			}
+		}
+	} else if strings.Contains(cfg.CurrentAPI, "deepseek") {
+		return deepseekContext
+	} else {
+		if localModelsData != nil {
+			for _, m := range localModelsData.Data {
+				if m.ID == modelName {
+					for _, arg := range m.Status.Args {
+						if strings.HasPrefix(arg, "--ctx-size") {
+							if strings.Contains(arg, "=") {
+								val := strings.Split(arg, "=")[1]
+								if n, err := strconv.Atoi(val); err == nil {
+									return n
+								}
+							} else {
+								idx := -1
+								for i, a := range m.Status.Args {
+									if a == "--ctx-size" && i+1 < len(m.Status.Args) {
+										idx = i + 1
+										break
+									}
+								}
+								if idx != -1 {
+									if n, err := strconv.Atoi(m.Status.Args[idx]); err == nil {
+										return n
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+	return 0
 }
 
 // set of roles within card definition and mention in chat history

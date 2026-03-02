@@ -63,7 +63,9 @@ var (
 		"google/gemma-3-27b-it:free",
 		"meta-llama/llama-3.3-70b-instruct:free",
 	}
-	LocalModels = []string{}
+	LocalModels     = []string{}
+	localModelsData *models.LCPModels
+	orModelsData    *models.ORModels
 )
 
 var thinkBlockRE = regexp.MustCompile(`(?s)<think>.*?</think>`)
@@ -355,6 +357,7 @@ func fetchORModels(free bool) ([]string, error) {
 	if err := json.NewDecoder(resp.Body).Decode(data); err != nil {
 		return nil, err
 	}
+	orModelsData = data
 	freeModels := data.ListModels(free)
 	return freeModels, nil
 }
@@ -416,6 +419,7 @@ func fetchLCPModelsWithStatus() (*models.LCPModels, error) {
 	if err := json.NewDecoder(resp.Body).Decode(data); err != nil {
 		return nil, err
 	}
+	localModelsData = data
 	return data, nil
 }
 
