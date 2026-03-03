@@ -224,11 +224,9 @@ func (op LCPChat) ParseChunk(data []byte) (*models.TextChunk, error) {
 		logger.Error("failed to decode", "error", err, "line", string(data))
 		return nil, err
 	}
-
-	// Handle multiple choices safely
 	if len(llmchunk.Choices) == 0 {
-		logger.Warn("LCPChat ParseChunk: no choices in response", "data", string(data))
-		return &models.TextChunk{Finished: true}, nil
+		logger.Warn("LCPChat empty chunk choices", "raw_data", string(data), "chunk", llmchunk)
+		return &models.TextChunk{}, nil
 	}
 	lastChoice := llmchunk.Choices[len(llmchunk.Choices)-1]
 	resp := &models.TextChunk{
@@ -349,6 +347,10 @@ func (ds DeepSeekerCompletion) ParseChunk(data []byte) (*models.TextChunk, error
 		logger.Error("failed to decode", "error", err, "line", string(data))
 		return nil, err
 	}
+	if len(llmchunk.Choices) == 0 {
+		logger.Warn("empty chunk choices", "raw_data", string(data), "chunk", llmchunk)
+		return &models.TextChunk{}, nil
+	}
 	resp := &models.TextChunk{
 		Chunk: llmchunk.Choices[0].Text,
 	}
@@ -414,6 +416,10 @@ func (ds DeepSeekerChat) ParseChunk(data []byte) (*models.TextChunk, error) {
 		return nil, err
 	}
 	resp := &models.TextChunk{}
+	if len(llmchunk.Choices) == 0 {
+		logger.Warn("empty chunk choices", "raw_data", string(data), "chunk", llmchunk)
+		return resp, nil
+	}
 	if llmchunk.Choices[0].FinishReason != "" {
 		if llmchunk.Choices[0].Delta.Content != "" {
 			logger.Error("text inside of finish llmchunk", "chunk", llmchunk)
@@ -496,6 +502,10 @@ func (or OpenRouterCompletion) ParseChunk(data []byte) (*models.TextChunk, error
 		logger.Error("failed to decode", "error", err, "line", string(data))
 		return nil, err
 	}
+	if len(llmchunk.Choices) == 0 {
+		logger.Warn("empty chunk choices", "raw_data", string(data), "chunk", llmchunk)
+		return &models.TextChunk{}, nil
+	}
 	resp := &models.TextChunk{
 		Chunk: llmchunk.Choices[len(llmchunk.Choices)-1].Text,
 	}
@@ -557,6 +567,10 @@ func (or OpenRouterChat) ParseChunk(data []byte) (*models.TextChunk, error) {
 	if err := json.Unmarshal(data, &llmchunk); err != nil {
 		logger.Error("failed to decode", "error", err, "line", string(data))
 		return nil, err
+	}
+	if len(llmchunk.Choices) == 0 {
+		logger.Warn("empty chunk choices", "raw_data", string(data), "chunk", llmchunk)
+		return &models.TextChunk{}, nil
 	}
 	lastChoice := llmchunk.Choices[len(llmchunk.Choices)-1]
 	resp := &models.TextChunk{
