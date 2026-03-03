@@ -162,13 +162,15 @@ After that you are free to respond to the user.
 	readURLSysPrompt   = `Extract and summarize the content from the webpage. Provide key information, main points, and any relevant details.`
 	summarySysPrompt   = `Please provide a concise summary of the following conversation. Focus on key points, decisions, and actions. Provide only the summary, no additional commentary.`
 	basicCard          = &models.CharCard{
+		ID:        models.ComputeCardID("assistant", "basic_sys"),
 		SysPrompt: basicSysMsg,
 		FirstMsg:  defaultFirstMsg,
-		Role:      "",
-		FilePath:  "",
+		Role:      "assistant",
+		FilePath:  "basic_sys",
 	}
-	sysMap    = map[string]*models.CharCard{"basic_sys": basicCard}
-	sysLabels = []string{"basic_sys"}
+	sysMap    = map[string]*models.CharCard{}
+	roleToID  = map[string]string{}
+	sysLabels = []string{"assistant"}
 
 	webAgentClient     *agent.AgentClient
 	webAgentClientOnce sync.Once
@@ -206,6 +208,8 @@ var (
 )
 
 func init() {
+	sysMap[basicCard.ID] = basicCard
+	roleToID["assistant"] = basicCard.ID
 	sa, err := searcher.NewWebSurfer(searcher.SearcherTypeScraper, "")
 	if err != nil {
 		panic("failed to init seachagent; error: " + err.Error())
@@ -216,6 +220,14 @@ func init() {
 	}
 	checkWindowTools()
 	registerWindowTools()
+}
+
+func GetCardByRole(role string) *models.CharCard {
+	cardID, ok := roleToID[role]
+	if !ok {
+		return nil
+	}
+	return sysMap[cardID]
 }
 
 func checkWindowTools() {

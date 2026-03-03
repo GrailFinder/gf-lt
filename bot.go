@@ -1382,8 +1382,8 @@ func applyCharCard(cc *models.CharCard, loadHistory bool) {
 }
 
 func charToStart(agentName string, keepSysP bool) bool {
-	cc, ok := sysMap[agentName]
-	if !ok {
+	cc := GetCardByRole(agentName)
+	if cc == nil {
 		return false
 	}
 	applyCharCard(cc, keepSysP)

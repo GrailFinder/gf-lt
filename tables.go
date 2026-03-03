@@ -159,27 +159,18 @@ func makeChatTable(chatMap map[string]models.Chat) *tview.Table {
 			// save updated card
 			fi := strings.Index(selectedChat, "_")
 			agentName := selectedChat[fi+1:]
-			cc, ok := sysMap[agentName]
-			if !ok {
+			cc := GetCardByRole(agentName)
+			if cc == nil {
 				logger.Warn("no such card", "agent", agentName)
-				//no:lint
 				if err := notifyUser("error", "no such card: "+agentName); err != nil {
 					logger.Warn("failed ot notify", "error", err)
 				}
 				return
 			}
-			// if chatBody.Messages[0].Role != "system" || chatBody.Messages[1].Role != agentName {
-			// 	if err := notifyUser("error", "unexpected chat structure; card: "+agentName); err != nil {
-			// 		logger.Warn("failed ot notify", "error", err)
-			// 	}
-			// 	return
-			// }
-			// change sys_prompt + first msg
 			cc.SysPrompt = chatBody.Messages[0].Content
 			cc.FirstMsg = chatBody.Messages[1].Content
 			if err := pngmeta.WriteToPng(cc.ToSpec(cfg.UserRole), cc.FilePath, cc.FilePath); err != nil {
-				logger.Error("failed to write charcard",
-					"error", err)
+				logger.Error("failed to write charcard", "error", err)
 			}
 			return
 		case "move sysprompt onto 1st msg":
@@ -190,18 +181,16 @@ func makeChatTable(chatMap map[string]models.Chat) *tview.Table {
 			pages.RemovePage(historyPage)
 			return
 		case "new_chat_from_card":
-			// Reread card from file and start fresh chat
 			fi := strings.Index(selectedChat, "_")
 			agentName := selectedChat[fi+1:]
-			cc, ok := sysMap[agentName]
-			if !ok {
+			cc := GetCardByRole(agentName)
+			if cc == nil {
 				logger.Warn("no such card", "agent", agentName)
 				if err := notifyUser("error", "no such card: "+agentName); err != nil {
 					logger.Warn("failed to notify", "error", err)
 				}
 				return
 			}
-			// Reload card from disk
 			newCard, err := pngmeta.ReadCard(cc.FilePath, cfg.UserRole)
 			if err != nil {
 				logger.Error("failed to reload charcard", "path", cc.FilePath, "error", err)
@@ -214,9 +203,11 @@ func makeChatTable(chatMap map[string]models.Chat) *tview.Table {
 					return
 				}
 			}
-			// Update sysMap with fresh card data
-			sysMap[agentName] = newCard
-			// fetching sysprompt and first message anew from the card
+			if newCard.ID == "" {
+				newCard.ID = models.ComputeCardID(newCard.Role, newCard.FilePath)
+			}
+			sysMap[newCard.ID] = newCard
+			roleToID[newCard.Role] = newCard.ID
 			startNewChat(false)
 			pages.RemovePage(historyPage)
 			return
@@ -529,8 +520,8 @@ func makeAgentTable(agentList []string) *tview.Table {
 						SetSelectable(false))
 			case 1:
 				if actions[c-1] == "filepath" {
-					cc, ok := sysMap[agentList[r]]
-					if !ok {
+					cc := GetCardByRole(agentList[r])
+					if cc == nil {
 						continue
 					}
 					chatActTable.SetCell(r, c,

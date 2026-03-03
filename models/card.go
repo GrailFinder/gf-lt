@@ -1,6 +1,10 @@
 package models
 
-import "strings"
+import (
+	"crypto/md5"
+	"fmt"
+	"strings"
+)
 
 // https://github.com/malfoyslastname/character-card-spec-v2/blob/main/spec_v2.md
 // what a bloat; trim to Role->Msg pair and first msg
@@ -31,6 +35,7 @@ func (c *CharCardSpec) Simplify(userName, fpath string) *CharCard {
 	fm := strings.ReplaceAll(strings.ReplaceAll(c.FirstMes, "{{char}}", c.Name), "{{user}}", userName)
 	sysPr := strings.ReplaceAll(strings.ReplaceAll(c.Description, "{{char}}", c.Name), "{{user}}", userName)
 	return &CharCard{
+		ID:         ComputeCardID(c.Name, fpath),
 		SysPrompt:  sysPr,
 		FirstMsg:   fm,
 		Role:       c.Name,
@@ -39,7 +44,12 @@ func (c *CharCardSpec) Simplify(userName, fpath string) *CharCard {
 	}
 }
 
+func ComputeCardID(role, filePath string) string {
+	return fmt.Sprintf("%x", md5.Sum([]byte(role+filePath)))
+}
+
 type CharCard struct {
+	ID         string   `json:"id"`
 	SysPrompt  string   `json:"sys_prompt"`
 	FirstMsg   string   `json:"first_msg"`
 	Role       string   `json:"role"`

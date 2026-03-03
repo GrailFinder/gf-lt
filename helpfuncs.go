@@ -198,7 +198,11 @@ func initSysCards() ([]string, error) {
 			logger.Warn("empty role", "file", cc.FilePath)
 			continue
 		}
-		sysMap[cc.Role] = cc
+		if cc.ID == "" {
+			cc.ID = models.ComputeCardID(cc.Role, cc.FilePath)
+		}
+		sysMap[cc.ID] = cc
+		roleToID[cc.Role] = cc.ID
 		labels = append(labels, cc.Role)
 	}
 	return labels, nil
@@ -289,8 +293,8 @@ func listRolesWithUser() []string {
 
 func loadImage() {
 	filepath := defaultImage
-	cc, ok := sysMap[cfg.AssistantRole]
-	if ok {
+	cc := GetCardByRole(cfg.AssistantRole)
+	if cc != nil {
 		if strings.HasSuffix(cc.FilePath, ".png") {
 			filepath = cc.FilePath
 		}
@@ -468,13 +472,9 @@ func listChatRoles() []string {
 	if !ok {
 		return cbc
 	}
-	currentCard, ok := sysMap[currentChat.Agent]
-	if !ok {
-		// case which won't let to switch roles:
-		// started new chat (basic_sys or any other), at the start it yet be saved or have chatbody
-		// if it does not have a card or chars, it'll return an empty slice
-		// log error
-		logger.Warn("failed to find current card in sysMap", "agent", currentChat.Agent, "sysMap", sysMap)
+	currentCard := GetCardByRole(currentChat.Agent)
+	if currentCard == nil {
+		logger.Warn("failed to find current card", "agent", currentChat.Agent)
 		return cbc
 	}
 	charset := []string{}

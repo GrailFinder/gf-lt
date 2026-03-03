@@ -109,6 +109,12 @@ func ReadCardJson(fname string) (*models.CharCard, error) {
 	if err := json.Unmarshal(data, &card); err != nil {
 		return nil, err
 	}
+	if card.FilePath == "" {
+		card.FilePath = fname
+	}
+	if card.ID == "" {
+		card.ID = models.ComputeCardID(card.Role, card.FilePath)
+	}
 	return &card, nil
 }
 
