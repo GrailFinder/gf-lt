@@ -1391,6 +1391,7 @@ func removePlaywrightToolsFromBaseTools() {
 		"pw_is_running":          true,
 		"pw_navigate":            true,
 		"pw_click":               true,
+		"pw_click_at":            true,
 		"pw_fill":                true,
 		"pw_extract_text":        true,
 		"pw_screenshot":          true,
@@ -1410,6 +1411,7 @@ func removePlaywrightToolsFromBaseTools() {
 	delete(fnMap, "pw_is_running")
 	delete(fnMap, "pw_navigate")
 	delete(fnMap, "pw_click")
+	delete(fnMap, "pw_click_at")
 	delete(fnMap, "pw_fill")
 	delete(fnMap, "pw_extract_text")
 	delete(fnMap, "pw_screenshot")
@@ -1487,6 +1489,7 @@ func registerPlaywrightTools() {
 		fnMap["pw_is_running"] = pwIsRunning
 		fnMap["pw_navigate"] = pwNavigate
 		fnMap["pw_click"] = pwClick
+		fnMap["pw_click_at"] = pwClickAt
 		fnMap["pw_fill"] = pwFill
 		fnMap["pw_extract_text"] = pwExtractText
 		fnMap["pw_screenshot"] = pwScreenshot

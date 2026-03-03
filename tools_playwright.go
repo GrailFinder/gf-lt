@@ -71,6 +71,11 @@ Additional browser automation tools (Playwright):
     "when_to_use": "drag the mouse from point (x1,y1) to (x2,y2)."
 },
 {
+    "name": "pw_click_at",
+    "args": ["x", "y"],
+    "when_to_use": "click at specific X,Y coordinates on the page. Use when you know the exact position."
+},
+{
     "name": "pw_get_html",
     "args": ["selector"],
     "when_to_use": "get the HTML content of the page or a specific element. Use to understand page structure or extract raw HTML."
@@ -440,6 +445,34 @@ func pwDrag(args map[string]string) []byte {
 		return []byte(fmt.Sprintf(`{"error": "failed to mouse up: %s"}`, err.Error()))
 	}
 	return []byte(fmt.Sprintf(`{"success": true, "message": "Dragged from (%s,%s) to (%s,%s)"}`, x1, y1, x2, y2))
+}
+
+func pwClickAt(args map[string]string) []byte {
+	x, ok := args["x"]
+	if !ok {
+		return []byte(`{"error": "x not provided"}`)
+	}
+	y, ok := args["y"]
+	if !ok {
+		return []byte(`{"error": "y not provided"}`)
+	}
+	if !browserStarted || page == nil {
+		return []byte(`{"error": "Browser not started. Call pw_start first."}`)
+	}
+	fx, err := strconv.ParseFloat(x, 64)
+	if err != nil {
+		return []byte(fmt.Sprintf(`{"error": "failed to parse x: %s"}`, err.Error()))
+	}
+	fy, err := strconv.ParseFloat(y, 64)
+	if err != nil {
+		return []byte(fmt.Sprintf(`{"error": "failed to parse y: %s"}`, err.Error()))
+	}
+	mouse := page.Mouse()
+	err = mouse.Click(fx, fy)
+	if err != nil {
+		return []byte(fmt.Sprintf(`{"error": "failed to click: %s"}`, err.Error()))
+	}
+	return []byte(fmt.Sprintf(`{"success": true, "message": "Clicked at (%s,%s)"}`, x, y))
 }
 
 func pwGetHTML(args map[string]string) []byte {
