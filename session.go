@@ -170,6 +170,17 @@ func copyToClipboard(text string) error {
 }
 
 func notifyUser(topic, message string) error {
-	cmd := exec.Command("notify-send", topic, message)
+	// Sanitize message to remove control characters that notify-send doesn't handle
+	sanitized := strings.Map(func(r rune) rune {
+		if r < 32 && r != '\t' {
+			return -1
+		}
+		return r
+	}, message)
+	// Truncate if too long
+	if len(sanitized) > 200 {
+		sanitized = sanitized[:197] + "..."
+	}
+	cmd := exec.Command("notify-send", topic, sanitized)
 	return cmd.Run()
 }

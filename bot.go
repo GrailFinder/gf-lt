@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"compress/gzip"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -495,6 +496,17 @@ func monitorModelLoad(modelID string) {
 
 // extractDetailedErrorFromBytes extracts detailed error information from response body bytes
 func extractDetailedErrorFromBytes(body []byte, statusCode int) string {
+	// Try to decompress gzip if the response is compressed
+	if len(body) >= 2 && body[0] == 0x1f && body[1] == 0x8b {
+		reader, err := gzip.NewReader(bytes.NewReader(body))
+		if err == nil {
+			decompressed, err := io.ReadAll(reader)
+			reader.Close()
+			if err == nil {
+				body = decompressed
+			}
+		}
+	}
 	// Try to parse as JSON to extract detailed error information
 	var errorResponse map[string]any
 	if err := json.Unmarshal(body, &errorResponse); err == nil {
