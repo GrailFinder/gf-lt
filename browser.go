@@ -362,6 +362,5 @@ func pwDrag(args map[string]string) []byte {
 }
 
 func init() {
-	logger = logger.With("component", "browser")
 	checkPlaywright()
 }

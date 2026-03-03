@@ -1376,7 +1376,26 @@ var fnMap = map[string]fnSig{
 	"pw_drag":                pwDrag,
 }
 
+func removeWindowToolsFromBaseTools() {
+	windowToolNames := map[string]bool{
+		"list_windows":            true,
+		"capture_window":          true,
+		"capture_window_and_view": true,
+	}
+	var filtered []models.Tool
+	for _, tool := range baseTools {
+		if !windowToolNames[tool.Function.Name] {
+			filtered = append(filtered, tool)
+		}
+	}
+	baseTools = filtered
+	delete(fnMap, "list_windows")
+	delete(fnMap, "capture_window")
+	delete(fnMap, "capture_window_and_view")
+}
+
 func registerWindowTools() {
+	removeWindowToolsFromBaseTools()
 	if windowToolsAvailable {
 		fnMap["list_windows"] = listWindows
 		fnMap["capture_window"] = captureWindow
