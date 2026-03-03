@@ -234,7 +234,7 @@ func checkWindowTools() {
 	}
 }
 
-func UpdateToolCapabilities() {
+func updateToolCapabilities() {
 	if !cfg.ToolUse {
 		return
 	}
@@ -242,6 +242,7 @@ func UpdateToolCapabilities() {
 	if cfg == nil || cfg.CurrentAPI == "" {
 		logger.Warn("cannot determine model capabilities: cfg or CurrentAPI is nil")
 		registerWindowTools()
+		registerPlaywrightTools()
 		return
 	}
 	prevHasVision := modelHasVision
@@ -255,6 +256,7 @@ func UpdateToolCapabilities() {
 		}
 	}
 	registerWindowTools()
+	registerPlaywrightTools()
 }
 
 // getWebAgentClient returns a singleton AgentClient for web agents.
@@ -1362,18 +1364,6 @@ var fnMap = map[string]fnSig{
 	"todo_update":       todoUpdate,
 	"todo_delete":       todoDelete,
 	"summarize_chat":    summarizeChat,
-	// playwright tools
-	"pw_start":               pwStart,
-	"pw_stop":                pwStop,
-	"pw_is_running":          pwIsRunning,
-	"pw_navigate":            pwNavigate,
-	"pw_click":               pwClick,
-	"pw_fill":                pwFill,
-	"pw_extract_text":        pwExtractText,
-	"pw_screenshot":          pwScreenshot,
-	"pw_screenshot_and_view": pwScreenshotAndView,
-	"pw_wait_for_selector":   pwWaitForSelector,
-	"pw_drag":                pwDrag,
 }
 
 func removeWindowToolsFromBaseTools() {
@@ -1392,6 +1382,40 @@ func removeWindowToolsFromBaseTools() {
 	delete(fnMap, "list_windows")
 	delete(fnMap, "capture_window")
 	delete(fnMap, "capture_window_and_view")
+}
+
+func removePlaywrightToolsFromBaseTools() {
+	playwrightToolNames := map[string]bool{
+		"pw_start":               true,
+		"pw_stop":                true,
+		"pw_is_running":          true,
+		"pw_navigate":            true,
+		"pw_click":               true,
+		"pw_fill":                true,
+		"pw_extract_text":        true,
+		"pw_screenshot":          true,
+		"pw_screenshot_and_view": true,
+		"pw_wait_for_selector":   true,
+		"pw_drag":                true,
+	}
+	var filtered []models.Tool
+	for _, tool := range baseTools {
+		if !playwrightToolNames[tool.Function.Name] {
+			filtered = append(filtered, tool)
+		}
+	}
+	baseTools = filtered
+	delete(fnMap, "pw_start")
+	delete(fnMap, "pw_stop")
+	delete(fnMap, "pw_is_running")
+	delete(fnMap, "pw_navigate")
+	delete(fnMap, "pw_click")
+	delete(fnMap, "pw_fill")
+	delete(fnMap, "pw_extract_text")
+	delete(fnMap, "pw_screenshot")
+	delete(fnMap, "pw_screenshot_and_view")
+	delete(fnMap, "pw_wait_for_selector")
+	delete(fnMap, "pw_drag")
 }
 
 func registerWindowTools() {
@@ -1452,6 +1476,235 @@ func registerWindowTools() {
 		}
 		baseTools = append(baseTools, windowTools...)
 		toolSysMsg += windowToolSysMsg
+	}
+}
+
+func registerPlaywrightTools() {
+	removePlaywrightToolsFromBaseTools()
+	if cfg != nil && !cfg.NoPlaywright {
+		fnMap["pw_start"] = pwStart
+		fnMap["pw_stop"] = pwStop
+		fnMap["pw_is_running"] = pwIsRunning
+		fnMap["pw_navigate"] = pwNavigate
+		fnMap["pw_click"] = pwClick
+		fnMap["pw_fill"] = pwFill
+		fnMap["pw_extract_text"] = pwExtractText
+		fnMap["pw_screenshot"] = pwScreenshot
+		fnMap["pw_screenshot_and_view"] = pwScreenshotAndView
+		fnMap["pw_wait_for_selector"] = pwWaitForSelector
+		fnMap["pw_drag"] = pwDrag
+		playwrightTools := []models.Tool{
+			{
+				Type: "function",
+				Function: models.ToolFunc{
+					Name:        "pw_start",
+					Description: "Start a Playwright browser instance. Call this first before using other pw_ tools. Uses headless mode by default (set PlaywrightHeadless=false in config for GUI).",
+					Parameters: models.ToolFuncParams{
+						Type:       "object",
+						Required:   []string{},
+						Properties: map[string]models.ToolArgProps{},
+					},
+				},
+			},
+			{
+				Type: "function",
+				Function: models.ToolFunc{
+					Name:        "pw_stop",
+					Description: "Stop the Playwright browser instance. Call when done with browser automation.",
+					Parameters: models.ToolFuncParams{
+						Type:       "object",
+						Required:   []string{},
+						Properties: map[string]models.ToolArgProps{},
+					},
+				},
+			},
+			{
+				Type: "function",
+				Function: models.ToolFunc{
+					Name:        "pw_is_running",
+					Description: "Check if Playwright browser is currently running.",
+					Parameters: models.ToolFuncParams{
+						Type:       "object",
+						Required:   []string{},
+						Properties: map[string]models.ToolArgProps{},
+					},
+				},
+			},
+			{
+				Type: "function",
+				Function: models.ToolFunc{
+					Name:        "pw_navigate",
+					Description: "Navigate to a URL in the browser.",
+					Parameters: models.ToolFuncParams{
+						Type:     "object",
+						Required: []string{"url"},
+						Properties: map[string]models.ToolArgProps{
+							"url": models.ToolArgProps{
+								Type:        "string",
+								Description: "URL to navigate to",
+							},
+						},
+					},
+				},
+			},
+			{
+				Type: "function",
+				Function: models.ToolFunc{
+					Name:        "pw_click",
+					Description: "Click on an element using CSS selector. Use 'index' for multiple matches (default 0).",
+					Parameters: models.ToolFuncParams{
+						Type:     "object",
+						Required: []string{"selector"},
+						Properties: map[string]models.ToolArgProps{
+							"selector": models.ToolArgProps{
+								Type:        "string",
+								Description: "CSS selector for the element to click",
+							},
+							"index": models.ToolArgProps{
+								Type:        "string",
+								Description: "optional index for multiple matches (default 0)",
+							},
+						},
+					},
+				},
+			},
+			{
+				Type: "function",
+				Function: models.ToolFunc{
+					Name:        "pw_fill",
+					Description: "Fill an input field with text using CSS selector.",
+					Parameters: models.ToolFuncParams{
+						Type:     "object",
+						Required: []string{"selector", "text"},
+						Properties: map[string]models.ToolArgProps{
+							"selector": models.ToolArgProps{
+								Type:        "string",
+								Description: "CSS selector for the input element",
+							},
+							"text": models.ToolArgProps{
+								Type:        "string",
+								Description: "text to fill into the input",
+							},
+							"index": models.ToolArgProps{
+								Type:        "string",
+								Description: "optional index for multiple matches (default 0)",
+							},
+						},
+					},
+				},
+			},
+			{
+				Type: "function",
+				Function: models.ToolFunc{
+					Name:        "pw_extract_text",
+					Description: "Extract text content from the page or specific elements using CSS selector. Use 'body' for all page text.",
+					Parameters: models.ToolFuncParams{
+						Type:     "object",
+						Required: []string{"selector"},
+						Properties: map[string]models.ToolArgProps{
+							"selector": models.ToolArgProps{
+								Type:        "string",
+								Description: "CSS selector (use 'body' for all page text)",
+							},
+						},
+					},
+				},
+			},
+			{
+				Type: "function",
+				Function: models.ToolFunc{
+					Name:        "pw_screenshot",
+					Description: "Take a screenshot of the page or a specific element. Returns file path to saved image.",
+					Parameters: models.ToolFuncParams{
+						Type:     "object",
+						Required: []string{},
+						Properties: map[string]models.ToolArgProps{
+							"selector": models.ToolArgProps{
+								Type:        "string",
+								Description: "optional CSS selector for element to screenshot",
+							},
+							"full_page": models.ToolArgProps{
+								Type:        "string",
+								Description: "optional: 'true' to capture full page (default false)",
+							},
+						},
+					},
+				},
+			},
+			{
+				Type: "function",
+				Function: models.ToolFunc{
+					Name:        "pw_screenshot_and_view",
+					Description: "Take a screenshot and return the image for viewing. Use when model needs to see the screenshot.",
+					Parameters: models.ToolFuncParams{
+						Type:     "object",
+						Required: []string{},
+						Properties: map[string]models.ToolArgProps{
+							"selector": models.ToolArgProps{
+								Type:        "string",
+								Description: "optional CSS selector for element to screenshot",
+							},
+							"full_page": models.ToolArgProps{
+								Type:        "string",
+								Description: "optional: 'true' to capture full page (default false)",
+							},
+						},
+					},
+				},
+			},
+			{
+				Type: "function",
+				Function: models.ToolFunc{
+					Name:        "pw_wait_for_selector",
+					Description: "Wait for an element to appear on the page.",
+					Parameters: models.ToolFuncParams{
+						Type:     "object",
+						Required: []string{"selector"},
+						Properties: map[string]models.ToolArgProps{
+							"selector": models.ToolArgProps{
+								Type:        "string",
+								Description: "CSS selector to wait for",
+							},
+							"timeout": models.ToolArgProps{
+								Type:        "string",
+								Description: "optional timeout in ms (default 30000)",
+							},
+						},
+					},
+				},
+			},
+			{
+				Type: "function",
+				Function: models.ToolFunc{
+					Name:        "pw_drag",
+					Description: "Drag the mouse from one point to another.",
+					Parameters: models.ToolFuncParams{
+						Type:     "object",
+						Required: []string{"x1", "y1", "x2", "y2"},
+						Properties: map[string]models.ToolArgProps{
+							"x1": models.ToolArgProps{
+								Type:        "string",
+								Description: "starting X coordinate",
+							},
+							"y1": models.ToolArgProps{
+								Type:        "string",
+								Description: "starting Y coordinate",
+							},
+							"x2": models.ToolArgProps{
+								Type:        "string",
+								Description: "ending X coordinate",
+							},
+							"y2": models.ToolArgProps{
+								Type:        "string",
+								Description: "ending Y coordinate",
+							},
+						},
+					},
+				},
+			},
+		}
+		baseTools = append(baseTools, playwrightTools...)
+		toolSysMsg += browserToolSysMsg
 	}
 }
 
@@ -1988,218 +2241,5 @@ func init() {
 				},
 			},
 		)
-	}
-	if browserAvailable {
-		baseTools = append(baseTools,
-			models.Tool{
-				Type: "function",
-				Function: models.ToolFunc{
-					Name:        "pw_start",
-					Description: "Start a Playwright browser instance. Call this first before using other pw_ tools. Uses headless mode by default (set PlaywrightHeadless=false in config for GUI).",
-					Parameters: models.ToolFuncParams{
-						Type:       "object",
-						Required:   []string{},
-						Properties: map[string]models.ToolArgProps{},
-					},
-				},
-			},
-			models.Tool{
-				Type: "function",
-				Function: models.ToolFunc{
-					Name:        "pw_stop",
-					Description: "Stop the Playwright browser instance. Call when done with browser automation.",
-					Parameters: models.ToolFuncParams{
-						Type:       "object",
-						Required:   []string{},
-						Properties: map[string]models.ToolArgProps{},
-					},
-				},
-			},
-			models.Tool{
-				Type: "function",
-				Function: models.ToolFunc{
-					Name:        "pw_is_running",
-					Description: "Check if Playwright browser is currently running.",
-					Parameters: models.ToolFuncParams{
-						Type:       "object",
-						Required:   []string{},
-						Properties: map[string]models.ToolArgProps{},
-					},
-				},
-			},
-			models.Tool{
-				Type: "function",
-				Function: models.ToolFunc{
-					Name:        "pw_navigate",
-					Description: "Navigate to a URL in the browser.",
-					Parameters: models.ToolFuncParams{
-						Type:     "object",
-						Required: []string{"url"},
-						Properties: map[string]models.ToolArgProps{
-							"url": models.ToolArgProps{
-								Type:        "string",
-								Description: "URL to navigate to",
-							},
-						},
-					},
-				},
-			},
-			models.Tool{
-				Type: "function",
-				Function: models.ToolFunc{
-					Name:        "pw_click",
-					Description: "Click on an element using CSS selector. Use 'index' for multiple matches (default 0).",
-					Parameters: models.ToolFuncParams{
-						Type:     "object",
-						Required: []string{"selector"},
-						Properties: map[string]models.ToolArgProps{
-							"selector": models.ToolArgProps{
-								Type:        "string",
-								Description: "CSS selector for the element to click",
-							},
-							"index": models.ToolArgProps{
-								Type:        "string",
-								Description: "optional index for multiple matches (default 0)",
-							},
-						},
-					},
-				},
-			},
-			models.Tool{
-				Type: "function",
-				Function: models.ToolFunc{
-					Name:        "pw_fill",
-					Description: "Fill an input field with text using CSS selector.",
-					Parameters: models.ToolFuncParams{
-						Type:     "object",
-						Required: []string{"selector", "text"},
-						Properties: map[string]models.ToolArgProps{
-							"selector": models.ToolArgProps{
-								Type:        "string",
-								Description: "CSS selector for the input element",
-							},
-							"text": models.ToolArgProps{
-								Type:        "string",
-								Description: "text to fill into the input",
-							},
-							"index": models.ToolArgProps{
-								Type:        "string",
-								Description: "optional index for multiple matches (default 0)",
-							},
-						},
-					},
-				},
-			},
-			models.Tool{
-				Type: "function",
-				Function: models.ToolFunc{
-					Name:        "pw_extract_text",
-					Description: "Extract text content from the page or specific elements using CSS selector. Use 'body' for all page text.",
-					Parameters: models.ToolFuncParams{
-						Type:     "object",
-						Required: []string{"selector"},
-						Properties: map[string]models.ToolArgProps{
-							"selector": models.ToolArgProps{
-								Type:        "string",
-								Description: "CSS selector (use 'body' for all page text)",
-							},
-						},
-					},
-				},
-			},
-			models.Tool{
-				Type: "function",
-				Function: models.ToolFunc{
-					Name:        "pw_screenshot",
-					Description: "Take a screenshot of the page or a specific element. Returns file path to saved image.",
-					Parameters: models.ToolFuncParams{
-						Type:     "object",
-						Required: []string{},
-						Properties: map[string]models.ToolArgProps{
-							"selector": models.ToolArgProps{
-								Type:        "string",
-								Description: "optional CSS selector for element to screenshot",
-							},
-							"full_page": models.ToolArgProps{
-								Type:        "string",
-								Description: "optional: 'true' to capture full page (default false)",
-							},
-						},
-					},
-				},
-			},
-			models.Tool{
-				Type: "function",
-				Function: models.ToolFunc{
-					Name:        "pw_screenshot_and_view",
-					Description: "Take a screenshot and return the image for viewing. Use when model needs to see the screenshot.",
-					Parameters: models.ToolFuncParams{
-						Type:     "object",
-						Required: []string{},
-						Properties: map[string]models.ToolArgProps{
-							"selector": models.ToolArgProps{
-								Type:        "string",
-								Description: "optional CSS selector for element to screenshot",
-							},
-							"full_page": models.ToolArgProps{
-								Type:        "string",
-								Description: "optional: 'true' to capture full page (default false)",
-							},
-						},
-					},
-				},
-			},
-			models.Tool{
-				Type: "function",
-				Function: models.ToolFunc{
-					Name:        "pw_wait_for_selector",
-					Description: "Wait for an element to appear on the page.",
-					Parameters: models.ToolFuncParams{
-						Type:     "object",
-						Required: []string{"selector"},
-						Properties: map[string]models.ToolArgProps{
-							"selector": models.ToolArgProps{
-								Type:        "string",
-								Description: "CSS selector to wait for",
-							},
-							"timeout": models.ToolArgProps{
-								Type:        "string",
-								Description: "optional timeout in ms (default 30000)",
-							},
-						},
-					},
-				},
-			},
-			models.Tool{
-				Type: "function",
-				Function: models.ToolFunc{
-					Name:        "pw_drag",
-					Description: "Drag the mouse from one point to another.",
-					Parameters: models.ToolFuncParams{
-						Type:     "object",
-						Required: []string{"x1", "y1", "x2", "y2"},
-						Properties: map[string]models.ToolArgProps{
-							"x1": models.ToolArgProps{
-								Type:        "string",
-								Description: "starting X coordinate",
-							},
-							"y1": models.ToolArgProps{
-								Type:        "string",
-								Description: "starting Y coordinate",
-							},
-							"x2": models.ToolArgProps{
-								Type:        "string",
-								Description: "ending X coordinate",
-							},
-							"y2": models.ToolArgProps{
-								Type:        "string",
-								Description: "ending Y coordinate",
-							},
-						},
-					},
-				},
-			},
-		)
-		toolSysMsg += browserToolSysMsg
 	}
 }

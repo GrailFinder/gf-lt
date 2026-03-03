@@ -1416,7 +1416,7 @@ func updateModelLists() {
 				chatBody.Model = m
 				cachedModelColor = "green"
 				updateStatusLine()
-				UpdateToolCapabilities()
+				updateToolCapabilities()
 				app.Draw()
 				return
 			}
@@ -1529,6 +1529,23 @@ func init() {
 	}
 	if cfg.STT_ENABLED {
 		asr = NewSTT(logger, cfg)
+	}
+	if !cfg.NoPlaywright {
+		if err := checkPlaywright(); err != nil {
+			// slow, need a faster check if playwright install
+			if err := installPW(); err != nil {
+				logger.Error("failed to install playwright", "error", err)
+				cancel()
+				os.Exit(1)
+				return
+			}
+			if err := checkPlaywright(); err != nil {
+				logger.Error("failed to run playwright", "error", err)
+				cancel()
+				os.Exit(1)
+				return
+			}
+		}
 	}
 	// Initialize scrollToEndEnabled based on config
 	scrollToEndEnabled = cfg.AutoScrollEnabled

@@ -860,7 +860,7 @@ func init() {
 		if event.Key() == tcell.KeyCtrlK {
 			// add message from tools
 			cfg.ToolUse = !cfg.ToolUse
-			UpdateToolCapabilities()
+			updateToolCapabilities()
 			updateStatusLine()
 			return nil
 		}

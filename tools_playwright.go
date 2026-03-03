@@ -74,23 +74,30 @@ Additional browser automation tools (Playwright):
 `
 
 var (
-	pw               *playwright.Playwright
-	browser          playwright.Browser
-	browserStarted   bool
-	browserStartMu   sync.Mutex
-	page             playwright.Page
-	browserAvailable bool
+	pw             *playwright.Playwright
+	browser        playwright.Browser
+	browserStarted bool
+	browserStartMu sync.Mutex
+	page           playwright.Page
 )
 
-func checkPlaywright() {
+func installPW() error {
+	err := playwright.Install(&playwright.RunOptions{Verbose: false})
+	if err != nil {
+		logger.Warn("playwright not available", "error", err)
+		return err
+	}
+	return nil
+}
+
+func checkPlaywright() error {
 	var err error
 	pw, err = playwright.Run()
 	if err != nil {
 		logger.Warn("playwright not available", "error", err)
-		return
+		return err
 	}
-	browserAvailable = true
-	logger.Info("playwright tools available")
+	return nil
 }
 
 func pwStart(args map[string]string) []byte {
@@ -419,8 +426,4 @@ func pwDrag(args map[string]string) []byte {
 		return []byte(fmt.Sprintf(`{"error": "failed to mouse up: %s"}`, err.Error()))
 	}
 	return []byte(fmt.Sprintf(`{"success": true, "message": "Dragged from (%s,%s) to (%s,%s)"}`, x1, y1, x2, y2))
-}
-
-func init() {
-	go checkPlaywright()
 }

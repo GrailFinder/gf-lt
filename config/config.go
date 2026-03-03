@@ -71,6 +71,7 @@ type Config struct {
 	CharSpecificContextTag     string `toml:"CharSpecificContextTag"`
 	AutoTurn                   bool   `toml:"AutoTurn"`
 	// playwright browser
+	NoPlaywright       bool `toml:"NoPlaywright"` // when we want to avoid pw tool use
 	PlaywrightHeadless bool `toml:"PlaywrightHeadless"`
 }
 
