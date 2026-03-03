@@ -69,6 +69,21 @@ Additional browser automation tools (Playwright):
     "name": "pw_drag",
     "args": ["x1", "y1", "x2", "y2"],
     "when_to_use": "drag the mouse from point (x1,y1) to (x2,y2)"
+},
+{
+    "name": "pw_get_html",
+    "args": ["selector"],
+    "when_to_use": "get the HTML content of the page or a specific element. Use when you need to understand page structure or extract HTML."
+},
+{
+    "name": "pw_get_dom",
+    "args": ["selector"],
+    "when_to_use": "get a structured DOM representation with tag, attributes, text, and children. Use when you need a readable tree view of page elements."
+},
+{
+    "name": "pw_search_elements",
+    "args": ["text", "selector"],
+    "when_to_use": "search for elements by text content or CSS selector. Returns matching elements with their tags, text, and HTML."
 }
 ]
 `
@@ -106,10 +121,9 @@ func pwStart(args map[string]string) []byte {
 	if browserStarted {
 		return []byte(`{"error": "Browser already started"}`)
 	}
-	headless := cfg == nil || cfg.PlaywrightHeadless
 	var err error
 	browser, err = pw.Chromium.Launch(playwright.BrowserTypeLaunchOptions{
-		Headless: playwright.Bool(headless),
+		Headless: playwright.Bool(!cfg.PlaywrightDebug),
 	})
 	if err != nil {
 		return []byte(fmt.Sprintf(`{"error": "failed to launch browser: %s"}`, err.Error()))
@@ -426,4 +440,179 @@ func pwDrag(args map[string]string) []byte {
 		return []byte(fmt.Sprintf(`{"error": "failed to mouse up: %s"}`, err.Error()))
 	}
 	return []byte(fmt.Sprintf(`{"success": true, "message": "Dragged from (%s,%s) to (%s,%s)"}`, x1, y1, x2, y2))
+}
+
+func pwGetHTML(args map[string]string) []byte {
+	selector := args["selector"]
+	if selector == "" {
+		selector = "body"
+	}
+	if !browserStarted || page == nil {
+		return []byte(`{"error": "Browser not started. Call pw_start first."}`)
+	}
+	locator := page.Locator(selector)
+	count, err := locator.Count()
+	if err != nil {
+		return []byte(fmt.Sprintf(`{"error": "failed to find elements: %s"}`, err.Error()))
+	}
+	if count == 0 {
+		return []byte(`{"error": "No elements found"}`)
+	}
+	html, err := locator.First().InnerHTML()
+	if err != nil {
+		return []byte(fmt.Sprintf(`{"error": "failed to get HTML: %s"}`, err.Error()))
+	}
+	return []byte(fmt.Sprintf(`{"html": %s}`, jsonString(html)))
+}
+
+type DOMElement struct {
+	Tag        string            `json:"tag,omitempty"`
+	Attributes map[string]string `json:"attributes,omitempty"`
+	Text       string            `json:"text,omitempty"`
+	Children   []DOMElement      `json:"children,omitempty"`
+	Selector   string            `json:"selector,omitempty"`
+	InnerHTML  string            `json:"innerHTML,omitempty"`
+}
+
+func buildDOMTree(locator playwright.Locator) ([]DOMElement, error) {
+	var results []DOMElement
+	count, err := locator.Count()
+	if err != nil {
+		return nil, err
+	}
+	for i := 0; i < count; i++ {
+		el := locator.Nth(i)
+		dom, err := elementToDOM(el)
+		if err != nil {
+			continue
+		}
+		results = append(results, dom)
+	}
+	return results, nil
+}
+
+func elementToDOM(el playwright.Locator) (DOMElement, error) {
+	dom := DOMElement{}
+
+	tag, err := el.Evaluate(`el => el.nodeName`, nil)
+	if err == nil {
+		dom.Tag = strings.ToLower(fmt.Sprintf("%v", tag))
+	}
+
+	attributes := make(map[string]string)
+	attrs, err := el.Evaluate(`el => {
+		let attrs = {};
+		for (let i = 0; i < el.attributes.length; i++) {
+			let attr = el.attributes[i];
+			attrs[attr.name] = attr.value;
+		}
+		return attrs;
+	}`, nil)
+	if err == nil {
+		if amap, ok := attrs.(map[string]any); ok {
+			for k, v := range amap {
+				if vs, ok := v.(string); ok {
+					attributes[k] = vs
+				}
+			}
+		}
+	}
+	if len(attributes) > 0 {
+		dom.Attributes = attributes
+	}
+
+	text, err := el.TextContent()
+	if err == nil && text != "" {
+		dom.Text = text
+	}
+
+	innerHTML, err := el.InnerHTML()
+	if err == nil && innerHTML != "" {
+		dom.InnerHTML = innerHTML
+	}
+
+	childCount, _ := el.Count()
+	if childCount > 0 {
+		childrenLocator := el.Locator("*")
+		children, err := buildDOMTree(childrenLocator)
+		if err == nil && len(children) > 0 {
+			dom.Children = children
+		}
+	}
+
+	return dom, nil
+}
+
+func pwGetDOM(args map[string]string) []byte {
+	selector := args["selector"]
+	if selector == "" {
+		selector = "body"
+	}
+	if !browserStarted || page == nil {
+		return []byte(`{"error": "Browser not started. Call pw_start first."}`)
+	}
+	locator := page.Locator(selector)
+	count, err := locator.Count()
+	if err != nil {
+		return []byte(fmt.Sprintf(`{"error": "failed to find elements: %s"}`, err.Error()))
+	}
+	if count == 0 {
+		return []byte(`{"error": "No elements found"}`)
+	}
+	dom, err := elementToDOM(locator.First())
+	if err != nil {
+		return []byte(fmt.Sprintf(`{"error": "failed to get DOM: %s"}`, err.Error()))
+	}
+	data, err := json.Marshal(dom)
+	if err != nil {
+		return []byte(fmt.Sprintf(`{"error": "failed to marshal DOM: %s"}`, err.Error()))
+	}
+	return []byte(fmt.Sprintf(`{"dom": %s}`, string(data)))
+}
+
+func pwSearchElements(args map[string]string) []byte {
+	text := args["text"]
+	selector := args["selector"]
+	if text == "" && selector == "" {
+		return []byte(`{"error": "text or selector not provided"}`)
+	}
+	if !browserStarted || page == nil {
+		return []byte(`{"error": "Browser not started. Call pw_start first."}`)
+	}
+	var locator playwright.Locator
+	if text != "" {
+		locator = page.GetByText(text)
+	} else {
+		locator = page.Locator(selector)
+	}
+	count, err := locator.Count()
+	if err != nil {
+		return []byte(fmt.Sprintf(`{"error": "failed to search elements: %s"}`, err.Error()))
+	}
+	if count == 0 {
+		return []byte(`{"elements": []}`)
+	}
+	var results []map[string]string
+	for i := 0; i < count; i++ {
+		el := locator.Nth(i)
+		tag, _ := el.Evaluate(`el => el.nodeName`, nil)
+		text, _ := el.TextContent()
+		html, _ := el.InnerHTML()
+		results = append(results, map[string]string{
+			"index": fmt.Sprintf("%d", i),
+			"tag":   strings.ToLower(fmt.Sprintf("%v", tag)),
+			"text":  text,
+			"html":  html,
+		})
+	}
+	data, err := json.Marshal(results)
+	if err != nil {
+		return []byte(fmt.Sprintf(`{"error": "failed to marshal results: %s"}`, err.Error()))
+	}
+	return []byte(fmt.Sprintf(`{"elements": %s}`, string(data)))
+}
+
+func jsonString(s string) string {
+	b, _ := json.Marshal(s)
+	return string(b)
 }

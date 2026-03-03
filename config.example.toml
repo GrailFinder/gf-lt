@@ -56,3 +56,6 @@ StripThinkingFromAPI = true  # Strip <think> blocks from messages before sending
 # Valid values: xhigh, high, medium, low, minimal, none (empty or none = disabled)
 # Models that support reasoning will include thinking content wrapped in <think> tags
 ReasoningEffort = "medium"
+# playwright
+NoPlaywright = false
+PlaywrightDebug = false

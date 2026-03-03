@@ -1493,6 +1493,9 @@ func registerPlaywrightTools() {
 		fnMap["pw_screenshot_and_view"] = pwScreenshotAndView
 		fnMap["pw_wait_for_selector"] = pwWaitForSelector
 		fnMap["pw_drag"] = pwDrag
+		fnMap["pw_get_html"] = pwGetHTML
+		fnMap["pw_get_dom"] = pwGetDOM
+		fnMap["pw_search_elements"] = pwSearchElements
 		playwrightTools := []models.Tool{
 			{
 				Type: "function",
@@ -1697,6 +1700,61 @@ func registerPlaywrightTools() {
 							"y2": models.ToolArgProps{
 								Type:        "string",
 								Description: "ending Y coordinate",
+							},
+						},
+					},
+				},
+			},
+			{
+				Type: "function",
+				Function: models.ToolFunc{
+					Name:        "pw_get_html",
+					Description: "Get the HTML content of the page or a specific element.",
+					Parameters: models.ToolFuncParams{
+						Type:     "object",
+						Required: []string{},
+						Properties: map[string]models.ToolArgProps{
+							"selector": models.ToolArgProps{
+								Type:        "string",
+								Description: "optional CSS selector (default: body)",
+							},
+						},
+					},
+				},
+			},
+			{
+				Type: "function",
+				Function: models.ToolFunc{
+					Name:        "pw_get_dom",
+					Description: "Get a structured DOM representation of an element with tag, attributes, text, and children.",
+					Parameters: models.ToolFuncParams{
+						Type:     "object",
+						Required: []string{},
+						Properties: map[string]models.ToolArgProps{
+							"selector": models.ToolArgProps{
+								Type:        "string",
+								Description: "optional CSS selector (default: body)",
+							},
+						},
+					},
+				},
+			},
+			{
+				Type: "function",
+				Function: models.ToolFunc{
+					Name:        "pw_search_elements",
+					Description: "Search for elements by text content or CSS selector. Returns matching elements with their tags, text, and HTML.",
+					Parameters: models.ToolFuncParams{
+						Type:     "object",
+						Required: []string{},
+						Properties: map[string]models.ToolArgProps{
+							"text": models.ToolArgProps{
+								Type:        "string",
+								Description: "text to search for in elements",
+							},
+							"selector": models.ToolArgProps{
+								Type:        "string",
+								Description: "CSS selector to search for",
 							},
 						},
 					},
