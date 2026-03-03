@@ -33,52 +33,52 @@ Additional browser automation tools (Playwright):
 {
     "name": "pw_navigate",
     "args": ["url"],
-    "when_to_use": "when asked to open a specific URL in a web browser."
+    "when_to_use": "open a specific URL in the web browser."
 },
 {
     "name": "pw_click",
     "args": ["selector", "index"],
-    "when_to_use": "when asked to click on an element on the current webpage. 'index' is optional (default 0) to handle multiple matches."
+    "when_to_use": "click on an element on the current webpage. Use 'index' for multiple matches (default 0)."
 },
 {
     "name": "pw_fill",
     "args": ["selector", "text", "index"],
-    "when_to_use": "when asked to type text into an input field. 'index' is optional."
+    "when_to_use": "type text into an input field. Use 'index' for multiple matches (default 0)."
 },
 {
     "name": "pw_extract_text",
     "args": ["selector"],
-    "when_to_use": "when asked to get text content from the page or specific elements. Use selector 'body' for all page text."
+    "when_to_use": "extract text content from the page or specific elements. Use selector 'body' for all page text."
 },
 {
     "name": "pw_screenshot",
     "args": ["selector", "full_page"],
-    "when_to_use": "when asked to take a screenshot of the page or a specific element. Returns a file path to the image."
+    "when_to_use": "take a screenshot of the page or a specific element. Returns a file path to the image. Use to verify actions or inspect visual state."
 },
 {
     "name": "pw_screenshot_and_view",
     "args": ["selector", "full_page"],
-    "when_to_use": "when asked to take a screenshot and show it to the model. Returns image for viewing."
+    "when_to_use": "take a screenshot and return the image for viewing. Use to visually verify page state."
 },
 {
     "name": "pw_wait_for_selector",
     "args": ["selector", "timeout"],
-    "when_to_use": "when asked to wait for an element to appear on the page before proceeding."
+    "when_to_use": "wait for an element to appear on the page before proceeding with further actions."
 },
 {
     "name": "pw_drag",
     "args": ["x1", "y1", "x2", "y2"],
-    "when_to_use": "drag the mouse from point (x1,y1) to (x2,y2)"
+    "when_to_use": "drag the mouse from point (x1,y1) to (x2,y2)."
 },
 {
     "name": "pw_get_html",
     "args": ["selector"],
-    "when_to_use": "get the HTML content of the page or a specific element. Use when you need to understand page structure or extract HTML."
+    "when_to_use": "get the HTML content of the page or a specific element. Use to understand page structure or extract raw HTML."
 },
 {
     "name": "pw_get_dom",
     "args": ["selector"],
-    "when_to_use": "get a structured DOM representation with tag, attributes, text, and children. Use when you need a readable tree view of page elements."
+    "when_to_use": "get a structured DOM representation with tag, attributes, text, and children. Use to inspect element hierarchy and properties."
 },
 {
     "name": "pw_search_elements",
@@ -493,12 +493,10 @@ func buildDOMTree(locator playwright.Locator) ([]DOMElement, error) {
 
 func elementToDOM(el playwright.Locator) (DOMElement, error) {
 	dom := DOMElement{}
-
 	tag, err := el.Evaluate(`el => el.nodeName`, nil)
 	if err == nil {
 		dom.Tag = strings.ToLower(fmt.Sprintf("%v", tag))
 	}
-
 	attributes := make(map[string]string)
 	attrs, err := el.Evaluate(`el => {
 		let attrs = {};
@@ -520,17 +518,14 @@ func elementToDOM(el playwright.Locator) (DOMElement, error) {
 	if len(attributes) > 0 {
 		dom.Attributes = attributes
 	}
-
 	text, err := el.TextContent()
 	if err == nil && text != "" {
 		dom.Text = text
 	}
-
 	innerHTML, err := el.InnerHTML()
 	if err == nil && innerHTML != "" {
 		dom.InnerHTML = innerHTML
 	}
-
 	childCount, _ := el.Count()
 	if childCount > 0 {
 		childrenLocator := el.Locator("*")
@@ -539,7 +534,6 @@ func elementToDOM(el playwright.Locator) (DOMElement, error) {
 			dom.Children = children
 		}
 	}
-
 	return dom, nil
 }
 
@@ -599,7 +593,7 @@ func pwSearchElements(args map[string]string) []byte {
 		text, _ := el.TextContent()
 		html, _ := el.InnerHTML()
 		results = append(results, map[string]string{
-			"index": fmt.Sprintf("%d", i),
+			"index": strconv.Itoa(i),
 			"tag":   strings.ToLower(fmt.Sprintf("%v", tag)),
 			"text":  text,
 			"html":  html,

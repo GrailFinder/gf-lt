@@ -77,17 +77,17 @@ Your current tools:
 {
 "name":"file_create",
 "args": ["path", "content"],
-"when_to_use": "when asked to create a new file with optional content"
+"when_to_use": "when there is a need to create a new file with optional content"
 },
 {
 "name":"file_read",
 "args": ["path"],
-"when_to_use": "when asked to read the content of a file"
+"when_to_use": "when you need to read the content of a file"
 },
 {
 "name":"file_read_image",
 "args": ["path"],
-"when_to_use": "when asked to read or view an image file"
+"when_to_use": "when you need to read or view an image file"
 },
 {
 "name":"file_write",
@@ -97,7 +97,7 @@ Your current tools:
 {
 "name":"file_write_append",
 "args": ["path", "content"],
-"when_to_use": "when asked to append content to a file; use sed to edit content"
+"when_to_use": "when you need append content to a file; use sed to edit content"
 },
 {
 "name":"file_edit",
@@ -112,22 +112,22 @@ Your current tools:
 {
 "name":"file_move",
 "args": ["src", "dst"],
-"when_to_use": "when asked to move a file from source to destination"
+"when_to_use": "when you need to move a file from source to destination"
 },
 {
 "name":"file_copy",
 "args": ["src", "dst"],
-"when_to_use": "when asked to copy a file from source to destination"
+"when_to_use": "copy a file from source to destination"
 },
 {
 "name":"file_list",
 "args": ["path"],
-"when_to_use": "when asked to list files in a directory; path is optional (default: current directory)"
+"when_to_use": "list files in a directory; path is optional (default: current directory)"
 },
 {
 "name":"execute_command",
 "args": ["command", "args"],
-"when_to_use": "when asked to execute a system command; args is optional; allowed commands: grep, sed, awk, find, cat, head, tail, sort, uniq, wc, ls, echo, cut, tr, cp, mv, rm, mkdir, rmdir, pwd, df, free, ps, top, du, whoami, date, uname, go"
+"when_to_use": "execute a system command; args is optional; allowed commands: grep, sed, awk, find, cat, head, tail, sort, uniq, wc, ls, echo, cut, tr, cp, mv, rm, mkdir, rmdir, pwd, df, free, ps, top, du, whoami, date, uname, go"
 }
 ]
 </tools>
