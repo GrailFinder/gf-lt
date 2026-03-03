@@ -872,21 +872,27 @@ func init() {
 				if err != nil {
 					logger.Error("failed to open attached image", "path", lastImg, "error", err)
 					// Fall back to showing agent image
-					loadImage()
+					if err := loadImage(); err != nil {
+						logger.Warn("failed to load agent image", "error", err)
+					}
 				} else {
 					defer file.Close()
 					img, _, err := image.Decode(file)
 					if err != nil {
 						logger.Error("failed to decode attached image", "path", lastImg, "error", err)
 						// Fall back to showing agent image
-						loadImage()
+						if err := loadImage(); err != nil {
+							logger.Warn("failed to load agent image", "error", err)
+						}
 					} else {
 						imgView.SetImage(img)
 					}
 				}
 			} else {
 				// No attached image, show agent image as before
-				loadImage()
+				if err := loadImage(); err != nil {
+					logger.Warn("failed to load agent image", "error", err)
+				}
 			}
 			pages.AddPage(imgPage, imgView, true, true)
 			return nil

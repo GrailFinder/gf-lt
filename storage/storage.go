@@ -103,7 +103,10 @@ func NewProviderSQL(dbPath string, logger *slog.Logger) FullRepo {
 		return nil
 	}
 	p := ProviderSQL{db: db, logger: logger}
-	p.Migrate()
+	if err := p.Migrate(); err != nil {
+		logger.Error("migration failed, app cannot start", "error", err)
+		return nil
+	}
 	return p
 }
 

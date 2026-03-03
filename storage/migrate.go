@@ -10,16 +10,18 @@ import (
 //go:embed migrations/*
 var migrationsFS embed.FS
 
-func (p *ProviderSQL) Migrate() {
+func (p *ProviderSQL) Migrate() error {
 	// Get the embedded filesystem
 	migrationsDir, err := fs.Sub(migrationsFS, "migrations")
 	if err != nil {
 		p.logger.Error("Failed to get embedded migrations directory;", "error", err)
+		return fmt.Errorf("failed to get embedded migrations directory: %w", err)
 	}
 	// List all .up.sql files
 	files, err := migrationsFS.ReadDir("migrations")
 	if err != nil {
 		p.logger.Error("Failed to read migrations directory;", "error", err)
+		return fmt.Errorf("failed to read migrations directory: %w", err)
 	}
 	// Execute each .up.sql file
 	for _, file := range files {
@@ -27,11 +29,12 @@ func (p *ProviderSQL) Migrate() {
 			err := p.executeMigration(migrationsDir, file.Name())
 			if err != nil {
 				p.logger.Error("Failed to execute migration %s: %v", file.Name(), err)
-				panic(err)
+				return fmt.Errorf("failed to execute migration %s: %w", file.Name(), err)
 			}
 		}
 	}
 	p.logger.Debug("All migrations executed successfully!")
+	return nil
 }
 
 func (p *ProviderSQL) executeMigration(migrationsDir fs.FS, fileName string) error {

@@ -291,7 +291,7 @@ func listRolesWithUser() []string {
 	return result
 }
 
-func loadImage() {
+func loadImage() error {
 	filepath := defaultImage
 	cc := GetCardByRole(cfg.AssistantRole)
 	if cc != nil {
@@ -301,14 +301,15 @@ func loadImage() {
 	}
 	file, err := os.Open(filepath)
 	if err != nil {
-		panic(err)
+		return fmt.Errorf("failed to open image: %w", err)
 	}
 	defer file.Close()
 	img, _, err := image.Decode(file)
 	if err != nil {
-		panic(err)
+		return fmt.Errorf("failed to decode image: %w", err)
 	}
 	imgView.SetImage(img)
+	return nil
 }
 
 func strInSlice(s string, sl []string) bool {

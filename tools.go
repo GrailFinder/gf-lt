@@ -212,9 +212,13 @@ func init() {
 	roleToID["assistant"] = basicCard.ID
 	sa, err := searcher.NewWebSurfer(searcher.SearcherTypeScraper, "")
 	if err != nil {
-		panic("failed to init seachagent; error: " + err.Error())
+		if logger != nil {
+			logger.Warn("search agent unavailable; web_search tool disabled", "error", err)
+		}
+		WebSearcher = nil
+	} else {
+		WebSearcher = sa
 	}
-	WebSearcher = sa
 	if err := rag.Init(cfg, logger, store); err != nil {
 		logger.Warn("failed to init rag; rag_search tool will not be available", "error", err)
 	}
@@ -275,10 +279,16 @@ func updateToolCapabilities() {
 func getWebAgentClient() *agent.AgentClient {
 	webAgentClientOnce.Do(func() {
 		if cfg == nil {
-			panic("cfg not initialized")
+			if logger != nil {
+				logger.Warn("web agent client unavailable: config not initialized")
+			}
+			return
 		}
 		if logger == nil {
-			panic("logger not initialized")
+			if logger != nil {
+				logger.Warn("web agent client unavailable: logger not initialized")
+			}
+			return
 		}
 		getToken := func() string {
 			if chunkParser == nil {
