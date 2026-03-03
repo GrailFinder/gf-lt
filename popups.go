@@ -143,7 +143,7 @@ func showAPILinkSelectionPopup() {
 	apiListWidget.SetSelectedFunc(func(index int, mainText string, secondaryText string, shortcut rune) {
 		// Update the API in config
 		cfg.CurrentAPI = mainText
-		updateToolCapabilities()
+		// updateToolCapabilities()
 		// Update model list based on new API
 		// Helper function to get model list for a given API (same as in props_table.go)
 		getModelListForAPI := func(api string) []string {
