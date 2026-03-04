@@ -10,6 +10,7 @@ import (
 	"path"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
@@ -21,7 +22,6 @@ func isFullScreenPageActive() bool {
 }
 
 var (
-	app                *tview.Application
 	pages              *tview.Pages
 	textArea           *tview.TextArea
 	editArea           *tview.TextArea
@@ -135,6 +135,42 @@ func setShellMode(enabled bool) {
 			updateFlexLayout()
 		})
 	}()
+}
+
+// showToast displays a temporary message in the top‑right corner.
+// It auto‑hides after 3 seconds and disappears when clicked.
+func showToast(title, message string) {
+	// Create a small, bordered text view for the notification.
+	notification := tview.NewTextView().
+		SetTextAlign(tview.AlignCenter).
+		SetDynamicColors(true).
+		SetRegions(true).
+		SetText(fmt.Sprintf("[yellow]%s[-]\n", message)).
+		SetChangedFunc(func() {
+			app.Draw()
+		})
+	notification.SetTitleAlign(tview.AlignLeft).
+		SetBorder(true).
+		SetTitle(title)
+	// Wrap it in a full‑screen Flex to position it in the top‑right corner.
+	// Outer Flex (row) pushes content to the top; inner Flex (column) pushes to the right.
+	background := tview.NewFlex().SetDirection(tview.FlexRow).
+		AddItem(nil, 0, 1, false). // top spacer
+		AddItem(tview.NewFlex().SetDirection(tview.FlexColumn).
+			AddItem(nil, 0, 1, false).          // left spacer
+			AddItem(notification, 40, 1, true), // notification width 40
+			5, 1, false) // notification height 5
+	// Generate a unique page name (e.g., using timestamp) to allow multiple toasts.
+	pageName := fmt.Sprintf("toast-%d", time.Now().UnixNano())
+	pages.AddPage(pageName, background, true, true)
+	// Auto‑dismiss after 3 seconds.
+	time.AfterFunc(3*time.Second, func() {
+		app.QueueUpdateDraw(func() {
+			if pages.HasPage(pageName) {
+				pages.RemovePage(pageName)
+			}
+		})
+	})
 }
 
 func init() {
@@ -575,6 +611,7 @@ func init() {
 			if scrollToEndEnabled {
 				status = "enabled"
 			}
+			showToast("autoscroll", "Auto-scrolling "+status)
 			if err := notifyUser("autoscroll", "Auto-scrolling "+status); err != nil {
 				logger.Error("failed to send notification", "error", err)
 			}

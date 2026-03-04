@@ -101,6 +101,14 @@ var (
 	page           playwright.Page
 )
 
+func pwShutDown() error {
+	if pw == nil {
+		return nil
+	}
+	pwStop(nil)
+	return pw.Stop()
+}
+
 func installPW() error {
 	err := playwright.Install(&playwright.RunOptions{Verbose: false})
 	if err != nil {
