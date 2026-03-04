@@ -38,8 +38,3 @@ func RegisterA(toolNames []string, a AgenterA) {
 func Get(toolName string) AgenterB {
 	return RegistryB[toolName]
 }
-
-// Register is a convenience wrapper for RegisterB.
-func Register(toolName string, a AgenterB) {
-	RegisterB(toolName, a)
-}

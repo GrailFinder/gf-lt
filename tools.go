@@ -278,25 +278,13 @@ func updateToolCapabilities() {
 // getWebAgentClient returns a singleton AgentClient for web agents.
 func getWebAgentClient() *agent.AgentClient {
 	webAgentClientOnce.Do(func() {
-		if cfg == nil {
-			if logger != nil {
-				logger.Warn("web agent client unavailable: config not initialized")
-			}
-			return
-		}
-		if logger == nil {
-			if logger != nil {
-				logger.Warn("web agent client unavailable: logger not initialized")
-			}
-			return
-		}
 		getToken := func() string {
 			if chunkParser == nil {
 				return ""
 			}
 			return chunkParser.GetToken()
 		}
-		webAgentClient = agent.NewAgentClient(cfg, *logger, getToken)
+		webAgentClient = agent.NewAgentClient(cfg, logger, getToken)
 	})
 	return webAgentClient
 }
@@ -306,13 +294,13 @@ func registerWebAgents() {
 	webAgentsOnce.Do(func() {
 		client := getWebAgentClient()
 		// Register rag_search agent
-		agent.Register("rag_search", agent.NewWebAgentB(client, ragSearchSysPrompt))
+		agent.RegisterB("rag_search", agent.NewWebAgentB(client, ragSearchSysPrompt))
 		// Register websearch agent
-		agent.Register("websearch", agent.NewWebAgentB(client, webSearchSysPrompt))
+		agent.RegisterB("websearch", agent.NewWebAgentB(client, webSearchSysPrompt))
 		// Register read_url agent
-		agent.Register("read_url", agent.NewWebAgentB(client, readURLSysPrompt))
+		agent.RegisterB("read_url", agent.NewWebAgentB(client, readURLSysPrompt))
 		// Register summarize_chat agent
-		agent.Register("summarize_chat", agent.NewWebAgentB(client, summarySysPrompt))
+		agent.RegisterB("summarize_chat", agent.NewWebAgentB(client, summarySysPrompt))
 	})
 }
 

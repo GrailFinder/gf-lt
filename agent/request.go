@@ -32,10 +32,10 @@ func detectAPI(api string) (isCompletion, isChat, isDeepSeek, isOpenRouter bool)
 type AgentClient struct {
 	cfg      *config.Config
 	getToken func() string
-	log      slog.Logger
+	log      *slog.Logger
 }
 
-func NewAgentClient(cfg *config.Config, log slog.Logger, gt func() string) *AgentClient {
+func NewAgentClient(cfg *config.Config, log *slog.Logger, gt func() string) *AgentClient {
 	return &AgentClient{
 		cfg:      cfg,
 		getToken: gt,
@@ -44,7 +44,7 @@ func NewAgentClient(cfg *config.Config, log slog.Logger, gt func() string) *Agen
 }
 
 func (ag *AgentClient) Log() *slog.Logger {
-	return &ag.log
+	return ag.log
 }
 
 func (ag *AgentClient) FormMsg(sysprompt, msg string) (io.Reader, error) {
@@ -63,11 +63,9 @@ func (ag *AgentClient) buildRequest(sysprompt, msg string) ([]byte, error) {
 		{Role: "system", Content: sysprompt},
 		{Role: "user", Content: msg},
 	}
-
 	// Determine API type
 	isCompletion, isChat, isDeepSeek, isOpenRouter := detectAPI(api)
 	ag.log.Debug("agent building request", "api", api, "isCompletion", isCompletion, "isChat", isChat, "isDeepSeek", isDeepSeek, "isOpenRouter", isOpenRouter)
-
 	// Build prompt for completion endpoints
 	if isCompletion {
 		var sb strings.Builder
@@ -76,7 +74,6 @@ func (ag *AgentClient) buildRequest(sysprompt, msg string) ([]byte, error) {
 			sb.WriteString("\n")
 		}
 		prompt := strings.TrimSpace(sb.String())
-
 		switch {
 		case isDeepSeek:
 			// DeepSeek completion
@@ -95,7 +92,6 @@ func (ag *AgentClient) buildRequest(sysprompt, msg string) ([]byte, error) {
 			return json.Marshal(req)
 		}
 	}
-
 	// Chat completions endpoints
 	if isChat || !isCompletion {
 		chatBody := &models.ChatBody{
@@ -103,7 +99,6 @@ func (ag *AgentClient) buildRequest(sysprompt, msg string) ([]byte, error) {
 			Stream:   false, // Agents don't need streaming
 			Messages: messages,
 		}
-
 		switch {
 		case isDeepSeek:
 			// DeepSeek chat
@@ -122,7 +117,6 @@ func (ag *AgentClient) buildRequest(sysprompt, msg string) ([]byte, error) {
 			return json.Marshal(req)
 		}
 	}
-
 	// Fallback (should not reach here)
 	ag.log.Warn("unknown API, using default chat completions format", "api", api)
 	chatBody := &models.ChatBody{
@@ -165,7 +159,6 @@ func (ag *AgentClient) LLMRequest(body io.Reader) ([]byte, error) {
 		ag.log.Error("agent LLM request failed", "status", resp.StatusCode, "response", string(responseBytes[:min(len(responseBytes), 1000)]))
 		return responseBytes, fmt.Errorf("HTTP %d: %s", resp.StatusCode, string(responseBytes[:min(len(responseBytes), 200)]))
 	}
-
 	// Parse response and extract text content
 	text, err := extractTextFromResponse(responseBytes)
 	if err != nil {
@@ -179,17 +172,16 @@ func (ag *AgentClient) LLMRequest(body io.Reader) ([]byte, error) {
 // extractTextFromResponse parses common LLM response formats and extracts the text content.
 func extractTextFromResponse(data []byte) (string, error) {
 	// Try to parse as generic JSON first
-	var genericResp map[string]interface{}
+	var genericResp map[string]any
 	if err := json.Unmarshal(data, &genericResp); err != nil {
 		// Not JSON, return as string
 		return string(data), nil
 	}
-
 	// Check for OpenAI chat completion format
-	if choices, ok := genericResp["choices"].([]interface{}); ok && len(choices) > 0 {
-		if firstChoice, ok := choices[0].(map[string]interface{}); ok {
+	if choices, ok := genericResp["choices"].([]any); ok && len(choices) > 0 {
+		if firstChoice, ok := choices[0].(map[string]any); ok {
 			// Chat completion: choices[0].message.content
-			if message, ok := firstChoice["message"].(map[string]interface{}); ok {
+			if message, ok := firstChoice["message"].(map[string]any); ok {
 				if content, ok := message["content"].(string); ok {
 					return content, nil
 				}
@@ -199,30 +191,21 @@ func extractTextFromResponse(data []byte) (string, error) {
 				return text, nil
 			}
 			// Delta format for streaming (should not happen with stream: false)
-			if delta, ok := firstChoice["delta"].(map[string]interface{}); ok {
+			if delta, ok := firstChoice["delta"].(map[string]any); ok {
 				if content, ok := delta["content"].(string); ok {
 					return content, nil
 				}
 			}
 		}
 	}
-
 	// Check for llama.cpp completion format
 	if content, ok := genericResp["content"].(string); ok {
 		return content, nil
 	}
-
 	// Unknown format, return pretty-printed JSON
 	prettyJSON, err := json.MarshalIndent(genericResp, "", "  ")
 	if err != nil {
 		return string(data), nil
 	}
 	return string(prettyJSON), nil
-}
-
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
 }
