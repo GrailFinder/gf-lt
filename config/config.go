@@ -71,8 +71,8 @@ type Config struct {
 	CharSpecificContextTag     string `toml:"CharSpecificContextTag"`
 	AutoTurn                   bool   `toml:"AutoTurn"`
 	// playwright browser
-	NoPlaywright    bool `toml:"NoPlaywright"`    // when we want to avoid pw tool use
-	PlaywrightDebug bool `toml:"PlaywrightDebug"` // !headless
+	PlaywrightEnabled bool `toml:"PlaywrightEnabled"`
+	PlaywrightDebug   bool `toml:"PlaywrightDebug"` // !headless
 }
 
 func LoadConfig(fn string) (*Config, error) {

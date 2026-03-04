@@ -1524,7 +1524,7 @@ func init() {
 	if cfg.STT_ENABLED {
 		asr = NewSTT(logger, cfg)
 	}
-	if !cfg.NoPlaywright {
+	if cfg.PlaywrightEnabled {
 		if err := checkPlaywright(); err != nil {
 			// slow, need a faster check if playwright install
 			if err := installPW(); err != nil {

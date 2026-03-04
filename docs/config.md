@@ -162,6 +162,15 @@ Those could be switched in program, but also bould be setup in config.
 #### ToolUse
 - Enable or disable explanation of tools to llm, so it could use them.
 
+#### Playwright Browser Automation
+These settings enable browser automation tools available to the LLM.
+
+- **PlaywrightEnabled** (`false`)
+  - Enable or disable Playwright browser automation tools for the LLM. When enabled, the LLM can use tools like `pw_browser`, `pw_close`, and `pw_status` to automate browser interactions.
+
+- **PlaywrightDebug** (`false`)
+  - Enable debug mode for Playwright browser. When set to `true`, the browser runs in visible (non-headless) mode, displaying the GUI for debugging purposes. When `false`, the browser runs in headless mode by default.
+
 ### StripThinkingFromAPI (`true`)
 - Strip thinking blocks from messages before sending to LLM. Keeps them in chat history for local viewing but reduces token usage in API calls.
 

@@ -1505,7 +1505,7 @@ func registerWindowTools() {
 
 func registerPlaywrightTools() {
 	removePlaywrightToolsFromBaseTools()
-	if cfg != nil && !cfg.NoPlaywright {
+	if cfg != nil && cfg.PlaywrightEnabled {
 		fnMap["pw_start"] = pwStart
 		fnMap["pw_stop"] = pwStop
 		fnMap["pw_is_running"] = pwIsRunning
