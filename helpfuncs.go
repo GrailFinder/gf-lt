@@ -491,10 +491,7 @@ func listChatRoles() []string {
 func deepseekModelValidator() error {
 	if cfg.CurrentAPI == cfg.DeepSeekChatAPI || cfg.CurrentAPI == cfg.DeepSeekCompletionAPI {
 		if chatBody.Model != "deepseek-chat" && chatBody.Model != "deepseek-reasoner" {
-			if err := notifyUser("bad request", "wrong deepseek model name"); err != nil {
-				logger.Warn("failed ot notify user", "error", err)
-				return err
-			}
+			showToast("bad request", "wrong deepseek model name")
 			return nil
 		}
 	}
@@ -694,9 +691,7 @@ func performSearch(term string) {
 		searchResults = nil
 		searchResultLengths = nil
 		notification := "Pattern not found: " + term
-		if err := notifyUser("search", notification); err != nil {
-			logger.Error("failed to send notification", "error", err)
-		}
+		showToast("search", notification)
 		return
 	}
 	// Store the formatted text positions and lengths for accurate highlighting
@@ -729,9 +724,7 @@ func highlightCurrentMatch() {
 	textView.Highlight(currentRegion).ScrollToHighlight()
 	// Send notification about which match we're at
 	notification := fmt.Sprintf("Match %d of %d", searchIndex+1, len(searchResults))
-	if err := notifyUser("search", notification); err != nil {
-		logger.Error("failed to send notification", "error", err)
-	}
+	showToast("search", notification)
 }
 
 // showSearchBar shows the search input field as an overlay
@@ -821,9 +814,7 @@ func addRegionTags(text string, positions []int, lengths []int, currentIdx int, 
 // searchNext finds the next occurrence of the search term
 func searchNext() {
 	if len(searchResults) == 0 {
-		if err := notifyUser("search", "No search results to navigate"); err != nil {
-			logger.Error("failed to send notification", "error", err)
-		}
+		showToast("search", "No search results to navigate")
 		return
 	}
 	searchIndex = (searchIndex + 1) % len(searchResults)
@@ -833,9 +824,7 @@ func searchNext() {
 // searchPrev finds the previous occurrence of the search term
 func searchPrev() {
 	if len(searchResults) == 0 {
-		if err := notifyUser("search", "No search results to navigate"); err != nil {
-			logger.Error("failed to send notification", "error", err)
-		}
+		showToast("search", "No search results to navigate")
 		return
 	}
 	if searchIndex == 0 {

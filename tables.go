@@ -147,9 +147,7 @@ func makeChatTable(chatMap map[string]models.Chat) *tview.Table {
 			if err := store.RemoveChat(sc.ID); err != nil {
 				logger.Error("failed to remove chat from db", "chat_id", sc.ID, "chat_name", sc.Name)
 			}
-			if err := notifyUser("chat deleted", selectedChat+" was deleted"); err != nil {
-				logger.Error("failed to send notification", "error", err)
-			}
+			showToast("chat deleted", selectedChat+" was deleted")
 			// load last chat
 			chatBody.Messages = loadOldChatOrGetNew()
 			textView.SetText(chatToText(chatBody.Messages, cfg.ShowSys))
@@ -162,9 +160,7 @@ func makeChatTable(chatMap map[string]models.Chat) *tview.Table {
 			cc := GetCardByRole(agentName)
 			if cc == nil {
 				logger.Warn("no such card", "agent", agentName)
-				if err := notifyUser("error", "no such card: "+agentName); err != nil {
-					logger.Warn("failed ot notify", "error", err)
-				}
+				showToast("error", "no such card: "+agentName)
 				return
 			}
 			cc.SysPrompt = chatBody.Messages[0].Content
@@ -186,9 +182,7 @@ func makeChatTable(chatMap map[string]models.Chat) *tview.Table {
 			cc := GetCardByRole(agentName)
 			if cc == nil {
 				logger.Warn("no such card", "agent", agentName)
-				if err := notifyUser("error", "no such card: "+agentName); err != nil {
-					logger.Warn("failed to notify", "error", err)
-				}
+				showToast("error", "no such card: "+agentName)
 				return
 			}
 			newCard, err := pngmeta.ReadCard(cc.FilePath, cfg.UserRole)
@@ -197,9 +191,7 @@ func makeChatTable(chatMap map[string]models.Chat) *tview.Table {
 				newCard, err = pngmeta.ReadCardJson(cc.FilePath)
 				if err != nil {
 					logger.Error("failed to reload charcard", "path", cc.FilePath, "error", err)
-					if err := notifyUser("error", "failed to reload card: "+cc.FilePath); err != nil {
-						logger.Warn("failed to notify", "error", err)
-					}
+					showToast("error", "failed to reload card: "+cc.FilePath)
 					return
 				}
 			}
@@ -448,13 +440,13 @@ func makeRAGTable(fileList []string, loadedFiles []string) *tview.Flex {
 			go func() {
 				if err := ragger.LoadRAG(fpath); err != nil {
 					logger.Error("failed to embed file", "chat", fpath, "error", err)
-					_ = notifyUser("RAG", "failed to embed file; error: "+err.Error())
+					showToast("RAG", "failed to embed file; error: "+err.Error())
 					app.QueueUpdate(func() {
 						pages.RemovePage(RAGPage)
 					})
 					return
 				}
-				_ = notifyUser("RAG", "file loaded successfully")
+				showToast("RAG", "file loaded successfully")
 				app.QueueUpdate(func() {
 					pages.RemovePage(RAGPage)
 				})
@@ -465,13 +457,13 @@ func makeRAGTable(fileList []string, loadedFiles []string) *tview.Flex {
 			go func() {
 				if err := ragger.RemoveFile(f.name); err != nil {
 					logger.Error("failed to unload file from RAG", "filename", f.name, "error", err)
-					_ = notifyUser("RAG", "failed to unload file; error: "+err.Error())
+					showToast("RAG", "failed to unload file; error: "+err.Error())
 					app.QueueUpdate(func() {
 						pages.RemovePage(RAGPage)
 					})
 					return
 				}
-				_ = notifyUser("RAG", "file unloaded successfully")
+				showToast("RAG", "file unloaded successfully")
 				app.QueueUpdate(func() {
 					pages.RemovePage(RAGPage)
 				})
@@ -483,9 +475,7 @@ func makeRAGTable(fileList []string, loadedFiles []string) *tview.Flex {
 				logger.Error("failed to delete file", "filename", fpath, "error", err)
 				return
 			}
-			if err := notifyUser("chat deleted", fpath+" was deleted"); err != nil {
-				logger.Error("failed to send notification", "error", err)
-			}
+			showToast("chat deleted", fpath+" was deleted")
 			return
 		default:
 			pages.RemovePage(RAGPage)
@@ -594,9 +584,7 @@ func makeAgentTable(agentList []string) *tview.Table {
 			if err := store.RemoveChat(sc.ID); err != nil {
 				logger.Error("failed to remove chat from db", "chat_id", sc.ID, "chat_name", sc.Name)
 			}
-			if err := notifyUser("chat deleted", selected+" was deleted"); err != nil {
-				logger.Error("failed to send notification", "error", err)
-			}
+			showToast("chat deleted", selected+" was deleted")
 			pages.RemovePage(agentPage)
 			return
 		default:
@@ -667,13 +655,9 @@ func makeCodeBlockTable(codeBlocks []string) *tview.Table {
 		switch tc.Text {
 		case "copy":
 			if err := copyToClipboard(selected); err != nil {
-				if err := notifyUser("error", err.Error()); err != nil {
-					logger.Error("failed to send notification", "error", err)
-				}
+				showToast("error", err.Error())
 			}
-			if err := notifyUser("copied", selected); err != nil {
-				logger.Error("failed to send notification", "error", err)
-			}
+			showToast("copied", selected)
 			pages.RemovePage(codeBlockPage)
 			app.SetFocus(textArea)
 			return
@@ -766,9 +750,7 @@ func makeImportChatTable(filenames []string) *tview.Table {
 			if err := store.RemoveChat(sc.ID); err != nil {
 				logger.Error("failed to remove chat from db", "chat_id", sc.ID, "chat_name", sc.Name)
 			}
-			if err := notifyUser("chat deleted", selected+" was deleted"); err != nil {
-				logger.Error("failed to send notification", "error", err)
-			}
+			showToast("chat deleted", selected+" was deleted")
 			pages.RemovePage(historyPage)
 			return
 		default:

@@ -140,7 +140,20 @@ func setShellMode(enabled bool) {
 // showToast displays a temporary message in the top‑right corner.
 // It auto‑hides after 3 seconds and disappears when clicked.
 func showToast(title, message string) {
-	// Create a small, bordered text view for the notification.
+	sanitize := func(s string, maxLen int) string {
+		sanitized := strings.Map(func(r rune) rune {
+			if r < 32 && r != '\t' {
+				return -1
+			}
+			return r
+		}, s)
+		if len(sanitized) > maxLen {
+			sanitized = sanitized[:maxLen-3] + "..."
+		}
+		return sanitized
+	}
+	title = sanitize(title, 50)
+	message = sanitize(message, 197)
 	notification := tview.NewTextView().
 		SetTextAlign(tview.AlignCenter).
 		SetDynamicColors(true).
@@ -363,9 +376,7 @@ func init() {
 			defer colorText()
 			editedMsg := editArea.GetText()
 			if editedMsg == "" {
-				if err := notifyUser("edit", "no edit provided"); err != nil {
-					logger.Error("failed to send notification", "error", err)
-				}
+				showToast("edit", "no edit provided")
 				pages.RemovePage(editMsgPage)
 				return nil
 			}
@@ -395,9 +406,7 @@ func init() {
 			case tcell.KeyEnter:
 				newRole := roleEditWindow.GetText()
 				if newRole == "" {
-					if err := notifyUser("edit", "no role provided"); err != nil {
-						logger.Error("failed to send notification", "error", err)
-					}
+					showToast("edit", "no role provided")
 					pages.RemovePage(roleEditPage)
 					return
 				}
@@ -424,9 +433,7 @@ func init() {
 			siInt, err := strconv.Atoi(si)
 			if err != nil {
 				logger.Error("failed to convert provided index", "error", err, "si", si)
-				if err := notifyUser("cancel", "no index provided, copying user input"); err != nil {
-					logger.Error("failed to send notification", "error", err)
-				}
+				showToast("cancel", "no index provided, copying user input")
 				if err := copyToClipboard(textArea.GetText()); err != nil {
 					logger.Error("failed to copy to clipboard", "error", err)
 				}
@@ -437,9 +444,7 @@ func init() {
 			if len(chatBody.Messages)-1 < selectedIndex || selectedIndex < 0 {
 				msg := "chosen index is out of bounds, will copy user input"
 				logger.Warn(msg, "index", selectedIndex)
-				if err := notifyUser("error", msg); err != nil {
-					logger.Error("failed to send notification", "error", err)
-				}
+				showToast("error", msg)
 				if err := copyToClipboard(textArea.GetText()); err != nil {
 					logger.Error("failed to copy to clipboard", "error", err)
 				}
@@ -465,9 +470,7 @@ func init() {
 				}
 				previewLen := min(30, len(msgText))
 				notification := fmt.Sprintf("msg '%s' was copied to the clipboard", msgText[:previewLen])
-				if err := notifyUser("copied", notification); err != nil {
-					logger.Error("failed to send notification", "error", err)
-				}
+				showToast("copied", notification)
 				hideIndexBar() // Hide overlay after copying
 			}
 			return nil
@@ -499,9 +502,7 @@ func init() {
 				logger.Error("failed to upsert chat", "error", err, "chat", currentChat)
 			}
 			notification := fmt.Sprintf("renamed chat to '%s'", activeChatName)
-			if err := notifyUser("renamed", notification); err != nil {
-				logger.Error("failed to send notification", "error", err)
-			}
+			showToast("renamed", notification)
 		}
 		return event
 	})
@@ -612,9 +613,6 @@ func init() {
 				status = "enabled"
 			}
 			showToast("autoscroll", "Auto-scrolling "+status)
-			if err := notifyUser("autoscroll", "Auto-scrolling "+status); err != nil {
-				logger.Error("failed to send notification", "error", err)
-			}
 			updateStatusLine()
 		}
 		// Handle Alt+7 to toggle injectRole
@@ -631,9 +629,7 @@ func init() {
 			if thinkingCollapsed {
 				status = "collapsed"
 			}
-			if err := notifyUser("thinking", "Thinking blocks "+status); err != nil {
-				logger.Error("failed to send notification", "error", err)
-			}
+			showToast("thinking", "Thinking blocks "+status)
 			return nil
 		}
 		// Handle Ctrl+T to toggle tool call/response visibility
@@ -645,9 +641,7 @@ func init() {
 			if toolCollapsed {
 				status = "collapsed"
 			}
-			if err := notifyUser("tools", "Tool calls/responses "+status); err != nil {
-				logger.Error("failed to send notification", "error", err)
-			}
+			showToast("tools", "Tool calls/responses "+status)
 			return nil
 		}
 		if event.Key() == tcell.KeyRune && event.Rune() == 'i' && event.Modifiers()&tcell.ModAlt != 0 {
@@ -667,9 +661,7 @@ func init() {
 			// Check if there are no chats for this agent
 			if len(chatList) == 0 {
 				notification := "no chats found for agent: " + cfg.AssistantRole
-				if err := notifyUser("info", notification); err != nil {
-					logger.Error("failed to send notification", "error", err)
-				}
+				showToast("info", notification)
 				return nil
 			}
 			chatMap := make(map[string]models.Chat)
@@ -687,9 +679,7 @@ func init() {
 		if event.Key() == tcell.KeyF2 && !botRespMode {
 			// regen last msg
 			if len(chatBody.Messages) == 0 {
-				if err := notifyUser("info", "no messages to regenerate"); err != nil {
-					logger.Error("failed to send notification", "error", err)
-				}
+				showToast("info", "no messages to regenerate")
 				return nil
 			}
 			chatBody.Messages = chatBody.Messages[:len(chatBody.Messages)-1]
@@ -715,9 +705,7 @@ func init() {
 				return nil
 			}
 			if len(chatBody.Messages) == 0 {
-				if err := notifyUser("info", "no messages to delete"); err != nil {
-					logger.Error("failed to send notification", "error", err)
-				}
+				showToast("info", "no messages to delete")
 				return nil
 			}
 			chatBody.Messages = chatBody.Messages[:len(chatBody.Messages)-1]
@@ -776,9 +764,7 @@ func init() {
 			}
 			previewLen := min(30, len(msgText))
 			notification := fmt.Sprintf("msg '%s' was copied to the clipboard", msgText[:previewLen])
-			if err := notifyUser("copied", notification); err != nil {
-				logger.Error("failed to send notification", "error", err)
-			}
+			showToast("copied", notification)
 			return nil
 		}
 		if event.Key() == tcell.KeyF8 {
@@ -792,9 +778,7 @@ func init() {
 			text := textView.GetText(false)
 			cb := codeBlockRE.FindAllString(text, -1)
 			if len(cb) == 0 {
-				if err := notifyUser("notify", "no code blocks in chat"); err != nil {
-					logger.Error("failed to send notification", "error", err)
-				}
+				showToast("notify", "no code blocks in chat")
 				return nil
 			}
 			table := makeCodeBlockTable(cb)
@@ -809,9 +793,7 @@ func init() {
 			// read files in chat_exports
 			filelist, err := os.ReadDir(exportDir)
 			if err != nil {
-				if err := notifyUser("failed to load exports", err.Error()); err != nil {
-					logger.Error("failed to send notification", "error", err)
-				}
+				showToast("failed to load exports", err.Error())
 				return nil
 			}
 			fli := []string{}
@@ -841,9 +823,7 @@ func init() {
 				logger.Error("failed to export chat;", "error", err, "chat_name", activeChatName)
 				return nil
 			}
-			if err := notifyUser("exported chat", "chat: "+activeChatName+" was exported"); err != nil {
-				logger.Error("failed to send notification", "error", err)
-			}
+			showToast("exported chat", "chat: "+activeChatName+" was exported")
 			return nil
 		}
 		if event.Key() == tcell.KeyCtrlP {
@@ -882,9 +862,7 @@ func init() {
 			labels, err := initSysCards()
 			if err != nil {
 				logger.Error("failed to read sys dir", "error", err)
-				if err := notifyUser("error", "failed to read: "+cfg.SysDir); err != nil {
-					logger.Debug("failed to notify user", "error", err)
-				}
+				showToast("error", "failed to read: "+cfg.SysDir)
 				return nil
 			}
 			at := makeAgentTable(labels)
@@ -941,9 +919,7 @@ func init() {
 				if err != nil {
 					msg := "failed to inference user speech; error:" + err.Error()
 					logger.Error(msg)
-					if err := notifyUser("stt error", msg); err != nil {
-						logger.Error("failed to notify user", "error", err)
-					}
+					showToast("stt error", msg)
 					return nil
 				}
 				if userSpeech != "" {
@@ -1023,26 +999,20 @@ func init() {
 					// Create the RAG directory if it doesn't exist
 					if mkdirErr := os.MkdirAll(cfg.RAGDir, 0755); mkdirErr != nil {
 						logger.Error("failed to create RAG directory", "dir", cfg.RAGDir, "error", mkdirErr)
-						if notifyerr := notifyUser("failed to create RAG directory", mkdirErr.Error()); notifyerr != nil {
-							logger.Error("failed to send notification", "error", notifyerr)
-						}
+						showToast("failed to create RAG directory", mkdirErr.Error())
 						return nil
 					}
 					// Now try to read the directory again after creating it
 					files, err = os.ReadDir(cfg.RAGDir)
 					if err != nil {
 						logger.Error("failed to read dir after creating it", "dir", cfg.RAGDir, "error", err)
-						if notifyerr := notifyUser("failed to read RAG directory", err.Error()); notifyerr != nil {
-							logger.Error("failed to send notification", "error", notifyerr)
-						}
+						showToast("failed to read RAG directory", err.Error())
 						return nil
 					}
 				} else {
 					// Other error (permissions, etc.)
 					logger.Error("failed to read dir", "dir", cfg.RAGDir, "error", err)
-					if notifyerr := notifyUser("failed to open RAG files dir", err.Error()); notifyerr != nil {
-						logger.Error("failed to send notification", "error", notifyerr)
-					}
+					showToast("failed to open RAG files dir", err.Error())
 					return nil
 				}
 			}
@@ -1072,9 +1042,7 @@ func init() {
 		if event.Key() == tcell.KeyRune && event.Modifiers() == tcell.ModAlt && event.Rune() == '9' {
 			// Warm up (load) the currently selected model
 			go warmUpModel()
-			if err := notifyUser("model warmup", "loading model: "+chatBody.Model); err != nil {
-				logger.Debug("failed to notify user", "error", err)
-			}
+			showToast("model warmup", "loading model: "+chatBody.Model)
 			return nil
 		}
 		// cannot send msg in editMode or botRespMode

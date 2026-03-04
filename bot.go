@@ -268,9 +268,7 @@ func warmUpModel() {
 		// Continue with warmup attempt anyway
 	}
 	if loaded {
-		if err := notifyUser("model already loaded", "Model "+chatBody.Model+" is already loaded."); err != nil {
-			logger.Debug("failed to notify user", "error", err)
-		}
+		showToast("model already loaded", "Model "+chatBody.Model+" is already loaded.")
 		return
 	}
 	go func() {
@@ -483,9 +481,7 @@ func monitorModelLoad(modelID string) {
 					continue
 				}
 				if loaded {
-					if err := notifyUser("model loaded", "Model "+modelID+" is now loaded and ready."); err != nil {
-						logger.Debug("failed to notify user", "error", err)
-					}
+					showToast("model loaded", "Model "+modelID+" is now loaded and ready.")
 					refreshChatDisplay()
 					return
 				}
@@ -572,9 +568,7 @@ func sendMsgToLLM(body io.Reader) {
 	req, err := http.NewRequest("POST", cfg.CurrentAPI, body)
 	if err != nil {
 		logger.Error("newreq error", "error", err)
-		if err := notifyUser("error", "apicall failed:"+err.Error()); err != nil {
-			logger.Error("failed to notify", "error", err)
-		}
+		showToast("error", "apicall failed:"+err.Error())
 		streamDone <- true
 		return
 	}
@@ -586,9 +580,7 @@ func sendMsgToLLM(body io.Reader) {
 	resp, err := httpClient.Do(req)
 	if err != nil {
 		logger.Error("llamacpp api", "error", err)
-		if err := notifyUser("error", "apicall failed:"+err.Error()); err != nil {
-			logger.Error("failed to notify", "error", err)
-		}
+		showToast("error", "apicall failed:"+err.Error())
 		streamDone <- true
 		return
 	}
@@ -599,9 +591,7 @@ func sendMsgToLLM(body io.Reader) {
 		if err != nil {
 			logger.Error("failed to read error response body", "error", err, "status_code", resp.StatusCode)
 			detailedError := fmt.Sprintf("HTTP Status: %d, Failed to read response body: %v", resp.StatusCode, err)
-			if err := notifyUser("API Error", detailedError); err != nil {
-				logger.Error("failed to notify", "error", err)
-			}
+			showToast("API Error", detailedError)
 			resp.Body.Close()
 			streamDone <- true
 			return
@@ -609,9 +599,7 @@ func sendMsgToLLM(body io.Reader) {
 		// Parse the error response for detailed information
 		detailedError := extractDetailedErrorFromBytes(bodyBytes, resp.StatusCode)
 		logger.Error("API returned error status", "status_code", resp.StatusCode, "detailed_error", detailedError)
-		if err := notifyUser("API Error", detailedError); err != nil {
-			logger.Error("failed to notify", "error", err)
-		}
+		showToast("API Error", detailedError)
 		resp.Body.Close()
 		streamDone <- true
 		return
@@ -648,16 +636,12 @@ func sendMsgToLLM(body io.Reader) {
 				detailedError := fmt.Sprintf("Streaming connection closed unexpectedly (Status: %d). This may indicate an API error. Check your API provider and model settings.", resp.StatusCode)
 				logger.Error("error reading response body", "error", err, "detailed_error", detailedError,
 					"status_code", resp.StatusCode, "user_role", cfg.UserRole, "parser", chunkParser, "link", cfg.CurrentAPI)
-				if err := notifyUser("API Error", detailedError); err != nil {
-					logger.Error("failed to notify", "error", err)
-				}
+				showToast("API Error", detailedError)
 			} else {
 				logger.Error("error reading response body", "error", err, "line", string(line),
 					"user_role", cfg.UserRole, "parser", chunkParser, "link", cfg.CurrentAPI)
 				// if err.Error() != "EOF" {
-				if err := notifyUser("API error", err.Error()); err != nil {
-					logger.Error("failed to notify", "error", err)
-				}
+				showToast("API error", err.Error())
 			}
 			streamDone <- true
 			break
@@ -684,9 +668,7 @@ func sendMsgToLLM(body io.Reader) {
 		if err != nil {
 			logger.Error("error parsing response body", "error", err,
 				"line", string(line), "url", cfg.CurrentAPI)
-			if err := notifyUser("LLM Response Error", "Failed to parse LLM response: "+err.Error()); err != nil {
-				logger.Error("failed to notify user", "error", err)
-			}
+			showToast("LLM Response Error", "Failed to parse LLM response: "+err.Error())
 			streamDone <- true
 			break
 		}
@@ -1456,15 +1438,15 @@ func refreshLocalModelsIfEmpty() {
 
 func summarizeAndStartNewChat() {
 	if len(chatBody.Messages) == 0 {
-		_ = notifyUser("info", "No chat history to summarize")
+		showToast("info", "No chat history to summarize")
 		return
 	}
-	_ = notifyUser("info", "Summarizing chat history...")
+	showToast("info", "Summarizing chat history...")
 	// Call the summarize_chat tool via agent
 	summaryBytes := callToolWithAgent("summarize_chat", map[string]string{})
 	summary := string(summaryBytes)
 	if summary == "" {
-		_ = notifyUser("error", "Failed to generate summary")
+		showToast("error", "Failed to generate summary")
 		return
 	}
 	// Start a new chat
@@ -1483,7 +1465,7 @@ func summarizeAndStartNewChat() {
 	if err := updateStorageChat(activeChatName, chatBody.Messages); err != nil {
 		logger.Warn("failed to update storage after injecting summary", "error", err)
 	}
-	_ = notifyUser("info", "Chat summarized and new chat started with summary as tool response")
+	showToast("info", "Chat summarized and new chat started with summary as tool response")
 }
 
 func init() {

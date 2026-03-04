@@ -40,9 +40,7 @@ func showModelSelectionPopup() {
 		default:
 			message = "No llama.cpp models loaded. Ensure llama.cpp server is running with models."
 		}
-		if err := notifyUser("Empty list", message); err != nil {
-			logger.Error("failed to send notification", "error", err)
-		}
+		showToast("Empty list", message)
 		return
 	}
 	// Create a list primitive
@@ -119,9 +117,7 @@ func showAPILinkSelectionPopup() {
 	if len(apiLinks) == 0 {
 		logger.Warn("no API links available for selection")
 		message := "No API links available. Please configure API links in your config file."
-		if err := notifyUser("Empty list", message); err != nil {
-			logger.Error("failed to send notification", "error", err)
-		}
+		showToast("Empty list", message)
 		return
 	}
 	// Create a list primitive
@@ -206,9 +202,7 @@ func showUserRoleSelectionPopup() {
 	if len(roles) == 0 {
 		logger.Warn("no roles available for selection")
 		message := "No roles available for selection."
-		if err := notifyUser("Empty list", message); err != nil {
-			logger.Error("failed to send notification", "error", err)
-		}
+		showToast("Empty list", message)
 		return
 	}
 	// Create a list primitive
@@ -285,9 +279,7 @@ func showBotRoleSelectionPopup() {
 	if len(roles) == 0 {
 		logger.Warn("no roles available for selection")
 		message := "No roles available for selection."
-		if err := notifyUser("Empty list", message); err != nil {
-			logger.Error("failed to send notification", "error", err)
-		}
+		showToast("Empty list", message)
 		return
 	}
 	// Create a list primitive
@@ -512,9 +504,7 @@ func showColorschemeSelectionPopup() {
 	if len(schemeNames) == 0 {
 		logger.Warn("no colorschemes available for selection")
 		message := "No colorschemes available."
-		if err := notifyUser("Empty list", message); err != nil {
-			logger.Error("failed to send notification", "error", err)
-		}
+		showToast("Empty list", message)
 		return
 	}
 	// Create a list primitive

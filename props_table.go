@@ -259,9 +259,7 @@ func makePropsTable(props map[string]float32) *tview.Table {
 				// Handle nil options
 				if data.Options == nil {
 					logger.Error("options list is nil for", "label", label)
-					if err := notifyUser("Configuration error", "Options list is nil for "+label); err != nil {
-						logger.Error("failed to send notification", "error", err)
-					}
+					showToast("Configuration error", "Options list is nil for "+label)
 					return
 				}
 
@@ -279,9 +277,7 @@ func makePropsTable(props map[string]float32) *tview.Table {
 							message = "No llama.cpp models loaded. Ensure llama.cpp server is running with models."
 						}
 					}
-					if err := notifyUser("Empty list", message); err != nil {
-						logger.Error("failed to send notification", "error", err)
-					}
+					showToast("Empty list", message)
 					return
 				}
 				// Create a list primitive
