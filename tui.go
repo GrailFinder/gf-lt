@@ -1001,6 +1001,17 @@ func init() {
 			showBotRoleSelectionPopup()
 			return nil
 		}
+		// INFO: shutdown
+		if event.Key() == tcell.KeyCtrlC {
+			logger.Info("caught Ctrl+C via tcell event")
+			go func() {
+				if err := pwShutDown(); err != nil {
+					logger.Error("shutdown failed", "err", err)
+				}
+				app.Stop()
+			}()
+			return nil // swallow the event
+		}
 		if event.Key() == tcell.KeyCtrlG {
 			// cfg.RAGDir is the directory with files to use with RAG
 			// rag load
