@@ -25,20 +25,23 @@ var (
 )
 
 type RAG struct {
-	logger   *slog.Logger
-	store    storage.FullRepo
-	cfg      *config.Config
-	embedder Embedder
-	storage  *VectorStorage
-	mu       sync.Mutex
+	logger      *slog.Logger
+	store       storage.FullRepo
+	cfg         *config.Config
+	embedder    Embedder
+	storage     *VectorStorage
+	mu          sync.Mutex
+	fallbackMsg string
 }
 
-func New(l *slog.Logger, s storage.FullRepo, cfg *config.Config) *RAG {
+func New(l *slog.Logger, s storage.FullRepo, cfg *config.Config) (*RAG, error) {
 	var embedder Embedder
+	var fallbackMsg string
 	if cfg.EmbedModelPath != "" && cfg.EmbedTokenizerPath != "" {
 		emb, err := NewONNXEmbedder(cfg.EmbedModelPath, cfg.EmbedTokenizerPath, cfg.EmbedDims, l)
 		if err != nil {
 			l.Error("failed to create ONNX embedder, falling back to API", "error", err)
+			fallbackMsg = err.Error()
 			embedder = NewAPIEmbedder(l, cfg)
 		} else {
 			embedder = emb
@@ -49,16 +52,17 @@ func New(l *slog.Logger, s storage.FullRepo, cfg *config.Config) *RAG {
 		l.Info("using API embedder", "url", cfg.EmbedURL)
 	}
 	rag := &RAG{
-		logger:   l,
-		store:    s,
-		cfg:      cfg,
-		embedder: embedder,
-		storage:  NewVectorStorage(l, s),
+		logger:      l,
+		store:       s,
+		cfg:         cfg,
+		embedder:    embedder,
+		storage:     NewVectorStorage(l, s),
+		fallbackMsg: fallbackMsg,
 	}
 
 	// Note: Vector tables are created via database migrations, not at runtime
 
-	return rag
+	return rag, nil
 }
 
 func wordCounter(sentence string) int {
@@ -449,14 +453,19 @@ var (
 	ragOnce     sync.Once
 )
 
+func (r *RAG) FallbackMessage() string {
+	return r.fallbackMsg
+}
+
 func Init(c *config.Config, l *slog.Logger, s storage.FullRepo) error {
+	var err error
 	ragOnce.Do(func() {
 		if c == nil || l == nil || s == nil {
 			return
 		}
-		ragInstance = New(l, s, c)
+		ragInstance, err = New(l, s, c)
 	})
-	return nil
+	return err
 }
 
 func GetInstance() *RAG {

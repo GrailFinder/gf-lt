@@ -1501,7 +1501,13 @@ func init() {
 		os.Exit(1)
 		return
 	}
-	ragger = rag.New(logger, store, cfg)
+	ragger, err = rag.New(logger, store, cfg)
+	if err != nil {
+		logger.Error("failed to create RAG", "error", err)
+	}
+	if ragger != nil && ragger.FallbackMessage() != "" && app != nil {
+		showToast("RAG", "ONNX unavailable, using API: "+ragger.FallbackMessage())
+	}
 	// https://github.com/coreydaley/ggerganov-llama.cpp/blob/master/examples/server/README.md
 	// load all chats in memory
 	if _, err := loadHistoryChats(); err != nil {
