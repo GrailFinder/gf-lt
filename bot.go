@@ -1393,12 +1393,13 @@ func updateModelLists() {
 		}
 	}
 	// if llama.cpp started after gf-lt?
-	localModelsMu.Lock()
-	LocalModels, err = fetchLCPModelsWithLoadStatus()
-	localModelsMu.Unlock()
+	ml, err := fetchLCPModelsWithLoadStatus()
 	if err != nil {
 		logger.Warn("failed to fetch llama.cpp models", "error", err)
 	}
+	localModelsMu.Lock()
+	LocalModels = ml
+	localModelsMu.Unlock()
 	// set already loaded model in llama.cpp
 	if strings.Contains(cfg.CurrentAPI, "localhost") || strings.Contains(cfg.CurrentAPI, "127.0.0.1") {
 		localModelsMu.Lock()

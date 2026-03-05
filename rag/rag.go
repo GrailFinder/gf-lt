@@ -34,8 +34,20 @@ type RAG struct {
 }
 
 func New(l *slog.Logger, s storage.FullRepo, cfg *config.Config) *RAG {
-	// Initialize with API embedder by default, could be configurable later
-	embedder := NewAPIEmbedder(l, cfg)
+	var embedder Embedder
+	if cfg.EmbedModelPath != "" && cfg.EmbedTokenizerPath != "" {
+		emb, err := NewONNXEmbedder(cfg.EmbedModelPath, cfg.EmbedTokenizerPath, cfg.EmbedDims, l)
+		if err != nil {
+			l.Error("failed to create ONNX embedder, falling back to API", "error", err)
+			embedder = NewAPIEmbedder(l, cfg)
+		} else {
+			embedder = emb
+			l.Info("using ONNX embedder", "model", cfg.EmbedModelPath, "dims", cfg.EmbedDims)
+		}
+	} else {
+		embedder = NewAPIEmbedder(l, cfg)
+		l.Info("using API embedder", "url", cfg.EmbedURL)
+	}
 	rag := &RAG{
 		logger:   l,
 		store:    s,

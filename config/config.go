@@ -34,8 +34,11 @@ type Config struct {
 	ImagePreview                  bool   `toml:"ImagePreview"`
 	EnableMouse                   bool   `toml:"EnableMouse"`
 	// embeddings
-	EmbedURL string `toml:"EmbedURL"`
-	HFToken  string `toml:"HFToken"`
+	EmbedURL           string `toml:"EmbedURL"`
+	HFToken            string `toml:"HFToken"`
+	EmbedModelPath     string `toml:"EmbedModelPath"`
+	EmbedTokenizerPath string `toml:"EmbedTokenizerPath"`
+	EmbedDims          int    `toml:"EmbedDims"`
 	// rag settings
 	RAGEnabled   bool   `toml:"RAGEnabled"`
 	RAGDir       string `toml:"RAGDir"`

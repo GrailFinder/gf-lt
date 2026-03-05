@@ -13,6 +13,9 @@ OpenRouterChatAPI = "https://openrouter.ai/api/v1/chat/completions"
 # embeddings
 EmbedURL = "http://localhost:8082/v1/embeddings"
 HFToken = ""
+EmbedModelPath = "onnx/embedgemma/model_q4.onnx"
+EmbedTokenizerPath = "onnx/embedgemma/tokenizer.json"
+EmbedDims = 768
 #
 ShowSys = true
 LogFile = "log.txt"
