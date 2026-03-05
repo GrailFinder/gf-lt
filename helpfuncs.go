@@ -521,7 +521,7 @@ func updateFlexLayout() {
 	if shellMode {
 		flex.AddItem(shellInput, 0, 10, false)
 	} else {
-		flex.AddItem(textArea, 0, 10, false)
+		flex.AddItem(bottomFlex, 0, 10, true)
 	}
 	if positionVisible {
 		flex.AddItem(statusLineWidget, 0, 2, false)

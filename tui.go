@@ -29,6 +29,8 @@ var (
 	statusLineWidget   *tview.TextView
 	helpView           *tview.TextView
 	flex               *tview.Flex
+	bottomFlex         *tview.Flex
+	notificationWidget *tview.TextView
 	imgView            *tview.Image
 	defaultImage       = "sysprompts/llama.png"
 	indexPickWindow    *tview.InputField
@@ -137,8 +139,8 @@ func setShellMode(enabled bool) {
 	}()
 }
 
-// showToast displays a temporary message in the top‑right corner.
-// It auto‑hides after 3 seconds and disappears when clicked.
+// showToast displays a temporary notification in the bottom-right corner.
+// It auto-hides after 3 seconds.
 func showToast(title, message string) {
 	sanitize := func(s string, maxLen int) string {
 		sanitized := strings.Map(func(r rune) rune {
@@ -154,33 +156,34 @@ func showToast(title, message string) {
 	}
 	title = sanitize(title, 50)
 	message = sanitize(message, 197)
-	notification := tview.NewTextView().
-		SetTextAlign(tview.AlignCenter).
-		SetDynamicColors(true).
-		SetRegions(true).
-		SetText(fmt.Sprintf("[yellow]%s[-]\n", message)).
-		SetChangedFunc(func() {
-			app.Draw()
+
+	notificationWidget.SetTitle(title)
+	notificationWidget.SetText(fmt.Sprintf("[yellow]%s[-]", message))
+
+	go func() {
+		app.QueueUpdateDraw(func() {
+			flex.RemoveItem(bottomFlex)
+			flex.RemoveItem(statusLineWidget)
+			bottomFlex = tview.NewFlex().SetDirection(tview.FlexColumn).
+				AddItem(textArea, 0, 1, true).
+				AddItem(notificationWidget, 40, 1, false)
+			flex.AddItem(bottomFlex, 0, 10, true)
+			if positionVisible {
+				flex.AddItem(statusLineWidget, 0, 2, false)
+			}
 		})
-	notification.SetTitleAlign(tview.AlignLeft).
-		SetBorder(true).
-		SetTitle(title)
-	// Wrap it in a full‑screen Flex to position it in the top‑right corner.
-	// Outer Flex (row) pushes content to the top; inner Flex (column) pushes to the right.
-	background := tview.NewFlex().SetDirection(tview.FlexRow).
-		AddItem(nil, 0, 1, false). // top spacer
-		AddItem(tview.NewFlex().SetDirection(tview.FlexColumn).
-			AddItem(nil, 0, 1, false).          // left spacer
-			AddItem(notification, 40, 1, true), // notification width 40
-			5, 1, false) // notification height 5
-	// Generate a unique page name (e.g., using timestamp) to allow multiple toasts.
-	pageName := fmt.Sprintf("toast-%d", time.Now().UnixNano())
-	pages.AddPage(pageName, background, true, true)
-	// Auto‑dismiss after 3 seconds.
+	}()
+
 	time.AfterFunc(3*time.Second, func() {
 		app.QueueUpdateDraw(func() {
-			if pages.HasPage(pageName) {
-				pages.RemovePage(pageName)
+			flex.RemoveItem(bottomFlex)
+			flex.RemoveItem(statusLineWidget)
+			bottomFlex = tview.NewFlex().SetDirection(tview.FlexColumn).
+				AddItem(textArea, 0, 1, true).
+				AddItem(notificationWidget, 0, 0, false)
+			flex.AddItem(bottomFlex, 0, 10, true)
+			if positionVisible {
+				flex.AddItem(statusLineWidget, 0, 2, false)
 			}
 		})
 	})
@@ -286,12 +289,25 @@ func init() {
 		SetDynamicColors(true).
 		SetRegions(true).
 		SetChangedFunc(func() {
-			app.Draw()
+			// https://github.com/rivo/tview/wiki/Concurrency#event-handlers
+			// app.Draw() // already called by default per tview specs
 		})
+	notificationWidget = tview.NewTextView().
+		SetTextAlign(tview.AlignCenter).
+		SetDynamicColors(true).
+		SetRegions(true).
+		SetChangedFunc(func() {
+		})
+	notificationWidget.SetBorder(true).SetTitle("notification")
+
+	bottomFlex = tview.NewFlex().SetDirection(tview.FlexColumn).
+		AddItem(textArea, 0, 1, true).
+		AddItem(notificationWidget, 0, 0, false)
+
 	//
 	flex = tview.NewFlex().SetDirection(tview.FlexRow).
 		AddItem(textView, 0, 40, false).
-		AddItem(textArea, 0, 10, true) // Restore original height
+		AddItem(bottomFlex, 0, 10, true)
 	if positionVisible {
 		flex.AddItem(statusLineWidget, 0, 2, false)
 	}
@@ -360,10 +376,14 @@ func init() {
 	// 	y += h / 2
 	// 	return x, y, w, h
 	// })
+	notificationWidget.SetDrawFunc(func(screen tcell.Screen, x, y, w, h int) (int, int, int, int) {
+		y += h / 2
+		return x, y, w, h
+	})
 	// Initially set up flex without search bar
 	flex = tview.NewFlex().SetDirection(tview.FlexRow).
 		AddItem(textView, 0, 40, false).
-		AddItem(textArea, 0, 10, true) // Restore original height
+		AddItem(bottomFlex, 0, 10, true)
 	if positionVisible {
 		flex.AddItem(statusLineWidget, 0, 2, false)
 	}
