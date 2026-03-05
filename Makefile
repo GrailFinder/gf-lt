@@ -30,6 +30,9 @@ lint: ## Run linters. Use make install-linters first.
 lintall: lint
 	noblanks ./...
 
+fetch-onnx:
+	mkdir -p onnx/embedgemma && curl -o onnx/embedgemma/config.json -L https://huggingface.co/onnx-community/embeddinggemma-300m-ONNX/resolve/main/config.json && curl -o onnx/embedgemma/tokenizer.json -L https://huggingface.co/onnx-community/embeddinggemma-300m-ONNX/resolve/main/tokenizer.json && curl -o onnx/embedgemma/model_q4.onnx -L https://huggingface.co/onnx-community/embeddinggemma-300m-ONNX/resolve/main/onnx/model_q4.onnx && curl -o onnx/embedgemma/model_q4.onnx_data -L https://huggingface.co/onnx-community/embeddinggemma-300m-ONNX/resolve/main/onnx/model_q4.onnx_data?download=true
+
 # Whisper STT Setup (in batteries directory)
 setup-whisper: build-whisper download-whisper-model
 
