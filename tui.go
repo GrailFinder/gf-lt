@@ -273,7 +273,7 @@ func init() {
 			shellHistoryPos = -1
 		}
 		// Handle Tab key for @ file completion
-		if event.Key() == tcell.KeyTab {
+		if event.Key() == tcell.KeyTab && shellMode {
 			currentText := shellInput.GetText()
 			atIndex := strings.LastIndex(currentText, "@")
 			if atIndex >= 0 {
@@ -1151,7 +1151,7 @@ func init() {
 			chatRoundChan <- &models.ChatRoundReq{Role: persona, UserMsg: msgText}
 			return nil
 		}
-		if event.Key() == tcell.KeyTab {
+		if event.Key() == tcell.KeyTab && !shellMode {
 			currentF := app.GetFocus()
 			if currentF == textArea {
 				currentText := textArea.GetText()
