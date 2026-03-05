@@ -215,7 +215,6 @@ func (e *ONNXEmbedder) Embed(text string) ([]float32, error) {
 	// 5. Run inference
 	err = e.session.Run(
 		[]onnxruntime_go.Value{inputIDsTensor, maskTensor},
-		[]string{"sentence_embedding"},
 		[]onnxruntime_go.Value{outputTensor},
 	)
 	if err != nil {
@@ -270,7 +269,6 @@ func (e *ONNXEmbedder) EmbedSlice(texts []string) ([][]float32, error) {
 	defer outputTensor.Destroy()
 	err := e.session.Run(
 		[]onnxruntime_go.Value{inputTensor, maskTensor},
-		[]string{"sentence_embedding"},
 		[]onnxruntime_go.Value{outputTensor},
 	)
 	if err != nil {
