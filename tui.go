@@ -38,6 +38,7 @@ var (
 	roleEditWindow     *tview.InputField
 	shellInput         *tview.InputField
 	confirmModal       *tview.Modal
+	toastTimer         *time.Timer
 	confirmPageName    = "confirm"
 	fullscreenMode     bool
 	positionVisible    bool = true
@@ -156,10 +157,11 @@ func showToast(title, message string) {
 	}
 	title = sanitize(title, 50)
 	message = sanitize(message, 197)
-
+	if toastTimer != nil {
+		toastTimer.Stop()
+	}
 	notificationWidget.SetTitle(title)
 	notificationWidget.SetText(fmt.Sprintf("[yellow]%s[-]", message))
-
 	go func() {
 		app.QueueUpdateDraw(func() {
 			flex.RemoveItem(bottomFlex)
@@ -173,8 +175,7 @@ func showToast(title, message string) {
 			}
 		})
 	}()
-
-	time.AfterFunc(3*time.Second, func() {
+	toastTimer = time.AfterFunc(3*time.Second, func() {
 		app.QueueUpdateDraw(func() {
 			flex.RemoveItem(bottomFlex)
 			flex.RemoveItem(statusLineWidget)
@@ -299,11 +300,9 @@ func init() {
 		SetChangedFunc(func() {
 		})
 	notificationWidget.SetBorder(true).SetTitle("notification")
-
 	bottomFlex = tview.NewFlex().SetDirection(tview.FlexColumn).
 		AddItem(textArea, 0, 1, true).
 		AddItem(notificationWidget, 0, 0, false)
-
 	//
 	flex = tview.NewFlex().SetDirection(tview.FlexRow).
 		AddItem(textView, 0, 40, false).
