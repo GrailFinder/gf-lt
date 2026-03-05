@@ -7,7 +7,6 @@ require (
 	github.com/GrailFinder/google-translate-tts v0.1.3
 	github.com/GrailFinder/searchagent v0.2.0
 	github.com/PuerkitoBio/goquery v1.11.0
-	github.com/deckarep/golang-set/v2 v2.8.0
 	github.com/gdamore/tcell/v2 v2.13.2
 	github.com/glebarez/go-sqlite v1.22.0
 	github.com/gopxl/beep/v2 v2.1.1
@@ -17,11 +16,14 @@ require (
 	github.com/neurosnap/sentences v1.1.2
 	github.com/playwright-community/playwright-go v0.5700.1
 	github.com/rivo/tview v0.42.0
+	github.com/takara-ai/go-tokenizers v1.0.0
+	github.com/yalue/onnxruntime_go v1.27.0
 	github.com/yuin/goldmark v1.4.13
 )
 
 require (
 	github.com/andybalholm/cascadia v1.3.3 // indirect
+	github.com/deckarep/golang-set/v2 v2.8.0 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/ebitengine/oto/v3 v3.4.0 // indirect
 	github.com/ebitengine/purego v0.9.1 // indirect

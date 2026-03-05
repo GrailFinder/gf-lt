@@ -246,7 +246,7 @@ func (r *RAG) extractImportantPhrases(query string) string {
 				break
 			}
 		}
-		if isImportant || len(word) > 3 {
+		if isImportant || len(word) >= 3 {
 			important = append(important, word)
 		}
 	}
