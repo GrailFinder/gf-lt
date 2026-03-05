@@ -324,8 +324,11 @@ func init() {
 		SetDynamicColors(true).
 		SetRegions(true).
 		SetChangedFunc(func() {
+			// INFO:
 			// https://github.com/rivo/tview/wiki/Concurrency#event-handlers
-			// app.Draw() // already called by default per tview specs
+			// although already called by default per tview specs
+			// calling it explicitly makes text streaming to look more smooth
+			app.Draw()
 		})
 	notificationWidget = tview.NewTextView().
 		SetTextAlign(tview.AlignCenter).
