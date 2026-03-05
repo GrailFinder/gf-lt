@@ -160,6 +160,40 @@ func showToast(title, message string) {
 	if toastTimer != nil {
 		toastTimer.Stop()
 	}
+	// show blocking notification to not mess up flex
+	if fullscreenMode {
+		notification := tview.NewTextView().
+			SetTextAlign(tview.AlignCenter).
+			SetDynamicColors(true).
+			SetRegions(true).
+			SetText(fmt.Sprintf("[yellow]%s[-]\n", message)).
+			SetChangedFunc(func() {
+				app.Draw()
+			})
+		notification.SetTitleAlign(tview.AlignLeft).
+			SetBorder(true).
+			SetTitle(title)
+		// Wrap it in a full‑screen Flex to position it in the top‑right corner.
+		// Outer Flex (row) pushes content to the top; inner Flex (column) pushes to the right.
+		background := tview.NewFlex().SetDirection(tview.FlexRow).
+			AddItem(nil, 0, 1, false). // top spacer
+			AddItem(tview.NewFlex().SetDirection(tview.FlexColumn).
+				AddItem(nil, 0, 1, false).          // left spacer
+				AddItem(notification, 40, 1, true), // notification width 40
+				5, 1, false) // notification height 5
+		// Generate a unique page name (e.g., using timestamp) to allow multiple toasts.
+		pageName := fmt.Sprintf("toast-%d", time.Now().UnixNano())
+		pages.AddPage(pageName, background, true, true)
+		// Auto‑dismiss after 2 seconds, since blocking is more annoying
+		time.AfterFunc(2*time.Second, func() {
+			app.QueueUpdateDraw(func() {
+				if pages.HasPage(pageName) {
+					pages.RemovePage(pageName)
+				}
+			})
+		})
+		return
+	}
 	notificationWidget.SetTitle(title)
 	notificationWidget.SetText(fmt.Sprintf("[yellow]%s[-]", message))
 	go func() {
