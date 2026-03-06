@@ -102,6 +102,22 @@ func NewProviderSQL(dbPath string, logger *slog.Logger) FullRepo {
 		logger.Error("failed to open db connection", "error", err)
 		return nil
 	}
+	// Enable WAL mode for better concurrency and performance
+	if _, err := db.Exec("PRAGMA journal_mode = WAL;"); err != nil {
+		logger.Warn("failed to enable WAL mode", "error", err)
+	}
+	if _, err := db.Exec("PRAGMA synchronous = NORMAL;"); err != nil {
+		logger.Warn("failed to set synchronous mode", "error", err)
+	}
+	// Increase cache size for better performance
+	if _, err := db.Exec("PRAGMA cache_size = -2000;"); err != nil {
+		logger.Warn("failed to set cache size", "error", err)
+	}
+	// Log actual journal mode for debugging
+	var journalMode string
+	if err := db.QueryRow("PRAGMA journal_mode;").Scan(&journalMode); err == nil {
+		logger.Debug("SQLite journal mode", "mode", journalMode)
+	}
 	p := ProviderSQL{db: db, logger: logger}
 	if err := p.Migrate(); err != nil {
 		logger.Error("migration failed, app cannot start", "error", err)

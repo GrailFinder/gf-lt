@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"sync"
+	"time"
 
 	"github.com/sugarme/tokenizer"
 	"github.com/sugarme/tokenizer/pretrained"
@@ -33,8 +34,10 @@ type APIEmbedder struct {
 func NewAPIEmbedder(l *slog.Logger, cfg *config.Config) *APIEmbedder {
 	return &APIEmbedder{
 		logger: l,
-		client: &http.Client{},
-		cfg:    cfg,
+		client: &http.Client{
+			Timeout: 30 * time.Second,
+		},
+		cfg: cfg,
 	}
 }
 
