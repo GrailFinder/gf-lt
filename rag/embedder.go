@@ -308,6 +308,19 @@ func (e *ONNXEmbedder) getModelPath() string {
 	return e.modelPath
 }
 
+func (e *ONNXEmbedder) Destroy() error {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if e.session != nil {
+		if err := e.session.Destroy(); err != nil {
+			return fmt.Errorf("failed to destroy ONNX session: %w", err)
+		}
+		e.session = nil
+		e.logger.Info("ONNX session destroyed, VRAM freed")
+	}
+	return nil
+}
+
 func (e *ONNXEmbedder) Embed(text string) ([]float32, error) {
 	if err := e.ensureInitialized(); err != nil {
 		return nil, err
