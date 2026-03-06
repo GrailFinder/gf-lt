@@ -3,6 +3,8 @@
 testlog
 history/
 *.db
+*.db-shm
+*.db-wal
 config.toml
 sysprompts/*
 !sysprompts/alice_bob_carl.json

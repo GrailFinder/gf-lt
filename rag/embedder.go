@@ -213,7 +213,6 @@ func NewONNXEmbedder(modelPath, tokenizerPath string, dims int, logger *slog.Log
 	if cudaLibPath == "" {
 		fmt.Println("WARNING: CUDA provider library not found, will use CPU")
 	}
-
 	emb := &ONNXEmbedder{
 		tokenizerPath: tokenizerPath,
 		dims:          dims,
@@ -232,7 +231,6 @@ func (e *ONNXEmbedder) ensureInitialized() error {
 	if e.session != nil {
 		return nil
 	}
-
 	// Load tokenizer lazily
 	if e.tokenizer == nil {
 		tok, err := pretrained.FromFile(e.tokenizerPath)
@@ -241,7 +239,6 @@ func (e *ONNXEmbedder) ensureInitialized() error {
 		}
 		e.tokenizer = tok
 	}
-
 	onnxInitOnce.Do(func() {
 		onnxruntime_go.SetSharedLibraryPath(onnxLibPath)
 		if err := onnxruntime_go.InitializeEnvironment(); err != nil {
@@ -260,13 +257,14 @@ func (e *ONNXEmbedder) ensureInitialized() error {
 	if !onnxReady {
 		return errors.New("ONNX runtime not ready")
 	}
-
 	// Create session options
 	opts, err := onnxruntime_go.NewSessionOptions()
 	if err != nil {
 		return fmt.Errorf("failed to create session options: %w", err)
 	}
-	defer opts.Destroy()
+	defer func() {
+		_ = opts.Destroy()
+	}()
 
 	// Try to add CUDA provider
 	useCUDA := cudaLibPath != ""
@@ -276,7 +274,9 @@ func (e *ONNXEmbedder) ensureInitialized() error {
 			e.logger.Warn("failed to create CUDA provider options, falling back to CPU", "error", err)
 			useCUDA = false
 		} else {
-			defer cudaOpts.Destroy()
+			defer func() {
+				_ = cudaOpts.Destroy()
+			}()
 			if err := cudaOpts.Update(map[string]string{"device_id": "0"}); err != nil {
 				e.logger.Warn("failed to update CUDA options, falling back to CPU", "error", err)
 				useCUDA = false
@@ -286,7 +286,6 @@ func (e *ONNXEmbedder) ensureInitialized() error {
 			}
 		}
 	}
-
 	if useCUDA {
 		e.logger.Info("Using CUDA for ONNX inference")
 	} else {

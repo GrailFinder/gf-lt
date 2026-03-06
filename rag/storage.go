@@ -64,7 +64,6 @@ func (vs *VectorStorage) WriteVector(row *models.VectorRow) error {
 		return err
 	}
 	embeddingSize := len(row.Embeddings)
-
 	// Start transaction
 	tx, err := vs.sqlxDB.Beginx()
 	if err != nil {
@@ -72,7 +71,7 @@ func (vs *VectorStorage) WriteVector(row *models.VectorRow) error {
 	}
 	defer func() {
 		if err != nil {
-			tx.Rollback()
+			_ = tx.Rollback()
 		}
 	}()
 
@@ -86,14 +85,12 @@ func (vs *VectorStorage) WriteVector(row *models.VectorRow) error {
 		vs.logger.Error("failed to write vector", "error", err, "slug", row.Slug)
 		return err
 	}
-
 	// Insert into FTS table
 	ftsQuery := `INSERT INTO fts_embeddings (slug, raw_text, filename, embedding_size) VALUES (?, ?, ?, ?)`
 	if _, err := tx.Exec(ftsQuery, row.Slug, row.RawText, row.FileName, embeddingSize); err != nil {
 		vs.logger.Error("failed to write to FTS table", "error", err, "slug", row.Slug)
 		return err
 	}
-
 	err = tx.Commit()
 	if err != nil {
 		vs.logger.Error("failed to commit transaction", "error", err)
@@ -133,7 +130,6 @@ func (vs *VectorStorage) WriteVectors(rows []*models.VectorRow) error {
 	if err != nil {
 		return err
 	}
-
 	// Start transaction
 	tx, err := vs.sqlxDB.Beginx()
 	if err != nil {
@@ -141,7 +137,7 @@ func (vs *VectorStorage) WriteVectors(rows []*models.VectorRow) error {
 	}
 	defer func() {
 		if err != nil {
-			tx.Rollback()
+			_ = tx.Rollback()
 		}
 	}()
 
@@ -161,7 +157,6 @@ func (vs *VectorStorage) WriteVectors(rows []*models.VectorRow) error {
 		vs.logger.Error("failed to write vectors batch", "error", err, "batch_size", len(rows))
 		return err
 	}
-
 	// Build batch insert for FTS table
 	ftsPlaceholders := make([]string, 0, len(rows))
 	ftsArgs := make([]any, 0, len(rows)*4)
@@ -170,15 +165,12 @@ func (vs *VectorStorage) WriteVectors(rows []*models.VectorRow) error {
 		ftsPlaceholders = append(ftsPlaceholders, "(?, ?, ?, ?)")
 		ftsArgs = append(ftsArgs, row.Slug, row.RawText, row.FileName, embeddingSize)
 	}
-	ftsQuery := fmt.Sprintf(
-		"INSERT INTO fts_embeddings (slug, raw_text, filename, embedding_size) VALUES %s",
-		strings.Join(ftsPlaceholders, ", "),
-	)
+	ftsQuery := "INSERT INTO fts_embeddings (slug, raw_text, filename, embedding_size) VALUES " +
+		strings.Join(ftsPlaceholders, ", ")
 	if _, err := tx.Exec(ftsQuery, ftsArgs...); err != nil {
 		vs.logger.Error("failed to write FTS batch", "error", err, "batch_size", len(rows))
 		return err
 	}
-
 	err = tx.Commit()
 	if err != nil {
 		vs.logger.Error("failed to commit transaction", "error", err)
@@ -218,14 +210,12 @@ func (vs *VectorStorage) SearchClosest(query []float32, limit int) ([]models.Vec
 	if err != nil {
 		return nil, err
 	}
-
 	querySQL := "SELECT embeddings, slug, raw_text, filename FROM " + tableName
 	rows, err := vs.sqlxDB.Query(querySQL)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-
 	type SearchResult struct {
 		vector   models.VectorRow
 		distance float32
@@ -241,7 +231,6 @@ func (vs *VectorStorage) SearchClosest(query []float32, limit int) ([]models.Vec
 			vs.logger.Error("failed to scan row", "error", err)
 			continue
 		}
-
 		storedEmbeddings := DeserializeVector(embeddingsBlob)
 		similarity := cosineSimilarity(query, storedEmbeddings)
 		distance := 1 - similarity
@@ -264,7 +253,6 @@ func (vs *VectorStorage) SearchClosest(query []float32, limit int) ([]models.Vec
 			topResults = topResults[:limit]
 		}
 	}
-
 	results := make([]models.VectorRow, 0, len(topResults))
 	for _, result := range topResults {
 		result.vector.Distance = result.distance
