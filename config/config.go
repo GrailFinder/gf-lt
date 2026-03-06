@@ -40,7 +40,6 @@ type Config struct {
 	EmbedTokenizerPath string `toml:"EmbedTokenizerPath"`
 	EmbedDims          int    `toml:"EmbedDims"`
 	// rag settings
-	RAGEnabled   bool   `toml:"RAGEnabled"`
 	RAGDir       string `toml:"RAGDir"`
 	RAGBatchSize int    `toml:"RAGBatchSize"`
 	RAGWordLimit uint32 `toml:"RAGWordLimit"`

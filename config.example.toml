@@ -27,7 +27,6 @@ ChunkLimit = 100000
 AutoScrollEnabled = true
 AutoCleanToolCallsFromCtx = false
 # rag settings
-RAGEnabled = false
 RAGBatchSize = 1
 RAGWordLimit = 80
 RAGDir = "ragimport"

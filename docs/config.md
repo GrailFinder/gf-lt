@@ -71,9 +71,6 @@ This document explains how to set up and configure the application using the `co
 #### EmbedURL (`"http://localhost:8082/v1/embeddings"`)
 - The endpoint for embedding API, used for RAG (Retrieval Augmented Generation) functionality.
 
-#### RAGEnabled (`false`)
-- Enable or disable RAG functionality for enhanced context retrieval.
-
 #### RAGBatchSize (`1`)
 - Number of documents to process in each RAG batch.
 
