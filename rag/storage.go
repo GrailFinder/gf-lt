@@ -1,6 +1,7 @@
 package rag
 
 import (
+	"database/sql"
 	"encoding/binary"
 	"fmt"
 	"gf-lt/models"
@@ -221,11 +222,41 @@ func (vs *VectorStorage) SearchKeyword(query string, limit int) ([]models.Vector
 				 WHERE fts_embeddings MATCH ? 
 				 ORDER BY score 
 				 LIMIT ?`
+
+	// Try original query first
 	rows, err := vs.sqlxDB.Query(ftsQuery, query, limit)
 	if err != nil {
 		return nil, fmt.Errorf("FTS search failed: %w", err)
 	}
-	defer rows.Close()
+	results, err := vs.scanRows(rows)
+	rows.Close()
+	if err != nil {
+		return nil, err
+	}
+
+	// If no results and query contains multiple terms, try OR fallback
+	if len(results) == 0 && strings.Contains(query, " ") && !strings.Contains(strings.ToUpper(query), " OR ") {
+		// Build OR query: term1 OR term2 OR term3
+		terms := strings.Fields(query)
+		if len(terms) > 1 {
+			orQuery := strings.Join(terms, " OR ")
+			rows, err := vs.sqlxDB.Query(ftsQuery, orQuery, limit)
+			if err != nil {
+				// Return original empty results rather than error
+				return results, nil
+			}
+			orResults, err := vs.scanRows(rows)
+			rows.Close()
+			if err == nil {
+				results = orResults
+			}
+		}
+	}
+	return results, nil
+}
+
+// scanRows converts SQL rows to VectorRow slice
+func (vs *VectorStorage) scanRows(rows *sql.Rows) ([]models.VectorRow, error) {
 	var results []models.VectorRow
 	for rows.Next() {
 		var slug, rawText, fileName string

@@ -286,10 +286,13 @@ func (r *RAG) RefineQuery(query string) string {
 		return original
 	}
 	query = strings.ToLower(query)
-	for _, stopWord := range stopWords {
-		wordPattern := `\b` + stopWord + `\b`
-		re := regexp.MustCompile(wordPattern)
-		query = re.ReplaceAllString(query, "")
+	words := strings.Fields(query)
+	if len(words) >= 3 {
+		for _, stopWord := range stopWords {
+			wordPattern := `\b` + stopWord + `\b`
+			re := regexp.MustCompile(wordPattern)
+			query = re.ReplaceAllString(query, "")
+		}
 	}
 	query = strings.TrimSpace(query)
 	if len(query) < 5 {
@@ -339,6 +342,36 @@ func (r *RAG) GenerateQueryVariations(query string) []string {
 	parts := strings.Fields(query)
 	if len(parts) == 0 {
 		return variations
+	}
+	// Get loaded filenames to filter out filename terms
+	filenames, err := r.storage.ListFiles()
+	if err == nil && len(filenames) > 0 {
+		// Convert to lowercase for case-insensitive matching
+		lowerFilenames := make([]string, len(filenames))
+		for i, f := range filenames {
+			lowerFilenames[i] = strings.ToLower(f)
+		}
+		filteredParts := make([]string, 0, len(parts))
+		for _, part := range parts {
+			partLower := strings.ToLower(part)
+			skip := false
+			for _, fn := range lowerFilenames {
+				if strings.Contains(fn, partLower) || strings.Contains(partLower, fn) {
+					skip = true
+					break
+				}
+			}
+			if !skip {
+				filteredParts = append(filteredParts, part)
+			}
+		}
+		// If filteredParts not empty and different from original, add filtered query
+		if len(filteredParts) > 0 && len(filteredParts) != len(parts) {
+			filteredQuery := strings.Join(filteredParts, " ")
+			if len(filteredQuery) >= 5 {
+				variations = append(variations, filteredQuery)
+			}
+		}
 	}
 	if len(parts) >= 2 {
 		trimmed := strings.Join(parts[:len(parts)-1], " ")
@@ -403,9 +436,14 @@ func (r *RAG) RerankResults(results []models.VectorRow, query string) []models.V
 	})
 	unique := make([]models.VectorRow, 0)
 	seen := make(map[string]bool)
+	fileCounts := make(map[string]int)
 	for i := range scored {
 		if !seen[scored[i].row.Slug] {
+			if fileCounts[scored[i].row.FileName] >= 2 {
+				continue
+			}
 			seen[scored[i].row.Slug] = true
+			fileCounts[scored[i].row.FileName]++
 			unique = append(unique, scored[i].row)
 		}
 	}
