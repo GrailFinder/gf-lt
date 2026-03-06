@@ -1400,6 +1400,9 @@ func updateModelLists() {
 	localModelsMu.Lock()
 	LocalModels = ml
 	localModelsMu.Unlock()
+	for statusLineWidget == nil {
+		time.Sleep(time.Millisecond * 100)
+	}
 	// set already loaded model in llama.cpp
 	if strings.Contains(cfg.CurrentAPI, "localhost") || strings.Contains(cfg.CurrentAPI, "127.0.0.1") {
 		localModelsMu.Lock()
