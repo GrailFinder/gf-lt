@@ -29,6 +29,7 @@ AutoCleanToolCallsFromCtx = false
 # rag settings
 RAGBatchSize = 1
 RAGWordLimit = 80
+RAGOverlapWords = 16
 RAGDir = "ragimport"
 # extra tts
 TTS_ENABLED = false

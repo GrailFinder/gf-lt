@@ -40,9 +40,10 @@ type Config struct {
 	EmbedTokenizerPath string `toml:"EmbedTokenizerPath"`
 	EmbedDims          int    `toml:"EmbedDims"`
 	// rag settings
-	RAGDir       string `toml:"RAGDir"`
-	RAGBatchSize int    `toml:"RAGBatchSize"`
-	RAGWordLimit uint32 `toml:"RAGWordLimit"`
+	RAGDir          string `toml:"RAGDir"`
+	RAGBatchSize    int    `toml:"RAGBatchSize"`
+	RAGWordLimit    uint32 `toml:"RAGWordLimit"`
+	RAGOverlapWords uint32 `toml:"RAGOverlapWords"`
 	// deepseek
 	DeepSeekChatAPI       string `toml:"DeepSeekChatAPI"`
 	DeepSeekCompletionAPI string `toml:"DeepSeekCompletionAPI"`
