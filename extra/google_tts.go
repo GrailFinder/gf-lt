@@ -27,6 +27,7 @@ type GoogleTranslateOrator struct {
 	// text buffer and interrupt flag
 	textBuffer strings.Builder
 	interrupt  bool
+	Speed      float32
 }
 
 func (o *GoogleTranslateOrator) stoproutine() {
@@ -141,8 +142,14 @@ func (o *GoogleTranslateOrator) Speak(text string) error {
 	// Wrap in io.NopCloser since GenerateSpeech returns io.Reader (no close needed)
 	body := io.NopCloser(reader)
 	defer body.Close()
-	// Exactly the same ffplay piping as KokoroOrator
-	cmd := exec.Command("ffplay", "-nodisp", "-autoexit", "-i", "pipe:0")
+	// Build ffplay command with optional speed filter
+	args := []string{"-nodisp", "-autoexit"}
+	if o.Speed > 0.1 && o.Speed != 1.0 {
+		// atempo range is 0.5 to 2.0; you might clamp it here
+		args = append(args, "-af", fmt.Sprintf("atempo=%.2f", o.Speed))
+	}
+	args = append(args, "-i", "pipe:0")
+	cmd := exec.Command("ffplay", args...)
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		return fmt.Errorf("failed to get stdin pipe: %w", err)

@@ -60,6 +60,7 @@ func NewOrator(log *slog.Logger, cfg *config.Config) Orator {
 		orator := &GoogleTranslateOrator{
 			logger: log,
 			speech: speech,
+			Speed:  cfg.TTS_SPEED,
 		}
 		go orator.readroutine()
 		go orator.stoproutine()
