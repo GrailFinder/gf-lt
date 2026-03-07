@@ -40,17 +40,13 @@ func (o *KokoroOrator) GetLogger() *slog.Logger {
 	return o.logger
 }
 
-// Speak streams audio directly to an external player
 func (o *KokoroOrator) Speak(text string) error {
 	o.logger.Debug("fn: Speak is called", "text-len", len(text))
-	// 1. Get the audio stream (still an io.ReadCloser)
 	body, err := o.requestSound(text)
 	if err != nil {
 		return fmt.Errorf("request failed: %w", err)
 	}
 	defer body.Close()
-	// 2. Prepare external player (ffplay as example)
-	//    -i pipe:0 tells ffplay to read from stdin
 	cmd := exec.Command("ffplay", "-nodisp", "-autoexit", "-i", "pipe:0")
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
@@ -60,60 +56,46 @@ func (o *KokoroOrator) Speak(text string) error {
 	o.cmd = cmd
 	o.stopCh = make(chan struct{})
 	o.cmdMu.Unlock()
-	// 3. Start the player
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("failed to start ffplay: %w", err)
 	}
-	// 4. Copy audio data to stdin in a goroutine
+	// Copy audio in background
 	copyErr := make(chan error, 1)
 	go func() {
 		_, err := io.Copy(stdin, body)
-		stdin.Close() // signal EOF to player
+		stdin.Close()
 		copyErr <- err
 	}()
-	// 5. Wait for player to finish or stop signal
+	// Wait for player in background
 	done := make(chan error, 1)
 	go func() {
 		done <- cmd.Wait()
 	}()
+	// Wait for BOTH copy and player, but ensure we block until done
 	select {
 	case <-o.stopCh:
-		// Stop requested: kill the player
+		// Stop requested: kill player and wait for it to exit
 		if o.cmd != nil && o.cmd.Process != nil {
 			o.cmd.Process.Kill()
 		}
-		<-done // wait for process to exit
+		<-done // Wait for process to actually exit
 		return nil
-	case err := <-done:
-		// Playback finished normally
-		return err
 	case copyErrVal := <-copyErr:
 		if copyErrVal != nil {
-			// Copy failed – kill the player
+			// Copy failed: kill player and wait
 			if o.cmd != nil && o.cmd.Process != nil {
 				o.cmd.Process.Kill()
 			}
 			<-done
 			return copyErrVal
 		}
-		return nil
+		// Copy succeeded, now wait for playback to complete
+		return <-done
+	case err := <-done:
+		// Playback finished normally (copy must have succeeded or player would have exited early)
+		return err
 	}
 }
-
-// // Stop interrupts ongoing playback
-// func (o *KokoroOrator) Stop() {
-// 	o.cmdMu.Lock()
-// 	defer o.cmdMu.Unlock()
-// 	if o.stopCh != nil {
-// 		close(o.stopCh)
-// 	}
-// 	// Also clear the buffer and set interrupt flag as before
-// 	o.mu.Lock()
-// 	o.textBuffer.Reset()
-// 	o.interrupt = true
-// 	o.mu.Unlock()
-// }
-
 func (o *KokoroOrator) requestSound(text string) (io.ReadCloser, error) {
 	if o.URL == "" {
 		return nil, fmt.Errorf("TTS URL is empty")
