@@ -964,3 +964,52 @@ func extractDisplayPath(p, bp string) string {
 	}
 	return p
 }
+
+func getValidKnowToRecipient(msg *models.RoleMsg) (string, bool) {
+	if cfg == nil || !cfg.CharSpecificContextEnabled {
+		return "", false
+	}
+	// case where all roles are in the tag => public message
+	cr := listChatRoles()
+	slices.Sort(cr)
+	slices.Sort(msg.KnownTo)
+	if slices.Equal(cr, msg.KnownTo) {
+		logger.Info("got msg with tag mentioning every role")
+		return "", false
+	}
+	// Check each character in the KnownTo list
+	for _, recipient := range msg.KnownTo {
+		if recipient == msg.Role || recipient == cfg.ToolRole {
+			// weird cases, skip
+			continue
+		}
+		// Skip if this is the user character (user handles their own turn)
+		// If user is in KnownTo, stop processing - it's the user's turn
+		if recipient == cfg.UserRole || recipient == cfg.WriteNextMsgAs {
+			return "", false
+		}
+		return recipient, true
+	}
+	return "", false
+}
+
+// triggerPrivateMessageResponses checks if a message was sent privately to specific characters
+// and triggers those non-user characters to respond
+func triggerPrivateMessageResponses(msg *models.RoleMsg) {
+	recipient, ok := getValidKnowToRecipient(msg)
+	if !ok || recipient == "" {
+		return
+	}
+	// Trigger the recipient character to respond
+	triggerMsg := recipient + ":\n"
+	// Send empty message so LLM continues naturally from the conversation
+	crr := &models.ChatRoundReq{
+		UserMsg: triggerMsg,
+		Role:    recipient,
+		Resume:  true,
+	}
+	fmt.Fprintf(textView, "\n[-:-:b](%d) ", len(chatBody.Messages))
+	fmt.Fprint(textView, roleToIcon(recipient))
+	fmt.Fprint(textView, "[-:-:-]\n")
+	chatRoundChan <- crr
+}

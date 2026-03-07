@@ -224,7 +224,7 @@ func showToast(title, message string) {
 	})
 }
 
-func init() {
+func initTUI() {
 	// Start background goroutine to update model color cache
 	startModelColorUpdater()
 	tview.Styles = colorschemes["default"]
@@ -1173,4 +1173,5 @@ func init() {
 		}
 		return event
 	})
+	go updateModelLists()
 }
