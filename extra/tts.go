@@ -4,14 +4,11 @@
 package extra
 
 import (
-	"bytes"
-	"encoding/json"
 	"fmt"
 	"gf-lt/config"
 	"gf-lt/models"
 	"io"
 	"log/slog"
-	"net/http"
 	"os"
 	"strings"
 	"sync"
@@ -39,23 +36,6 @@ type Orator interface {
 	GetLogger() *slog.Logger
 }
 
-// impl https://github.com/remsky/Kokoro-FastAPI
-type KokoroOrator struct {
-	logger        *slog.Logger
-	mu            sync.Mutex
-	URL           string
-	Format        models.AudioFormat
-	Stream        bool
-	Speed         float32
-	Language      string
-	Voice         string
-	currentStream *beep.Ctrl // Added for playback control
-	currentDone   chan bool
-	textBuffer    strings.Builder
-	interrupt     bool
-	// textBuffer bytes.Buffer
-}
-
 // Google Translate TTS implementation
 type GoogleTranslateOrator struct {
 	logger        *slog.Logger
@@ -65,114 +45,6 @@ type GoogleTranslateOrator struct {
 	currentDone   chan bool
 	textBuffer    strings.Builder
 	interrupt     bool
-}
-
-func (o *KokoroOrator) stoproutine() {
-	for {
-		<-TTSDoneChan
-		o.logger.Debug("orator got done signal")
-		o.Stop()
-		// drain the channel
-		for len(TTSTextChan) > 0 {
-			<-TTSTextChan
-		}
-		o.mu.Lock()
-		o.textBuffer.Reset()
-		if o.currentDone != nil {
-			select {
-			case o.currentDone <- true:
-			default:
-				// Channel might be closed, ignore
-			}
-		}
-		o.interrupt = true
-		o.mu.Unlock()
-	}
-}
-
-func (o *KokoroOrator) readroutine() {
-	tokenizer, _ := english.NewSentenceTokenizer(nil)
-	for {
-		select {
-		case chunk := <-TTSTextChan:
-			o.mu.Lock()
-			o.interrupt = false
-			_, err := o.textBuffer.WriteString(chunk)
-			if err != nil {
-				o.logger.Warn("failed to write to stringbuilder", "error", err)
-				o.mu.Unlock()
-				continue
-			}
-			text := o.textBuffer.String()
-			sentences := tokenizer.Tokenize(text)
-			o.logger.Debug("adding chunk", "chunk", chunk, "text", text, "sen-len", len(sentences))
-			if len(sentences) <= 1 {
-				o.mu.Unlock()
-				continue
-			}
-			completeSentences := sentences[:len(sentences)-1]
-			remaining := sentences[len(sentences)-1].Text
-			o.textBuffer.Reset()
-			o.textBuffer.WriteString(remaining)
-			o.mu.Unlock()
-
-			for _, sentence := range completeSentences {
-				o.mu.Lock()
-				interrupted := o.interrupt
-				o.mu.Unlock()
-				if interrupted {
-					return
-				}
-				cleanedText := models.CleanText(sentence.Text)
-				if cleanedText == "" {
-					continue
-				}
-				o.logger.Debug("calling Speak with sentence", "sent", cleanedText)
-				if err := o.Speak(cleanedText); err != nil {
-					o.logger.Error("tts failed", "sentence", cleanedText, "error", err)
-				}
-			}
-		case <-TTSFlushChan:
-			o.logger.Debug("got flushchan signal start")
-			// lln is done get the whole message out
-			if len(TTSTextChan) > 0 { // otherwise might get stuck
-				for chunk := range TTSTextChan {
-					o.mu.Lock()
-					_, err := o.textBuffer.WriteString(chunk)
-					o.mu.Unlock()
-					if err != nil {
-						o.logger.Warn("failed to write to stringbuilder", "error", err)
-						continue
-					}
-					if len(TTSTextChan) == 0 {
-						break
-					}
-				}
-			}
-			// flush remaining text
-			o.mu.Lock()
-			remaining := o.textBuffer.String()
-			remaining = models.CleanText(remaining)
-			o.textBuffer.Reset()
-			o.mu.Unlock()
-			if remaining == "" {
-				continue
-			}
-			o.logger.Debug("calling Speak with remainder", "rem", remaining)
-			sentencesRem := tokenizer.Tokenize(remaining)
-			for _, rs := range sentencesRem { // to avoid dumping large volume of text
-				o.mu.Lock()
-				interrupt := o.interrupt
-				o.mu.Unlock()
-				if interrupt {
-					break
-				}
-				if err := o.Speak(rs.Text); err != nil {
-					o.logger.Error("tts failed", "sentence", rs, "error", err)
-				}
-			}
-		}
-	}
 }
 
 func NewOrator(log *slog.Logger, cfg *config.Config) Orator {
@@ -213,93 +85,6 @@ func NewOrator(log *slog.Logger, cfg *config.Config) Orator {
 		go orator.readroutine()
 		go orator.stoproutine()
 		return orator
-	}
-}
-
-func (o *KokoroOrator) GetLogger() *slog.Logger {
-	return o.logger
-}
-
-func (o *KokoroOrator) requestSound(text string) (io.ReadCloser, error) {
-	if o.URL == "" {
-		return nil, fmt.Errorf("TTS URL is empty")
-	}
-	payload := map[string]interface{}{
-		"input":           text,
-		"voice":           o.Voice,
-		"response_format": o.Format,
-		"download_format": o.Format,
-		"stream":          o.Stream,
-		"speed":           o.Speed,
-		// "return_download_link": true,
-		"lang_code": o.Language,
-	}
-	payloadBytes, err := json.Marshal(payload)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal payload: %w", err)
-	}
-	req, err := http.NewRequest("POST", o.URL, bytes.NewBuffer(payloadBytes)) //nolint:noctx
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
-	}
-	req.Header.Set("accept", "application/json")
-	req.Header.Set("Content-Type", "application/json")
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("request failed: %w", err)
-	}
-	if resp.StatusCode != http.StatusOK {
-		defer resp.Body.Close()
-		return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
-	}
-	return resp.Body, nil
-}
-
-func (o *KokoroOrator) Speak(text string) error {
-	o.logger.Debug("fn: Speak is called", "text-len", len(text))
-	body, err := o.requestSound(text)
-	if err != nil {
-		o.logger.Error("request failed", "error", err)
-		return fmt.Errorf("request failed: %w", err)
-	}
-	defer body.Close()
-	// Decode the mp3 audio from response body
-	streamer, format, err := mp3.Decode(body)
-	if err != nil {
-		o.logger.Error("mp3 decode failed", "error", err)
-		return fmt.Errorf("mp3 decode failed: %w", err)
-	}
-	defer streamer.Close()
-	// here it spams with errors that speaker cannot be initialized more than once, but how would we deal with many audio records then?
-	if err := speaker.Init(format.SampleRate, format.SampleRate.N(time.Second/10)); err != nil {
-		o.logger.Debug("failed to init speaker", "error", err)
-	}
-	done := make(chan bool)
-	o.mu.Lock()
-	o.currentDone = done
-	o.currentStream = &beep.Ctrl{Streamer: beep.Seq(streamer, beep.Callback(func() {
-		o.mu.Lock()
-		close(done)
-		o.currentStream = nil
-		o.currentDone = nil
-		o.mu.Unlock()
-	})), Paused: false}
-	o.mu.Unlock()
-	speaker.Play(o.currentStream)
-	<-done
-	return nil
-}
-
-func (o *KokoroOrator) Stop() {
-	// speaker.Clear()
-	o.logger.Debug("attempted to stop orator", "orator", o)
-	speaker.Lock()
-	defer speaker.Unlock()
-	o.mu.Lock()
-	defer o.mu.Unlock()
-	if o.currentStream != nil {
-		// o.currentStream.Paused = true
-		o.currentStream.Streamer = nil
 	}
 }
 
