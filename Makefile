@@ -143,11 +143,10 @@ build-whisper: ## Build whisper.cpp from source in batteries directory
 
 download-whisper-model: ## Download Whisper model for STT in batteries directory
 	@echo "Downloading Whisper model for STT..."
-	@if [ ! -d "batteries/whisper.cpp" ]; then \
-		echo "Please run 'make setup-whisper' first to clone the repository."; \
-		exit 1; \
+	@if [ ! -d "batteries/whisper.cpp/models" ]; then \
+		mkdir -p "batteries/whisper.cpp/models" \
 	fi
-	@cd batteries/whisper.cpp && bash ./models/download-ggml-model.sh large-v3-turbo-q5_0
+	curl -o batteries/whisper.cpp/models/ggml-large-v3-turbo-q5_0.bin -L "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo-q5_0.bin?download=true"
 	@echo "Whisper model downloaded successfully!"
 
 # Docker targets for STT/TTS services (in batteries directory)
