@@ -16,7 +16,6 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
-	"net/url"
 	"os"
 	"regexp"
 	"slices"
@@ -253,12 +252,7 @@ func createClient(connectTimeout time.Duration) *http.Client {
 }
 
 func warmUpModel() {
-	u, err := url.Parse(cfg.CurrentAPI)
-	if err != nil {
-		return
-	}
-	host := u.Hostname()
-	if host != "localhost" && host != "127.0.0.1" && host != "::1" {
+	if !isLocalLlamacpp() {
 		return
 	}
 	// Check if model is already loaded
@@ -1404,20 +1398,21 @@ func updateModelLists() {
 		time.Sleep(time.Millisecond * 100)
 	}
 	// set already loaded model in llama.cpp
-	if strings.Contains(cfg.CurrentAPI, "localhost") || strings.Contains(cfg.CurrentAPI, "127.0.0.1") {
-		localModelsMu.Lock()
-		defer localModelsMu.Unlock()
-		for i := range LocalModels {
-			if strings.Contains(LocalModels[i], models.LoadedMark) {
-				m := strings.TrimPrefix(LocalModels[i], models.LoadedMark)
-				cfg.CurrentModel = m
-				chatBody.Model = m
-				cachedModelColor = "green"
-				updateStatusLine()
-				updateToolCapabilities()
-				app.Draw()
-				return
-			}
+	if !isLocalLlamacpp() {
+		return
+	}
+	localModelsMu.Lock()
+	defer localModelsMu.Unlock()
+	for i := range LocalModels {
+		if strings.Contains(LocalModels[i], models.LoadedMark) {
+			m := strings.TrimPrefix(LocalModels[i], models.LoadedMark)
+			cfg.CurrentModel = m
+			chatBody.Model = m
+			cachedModelColor = "green"
+			updateStatusLine()
+			updateToolCapabilities()
+			app.Draw()
+			return
 		}
 	}
 }

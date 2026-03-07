@@ -5,7 +5,6 @@ import (
 	"gf-lt/models"
 	"gf-lt/pngmeta"
 	"image"
-	"net/url"
 	"os"
 	"os/exec"
 	"path"
@@ -323,12 +322,10 @@ func strInSlice(s string, sl []string) bool {
 
 // isLocalLlamacpp checks if the current API is a local llama.cpp instance.
 func isLocalLlamacpp() bool {
-	u, err := url.Parse(cfg.CurrentAPI)
-	if err != nil {
+	if strings.Contains(cfg.CurrentAPI, "openrouter") || strings.Contains(cfg.CurrentAPI, "deepseek") {
 		return false
 	}
-	host := u.Hostname()
-	return host == "localhost" || host == "127.0.0.1" || host == "::1"
+	return true
 }
 
 // getModelColor returns the cached color tag for the model name.
