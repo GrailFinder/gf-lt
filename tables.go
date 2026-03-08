@@ -470,19 +470,21 @@ func makeRAGTable(fileList []string, loadedFiles []string) *tview.Flex {
 				return
 			}
 			showToast("chat deleted", fpath+" was deleted")
-			app.QueueUpdate(func() {
-				pages.RemovePage(RAGPage)
-				newFileList, _ := os.ReadDir(cfg.RAGDir)
-				loadedFiles, _ := ragger.ListLoaded()
-				var newFiles []string
-				for _, f := range newFileList {
-					if !f.IsDir() {
-						newFiles = append(newFiles, f.Name())
+			go func() {
+				app.QueueUpdate(func() {
+					pages.RemovePage(RAGPage)
+					newFileList, _ := os.ReadDir(cfg.RAGDir)
+					loadedFiles, _ := ragger.ListLoaded()
+					var newFiles []string
+					for _, f := range newFileList {
+						if !f.IsDir() {
+							newFiles = append(newFiles, f.Name())
+						}
 					}
-				}
-				chatRAGTable := makeRAGTable(newFiles, loadedFiles)
-				pages.AddPage(RAGPage, chatRAGTable, true, true)
-			})
+					chatRAGTable := makeRAGTable(newFiles, loadedFiles)
+					pages.AddPage(RAGPage, chatRAGTable, true, true)
+				})
+			}()
 			return
 		default:
 			pages.RemovePage(RAGPage)
