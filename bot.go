@@ -22,6 +22,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -40,7 +41,7 @@ var (
 	store           storage.FullRepo
 	defaultFirstMsg = "Hello! What can I do for you?"
 	defaultStarter  = []models.RoleMsg{}
-	interruptResp   = false
+	interruptResp   atomic.Bool
 	ragger          *rag.RAG
 	chunkParser     ChunkParser
 	lastToolCall    *models.FuncCall
@@ -643,7 +644,7 @@ func sendMsgToLLM(body io.Reader) {
 			// continue
 		}
 		if len(line) <= 1 {
-			if interruptResp {
+			if interruptResp.Load() {
 				goto interrupt // get unstuck from bad connection
 			}
 			continue // skip \n
@@ -736,8 +737,7 @@ func sendMsgToLLM(body io.Reader) {
 			lastToolCall.ID = chunk.ToolID
 		}
 	interrupt:
-		if interruptResp { // read bytes, so it would not get into beginning of the next req
-			// interruptResp = false
+		if interruptResp.Load() { // read bytes, so it would not get into beginning of the next req
 			logger.Info("interrupted bot response", "chunk_counter", counter)
 			streamDone <- true
 			break
@@ -770,14 +770,14 @@ func showSpinner() {
 	if cfg.WriteNextMsgAsCompletionAgent != "" {
 		botPersona = cfg.WriteNextMsgAsCompletionAgent
 	}
-	for botRespMode || toolRunningMode {
+	for botRespMode.Load() || toolRunningMode.Load() {
 		time.Sleep(400 * time.Millisecond)
 		spin := i % len(spinners)
 		app.QueueUpdateDraw(func() {
 			switch {
-			case toolRunningMode:
+			case toolRunningMode.Load():
 				textArea.SetTitle(spinners[spin] + " tool")
-			case botRespMode:
+			case botRespMode.Load():
 				textArea.SetTitle(spinners[spin] + " " + botPersona + " (F6 to interrupt)")
 			default:
 				textArea.SetTitle(spinners[spin] + " input")
@@ -791,8 +791,8 @@ func showSpinner() {
 }
 
 func chatRound(r *models.ChatRoundReq) error {
-	interruptResp = false
-	botRespMode = true
+	interruptResp.Store(false)
+	botRespMode.Store(true)
 	go showSpinner()
 	updateStatusLine()
 	botPersona := cfg.AssistantRole
@@ -800,7 +800,7 @@ func chatRound(r *models.ChatRoundReq) error {
 		botPersona = cfg.WriteNextMsgAsCompletionAgent
 	}
 	defer func() {
-		botRespMode = false
+		botRespMode.Store(false)
 		ClearImageAttachment()
 	}()
 	// check that there is a model set to use if is not local
@@ -928,7 +928,7 @@ out:
 		}
 		lastRespStats = nil
 	}
-	botRespMode = false
+	botRespMode.Store(false)
 	if r.Resume {
 		chatBody.Messages[len(chatBody.Messages)-1].Content += respText.String()
 		updatedMsg := chatBody.Messages[len(chatBody.Messages)-1]
@@ -957,7 +957,7 @@ out:
 	}
 	// Strip think blocks before parsing for tool calls
 	respTextNoThink := thinkBlockRE.ReplaceAllString(respText.String(), "")
-	if interruptResp {
+	if interruptResp.Load() {
 		return nil
 	}
 	if findCall(respTextNoThink, toolResp.String()) {
@@ -1192,9 +1192,9 @@ func findCall(msg, toolCall string) bool {
 	}
 	// Show tool call progress indicator before execution
 	fmt.Fprintf(textView, "\n[yellow::i][tool: %s...][-:-:-]", fc.Name)
-	toolRunningMode = true
+	toolRunningMode.Store(true)
 	resp := callToolWithAgent(fc.Name, fc.Args)
-	toolRunningMode = false
+	toolRunningMode.Store(false)
 	toolMsg := string(resp)
 	logger.Info("llm used a tool call", "tool_name", fc.Name, "too_args", fc.Args, "id", fc.ID, "tool_resp", toolMsg)
 	// Create tool response message with the proper tool_call_id

@@ -731,7 +731,7 @@ func initTUI() {
 			updateStatusLine()
 			return nil
 		}
-		if event.Key() == tcell.KeyF2 && !botRespMode {
+		if event.Key() == tcell.KeyF2 && !botRespMode.Load() {
 			// regen last msg
 			if len(chatBody.Messages) == 0 {
 				showToast("info", "no messages to regenerate")
@@ -748,7 +748,7 @@ func initTUI() {
 			chatRoundChan <- &models.ChatRoundReq{Role: cfg.UserRole, Regen: true}
 			return nil
 		}
-		if event.Key() == tcell.KeyF3 && !botRespMode {
+		if event.Key() == tcell.KeyF3 && !botRespMode.Load() {
 			// delete last msg
 			// check textarea text; if it ends with bot icon delete only icon:
 			text := textView.GetText(true)
@@ -804,9 +804,9 @@ func initTUI() {
 			return nil
 		}
 		if event.Key() == tcell.KeyF6 {
-			interruptResp = true
-			botRespMode = false
-			toolRunningMode = false
+			interruptResp.Store(true)
+			botRespMode.Store(false)
+			toolRunningMode.Store(false)
 			return nil
 		}
 		if event.Key() == tcell.KeyF7 {
@@ -1101,7 +1101,7 @@ func initTUI() {
 			return nil
 		}
 		// cannot send msg in editMode or botRespMode
-		if event.Key() == tcell.KeyEscape && !editMode && !botRespMode {
+		if event.Key() == tcell.KeyEscape && !editMode && !botRespMode.Load() {
 			if shellMode {
 				cmdText := shellInput.GetText()
 				if cmdText != "" {
@@ -1167,7 +1167,7 @@ func initTUI() {
 			app.SetFocus(focusSwitcher[currentF])
 			return nil
 		}
-		if isASCII(string(event.Rune())) && !botRespMode {
+		if isASCII(string(event.Rune())) && !botRespMode.Load() {
 			return event
 		}
 		return event

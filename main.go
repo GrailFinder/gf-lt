@@ -1,13 +1,15 @@
 package main
 
 import (
+	"sync/atomic"
+
 	"github.com/rivo/tview"
 )
 
 var (
 	boolColors        = map[bool]string{true: "green", false: "red"}
-	botRespMode       = false
-	toolRunningMode   = false
+	botRespMode       atomic.Bool
+	toolRunningMode   atomic.Bool
 	editMode          = false
 	roleEditMode      = false
 	injectRole        = true
