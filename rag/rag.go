@@ -24,7 +24,7 @@ const ()
 var (
 	// Status messages for TUI integration
 	LongJobStatusCh     = make(chan string, 100) // Increased buffer size for parallel batch updates
-	FinishedRAGStatus   = "finished loading RAG file; press Enter"
+	FinishedRAGStatus   = "finished loading RAG file; press x to exit"
 	LoadedFileRAGStatus = "loaded file"
 	ErrRAGStatus        = "some error occurred; failed to transfer data to vector db"
 )

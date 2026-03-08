@@ -50,7 +50,6 @@ var (
 	helpPage       = "helpPage"
 	renamePage     = "renamePage"
 	RAGPage        = "RAGPage"
-	RAGLoadedPage  = "RAGLoadedPage"
 	propsPage      = "propsPage"
 	codeBlockPage  = "codeBlockPage"
 	imgPage        = "imgPage"
