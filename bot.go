@@ -851,7 +851,7 @@ out:
 				if thinkingCollapsed {
 					// Show placeholder immediately when thinking starts in collapsed mode
 					fmt.Fprint(textView, "[yellow::i][thinking... (press Alt+T to expand)][-:-:-]")
-					if scrollToEndEnabled {
+					if cfg.AutoScrollEnabled {
 						textView.ScrollToEnd()
 					}
 					respText.WriteString(chunk)
@@ -866,7 +866,7 @@ out:
 						// Thinking already displayed as placeholder, just update respText
 						respText.WriteString(chunk)
 						justExitedThinkingCollapsed = true
-						if scrollToEndEnabled {
+						if cfg.AutoScrollEnabled {
 							textView.ScrollToEnd()
 						}
 						continue
@@ -888,7 +888,7 @@ out:
 			respText.WriteString(chunk)
 			// Update the message in chatBody.Messages so it persists during Alt+T
 			chatBody.Messages[msgIdx].Content = respText.String()
-			if scrollToEndEnabled {
+			if cfg.AutoScrollEnabled {
 				textView.ScrollToEnd()
 			}
 			// Send chunk to audio stream handler
@@ -898,7 +898,7 @@ out:
 		case toolChunk := <-openAIToolChan:
 			fmt.Fprint(textView, toolChunk)
 			toolResp.WriteString(toolChunk)
-			if scrollToEndEnabled {
+			if cfg.AutoScrollEnabled {
 				textView.ScrollToEnd()
 			}
 		case <-streamDone:
@@ -906,7 +906,7 @@ out:
 				chunk := <-chunkChan
 				fmt.Fprint(textView, chunk)
 				respText.WriteString(chunk)
-				if scrollToEndEnabled {
+				if cfg.AutoScrollEnabled {
 					textView.ScrollToEnd()
 				}
 				if cfg.TTS_ENABLED {
@@ -1394,9 +1394,6 @@ func updateModelLists() {
 	localModelsMu.Lock()
 	LocalModels = ml
 	localModelsMu.Unlock()
-	for statusLineWidget == nil {
-		time.Sleep(time.Millisecond * 100)
-	}
 	// set already loaded model in llama.cpp
 	if !isLocalLlamacpp() {
 		return
@@ -1408,7 +1405,7 @@ func updateModelLists() {
 			m := strings.TrimPrefix(LocalModels[i], models.LoadedMark)
 			cfg.CurrentModel = m
 			chatBody.Model = m
-			cachedModelColor = "green"
+			cachedModelColor.Store("green")
 			updateStatusLine()
 			updateToolCapabilities()
 			app.Draw()
@@ -1546,8 +1543,8 @@ func init() {
 			}
 		}
 	}
-	// Initialize scrollToEndEnabled based on config
-	scrollToEndEnabled = cfg.AutoScrollEnabled
+	// atomic default values
+	cachedModelColor.Store("orange")
 	go chatWatcher(ctx)
 	initTUI()
 	initTools()

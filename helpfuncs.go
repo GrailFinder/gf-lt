@@ -12,6 +12,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 	"unicode"
 
@@ -19,7 +20,8 @@ import (
 )
 
 // Cached model color - updated by background goroutine
-var cachedModelColor string = "orange"
+// var cachedModelColor string = "orange"
+var cachedModelColor atomic.Value
 
 // startModelColorUpdater starts a background goroutine that periodically updates
 // the cached model color. Only runs HTTP requests for local llama.cpp APIs.
@@ -38,20 +40,20 @@ func startModelColorUpdater() {
 // updateCachedModelColor updates the global cachedModelColor variable
 func updateCachedModelColor() {
 	if !isLocalLlamacpp() {
-		cachedModelColor = "orange"
+		cachedModelColor.Store("orange")
 		return
 	}
 	// Check if model is loaded
 	loaded, err := isModelLoaded(chatBody.Model)
 	if err != nil {
 		// On error, assume not loaded (red)
-		cachedModelColor = "red"
+		cachedModelColor.Store("red")
 		return
 	}
 	if loaded {
-		cachedModelColor = "green"
+		cachedModelColor.Store("green")
 	} else {
-		cachedModelColor = "red"
+		cachedModelColor.Store("red")
 	}
 }
 
@@ -107,7 +109,7 @@ func refreshChatDisplay() {
 	textView.SetText(displayText)
 	colorText()
 	updateStatusLine()
-	if scrollToEndEnabled {
+	if cfg.AutoScrollEnabled {
 		textView.ScrollToEnd()
 	}
 }
@@ -332,7 +334,7 @@ func isLocalLlamacpp() bool {
 // The cached value is updated by a background goroutine every 5 seconds.
 // For non-local models, returns orange. For local llama.cpp models, returns green if loaded, red if not.
 func getModelColor() string {
-	return cachedModelColor
+	return cachedModelColor.Load().(string)
 }
 
 func makeStatusLine() string {
@@ -539,7 +541,7 @@ func executeCommandAndDisplay(cmdText string) {
 	cmdText = strings.TrimSpace(cmdText)
 	if cmdText == "" {
 		fmt.Fprintf(textView, "\n[red]Error: No command provided[-:-:-]\n")
-		if scrollToEndEnabled {
+		if cfg.AutoScrollEnabled {
 			textView.ScrollToEnd()
 		}
 		colorText()
@@ -571,7 +573,7 @@ func executeCommandAndDisplay(cmdText string) {
 				Content: "$ " + cmdText + "\n\n" + outputContent,
 			}
 			chatBody.Messages = append(chatBody.Messages, combinedMsg)
-			if scrollToEndEnabled {
+			if cfg.AutoScrollEnabled {
 				textView.ScrollToEnd()
 			}
 			colorText()
@@ -586,7 +588,7 @@ func executeCommandAndDisplay(cmdText string) {
 				Content: "$ " + cmdText + "\n\n" + outputContent,
 			}
 			chatBody.Messages = append(chatBody.Messages, combinedMsg)
-			if scrollToEndEnabled {
+			if cfg.AutoScrollEnabled {
 				textView.ScrollToEnd()
 			}
 			colorText()
@@ -634,7 +636,7 @@ func executeCommandAndDisplay(cmdText string) {
 	}
 	chatBody.Messages = append(chatBody.Messages, combinedMsg)
 	// Scroll to end and update colors
-	if scrollToEndEnabled {
+	if cfg.AutoScrollEnabled {
 		textView.ScrollToEnd()
 	}
 	colorText()

@@ -63,9 +63,6 @@ This document explains how to set up and configure the application using the `co
 #### AutoScrollEnabled (`true`)
 - Whether to automatically scroll chat window while llm streams its repsonse.
 
-#### AutoCleanToolCallsFromCtx (`false`)
-- Whether to automatically clean tool calls from the conversation context to manage token usage.
-
 ### RAG (Retrieval Augmented Generation) Settings
 
 #### EmbedURL (`"http://localhost:8082/v1/embeddings"`)

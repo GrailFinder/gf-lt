@@ -42,7 +42,6 @@ var (
 	confirmPageName    = "confirm"
 	fullscreenMode     bool
 	positionVisible    bool = true
-	scrollToEndEnabled bool = true
 	// pages
 	historyPage    = "historyPage"
 	agentPage      = "agentPage"
@@ -634,7 +633,7 @@ func initTUI() {
 	updateStatusLine()
 	textView.SetText(chatToText(chatBody.Messages, cfg.ShowSys))
 	colorText()
-	if scrollToEndEnabled {
+	if cfg.AutoScrollEnabled {
 		textView.ScrollToEnd()
 	}
 	// init sysmap
@@ -663,9 +662,9 @@ func initTUI() {
 		}
 		if event.Key() == tcell.KeyRune && event.Rune() == '2' && event.Modifiers()&tcell.ModAlt != 0 {
 			// toggle auto-scrolling
-			scrollToEndEnabled = !scrollToEndEnabled
+			cfg.AutoScrollEnabled = !cfg.AutoScrollEnabled
 			status := "disabled"
-			if scrollToEndEnabled {
+			if cfg.AutoScrollEnabled {
 				status = "enabled"
 			}
 			showToast("autoscroll", "Auto-scrolling "+status)
@@ -1139,7 +1138,7 @@ func initTUI() {
 				fmt.Fprintf(textView, "%s[-:-:b](%d) <%s>: [-:-:-]\n%s\n",
 					nl, len(chatBody.Messages), persona, msgText)
 				textArea.SetText("", true)
-				if scrollToEndEnabled {
+				if cfg.AutoScrollEnabled {
 					textView.ScrollToEnd()
 				}
 				colorText()

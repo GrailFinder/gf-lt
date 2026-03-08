@@ -121,9 +121,6 @@ func makePropsTable(props map[string]float32) *tview.Table {
 	addCheckboxRow("TTS Enabled", cfg.TTS_ENABLED, func(checked bool) {
 		cfg.TTS_ENABLED = checked
 	})
-	addCheckboxRow("Auto clean tool calls from context", cfg.AutoCleanToolCallsFromCtx, func(checked bool) {
-		cfg.AutoCleanToolCallsFromCtx = checked
-	})
 	addCheckboxRow("Enable Mouse", cfg.EnableMouse, func(checked bool) {
 		cfg.EnableMouse = checked
 		// Reconfigure the app's mouse setting
