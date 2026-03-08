@@ -887,7 +887,9 @@ out:
 			fmt.Fprint(textView, chunk)
 			respText.WriteString(chunk)
 			// Update the message in chatBody.Messages so it persists during Alt+T
-			chatBody.Messages[msgIdx].Content = respText.String()
+			if !r.Resume {
+				chatBody.Messages[msgIdx].Content += respText.String()
+			}
 			if cfg.AutoScrollEnabled {
 				textView.ScrollToEnd()
 			}
