@@ -340,11 +340,9 @@ func (vs *VectorStorage) scanRows(rows *sql.Rows) ([]models.VectorRow, error) {
 			continue
 		}
 		// Convert BM25 score to distance-like metric (lower is better)
-		// BM25 is negative, more negative is better. We'll normalize to positive distance.
-		distance := float32(-score) // Make positive (since score is negative)
-		if distance < 0 {
-			distance = 0
-		}
+		// BM25 is negative, more negative is better. Keep as negative.
+		distance := float32(score) // Keep negative, more negative is better
+		// No clamping needed; negative distances are fine
 		results = append(results, models.VectorRow{
 			Slug:     slug,
 			RawText:  rawText,
