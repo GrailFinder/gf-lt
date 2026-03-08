@@ -360,13 +360,13 @@ func ragsearch(args map[string]string) []byte {
 	}
 	limitS, ok := args["limit"]
 	if !ok || limitS == "" {
-		limitS = "3"
+		limitS = "10"
 	}
 	limit, err := strconv.Atoi(limitS)
 	if err != nil || limit == 0 {
 		logger.Warn("ragsearch limit; passed bad value; setting to default (3)",
 			"limit_arg", limitS, "error", err)
-		limit = 3
+		limit = 10
 	}
 	ragInstance := rag.GetInstance()
 	if ragInstance == nil {

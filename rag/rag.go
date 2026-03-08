@@ -156,7 +156,7 @@ func createChunks(sentences []string, wordLimit, overlapWords uint32) []string {
 
 func sanitizeFTSQuery(query string) string {
 	// Remove double quotes and other problematic characters for FTS5
-	query = strings.ReplaceAll(query, "\"", " ")
+	// query = strings.ReplaceAll(query, "\"", " ")
 	query = strings.ReplaceAll(query, "'", " ")
 	query = strings.ReplaceAll(query, ";", " ")
 	query = strings.ReplaceAll(query, "\\", " ")
