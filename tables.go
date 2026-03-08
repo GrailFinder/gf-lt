@@ -272,7 +272,7 @@ func makeRAGTable(fileList []string, loadedFiles []string) *tview.Flex {
 	fileTable := tview.NewTable().
 		SetBorders(true)
 	longStatusView := tview.NewTextView()
-	longStatusView.SetText("status text")
+	longStatusView.SetText("press x to exit")
 	longStatusView.SetBorder(true).SetTitle("status")
 	longStatusView.SetChangedFunc(func() {
 		app.Draw()
