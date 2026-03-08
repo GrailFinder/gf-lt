@@ -13,6 +13,12 @@ made with use of [tview](https://github.com/rivo/tview)
 #### how it looks
 ![how it looks](assets/ex01.png)
 
+
+#### dependencies
+- make
+- go
+- ffmpeg (extra)
+
 #### how to install
 (requires golang)
 clone the project
