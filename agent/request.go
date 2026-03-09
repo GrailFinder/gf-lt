@@ -30,9 +30,13 @@ func detectAPI(api string) (isCompletion, isChat, isDeepSeek, isOpenRouter bool)
 }
 
 type AgentClient struct {
-	cfg      *config.Config
-	getToken func() string
-	log      *slog.Logger
+	cfg            *config.Config
+	getToken       func() string
+	log            *slog.Logger
+	chatBody       *models.ChatBody
+	sysprompt      string
+	lastToolCallID string
+	tools          []models.Tool
 }
 
 func NewAgentClient(cfg *config.Config, log *slog.Logger, gt func() string) *AgentClient {
@@ -47,8 +51,29 @@ func (ag *AgentClient) Log() *slog.Logger {
 	return ag.log
 }
 
-func (ag *AgentClient) FormMsg(sysprompt, msg string) (io.Reader, error) {
-	b, err := ag.buildRequest(sysprompt, msg)
+func (ag *AgentClient) FormFirstMsg(sysprompt, msg string) (io.Reader, error) {
+	ag.sysprompt = sysprompt
+	ag.chatBody = &models.ChatBody{
+		Messages: []models.RoleMsg{
+			{Role: "system", Content: ag.sysprompt},
+			{Role: "user", Content: msg},
+		},
+		Stream: false,
+		Model:  ag.cfg.CurrentModel,
+	}
+	b, err := ag.buildRequest()
+	if err != nil {
+		return nil, err
+	}
+	return bytes.NewReader(b), nil
+}
+
+func (ag *AgentClient) FormMsg(msg string) (io.Reader, error) {
+	m := models.RoleMsg{
+		Role: "tool", Content: msg,
+	}
+	ag.chatBody.Messages = append(ag.chatBody.Messages, m)
+	b, err := ag.buildRequest()
 	if err != nil {
 		return nil, err
 	}
@@ -56,75 +81,52 @@ func (ag *AgentClient) FormMsg(sysprompt, msg string) (io.Reader, error) {
 }
 
 // buildRequest creates the appropriate LLM request based on the current API endpoint.
-func (ag *AgentClient) buildRequest(sysprompt, msg string) ([]byte, error) {
-	api := ag.cfg.CurrentAPI
-	model := ag.cfg.CurrentModel
-	messages := []models.RoleMsg{
-		{Role: "system", Content: sysprompt},
-		{Role: "user", Content: msg},
-	}
-	// Determine API type
-	isCompletion, isChat, isDeepSeek, isOpenRouter := detectAPI(api)
-	ag.log.Debug("agent building request", "api", api, "isCompletion", isCompletion, "isChat", isChat, "isDeepSeek", isDeepSeek, "isOpenRouter", isOpenRouter)
+func (ag *AgentClient) buildRequest() ([]byte, error) {
+	isCompletion, isChat, isDeepSeek, isOpenRouter := detectAPI(ag.cfg.CurrentAPI)
+	ag.log.Debug("agent building request", "api", ag.cfg.CurrentAPI, "isCompletion", isCompletion, "isChat", isChat, "isDeepSeek", isDeepSeek, "isOpenRouter", isOpenRouter)
 	// Build prompt for completion endpoints
 	if isCompletion {
 		var sb strings.Builder
-		for i := range messages {
-			sb.WriteString(messages[i].ToPrompt())
+		for i := range ag.chatBody.Messages {
+			sb.WriteString(ag.chatBody.Messages[i].ToPrompt())
 			sb.WriteString("\n")
 		}
 		prompt := strings.TrimSpace(sb.String())
 		switch {
 		case isDeepSeek:
 			// DeepSeek completion
-			req := models.NewDSCompletionReq(prompt, model, defaultProps["temperature"], []string{})
+			req := models.NewDSCompletionReq(prompt, ag.chatBody.Model, defaultProps["temperature"], []string{})
 			req.Stream = false // Agents don't need streaming
 			return json.Marshal(req)
 		case isOpenRouter:
 			// OpenRouter completion
-			req := models.NewOpenRouterCompletionReq(model, prompt, defaultProps, []string{})
+			req := models.NewOpenRouterCompletionReq(ag.chatBody.Model, prompt, defaultProps, []string{})
 			req.Stream = false // Agents don't need streaming
 			return json.Marshal(req)
 		default:
 			// Assume llama.cpp completion
-			req := models.NewLCPReq(prompt, model, nil, defaultProps, []string{})
+			req := models.NewLCPReq(prompt, ag.chatBody.Model, nil, defaultProps, []string{})
 			req.Stream = false // Agents don't need streaming
 			return json.Marshal(req)
 		}
 	}
-	// Chat completions endpoints
-	if isChat || !isCompletion {
-		chatBody := &models.ChatBody{
-			Model:    model,
-			Stream:   false, // Agents don't need streaming
-			Messages: messages,
+	switch {
+	case isDeepSeek:
+		// DeepSeek chat
+		req := models.NewDSChatReq(*ag.chatBody)
+		return json.Marshal(req)
+	case isOpenRouter:
+		// OpenRouter chat - agents don't use reasoning by default
+		req := models.NewOpenRouterChatReq(*ag.chatBody, defaultProps, ag.cfg.ReasoningEffort)
+		return json.Marshal(req)
+	default:
+		// Assume llama.cpp chat (OpenAI format)
+		req := models.OpenAIReq{
+			ChatBody: ag.chatBody,
+			Tools:    ag.tools,
 		}
-		switch {
-		case isDeepSeek:
-			// DeepSeek chat
-			req := models.NewDSChatReq(*chatBody)
-			return json.Marshal(req)
-		case isOpenRouter:
-			// OpenRouter chat - agents don't use reasoning by default
-			req := models.NewOpenRouterChatReq(*chatBody, defaultProps, "")
-			return json.Marshal(req)
-		default:
-			// Assume llama.cpp chat (OpenAI format)
-			req := models.OpenAIReq{
-				ChatBody: chatBody,
-				Tools:    nil,
-			}
-			return json.Marshal(req)
-		}
+		return json.Marshal(req)
 	}
-	// Fallback (should not reach here)
-	ag.log.Warn("unknown API, using default chat completions format", "api", api)
-	chatBody := &models.ChatBody{
-		Model:    model,
-		Stream:   false, // Agents don't need streaming
-		Messages: messages,
-	}
-	return json.Marshal(chatBody)
 }
 
 func (ag *AgentClient) LLMRequest(body io.Reader) ([]byte, error) {

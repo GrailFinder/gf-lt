@@ -4,11 +4,12 @@ package agent
 // ones who do their own tools calls
 // ones that works only with the output
 
-// A: main chat -> agent (handles everything: tool + processing)
+// A: main chat -> agent (handles everything: tool + processing), supports tool chaining
 // B: main chat -> tool -> agent (process tool output)
 
-// AgenterA gets a task "find out weather in london"
-// proceeds to make tool calls on its own
+// AgenterA gets a task like "go to the webpage, login and take a screenshot (tell me what you see)"
+// proceeds to make a plan and executes it.
+// returns with final result or an error
 type AgenterA interface {
 	ProcessTask(task string) []byte
 }
