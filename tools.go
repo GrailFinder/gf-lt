@@ -1491,6 +1491,47 @@ func registerWindowTools() {
 	}
 }
 
+var browserAgentSysPrompt = `You are an autonomous browser automation agent. Your goal is to complete the user's task by intelligently using browser automation tools.
+
+Available tools:
+- pw_start: Start browser (must call first)
+- pw_stop: Stop browser (call when done)
+- pw_is_running: Check if browser is running
+- pw_navigate: Go to a URL
+- pw_click: Click an element by CSS selector
+- pw_fill: Type text into an input
+- pw_extract_text: Get text from page/element
+- pw_screenshot: Take a screenshot (returns file path)
+- pw_screenshot_and_view: Take screenshot with image for viewing
+- pw_wait_for_selector: Wait for element to appear
+- pw_drag: Drag mouse from one point to another
+- pw_click_at: Click at X,Y coordinates
+- pw_get_html: Get HTML content
+- pw_get_dom: Get structured DOM tree
+- pw_search_elements: Search for elements by text or selector
+
+Workflow:
+1. Start browser if not running (pw_start)
+2. Navigate to required pages (pw_navigate)
+3. Interact with elements as needed (click, fill, etc.)
+4. Extract information or take screenshots as requested
+5. Stop browser when done (pw_stop)
+
+Always provide clear feedback about what you're doing and what you found.`
+
+func runBrowserAgent(args map[string]string) []byte {
+	task, ok := args["task"]
+	if !ok || task == "" {
+		return []byte(`{"error": "task argument is required"}`)
+	}
+
+	client := getWebAgentClient()
+	pwAgent := agent.NewPWAgent(client, browserAgentSysPrompt)
+	pwAgent.SetTools(agent.GetPWTools())
+
+	return pwAgent.ProcessTask(task)
+}
+
 func registerPlaywrightTools() {
 	removePlaywrightToolsFromBaseTools()
 	if cfg != nil && cfg.PlaywrightEnabled {
@@ -1776,6 +1817,42 @@ func registerPlaywrightTools() {
 		}
 		baseTools = append(baseTools, playwrightTools...)
 		toolSysMsg += browserToolSysMsg
+
+		agent.RegisterPWTool("pw_start", pwStart)
+		agent.RegisterPWTool("pw_stop", pwStop)
+		agent.RegisterPWTool("pw_is_running", pwIsRunning)
+		agent.RegisterPWTool("pw_navigate", pwNavigate)
+		agent.RegisterPWTool("pw_click", pwClick)
+		agent.RegisterPWTool("pw_click_at", pwClickAt)
+		agent.RegisterPWTool("pw_fill", pwFill)
+		agent.RegisterPWTool("pw_extract_text", pwExtractText)
+		agent.RegisterPWTool("pw_screenshot", pwScreenshot)
+		agent.RegisterPWTool("pw_screenshot_and_view", pwScreenshotAndView)
+		agent.RegisterPWTool("pw_wait_for_selector", pwWaitForSelector)
+		agent.RegisterPWTool("pw_drag", pwDrag)
+		agent.RegisterPWTool("pw_get_html", pwGetHTML)
+		agent.RegisterPWTool("pw_get_dom", pwGetDOM)
+		agent.RegisterPWTool("pw_search_elements", pwSearchElements)
+
+		browserAgentTool := []models.Tool{
+			{
+				Type: "function",
+				Function: models.ToolFunc{
+					Name:        "browser_agent",
+					Description: "Autonomous browser automation agent. Use for complex multi-step browser tasks like 'go to website, login, and take screenshot'. The agent will plan and execute steps automatically using browser tools.",
+					Parameters: models.ToolFuncParams{
+						Type:     "object",
+						Required: []string{"task"},
+						Properties: map[string]models.ToolArgProps{
+							"task": {Type: "string", Description: "The task to accomplish, e.g., 'go to github.com and take a screenshot of the homepage'"},
+						},
+					},
+				},
+			},
+		}
+		baseTools = append(baseTools, browserAgentTool...)
+
+		fnMap["browser_agent"] = runBrowserAgent
 	}
 }
 

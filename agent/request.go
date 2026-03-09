@@ -80,6 +80,20 @@ func (ag *AgentClient) FormMsg(msg string) (io.Reader, error) {
 	return bytes.NewReader(b), nil
 }
 
+func (ag *AgentClient) FormMsgWithToolCallID(msg, toolCallID string) (io.Reader, error) {
+	m := models.RoleMsg{
+		Role:       "tool",
+		Content:    msg,
+		ToolCallID: toolCallID,
+	}
+	ag.chatBody.Messages = append(ag.chatBody.Messages, m)
+	b, err := ag.buildRequest()
+	if err != nil {
+		return nil, err
+	}
+	return bytes.NewReader(b), nil
+}
+
 // buildRequest creates the appropriate LLM request based on the current API endpoint.
 func (ag *AgentClient) buildRequest() ([]byte, error) {
 	isCompletion, isChat, isDeepSeek, isOpenRouter := detectAPI(ag.cfg.CurrentAPI)
