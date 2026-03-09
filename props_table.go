@@ -115,17 +115,11 @@ func makePropsTable(props map[string]float32) *tview.Table {
 		row++
 	}
 	// Add checkboxes
-	addCheckboxRow("RAG use", cfg.RAGEnabled, func(checked bool) {
-		cfg.RAGEnabled = checked
-	})
 	addCheckboxRow("Inject role", injectRole, func(checked bool) {
 		injectRole = checked
 	})
 	addCheckboxRow("TTS Enabled", cfg.TTS_ENABLED, func(checked bool) {
 		cfg.TTS_ENABLED = checked
-	})
-	addCheckboxRow("Auto clean tool calls from context", cfg.AutoCleanToolCallsFromCtx, func(checked bool) {
-		cfg.AutoCleanToolCallsFromCtx = checked
 	})
 	addCheckboxRow("Enable Mouse", cfg.EnableMouse, func(checked bool) {
 		cfg.EnableMouse = checked

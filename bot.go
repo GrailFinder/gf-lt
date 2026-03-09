@@ -16,13 +16,13 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
-	"net/url"
 	"os"
 	"regexp"
 	"slices"
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -41,7 +41,7 @@ var (
 	store           storage.FullRepo
 	defaultFirstMsg = "Hello! What can I do for you?"
 	defaultStarter  = []models.RoleMsg{}
-	interruptResp   = false
+	interruptResp   atomic.Bool
 	ragger          *rag.RAG
 	chunkParser     ChunkParser
 	lastToolCall    *models.FuncCall
@@ -253,12 +253,7 @@ func createClient(connectTimeout time.Duration) *http.Client {
 }
 
 func warmUpModel() {
-	u, err := url.Parse(cfg.CurrentAPI)
-	if err != nil {
-		return
-	}
-	host := u.Hostname()
-	if host != "localhost" && host != "127.0.0.1" && host != "::1" {
+	if !isLocalLlamacpp() {
 		return
 	}
 	// Check if model is already loaded
@@ -649,7 +644,7 @@ func sendMsgToLLM(body io.Reader) {
 			// continue
 		}
 		if len(line) <= 1 {
-			if interruptResp {
+			if interruptResp.Load() {
 				goto interrupt // get unstuck from bad connection
 			}
 			continue // skip \n
@@ -742,8 +737,7 @@ func sendMsgToLLM(body io.Reader) {
 			lastToolCall.ID = chunk.ToolID
 		}
 	interrupt:
-		if interruptResp { // read bytes, so it would not get into beginning of the next req
-			// interruptResp = false
+		if interruptResp.Load() { // read bytes, so it would not get into beginning of the next req
 			logger.Info("interrupted bot response", "chunk_counter", counter)
 			streamDone <- true
 			break
@@ -776,14 +770,14 @@ func showSpinner() {
 	if cfg.WriteNextMsgAsCompletionAgent != "" {
 		botPersona = cfg.WriteNextMsgAsCompletionAgent
 	}
-	for botRespMode || toolRunningMode {
+	for botRespMode.Load() || toolRunningMode.Load() {
 		time.Sleep(400 * time.Millisecond)
 		spin := i % len(spinners)
 		app.QueueUpdateDraw(func() {
 			switch {
-			case toolRunningMode:
+			case toolRunningMode.Load():
 				textArea.SetTitle(spinners[spin] + " tool")
-			case botRespMode:
+			case botRespMode.Load():
 				textArea.SetTitle(spinners[spin] + " " + botPersona + " (F6 to interrupt)")
 			default:
 				textArea.SetTitle(spinners[spin] + " input")
@@ -797,8 +791,8 @@ func showSpinner() {
 }
 
 func chatRound(r *models.ChatRoundReq) error {
-	interruptResp = false
-	botRespMode = true
+	interruptResp.Store(false)
+	botRespMode.Store(true)
 	go showSpinner()
 	updateStatusLine()
 	botPersona := cfg.AssistantRole
@@ -806,7 +800,7 @@ func chatRound(r *models.ChatRoundReq) error {
 		botPersona = cfg.WriteNextMsgAsCompletionAgent
 	}
 	defer func() {
-		botRespMode = false
+		botRespMode.Store(false)
 		ClearImageAttachment()
 	}()
 	// check that there is a model set to use if is not local
@@ -857,7 +851,7 @@ out:
 				if thinkingCollapsed {
 					// Show placeholder immediately when thinking starts in collapsed mode
 					fmt.Fprint(textView, "[yellow::i][thinking... (press Alt+T to expand)][-:-:-]")
-					if scrollToEndEnabled {
+					if cfg.AutoScrollEnabled {
 						textView.ScrollToEnd()
 					}
 					respText.WriteString(chunk)
@@ -872,7 +866,7 @@ out:
 						// Thinking already displayed as placeholder, just update respText
 						respText.WriteString(chunk)
 						justExitedThinkingCollapsed = true
-						if scrollToEndEnabled {
+						if cfg.AutoScrollEnabled {
 							textView.ScrollToEnd()
 						}
 						continue
@@ -893,8 +887,10 @@ out:
 			fmt.Fprint(textView, chunk)
 			respText.WriteString(chunk)
 			// Update the message in chatBody.Messages so it persists during Alt+T
-			chatBody.Messages[msgIdx].Content = respText.String()
-			if scrollToEndEnabled {
+			if !r.Resume {
+				chatBody.Messages[msgIdx].Content += respText.String()
+			}
+			if cfg.AutoScrollEnabled {
 				textView.ScrollToEnd()
 			}
 			// Send chunk to audio stream handler
@@ -904,7 +900,7 @@ out:
 		case toolChunk := <-openAIToolChan:
 			fmt.Fprint(textView, toolChunk)
 			toolResp.WriteString(toolChunk)
-			if scrollToEndEnabled {
+			if cfg.AutoScrollEnabled {
 				textView.ScrollToEnd()
 			}
 		case <-streamDone:
@@ -912,7 +908,7 @@ out:
 				chunk := <-chunkChan
 				fmt.Fprint(textView, chunk)
 				respText.WriteString(chunk)
-				if scrollToEndEnabled {
+				if cfg.AutoScrollEnabled {
 					textView.ScrollToEnd()
 				}
 				if cfg.TTS_ENABLED {
@@ -934,7 +930,7 @@ out:
 		}
 		lastRespStats = nil
 	}
-	botRespMode = false
+	botRespMode.Store(false)
 	if r.Resume {
 		chatBody.Messages[len(chatBody.Messages)-1].Content += respText.String()
 		updatedMsg := chatBody.Messages[len(chatBody.Messages)-1]
@@ -963,7 +959,7 @@ out:
 	}
 	// Strip think blocks before parsing for tool calls
 	respTextNoThink := thinkBlockRE.ReplaceAllString(respText.String(), "")
-	if interruptResp {
+	if interruptResp.Load() {
 		return nil
 	}
 	if findCall(respTextNoThink, toolResp.String()) {
@@ -1198,9 +1194,9 @@ func findCall(msg, toolCall string) bool {
 	}
 	// Show tool call progress indicator before execution
 	fmt.Fprintf(textView, "\n[yellow::i][tool: %s...][-:-:-]", fc.Name)
-	toolRunningMode = true
+	toolRunningMode.Store(true)
 	resp := callToolWithAgent(fc.Name, fc.Args)
-	toolRunningMode = false
+	toolRunningMode.Store(false)
 	toolMsg := string(resp)
 	logger.Info("llm used a tool call", "tool_name", fc.Name, "too_args", fc.Args, "id", fc.ID, "tool_resp", toolMsg)
 	// Create tool response message with the proper tool_call_id
@@ -1393,27 +1389,29 @@ func updateModelLists() {
 		}
 	}
 	// if llama.cpp started after gf-lt?
-	localModelsMu.Lock()
-	LocalModels, err = fetchLCPModelsWithLoadStatus()
-	localModelsMu.Unlock()
+	ml, err := fetchLCPModelsWithLoadStatus()
 	if err != nil {
 		logger.Warn("failed to fetch llama.cpp models", "error", err)
 	}
+	localModelsMu.Lock()
+	LocalModels = ml
+	localModelsMu.Unlock()
 	// set already loaded model in llama.cpp
-	if strings.Contains(cfg.CurrentAPI, "localhost") || strings.Contains(cfg.CurrentAPI, "127.0.0.1") {
-		localModelsMu.Lock()
-		defer localModelsMu.Unlock()
-		for i := range LocalModels {
-			if strings.Contains(LocalModels[i], models.LoadedMark) {
-				m := strings.TrimPrefix(LocalModels[i], models.LoadedMark)
-				cfg.CurrentModel = m
-				chatBody.Model = m
-				cachedModelColor = "green"
-				updateStatusLine()
-				updateToolCapabilities()
-				app.Draw()
-				return
-			}
+	if !isLocalLlamacpp() {
+		return
+	}
+	localModelsMu.Lock()
+	defer localModelsMu.Unlock()
+	for i := range LocalModels {
+		if strings.Contains(LocalModels[i], models.LoadedMark) {
+			m := strings.TrimPrefix(LocalModels[i], models.LoadedMark)
+			cfg.CurrentModel = m
+			chatBody.Model = m
+			cachedModelColor.Store("green")
+			updateStatusLine()
+			updateToolCapabilities()
+			app.Draw()
+			return
 		}
 	}
 }
@@ -1500,7 +1498,13 @@ func init() {
 		os.Exit(1)
 		return
 	}
-	ragger = rag.New(logger, store, cfg)
+	ragger, err = rag.New(logger, store, cfg)
+	if err != nil {
+		logger.Error("failed to create RAG", "error", err)
+	}
+	if ragger != nil && ragger.FallbackMessage() != "" && app != nil {
+		showToast("RAG", "ONNX unavailable, using API: "+ragger.FallbackMessage())
+	}
 	// https://github.com/coreydaley/ggerganov-llama.cpp/blob/master/examples/server/README.md
 	// load all chats in memory
 	if _, err := loadHistoryChats(); err != nil {
@@ -1541,57 +1545,9 @@ func init() {
 			}
 		}
 	}
-	// Initialize scrollToEndEnabled based on config
-	scrollToEndEnabled = cfg.AutoScrollEnabled
-	go updateModelLists()
+	// atomic default values
+	cachedModelColor.Store("orange")
 	go chatWatcher(ctx)
-}
-
-func getValidKnowToRecipient(msg *models.RoleMsg) (string, bool) {
-	if cfg == nil || !cfg.CharSpecificContextEnabled {
-		return "", false
-	}
-	// case where all roles are in the tag => public message
-	cr := listChatRoles()
-	slices.Sort(cr)
-	slices.Sort(msg.KnownTo)
-	if slices.Equal(cr, msg.KnownTo) {
-		logger.Info("got msg with tag mentioning every role")
-		return "", false
-	}
-	// Check each character in the KnownTo list
-	for _, recipient := range msg.KnownTo {
-		if recipient == msg.Role || recipient == cfg.ToolRole {
-			// weird cases, skip
-			continue
-		}
-		// Skip if this is the user character (user handles their own turn)
-		// If user is in KnownTo, stop processing - it's the user's turn
-		if recipient == cfg.UserRole || recipient == cfg.WriteNextMsgAs {
-			return "", false
-		}
-		return recipient, true
-	}
-	return "", false
-}
-
-// triggerPrivateMessageResponses checks if a message was sent privately to specific characters
-// and triggers those non-user characters to respond
-func triggerPrivateMessageResponses(msg *models.RoleMsg) {
-	recipient, ok := getValidKnowToRecipient(msg)
-	if !ok || recipient == "" {
-		return
-	}
-	// Trigger the recipient character to respond
-	triggerMsg := recipient + ":\n"
-	// Send empty message so LLM continues naturally from the conversation
-	crr := &models.ChatRoundReq{
-		UserMsg: triggerMsg,
-		Role:    recipient,
-		Resume:  true,
-	}
-	fmt.Fprintf(textView, "\n[-:-:b](%d) ", len(chatBody.Messages))
-	fmt.Fprint(textView, roleToIcon(recipient))
-	fmt.Fprint(textView, "[-:-:-]\n")
-	chatRoundChan <- crr
+	initTUI()
+	initTools()
 }

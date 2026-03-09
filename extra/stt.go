@@ -6,18 +6,10 @@ package extra
 import (
 	"bytes"
 	"encoding/binary"
-	"errors"
-	"fmt"
 	"gf-lt/config"
 	"io"
 	"log/slog"
-	"mime/multipart"
-	"net/http"
 	"regexp"
-	"strings"
-	"syscall"
-
-	"github.com/gordonklaus/portaudio"
 )
 
 var specialRE = regexp.MustCompile(`\[.*?\]`)
@@ -44,14 +36,6 @@ func NewSTT(logger *slog.Logger, cfg *config.Config) STT {
 	return NewWhisperServer(logger, cfg)
 }
 
-type WhisperServer struct {
-	logger      *slog.Logger
-	ServerURL   string
-	SampleRate  int
-	AudioBuffer *bytes.Buffer
-	recording   bool
-}
-
 func NewWhisperServer(logger *slog.Logger, cfg *config.Config) *WhisperServer {
 	return &WhisperServer{
 		logger:      logger,
@@ -59,69 +43,6 @@ func NewWhisperServer(logger *slog.Logger, cfg *config.Config) *WhisperServer {
 		SampleRate:  cfg.STT_SR,
 		AudioBuffer: new(bytes.Buffer),
 	}
-}
-
-func (stt *WhisperServer) StartRecording() error {
-	if err := stt.microphoneStream(stt.SampleRate); err != nil {
-		return fmt.Errorf("failed to init microphone: %w", err)
-	}
-	stt.recording = true
-	return nil
-}
-
-func (stt *WhisperServer) StopRecording() (string, error) {
-	stt.recording = false
-	// wait loop to finish?
-	if stt.AudioBuffer == nil {
-		err := errors.New("unexpected nil AudioBuffer")
-		stt.logger.Error(err.Error())
-		return "", err
-	}
-	// Create WAV header first
-	body := &bytes.Buffer{}
-	writer := multipart.NewWriter(body)
-	// Add audio file part
-	part, err := writer.CreateFormFile("file", "recording.wav")
-	if err != nil {
-		stt.logger.Error("fn: StopRecording", "error", err)
-		return "", err
-	}
-	// Stream directly to multipart writer: header + raw data
-	dataSize := stt.AudioBuffer.Len()
-	stt.writeWavHeader(part, dataSize)
-	if _, err := io.Copy(part, stt.AudioBuffer); err != nil {
-		stt.logger.Error("fn: StopRecording", "error", err)
-		return "", err
-	}
-	// Reset buffer for next recording
-	stt.AudioBuffer.Reset()
-	// Add response format field
-	err = writer.WriteField("response_format", "text")
-	if err != nil {
-		stt.logger.Error("fn: StopRecording", "error", err)
-		return "", err
-	}
-	if writer.Close() != nil {
-		stt.logger.Error("fn: StopRecording", "error", err)
-		return "", err
-	}
-	// Send request
-	resp, err := http.Post(stt.ServerURL, writer.FormDataContentType(), body) //nolint:noctx
-	if err != nil {
-		stt.logger.Error("fn: StopRecording", "error", err)
-		return "", err
-	}
-	defer resp.Body.Close()
-	// Read and print response
-	responseTextBytes, err := io.ReadAll(resp.Body)
-	if err != nil {
-		stt.logger.Error("fn: StopRecording", "error", err)
-		return "", err
-	}
-	resptext := strings.TrimRight(string(responseTextBytes), "\n")
-	// in case there are special tokens like [_BEG_]
-	resptext = specialRE.ReplaceAllString(resptext, "")
-	return strings.TrimSpace(strings.ReplaceAll(resptext, "\n ", "\n")), nil
 }
 
 func (stt *WhisperServer) writeWavHeader(w io.Writer, dataSize int) {
@@ -146,57 +67,4 @@ func (stt *WhisperServer) writeWavHeader(w io.Writer, dataSize int) {
 
 func (stt *WhisperServer) IsRecording() bool {
 	return stt.recording
-}
-
-func (stt *WhisperServer) microphoneStream(sampleRate int) error {
-	// Temporarily redirect stderr to suppress ALSA warnings during PortAudio init
-	origStderr, errDup := syscall.Dup(syscall.Stderr)
-	if errDup != nil {
-		return fmt.Errorf("failed to dup stderr: %w", errDup)
-	}
-	nullFD, err := syscall.Open("/dev/null", syscall.O_WRONLY, 0)
-	if err != nil {
-		_ = syscall.Close(origStderr) // Close the dup'd fd if open fails
-		return fmt.Errorf("failed to open /dev/null: %w", err)
-	}
-	// redirect stderr
-	_ = syscall.Dup2(nullFD, syscall.Stderr)
-	// Initialize PortAudio (this is where ALSA warnings occur)
-	defer func() {
-		// Restore stderr
-		_ = syscall.Dup2(origStderr, syscall.Stderr)
-		_ = syscall.Close(origStderr)
-		_ = syscall.Close(nullFD)
-	}()
-	if err := portaudio.Initialize(); err != nil {
-		return fmt.Errorf("portaudio init failed: %w", err)
-	}
-	in := make([]int16, 64)
-	stream, err := portaudio.OpenDefaultStream(1, 0, float64(sampleRate), len(in), in)
-	if err != nil {
-		if paErr := portaudio.Terminate(); paErr != nil {
-			return fmt.Errorf("failed to open microphone: %w; terminate error: %w", err, paErr)
-		}
-		return fmt.Errorf("failed to open microphone: %w", err)
-	}
-	go func(stream *portaudio.Stream) {
-		if err := stream.Start(); err != nil {
-			stt.logger.Error("microphoneStream", "error", err)
-			return
-		}
-		for {
-			if !stt.IsRecording() {
-				return
-			}
-			if err := stream.Read(); err != nil {
-				stt.logger.Error("reading stream", "error", err)
-				return
-			}
-			if err := binary.Write(stt.AudioBuffer, binary.LittleEndian, in); err != nil {
-				stt.logger.Error("writing to buffer", "error", err)
-				return
-			}
-		}
-	}(stream)
-	return nil
 }

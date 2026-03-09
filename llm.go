@@ -62,11 +62,11 @@ type ChunkParser interface {
 func choseChunkParser() {
 	chunkParser = LCPCompletion{}
 	switch cfg.CurrentAPI {
-	case "http://localhost:8080/completion":
+	case "http://localhost:8080/completion", "http://127.0.0.1:8080/completion":
 		chunkParser = LCPCompletion{}
 		logger.Debug("chosen lcpcompletion", "link", cfg.CurrentAPI)
 		return
-	case "http://localhost:8080/v1/chat/completions":
+	case "http://localhost:8080/v1/chat/completions", "http://127.0.0.1:8080/v1/chat/completions":
 		chunkParser = LCPChat{}
 		logger.Debug("chosen lcpchat", "link", cfg.CurrentAPI)
 		return
@@ -87,6 +87,11 @@ func choseChunkParser() {
 		logger.Debug("chosen openrouterchat", "link", cfg.CurrentAPI)
 		return
 	default:
+		logger.Warn("unexpected case, assuming llama.cpp on non default address", "link", cfg.CurrentAPI)
+		if strings.Contains(cfg.CurrentAPI, "chat") {
+			chunkParser = LCPChat{}
+			return
+		}
 		chunkParser = LCPCompletion{}
 	}
 }

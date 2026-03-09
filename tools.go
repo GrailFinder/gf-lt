@@ -207,7 +207,7 @@ var (
 	modelHasVision       bool
 )
 
-func init() {
+func initTools() {
 	sysMap[basicCard.ID] = basicCard
 	roleToID["assistant"] = basicCard.ID
 	sa, err := searcher.NewWebSurfer(searcher.SearcherTypeScraper, "")
@@ -348,13 +348,13 @@ func ragsearch(args map[string]string) []byte {
 	}
 	limitS, ok := args["limit"]
 	if !ok || limitS == "" {
-		limitS = "3"
+		limitS = "10"
 	}
 	limit, err := strconv.Atoi(limitS)
 	if err != nil || limit == 0 {
 		logger.Warn("ragsearch limit; passed bad value; setting to default (3)",
 			"limit_arg", limitS, "error", err)
-		limit = 3
+		limit = 10
 	}
 	ragInstance := rag.GetInstance()
 	if ragInstance == nil {
@@ -2260,57 +2260,4 @@ var baseTools = []models.Tool{
 			},
 		},
 	},
-}
-
-func init() {
-	if windowToolsAvailable {
-		baseTools = append(baseTools,
-			models.Tool{
-				Type: "function",
-				Function: models.ToolFunc{
-					Name:        "list_windows",
-					Description: "List all visible windows with their IDs and names. Returns a map of window ID to window name.",
-					Parameters: models.ToolFuncParams{
-						Type:       "object",
-						Required:   []string{},
-						Properties: map[string]models.ToolArgProps{},
-					},
-				},
-			},
-			models.Tool{
-				Type: "function",
-				Function: models.ToolFunc{
-					Name:        "capture_window",
-					Description: "Capture a screenshot of a specific window and save it to /tmp. Requires window parameter (window ID or name substring).",
-					Parameters: models.ToolFuncParams{
-						Type:     "object",
-						Required: []string{"window"},
-						Properties: map[string]models.ToolArgProps{
-							"window": models.ToolArgProps{
-								Type:        "string",
-								Description: "window ID or window name (partial match)",
-							},
-						},
-					},
-				},
-			},
-			models.Tool{
-				Type: "function",
-				Function: models.ToolFunc{
-					Name:        "capture_window_and_view",
-					Description: "Capture a screenshot of a specific window, save it to /tmp, and return the image for viewing. Requires window parameter (window ID or name substring).",
-					Parameters: models.ToolFuncParams{
-						Type:     "object",
-						Required: []string{"window"},
-						Properties: map[string]models.ToolArgProps{
-							"window": models.ToolArgProps{
-								Type:        "string",
-								Description: "window ID or window name (partial match)",
-							},
-						},
-					},
-				},
-			},
-		)
-	}
 }

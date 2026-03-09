@@ -27,20 +27,22 @@ type Config struct {
 	WriteNextMsgAs                string
 	WriteNextMsgAsCompletionAgent string
 	SkipLLMResp                   bool
-	AutoCleanToolCallsFromCtx     bool   `toml:"AutoCleanToolCallsFromCtx"`
 	DBPATH                        string `toml:"DBPATH"`
 	FilePickerDir                 string `toml:"FilePickerDir"`
 	FilePickerExts                string `toml:"FilePickerExts"`
 	ImagePreview                  bool   `toml:"ImagePreview"`
 	EnableMouse                   bool   `toml:"EnableMouse"`
 	// embeddings
-	EmbedURL string `toml:"EmbedURL"`
-	HFToken  string `toml:"HFToken"`
+	EmbedURL           string `toml:"EmbedURL"`
+	HFToken            string `toml:"HFToken"`
+	EmbedModelPath     string `toml:"EmbedModelPath"`
+	EmbedTokenizerPath string `toml:"EmbedTokenizerPath"`
+	EmbedDims          int    `toml:"EmbedDims"`
 	// rag settings
-	RAGEnabled   bool   `toml:"RAGEnabled"`
-	RAGDir       string `toml:"RAGDir"`
-	RAGBatchSize int    `toml:"RAGBatchSize"`
-	RAGWordLimit uint32 `toml:"RAGWordLimit"`
+	RAGDir          string `toml:"RAGDir"`
+	RAGBatchSize    int    `toml:"RAGBatchSize"`
+	RAGWordLimit    uint32 `toml:"RAGWordLimit"`
+	RAGOverlapWords uint32 `toml:"RAGOverlapWords"`
 	// deepseek
 	DeepSeekChatAPI       string `toml:"DeepSeekChatAPI"`
 	DeepSeekCompletionAPI string `toml:"DeepSeekCompletionAPI"`

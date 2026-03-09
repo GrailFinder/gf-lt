@@ -243,11 +243,9 @@ func makeRAGTable(fileList []string, loadedFiles []string) *tview.Flex {
 	for _, f := range loadedFiles {
 		loadedSet[f] = true
 	}
-
 	// Build merged list: files from ragdir + orphaned files from DB
 	ragFiles := make([]ragFileInfo, 0, len(fileList)+len(loadedFiles))
 	seen := make(map[string]bool)
-
 	// Add files from ragdir
 	for _, f := range fileList {
 		ragFiles = append(ragFiles, ragFileInfo{
@@ -258,7 +256,6 @@ func makeRAGTable(fileList []string, loadedFiles []string) *tview.Flex {
 		})
 		seen[f] = true
 	}
-
 	// Add orphaned files (in DB but not in ragdir)
 	for _, f := range loadedFiles {
 		if !seen[f] {
@@ -275,7 +272,7 @@ func makeRAGTable(fileList []string, loadedFiles []string) *tview.Flex {
 	fileTable := tview.NewTable().
 		SetBorders(true)
 	longStatusView := tview.NewTextView()
-	longStatusView.SetText("status text")
+	longStatusView.SetText("press x to exit")
 	longStatusView.SetBorder(true).SetTitle("status")
 	longStatusView.SetChangedFunc(func() {
 		app.Draw()
@@ -376,7 +373,6 @@ func makeRAGTable(fileList []string, loadedFiles []string) *tview.Flex {
 	}
 	errCh := make(chan error, 1) // why?
 	go func() {
-		defer pages.RemovePage(RAGPage)
 		for {
 			select {
 			case err := <-errCh:
@@ -417,7 +413,6 @@ func makeRAGTable(fileList []string, loadedFiles []string) *tview.Flex {
 			}
 			return
 		}
-		// defer pages.RemovePage(RAGPage)
 		tc := fileTable.GetCell(row, column)
 		tc.SetTextColor(tcell.ColorRed)
 		fileTable.SetSelectable(false, false)
@@ -430,7 +425,6 @@ func makeRAGTable(fileList []string, loadedFiles []string) *tview.Flex {
 		f := ragFiles[row-1]
 		// Handle "-" case (orphaned file with no delete option)
 		if tc.Text == "-" {
-			pages.RemovePage(RAGPage)
 			return
 		}
 		switch tc.Text {
@@ -441,14 +435,14 @@ func makeRAGTable(fileList []string, loadedFiles []string) *tview.Flex {
 				if err := ragger.LoadRAG(fpath); err != nil {
 					logger.Error("failed to embed file", "chat", fpath, "error", err)
 					showToast("RAG", "failed to embed file; error: "+err.Error())
-					app.QueueUpdate(func() {
-						pages.RemovePage(RAGPage)
-					})
 					return
 				}
 				showToast("RAG", "file loaded successfully")
 				app.QueueUpdate(func() {
 					pages.RemovePage(RAGPage)
+					loadedFiles, _ := ragger.ListLoaded()
+					chatRAGTable := makeRAGTable(fileList, loadedFiles)
+					pages.AddPage(RAGPage, chatRAGTable, true, true)
 				})
 			}()
 			return
@@ -458,14 +452,14 @@ func makeRAGTable(fileList []string, loadedFiles []string) *tview.Flex {
 				if err := ragger.RemoveFile(f.name); err != nil {
 					logger.Error("failed to unload file from RAG", "filename", f.name, "error", err)
 					showToast("RAG", "failed to unload file; error: "+err.Error())
-					app.QueueUpdate(func() {
-						pages.RemovePage(RAGPage)
-					})
 					return
 				}
 				showToast("RAG", "file unloaded successfully")
 				app.QueueUpdate(func() {
 					pages.RemovePage(RAGPage)
+					loadedFiles, _ := ragger.ListLoaded()
+					chatRAGTable := makeRAGTable(fileList, loadedFiles)
+					pages.AddPage(RAGPage, chatRAGTable, true, true)
 				})
 			}()
 			return
@@ -476,6 +470,21 @@ func makeRAGTable(fileList []string, loadedFiles []string) *tview.Flex {
 				return
 			}
 			showToast("chat deleted", fpath+" was deleted")
+			go func() {
+				app.QueueUpdate(func() {
+					pages.RemovePage(RAGPage)
+					newFileList, _ := os.ReadDir(cfg.RAGDir)
+					loadedFiles, _ := ragger.ListLoaded()
+					var newFiles []string
+					for _, f := range newFileList {
+						if !f.IsDir() {
+							newFiles = append(newFiles, f.Name())
+						}
+					}
+					chatRAGTable := makeRAGTable(newFiles, loadedFiles)
+					pages.AddPage(RAGPage, chatRAGTable, true, true)
+				})
+			}()
 			return
 		default:
 			pages.RemovePage(RAGPage)
