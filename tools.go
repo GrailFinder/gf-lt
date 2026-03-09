@@ -1493,9 +1493,11 @@ func registerWindowTools() {
 
 var browserAgentSysPrompt = `You are an autonomous browser automation agent. Your goal is to complete the user's task by intelligently using browser automation tools.
 
+Important: The browser may already be running from a previous task! Always check pw_is_running first before starting a new browser.
+
 Available tools:
-- pw_start: Start browser (must call first)
-- pw_stop: Stop browser (call when done)
+- pw_start: Start browser (only if not already running)
+- pw_stop: Stop browser (only when you're truly done and browser is no longer needed)
 - pw_is_running: Check if browser is running
 - pw_navigate: Go to a URL
 - pw_click: Click an element by CSS selector
@@ -1511,11 +1513,12 @@ Available tools:
 - pw_search_elements: Search for elements by text or selector
 
 Workflow:
-1. Start browser if not running (pw_start)
-2. Navigate to required pages (pw_navigate)
-3. Interact with elements as needed (click, fill, etc.)
-4. Extract information or take screenshots as requested
-5. Stop browser when done (pw_stop)
+1. First, check if browser is already running (pw_is_running)
+2. Only start browser if not already running (pw_start)
+3. Navigate to required pages (pw_navigate)
+4. Interact with elements as needed (click, fill, etc.)
+5. Extract information or take screenshots as requested
+6. IMPORTANT: Do NOT stop the browser when done! Leave it running so the user can continue interacting with the page in subsequent requests.
 
 Always provide clear feedback about what you're doing and what you found.`
 
@@ -1524,11 +1527,9 @@ func runBrowserAgent(args map[string]string) []byte {
 	if !ok || task == "" {
 		return []byte(`{"error": "task argument is required"}`)
 	}
-
 	client := getWebAgentClient()
 	pwAgent := agent.NewPWAgent(client, browserAgentSysPrompt)
 	pwAgent.SetTools(agent.GetPWTools())
-
 	return pwAgent.ProcessTask(task)
 }
 
@@ -1817,7 +1818,6 @@ func registerPlaywrightTools() {
 		}
 		baseTools = append(baseTools, playwrightTools...)
 		toolSysMsg += browserToolSysMsg
-
 		agent.RegisterPWTool("pw_start", pwStart)
 		agent.RegisterPWTool("pw_stop", pwStop)
 		agent.RegisterPWTool("pw_is_running", pwIsRunning)
@@ -1833,7 +1833,6 @@ func registerPlaywrightTools() {
 		agent.RegisterPWTool("pw_get_html", pwGetHTML)
 		agent.RegisterPWTool("pw_get_dom", pwGetDOM)
 		agent.RegisterPWTool("pw_search_elements", pwSearchElements)
-
 		browserAgentTool := []models.Tool{
 			{
 				Type: "function",
@@ -1851,7 +1850,6 @@ func registerPlaywrightTools() {
 			},
 		}
 		baseTools = append(baseTools, browserAgentTool...)
-
 		fnMap["browser_agent"] = runBrowserAgent
 	}
 }
