@@ -134,8 +134,9 @@ setup-whisper: build-whisper download-whisper-model
 
 build-whisper: ## Build whisper.cpp from source in batteries directory
 	@echo "Building whisper.cpp from source in batteries directory..."
-	@if [ ! -d "batteries/whisper.cpp" ]; then \
+	@if [ ! -f "batteries/whisper.cpp/CMakeLists.txt" ]; then \
 		echo "Cloning whisper.cpp repository to batteries directory..."; \
+		rm -rf batteries/whisper.cpp; \
 		git clone https://github.com/ggml-org/whisper.cpp.git batteries/whisper.cpp; \
 	fi
 	cd batteries/whisper.cpp && cmake -B build -DGGML_CUDA=ON -DWHISPER_SDL2=ON; cmake --build build --config Release -j 8
@@ -144,7 +145,7 @@ build-whisper: ## Build whisper.cpp from source in batteries directory
 download-whisper-model: ## Download Whisper model for STT in batteries directory
 	@echo "Downloading Whisper model for STT..."
 	@if [ ! -d "batteries/whisper.cpp/models" ]; then \
-		mkdir -p "batteries/whisper.cpp/models" \
+		mkdir -p "batteries/whisper.cpp/models"; \
 	fi
 	curl -o batteries/whisper.cpp/models/ggml-large-v3-turbo-q5_0.bin -L "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo-q5_0.bin?download=true"
 	@echo "Whisper model downloaded successfully!"
