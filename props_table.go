@@ -115,9 +115,6 @@ func makePropsTable(props map[string]float32) *tview.Table {
 		row++
 	}
 	// Add checkboxes
-	addCheckboxRow("Inject role", injectRole, func(checked bool) {
-		injectRole = checked
-	})
 	addCheckboxRow("TTS Enabled", cfg.TTS_ENABLED, func(checked bool) {
 		cfg.TTS_ENABLED = checked
 	})
