@@ -61,4 +61,4 @@ StripThinkingFromAPI = true  # Strip <think> blocks from messages before sending
 ReasoningEffort = "medium"
 # playwright tools
 PlaywrightEnabled = false
-PlaywrightDebug = false
+PlaywrightDebug = false # when true opens in gui mode (headless=false)

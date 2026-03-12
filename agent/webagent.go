@@ -17,8 +17,9 @@ func NewWebAgentB(client *AgentClient, sysprompt string) *WebAgentB {
 
 // Process applies the formatting function to raw output
 func (a *WebAgentB) Process(args map[string]string, rawOutput []byte) []byte {
-	msg, err := a.FormMsg(
-		fmt.Sprintf("%s\n\nrequest:\n%+v\ntool response:\n%v", a.sysprompt, args, string(rawOutput)))
+	msg, err := a.FormFirstMsg(
+		a.sysprompt,
+		fmt.Sprintf("request:\n%+v\ntool response:\n%v", args, string(rawOutput)))
 	if err != nil {
 		a.Log().Error("failed to process the request", "error", err)
 		return []byte("failed to process the request; err: " + err.Error())
