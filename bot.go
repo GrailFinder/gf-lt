@@ -1529,21 +1529,23 @@ func init() {
 		asr = NewSTT(logger, cfg)
 	}
 	if cfg.PlaywrightEnabled {
-		if err := checkPlaywright(); err != nil {
-			// slow, need a faster check if playwright install
-			if err := installPW(); err != nil {
-				logger.Error("failed to install playwright", "error", err)
-				cancel()
-				os.Exit(1)
-				return
-			}
+		go func() {
 			if err := checkPlaywright(); err != nil {
-				logger.Error("failed to run playwright", "error", err)
-				cancel()
-				os.Exit(1)
-				return
+				// slow, need a faster check if playwright install
+				if err := installPW(); err != nil {
+					logger.Error("failed to install playwright", "error", err)
+					cancel()
+					os.Exit(1)
+					return
+				}
+				if err := checkPlaywright(); err != nil {
+					logger.Error("failed to run playwright", "error", err)
+					cancel()
+					os.Exit(1)
+					return
+				}
 			}
-		}
+		}()
 	}
 	// atomic default values
 	cachedModelColor.Store("orange")

@@ -1,0 +1,32 @@
+-- Drop unused embedding tables (we only use 768)
+DROP INDEX IF EXISTS idx_embeddings_384_filename;
+DROP INDEX IF EXISTS idx_embeddings_1024_filename;
+DROP INDEX IF EXISTS idx_embeddings_1536_filename;
+DROP INDEX IF EXISTS idx_embeddings_2048_filename;
+DROP INDEX IF EXISTS idx_embeddings_3072_filename;
+DROP INDEX IF EXISTS idx_embeddings_4096_filename;
+DROP INDEX IF EXISTS idx_embeddings_5120_filename;
+
+DROP INDEX IF EXISTS idx_embeddings_384_slug;
+DROP INDEX IF EXISTS idx_embeddings_1024_slug;
+DROP INDEX IF EXISTS idx_embeddings_1536_slug;
+DROP INDEX IF EXISTS idx_embeddings_2048_slug;
+DROP INDEX IF EXISTS idx_embeddings_3072_slug;
+DROP INDEX IF EXISTS idx_embeddings_4096_slug;
+DROP INDEX IF EXISTS idx_embeddings_5120_slug;
+
+DROP INDEX IF EXISTS idx_embeddings_384_created_at;
+DROP INDEX IF EXISTS idx_embeddings_1024_created_at;
+DROP INDEX IF EXISTS idx_embeddings_1536_created_at;
+DROP INDEX IF EXISTS idx_embeddings_2048_created_at;
+DROP INDEX IF EXISTS idx_embeddings_3072_created_at;
+DROP INDEX IF EXISTS idx_embeddings_4096_created_at;
+DROP INDEX IF EXISTS idx_embeddings_5120_created_at;
+
+DROP TABLE IF EXISTS embeddings_384;
+DROP TABLE IF EXISTS embeddings_1024;
+DROP TABLE IF EXISTS embeddings_1536;
+DROP TABLE IF EXISTS embeddings_2048;
+DROP TABLE IF EXISTS embeddings_3072;
+DROP TABLE IF EXISTS embeddings_4096;
+DROP TABLE IF EXISTS embeddings_5120;
