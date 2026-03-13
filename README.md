@@ -10,6 +10,10 @@ made with use of [tview](https://github.com/rivo/tview)
 - function calls (function calls are implemented natively, to avoid calling outside sources);
 - [character specific context (unique feature)](docs/char-specific-context.md)
 
+
+#### showcase on youtube
+[![gf-lt video showcase](assets/yt_thumb.jpg)](https://youtu.be/WCS4Xc902F8 "gf-lt showcase")
+
 #### how it looks
 ![how it looks](assets/ex01.png)
 
