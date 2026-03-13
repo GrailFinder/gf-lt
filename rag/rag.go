@@ -47,7 +47,6 @@ func isStopWord(word string) bool {
 func detectPhrases(query string) []string {
 	words := strings.Fields(strings.ToLower(query))
 	var phrases []string
-
 	for i := 0; i < len(words)-1; i++ {
 		word1 := strings.Trim(words[i], ".,!?;:'\"()[]{}")
 		word2 := strings.Trim(words[i+1], ".,!?;:'\"()[]{}")
@@ -70,7 +69,6 @@ func detectPhrases(query string) []string {
 			}
 		}
 	}
-
 	return phrases
 }
 
@@ -122,7 +120,6 @@ func areSlugsAdjacent(slug1, slug2 string) bool {
 	if prefix1 != prefix2 {
 		return false
 	}
-
 	batch1, chunk1, ok1 := parseSlugIndices(slug1)
 	batch2, chunk2, ok2 := parseSlugIndices(slug2)
 	if !ok1 || !ok2 {
@@ -843,7 +840,6 @@ func (r *RAG) GenerateQueryVariations(query string) []string {
 			}
 		}
 	}
-
 	return variations
 }
 

@@ -162,7 +162,6 @@ func (p ProviderSQL) ListFiles() ([]string, error) {
 		return nil, err
 	}
 	defer rows.Close()
-
 	var allFiles []string
 	for rows.Next() {
 		var filename string
