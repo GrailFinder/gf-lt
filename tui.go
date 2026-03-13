@@ -68,8 +68,8 @@ var (
 [yellow]F4[white]: edit msg
 [yellow]F5[white]: toggle fullscreen for input/chat window
 [yellow]F6[white]: interrupt bot resp
-[yellow]F7[white]: copy last msg to clipboard (linux xclip)
-[yellow]F8[white]: copy n msg to clipboard (linux xclip)
+[yellow]F7[white]: copy last msg to clipboard (linux xclip or wl-copy)
+[yellow]F8[white]: copy n msg to clipboard (linux xclip or wl-copy)
 [yellow]F9[white]: table to copy from; with all code blocks
 [yellow]F10[white]: switch if LLM will respond on this message (for user to write multiple messages in a row)
 [yellow]F11[white]: import json chat file
@@ -104,6 +104,7 @@ var (
 [yellow]Alt+t[white]: toggle thinking blocks visibility (collapse/expand <think> blocks)
 [yellow]Ctrl+t[white]: toggle tool call/response visibility (collapse/expand tool calls and non-shell tool responses)
 [yellow]Alt+i[white]: show colorscheme selection popup
+[yellow]Insert[white]: paste from clipboard to the text area (use it instead shift+insert)
 
 === scrolling chat window (some keys similar to vim) ===
 [yellow]arrows up/down and j/k[white]: scroll up and down
@@ -318,6 +319,24 @@ func initTUI() {
 	textArea = tview.NewTextArea().
 		SetPlaceholder("input is multiline; press <Enter> to start the next line;\npress <Esc> to send the message.")
 	textArea.SetBorder(true).SetTitle("input")
+	textArea.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		if event.Key() == tcell.KeyInsert {
+			text, err := readFromClipboard()
+			if err != nil {
+				logger.Error("failed to read clipboard", "error", err)
+				return event
+			}
+			maxPaste := 100000
+			if len(text) > maxPaste {
+				text = text[:maxPaste]
+				showToast("paste truncated", "pasted text exceeded 100KB limit")
+			}
+			current := textArea.GetText()
+			textArea.SetText(current+text, true)
+			return nil
+		}
+		return event
+	})
 	textView = tview.NewTextView().
 		SetDynamicColors(true).
 		SetRegions(true).

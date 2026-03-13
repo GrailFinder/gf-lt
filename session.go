@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -161,10 +162,31 @@ func loadOldChatOrGetNew() []models.RoleMsg {
 }
 
 func copyToClipboard(text string) error {
-	cmd := exec.Command("xclip", "-selection", "clipboard")
-	cmd.Stdin = nil
+	var cmd *exec.Cmd
+	if _, err := exec.LookPath("xclip"); err == nil {
+		cmd = exec.Command("xclip", "-selection", "clipboard")
+	} else if _, err := exec.LookPath("wl-copy"); err == nil {
+		cmd = exec.Command("wl-copy")
+	} else {
+		return errors.New("no clipboard tool found (install xclip or wl-clipboard)")
+	}
+	cmd.Stdin = strings.NewReader(text)
 	cmd.Stdout = nil
 	cmd.Stderr = nil
-	cmd.Stdin = strings.NewReader(text)
 	return cmd.Run()
+}
+
+func readFromClipboard() (string, error) {
+	var cmd *exec.Cmd
+	if _, err := exec.LookPath("xclip"); err == nil {
+		cmd = exec.Command("xclip", "-selection", "clipboard", "-out")
+	} else if _, err := exec.LookPath("wl-paste"); err == nil {
+		cmd = exec.Command("wl-paste")
+	} else {
+		return "", errors.New("no clipboard tool found (install xclip or wl-clipboard)")
+	}
+	var out bytes.Buffer
+	cmd.Stdout = &out
+	err := cmd.Run()
+	return out.String(), err
 }
