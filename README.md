@@ -38,7 +38,8 @@ make noextra-run
 ```
 
 #### keybinds
-while running you can press f12 for list of keys;
+- use `insert` button to paste text from the clipboard to the text area, instead of shift+insert (might freeze the program);
+- press f12 for list of keys;
 ![keybinds](assets/helppage.png)
 
 #### setting up config
