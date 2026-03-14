@@ -455,6 +455,83 @@ func pwDrag(args map[string]string) []byte {
 	return []byte(fmt.Sprintf(`{"success": true, "message": "Dragged from (%s,%s) to (%s,%s)"}`, x1, y1, x2, y2))
 }
 
+func pwDragBySelector(args map[string]string) []byte {
+	fromSelector, ok := args["fromSelector"]
+	if !ok || fromSelector == "" {
+		return []byte(`{"error": "fromSelector not provided"}`)
+	}
+	toSelector, ok := args["toSelector"]
+	if !ok || toSelector == "" {
+		return []byte(`{"error": "toSelector not provided"}`)
+	}
+	if !browserStarted || page == nil {
+		return []byte(`{"error": "Browser not started. Call pw_start first."}`)
+	}
+
+	// Get center coordinates of both elements using JavaScript
+	fromJS := fmt.Sprintf(`
+		function getCenter(selector) {
+			const el = document.querySelector(selector);
+			if (!el) return null;
+			const rect = el.getBoundingClientRect();
+			return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+		}
+		getCenter(%q)
+	`, fromSelector)
+	toJS := fmt.Sprintf(`
+		function getCenter(selector) {
+			const el = document.querySelector(selector);
+			if (!el) return null;
+			const rect = el.getBoundingClientRect();
+			return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+		}
+		getCenter(%q)
+	`, toSelector)
+
+	fromResult, err := page.Evaluate(fromJS)
+	if err != nil {
+		return []byte(fmt.Sprintf(`{"error": "failed to get from element: %s"}`, err.Error()))
+	}
+	fromMap, ok := fromResult.(map[string]interface{})
+	if !ok || fromMap == nil {
+		return []byte(fmt.Sprintf(`{"error": "from selector '%s' not found"}`, fromSelector))
+	}
+	fromX := fromMap["x"].(float64)
+	fromY := fromMap["y"].(float64)
+
+	toResult, err := page.Evaluate(toJS)
+	if err != nil {
+		return []byte(fmt.Sprintf(`{"error": "failed to get to element: %s"}`, err.Error()))
+	}
+	toMap, ok := toResult.(map[string]interface{})
+	if !ok || toMap == nil {
+		return []byte(fmt.Sprintf(`{"error": "to selector '%s' not found"}`, toSelector))
+	}
+	toX := toMap["x"].(float64)
+	toY := toMap["y"].(float64)
+
+	// Perform the drag using coordinates
+	mouse := page.Mouse()
+	err = mouse.Move(fromX, fromY)
+	if err != nil {
+		return []byte(fmt.Sprintf(`{"error": "failed to move mouse: %s"}`, err.Error()))
+	}
+	err = mouse.Down()
+	if err != nil {
+		return []byte(fmt.Sprintf(`{"error": "failed to mouse down: %s"}`, err.Error()))
+	}
+	err = mouse.Move(toX, toY)
+	if err != nil {
+		return []byte(fmt.Sprintf(`{"error": "failed to move mouse: %s"}`, err.Error()))
+	}
+	err = mouse.Up()
+	if err != nil {
+		return []byte(fmt.Sprintf(`{"error": "failed to mouse up: %s"}`, err.Error()))
+	}
+	msg := fmt.Sprintf("Dragged from %s (%.0f,%.0f) to %s (%.0f,%.0f)", fromSelector, fromX, fromY, toSelector, toX, toY)
+	return []byte(fmt.Sprintf(`{"success": true, "message": "%s"}`, msg))
+}
+
 func pwClickAt(args map[string]string) []byte {
 	x, ok := args["x"]
 	if !ok {

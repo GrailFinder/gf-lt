@@ -205,8 +205,7 @@ func updateToolCapabilities() {
 	if cfg == nil || cfg.CurrentAPI == "" {
 		logger.Warn("cannot determine model capabilities: cfg or CurrentAPI is nil")
 		registerWindowTools()
-		fnMap["browser_agent"] = runBrowserAgent
-		// registerPlaywrightTools()
+		// fnMap["browser_agent"] = runBrowserAgent
 		return
 	}
 	prevHasVision := modelHasVision
@@ -220,8 +219,7 @@ func updateToolCapabilities() {
 		}
 	}
 	registerWindowTools()
-	fnMap["browser_agent"] = runBrowserAgent
-	// registerPlaywrightTools()
+	// fnMap["browser_agent"] = runBrowserAgent
 }
 
 // getWebAgentClient returns a singleton AgentClient for web agents.
@@ -511,10 +509,152 @@ func runCmd(args map[string]string) []byte {
 	case "todo":
 		// todo create|read|update|delete - route to existing todo handlers
 		return []byte(handleTodoSubcommand(rest, args))
+	case "window", "windows":
+		// window list - list all windows
+		return listWindows(args)
+	case "capture", "screenshot":
+		// capture <window-name> - capture a window
+		return captureWindow(args)
+	case "capture_and_view", "screenshot_and_view":
+		// capture and view screenshot
+		return captureWindowAndView(args)
+	case "browser":
+		// browser <action> [args...] - Playwright browser automation
+		return runBrowserCommand(rest, args)
 	default:
 		// Everything else: shell with pipe/chaining support
 		result := tools.ExecChain(commandStr)
 		return []byte(result)
+	}
+}
+
+// runBrowserCommand routes browser subcommands to Playwright handlers
+func runBrowserCommand(args []string, originalArgs map[string]string) []byte {
+	if len(args) == 0 {
+		return []byte(`usage: browser <action> [args...]
+Actions:
+  start              - start browser
+  stop               - stop browser
+  running            - check if browser is running
+  go <url>           - navigate to URL
+  click <selector>   - click element
+  fill <selector> <text> - fill input
+  text [selector]    - extract text
+  html [selector]    - get HTML
+  dom                - get DOM
+  screenshot [path]  - take screenshot
+  screenshot_and_view - take and view screenshot
+  wait <selector>    - wait for element
+  drag <from> <to>   - drag element`)
+	}
+
+	action := args[0]
+	rest := args[1:]
+
+	switch action {
+	case "start":
+		return pwStart(originalArgs)
+	case "stop":
+		return pwStop(originalArgs)
+	case "running":
+		return pwIsRunning(originalArgs)
+	case "go", "navigate", "open":
+		// browser go <url>
+		url := ""
+		if len(rest) > 0 {
+			url = rest[0]
+		}
+		if url == "" {
+			return []byte("usage: browser go <url>")
+		}
+		return pwNavigate(map[string]string{"url": url})
+	case "click":
+		// browser click <selector> [index]
+		selector := ""
+		index := "0"
+		if len(rest) > 0 {
+			selector = rest[0]
+		}
+		if len(rest) > 1 {
+			index = rest[1]
+		}
+		if selector == "" {
+			return []byte("usage: browser click <selector> [index]")
+		}
+		return pwClick(map[string]string{"selector": selector, "index": index})
+	case "fill":
+		// browser fill <selector> <text>
+		if len(rest) < 2 {
+			return []byte("usage: browser fill <selector> <text>")
+		}
+		return pwFill(map[string]string{"selector": rest[0], "text": strings.Join(rest[1:], " ")})
+	case "text":
+		// browser text [selector]
+		selector := ""
+		if len(rest) > 0 {
+			selector = rest[0]
+		}
+		return pwExtractText(map[string]string{"selector": selector})
+	case "html":
+		// browser html [selector]
+		selector := ""
+		if len(rest) > 0 {
+			selector = rest[0]
+		}
+		return pwGetHTML(map[string]string{"selector": selector})
+	case "dom":
+		return pwGetDOM(originalArgs)
+	case "screenshot":
+		// browser screenshot [path]
+		path := ""
+		if len(rest) > 0 {
+			path = rest[0]
+		}
+		return pwScreenshot(map[string]string{"path": path})
+	case "screenshot_and_view":
+		// browser screenshot_and_view [path]
+		path := ""
+		if len(rest) > 0 {
+			path = rest[0]
+		}
+		return pwScreenshotAndView(map[string]string{"path": path})
+	case "wait":
+		// browser wait <selector>
+		selector := ""
+		if len(rest) > 0 {
+			selector = rest[0]
+		}
+		if selector == "" {
+			return []byte("usage: browser wait <selector>")
+		}
+		return pwWaitForSelector(map[string]string{"selector": selector})
+	case "drag":
+		// browser drag <x1> <y1> <x2> <y2> OR browser drag <from_selector> <to_selector>
+		if len(rest) < 4 && len(rest) < 2 {
+			return []byte("usage: browser drag <x1> <y1> <x2> <y2> OR browser drag <from_selector> <to_selector>")
+		}
+		// Check if first arg is a number (coordinates) or selector
+		_, err := strconv.Atoi(rest[0])
+		_, err2 := strconv.ParseFloat(rest[0], 64)
+		if err == nil || err2 == nil {
+			// Coordinates: browser drag 100 200 300 400
+			if len(rest) < 4 {
+				return []byte("usage: browser drag <x1> <y1> <x2> <y2>")
+			}
+			return pwDrag(map[string]string{
+				"x1": rest[0], "y1": rest[1],
+				"x2": rest[2], "y2": rest[3],
+			})
+		}
+		// Selectors: browser drag #item #container
+		// pwDrag needs coordinates, so we need to get element positions first
+		// This requires a different approach - use JavaScript to get centers
+		return pwDragBySelector(map[string]string{
+			"fromSelector": rest[0],
+			"toSelector":   rest[1],
+		})
+	default:
+		return []byte(fmt.Sprintf("unknown browser action: %s", action))
 	}
 }
 
@@ -567,6 +707,25 @@ func getHelp(args []string) string {
   todo update <id> <status> - update todo (pending/in_progress/completed)
   todo delete <id>     - delete a todo
   
+  # Window (requires xdotool + maim)
+  window              - list available windows
+  capture <name>    - capture a window screenshot
+  capture_and_view <name> - capture and view screenshot
+  
+  # Browser (requires Playwright)
+  browser start           - start browser
+  browser stop            - stop browser
+  browser running         - check if running
+  browser go <url>        - navigate to URL
+  browser click <sel>     - click element
+  browser fill <sel> <txt> - fill input
+  browser text [sel]     - extract text
+  browser html [sel]      - get HTML
+  browser screenshot     - take screenshot
+  browser wait <sel>     - wait for element
+  browser drag <x1> <y1> <x2> <y2> - drag by coordinates
+  browser drag <sel1> <sel2> - drag by selectors (center points)
+
   # System
   <any shell command> - run shell command directly
 
@@ -675,6 +834,51 @@ Use: run "command" to execute.`
     run "go test ./..."
     run "go mod tidy"
     run "go get github.com/package"`
+	case "window", "windows":
+		return `window
+  List available windows.
+  Requires: xdotool and maim
+  Example:
+    run "window"`
+	case "capture", "screenshot":
+		return `capture <window-name-or-id>
+  Capture a screenshot of a window.
+  Requires: xdotool and maim
+  Examples:
+    run "capture Firefox"
+    run "capture 0x12345678"
+    run "capture_and_view Firefox"`
+	case "capture_and_view":
+		return `capture_and_view <window-name-or-id>
+  Capture a window and return for viewing.
+  Requires: xdotool and maim
+  Examples:
+    run "capture_and_view Firefox"`
+	case "browser":
+		return `browser <action> [args]
+  Playwright browser automation.
+  Requires: Playwright browser server running
+  Actions:
+    start              - start browser
+    stop               - stop browser
+    running            - check if browser is running
+    go <url>           - navigate to URL
+    click <selector>   - click element (use index for multiple: click #btn 1)
+    fill <selector> <text> - fill input field
+    text [selector]   - extract text (from element or whole page)
+    html [selector]   - get HTML (from element or whole page)
+    screenshot [path] - take screenshot
+    wait <selector>   - wait for element to appear
+    drag <from> <to>  - drag element to another element
+  Examples:
+    run "browser start"
+    run "browser go https://example.com"
+    run "browser click #submit-button"
+    run "browser fill #search-input hello"
+    run "browser text"
+    run "browser screenshot"
+    run "browser drag 100 200 300 400"
+    run "browser drag #item1 #container2"`
 	default:
 		return fmt.Sprintf("No help available for: %s. Use: run \"help\" for all commands.", cmd)
 	}
