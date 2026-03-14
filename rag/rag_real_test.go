@@ -41,7 +41,6 @@ func TestRealBiblicalQuery(t *testing.T) {
 		t.Fatalf("failed to create RAG instance: %v", err)
 	}
 	t.Cleanup(func() { rag.Destroy() })
-
 	query := "bald prophet and two she bears"
 	results, err := rag.Search(query, 30)
 	if err != nil {
@@ -95,7 +94,6 @@ func TestRealQueryVariations(t *testing.T) {
 		t.Fatalf("failed to create RAG instance: %v", err)
 	}
 	t.Cleanup(func() { rag.Destroy() })
-
 	tests := []struct {
 		name  string
 		query string

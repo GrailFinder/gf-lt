@@ -23,9 +23,20 @@ func (p *ProviderSQL) Migrate() error {
 		p.logger.Error("Failed to read migrations directory;", "error", err)
 		return fmt.Errorf("failed to read migrations directory: %w", err)
 	}
+
+	// Check if FTS already has data - skip populate migration if so
+	var ftsCount int
+	_ = p.db.QueryRow("SELECT COUNT(*) FROM fts_embeddings").Scan(&ftsCount)
+	skipFTSMigration := ftsCount > 0
+
 	// Execute each .up.sql file
 	for _, file := range files {
 		if strings.HasSuffix(file.Name(), ".up.sql") {
+			// Skip FTS populate migration if already populated
+			if skipFTSMigration && strings.Contains(file.Name(), "004_populate_fts") {
+				p.logger.Debug("Skipping FTS migration - already populated", "file", file.Name())
+				continue
+			}
 			err := p.executeMigration(migrationsDir, file.Name())
 			if err != nil {
 				p.logger.Error("Failed to execute migration %s: %v", file.Name(), err)

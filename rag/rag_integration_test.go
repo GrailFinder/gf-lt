@@ -297,7 +297,6 @@ relative term as it was still a few kilometers away.
 
 The clan house was made of brick and conformed to an older style of architecture.  Nearly everyone knew about this mansion and its clock tower.  It stood tall over the neighboring mansions and rumor had it that you could see the whole capital from the top.  It 
 spoke to this clan’s renown and history that they were able to get away with building something that dwarfed the mansions of the nobility.`
-
 	chunks := []*models.VectorRow{
 		{
 			Slug:       "kjv_bible.epub_1786_0",

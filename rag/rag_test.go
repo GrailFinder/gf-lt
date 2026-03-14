@@ -30,7 +30,6 @@ func TestDetectPhrases(t *testing.T) {
 			expect: []string{},
 		},
 	}
-
 	for _, tt := range tests {
 		got := detectPhrases(tt.query)
 		if len(got) != len(tt.expect) {
@@ -73,7 +72,6 @@ func TestCountPhraseMatches(t *testing.T) {
 			expect: 2, // "she bears" and "bald prophet"
 		},
 	}
-
 	for _, tt := range tests {
 		got := countPhraseMatches(tt.text, tt.query)
 		if got != tt.expect {
@@ -119,7 +117,6 @@ func TestAreSlugsAdjacent(t *testing.T) {
 			expect: true,       // sequential batches with same chunk index are adjacent
 		},
 	}
-
 	for _, tt := range tests {
 		got := areSlugsAdjacent(tt.slug1, tt.slug2)
 		if got != tt.expect {
@@ -141,7 +138,6 @@ func TestParseSlugIndices(t *testing.T) {
 		{"file_abc_def", 0, 0, false},
 		{"file_123_456_extra", 456, 0, false}, // regex matches last two numbers
 	}
-
 	for _, tt := range tests {
 		batch, chunk, ok := parseSlugIndices(tt.slug)
 		if ok != tt.wantOk {

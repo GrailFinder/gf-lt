@@ -48,22 +48,8 @@ func mathBitsToFloat32(b uint32) float32 {
 
 func fetchTableName(emb []float32) (string, error) {
 	switch len(emb) {
-	case 384:
-		return "embeddings_384", nil
 	case 768:
 		return "embeddings_768", nil
-	case 1024:
-		return "embeddings_1024", nil
-	case 1536:
-		return "embeddings_1536", nil
-	case 2048:
-		return "embeddings_2048", nil
-	case 3072:
-		return "embeddings_3072", nil
-	case 4096:
-		return "embeddings_4096", nil
-	case 5120:
-		return "embeddings_5120", nil
 	default:
 		return "", fmt.Errorf("no table for the size of %d", len(emb))
 	}
@@ -170,62 +156,25 @@ func sqrt(f float32) float32 {
 }
 
 func (p ProviderSQL) ListFiles() ([]string, error) {
-	fileLists := make([][]string, 0)
-
-	// Query all supported tables and combine results
-	tableNames := []string{
-		"embeddings_384", "embeddings_768", "embeddings_1024", "embeddings_1536",
-		"embeddings_2048", "embeddings_3072", "embeddings_4096", "embeddings_5120",
+	query := "SELECT DISTINCT filename FROM embeddings_768"
+	rows, err := p.db.Query(query)
+	if err != nil {
+		return nil, err
 	}
-	for _, table := range tableNames {
-		query := "SELECT DISTINCT filename FROM " + table
-		rows, err := p.db.Query(query)
-		if err != nil {
-			// Continue if one table doesn't exist
+	defer rows.Close()
+	var allFiles []string
+	for rows.Next() {
+		var filename string
+		if err := rows.Scan(&filename); err != nil {
 			continue
 		}
-
-		var files []string
-		for rows.Next() {
-			var filename string
-			if err := rows.Scan(&filename); err != nil {
-				continue
-			}
-			files = append(files, filename)
-		}
-		rows.Close()
-
-		fileLists = append(fileLists, files)
-	}
-
-	// Combine and deduplicate
-	fileSet := make(map[string]bool)
-	var allFiles []string
-	for _, files := range fileLists {
-		for _, file := range files {
-			if !fileSet[file] {
-				fileSet[file] = true
-				allFiles = append(allFiles, file)
-			}
-		}
+		allFiles = append(allFiles, filename)
 	}
 	return allFiles, nil
 }
 
 func (p ProviderSQL) RemoveEmbByFileName(filename string) error {
-	var errors []string
-	tableNames := []string{
-		"embeddings_384", "embeddings_768", "embeddings_1024", "embeddings_1536",
-		"embeddings_2048", "embeddings_3072", "embeddings_4096", "embeddings_5120",
-	}
-	for _, table := range tableNames {
-		query := fmt.Sprintf("DELETE FROM %s WHERE filename = ?", table)
-		if _, err := p.db.Exec(query, filename); err != nil {
-			errors = append(errors, err.Error())
-		}
-	}
-	if len(errors) > 0 {
-		return fmt.Errorf("errors occurred: %v", errors)
-	}
-	return nil
+	query := "DELETE FROM embeddings_768 WHERE filename = ?"
+	_, err := p.db.Exec(query, filename)
+	return err
 }
