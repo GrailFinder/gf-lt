@@ -6,6 +6,7 @@ type Memories interface {
 	Memorise(m *models.Memory) (*models.Memory, error)
 	Recall(agent, topic string) (string, error)
 	RecallTopics(agent string) ([]string, error)
+	Forget(agent, topic string) error
 }
 
 func (p ProviderSQL) Memorise(m *models.Memory) (*models.Memory, error) {
@@ -51,4 +52,14 @@ func (p ProviderSQL) RecallTopics(agent string) ([]string, error) {
 		return nil, err
 	}
 	return topics, nil
+}
+
+func (p ProviderSQL) Forget(agent, topic string) error {
+	query := "DELETE FROM memories WHERE agent = $1 AND topic = $2"
+	_, err := p.db.Exec(query, agent, topic)
+	if err != nil {
+		p.logger.Error("failed to delete memory", "query", query, "error", err)
+		return err
+	}
+	return nil
 }
