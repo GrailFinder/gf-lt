@@ -2,7 +2,9 @@ package tools
 
 import (
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
+	"gf-lt/models"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -155,27 +157,53 @@ func FsCat(args []string, stdin string) string {
 	return string(data)
 }
 
-func FsSee(args []string, stdin string) string {
+func FsViewImg(args []string, stdin string) string {
 	if len(args) == 0 {
-		return "[error] usage: see <image-path>"
+		return "[error] usage: view_img <image-path>"
 	}
 	path := args[0]
 
-	abs, err := resolvePath(path)
-	if err != nil {
-		return fmt.Sprintf("[error] %v", err)
+	var abs string
+	if filepath.IsAbs(path) {
+		abs = path
+	} else {
+		var err error
+		abs, err = resolvePath(path)
+		if err != nil {
+			return fmt.Sprintf("[error] %v", err)
+		}
 	}
 
-	info, err := os.Stat(abs)
-	if err != nil {
-		return fmt.Sprintf("[error] see: %v", err)
+	if _, err := os.Stat(abs); err != nil {
+		return fmt.Sprintf("[error] view_img: %v", err)
 	}
 
 	if !IsImageFile(path) {
 		return fmt.Sprintf("[error] not an image file: %s (use cat to read text files)", path)
 	}
 
-	return fmt.Sprintf("Image: %s (%s)\n![image](file://%s)", path, humanSize(info.Size()), abs)
+	dataURL, err := models.CreateImageURLFromPath(abs)
+	if err != nil {
+		return fmt.Sprintf("[error] view_img: %v", err)
+	}
+
+	result := models.MultimodalToolResp{
+		Type: "multimodal_content",
+		Parts: []map[string]string{
+			{"type": "text", "text": "Image: " + path},
+			{"type": "image_url", "url": dataURL},
+		},
+	}
+	jsonResult, err := json.Marshal(result)
+	if err != nil {
+		return fmt.Sprintf("[error] view_img: %v", err)
+	}
+	return string(jsonResult)
+}
+
+// FsSee is deprecated, use FsViewImg
+func FsSee(args []string, stdin string) string {
+	return FsViewImg(args, stdin)
 }
 
 func FsWrite(args []string, stdin string) string {
@@ -352,18 +380,44 @@ func FsMv(args []string, stdin string) string {
 
 func FsMkdir(args []string, stdin string) string {
 	if len(args) == 0 {
-		return "[error] usage: mkdir <dir>"
+		return "[error] usage: mkdir [-p] <dir>"
 	}
 
-	abs, err := resolvePath(args[0])
+	createParents := false
+	var dirPath string
+
+	for _, a := range args {
+		if a == "-p" || a == "--parents" {
+			createParents = true
+		} else if dirPath == "" {
+			dirPath = a
+		}
+	}
+
+	if dirPath == "" {
+		return "[error] usage: mkdir [-p] <dir>"
+	}
+
+	abs, err := resolvePath(dirPath)
 	if err != nil {
 		return fmt.Sprintf("[error] %v", err)
 	}
 
-	if err := os.MkdirAll(abs, 0o755); err != nil {
+	var mkdirFunc func(string, os.FileMode) error
+	if createParents {
+		mkdirFunc = os.MkdirAll
+	} else {
+		mkdirFunc = os.Mkdir
+	}
+
+	if err := mkdirFunc(abs, 0o755); err != nil {
 		return fmt.Sprintf("[error] mkdir: %v", err)
 	}
-	return fmt.Sprintf("Created %s", args[0])
+
+	if createParents {
+		return fmt.Sprintf("Created %s (with parents)", dirPath)
+	}
+	return fmt.Sprintf("Created %s", dirPath)
 }
 
 // Text processing commands

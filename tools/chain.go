@@ -239,7 +239,12 @@ func execBuiltin(name string, args []string, stdin string) string {
 			}
 			return ""
 		}
-		data, err := os.ReadFile(args[0])
+		path := args[0]
+		abs := path
+		if !filepath.IsAbs(path) {
+			abs = filepath.Join(fsRootDir, path)
+		}
+		data, err := os.ReadFile(abs)
 		if err != nil {
 			return fmt.Sprintf("[error] cat: %v", err)
 		}
@@ -266,6 +271,76 @@ func execBuiltin(name string, args []string, stdin string) string {
 		}
 		fsRootDir = abs
 		return fmt.Sprintf("Changed directory to: %s", fsRootDir)
+	case "mkdir":
+		if len(args) == 0 {
+			return "[error] usage: mkdir [-p] <dir>"
+		}
+		createParents := false
+		var dirPath string
+		for _, a := range args {
+			if a == "-p" || a == "--parents" {
+				createParents = true
+			} else if dirPath == "" {
+				dirPath = a
+			}
+		}
+		if dirPath == "" {
+			return "[error] usage: mkdir [-p] <dir>"
+		}
+		abs := dirPath
+		if !filepath.IsAbs(dirPath) {
+			abs = filepath.Join(fsRootDir, dirPath)
+		}
+		abs = filepath.Clean(abs)
+		var mkdirFunc func(string, os.FileMode) error
+		if createParents {
+			mkdirFunc = os.MkdirAll
+		} else {
+			mkdirFunc = os.Mkdir
+		}
+		if err := mkdirFunc(abs, 0o755); err != nil {
+			return fmt.Sprintf("[error] mkdir: %v", err)
+		}
+		if createParents {
+			return fmt.Sprintf("Created %s (with parents)", dirPath)
+		}
+		return fmt.Sprintf("Created %s", dirPath)
+	case "ls":
+		dir := "."
+		for _, a := range args {
+			if !strings.HasPrefix(a, "-") {
+				dir = a
+				break
+			}
+		}
+		abs := dir
+		if !filepath.IsAbs(dir) {
+			abs = filepath.Join(fsRootDir, dir)
+		}
+		entries, err := os.ReadDir(abs)
+		if err != nil {
+			return fmt.Sprintf("[error] ls: %v", err)
+		}
+		var out strings.Builder
+		for _, e := range entries {
+			info, _ := e.Info()
+			if e.IsDir() {
+				fmt.Fprintf(&out, "d  %-8s %s/\n", "-", e.Name())
+			} else if info != nil {
+				size := info.Size()
+				sizeStr := fmt.Sprintf("%d", size)
+				if size > 1024 {
+					sizeStr = fmt.Sprintf("%.1fKB", float64(size)/1024)
+				}
+				fmt.Fprintf(&out, "f  %-8s %s\n", sizeStr, e.Name())
+			} else {
+				fmt.Fprintf(&out, "f  %-8s %s\n", "?", e.Name())
+			}
+		}
+		if out.Len() == 0 {
+			return "(empty directory)"
+		}
+		return strings.TrimRight(out.String(), "\n")
 	case "go":
 		// Allow all go subcommands
 		if len(args) == 0 {

@@ -518,9 +518,18 @@ func runCmd(args map[string]string) []byte {
 	case "capture_and_view", "screenshot_and_view":
 		// capture and view screenshot
 		return captureWindowAndView(args)
+	case "view_img":
+		// view_img <file> - view image for multimodal
+		return []byte(tools.FsViewImg(rest, ""))
 	case "browser":
 		// browser <action> [args...] - Playwright browser automation
 		return runBrowserCommand(rest, args)
+	case "mkdir", "ls", "cat", "pwd", "cd", "cp", "mv", "rm", "sed", "grep", "head", "tail", "wc", "sort", "uniq", "echo", "time", "stat", "go", "find", "file":
+		// File operations and shell commands - use ExecChain which has whitelist
+		return executeCommand(args)
+	case "git":
+		// git has its own whitelist in FsGit
+		return []byte(tools.FsGit(rest, ""))
 	default:
 		// Unknown subcommand - return help to remind user of available commands
 		return []byte(getHelp(nil))
@@ -667,13 +676,13 @@ func getHelp(args []string) string {
   # File operations
   ls [path]       - list files in directory
   cat <file>      - read file content
-  see <file>      - view image file
+  view_img <file> - view image file
   write <file>    - write content to file
   stat <file>     - get file info
   rm <file>       - delete file
   cp <src> <dst> - copy file
   mv <src> <dst> - move/rename file
-  mkdir <dir>     - create directory
+  mkdir [-p] <dir> - create directory (use full path)
   pwd             - print working directory
   cd <dir>        - change directory
   sed 's/old/new/[g]' [file] - text replacement
@@ -747,12 +756,12 @@ Use: run "command" to execute.`
   Examples:
     run "cat readme.md"
     run "cat -b image.png" (base64 output)`
-	case "see":
-		return `see <image-file>
+	case "view_img":
+		return `view_img <image-file>
   View an image file for multimodal analysis.
   Supports: png, jpg, jpeg, gif, webp, svg
   Example:
-    run "see screenshot.png"`
+    run "view_img screenshot.png"`
 	case "write":
 		return `write <file> [content]
   Write content to a file.
@@ -812,6 +821,14 @@ Use: run "command" to execute.`
   Print working directory.
   Example:
     run "pwd"`
+	case "mkdir":
+		return `mkdir [-p] <directory>
+  Create a directory (use full path).
+  Options:
+    -p, --parents  create parent directories as needed
+  Examples:
+    run "mkdir /full/path/myfolder"
+    run "mkdir -p /full/path/to/nested/folder"`
 	case "sed":
 		return `sed 's/old/new/[g]' [file]
   Stream editor for text replacement.
