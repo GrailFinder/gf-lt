@@ -45,7 +45,12 @@ Your current tools:
 {
 "name":"run",
 "args": ["command"],
-"when_to_use": "main tool: run shell, memory, git, todo. Use run \"help\" for all commands, run \"help <cmd>\" for specific help. Examples: run \"ls -la\", run \"help\", run \"help memory\", run \"git status\", run \"memory store foo bar\""
+"when_to_use": "Main tool for file operations, shell commands, memory, git, and todo. Use run \"help\" for all commands. Examples: run \"ls -la\", run \"help\", run \"mkdir -p foo/bar\", run \"cat file.txt\", run \"view_img image.png\", run \"git status\", run \"memory store foo bar\", run \"todo create task\", run \"grep pattern file\", run \"cd /path\", run \"pwd\", run \"find . -name *.txt\", run \"file image.png\", run \"head file\", run \"tail file\", run \"wc -l file\", run \"sort file\", run \"uniq file\", run \"sed 's/old/new/' file\", run \"echo text\", run \"go build ./...\", run \"time\", run \"stat file\", run \"cp src dst\", run \"mv src dst\", run \"rm file\""
+},
+{
+"name":"view_img",
+"args": ["file"],
+"when_to_use": "View an image file and get it displayed in the conversation for visual analysis. Supports: png, jpg, jpeg, gif, webp, svg. Example: view_img /path/to/image.png or view_img image.png"
 },
 {
 "name":"websearch",
@@ -70,7 +75,7 @@ Your current tools:
 {
 "name":"browser_agent",
 "args": ["task"],
-"when_to_use": "autonomous browser automation for complex tasks"
+"when_to_use": "autonomous browser automation for complex multi-step tasks like login, form filling, scraping"
 }
 ]
 </tools>
@@ -78,25 +83,25 @@ To make a function call return a json object within __tool_call__ tags;
 <example_request>
 __tool_call__
 {
-"name":"recall",
-"args": {"topic": "Adam's number"}
+"name":"run",
+"args": {"command": "ls -la /home"}
 }
 __tool_call__
 </example_request>
 <example_request>
 __tool_call__
 {
-"name":"execute_command",
-"args": {"command": "ls", "args": "-la /home"}
+"name":"view_img",
+"args": {"file": "screenshot.png"}
 }
 __tool_call__
 </example_request>
-Tool call is addressed to the tool agent, avoid sending more info than tool call itself, while making a call.
+Tool call is addressed to the tool agent, avoid sending more info than the tool call itself, while making a call.
 When done right, tool call will be delivered to the tool agent. tool agent will respond with the results of the call.
 <example_response>
 tool:
-under the topic: Adam's number is stored:
-559-996
+total 1234
+drwxr-xr-x   2 user user  4096 Jan  1 12:00 .
 </example_response>
 After that you are free to respond to the user.
 `
@@ -531,8 +536,8 @@ func runCmd(args map[string]string) []byte {
 		// git has its own whitelist in FsGit
 		return []byte(tools.FsGit(rest, ""))
 	default:
-		// Unknown subcommand - return help to remind user of available commands
-		return []byte(getHelp(nil))
+		// Unknown subcommand - tell user to run help tool
+		return []byte("[error] command not allowed. Run 'help' tool to see available commands.")
 	}
 }
 
@@ -1176,6 +1181,29 @@ func todoDelete(args map[string]string) []byte {
 	return jsonResult
 }
 
+func viewImgTool(args map[string]string) []byte {
+	file, ok := args["file"]
+	if !ok || file == "" {
+		msg := "file not provided to view_img tool"
+		logger.Error(msg)
+		return []byte(msg)
+	}
+	result := tools.FsViewImg([]string{file}, "")
+	return []byte(result)
+}
+
+func helpTool(args map[string]string) []byte {
+	command, ok := args["command"]
+	var rest []string
+	if ok && command != "" {
+		parts := strings.Fields(command)
+		if len(parts) > 1 {
+			rest = parts[1:]
+		}
+	}
+	return []byte(getHelp(rest))
+}
+
 func summarizeChat(args map[string]string) []byte {
 	if len(chatBody.Messages) == 0 {
 		return []byte("No chat history to summarize.")
@@ -1379,6 +1407,8 @@ var fnMap = map[string]fnSig{
 	"websearch_raw": websearchRaw,
 	"read_url":      readURL,
 	"read_url_raw":  readURLRaw,
+	"view_img":      viewImgTool,
+	"help":          helpTool,
 	// Unified run command
 	"run":            runCmd,
 	"summarize_chat": summarizeChat,
@@ -1975,6 +2005,24 @@ var baseTools = []models.Tool{
 					"url": models.ToolArgProps{
 						Type:        "string",
 						Description: "link to the webpage to read text from",
+					},
+				},
+			},
+		},
+	},
+	// help
+	models.Tool{
+		Type: "function",
+		Function: models.ToolFunc{
+			Name:        "help",
+			Description: "List all available commands. Use this to discover what commands are available when unsure.",
+			Parameters: models.ToolFuncParams{
+				Type:     "object",
+				Required: []string{},
+				Properties: map[string]models.ToolArgProps{
+					"command": models.ToolArgProps{
+						Type:        "string",
+						Description: "optional: get help for specific command (e.g., 'help memory')",
 					},
 				},
 			},
