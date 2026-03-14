@@ -614,6 +614,80 @@ func FsCd(args []string, stdin string) string {
 	return fmt.Sprintf("Changed directory to: %s", fsRootDir)
 }
 
+func FsSed(args []string, stdin string) string {
+	if len(args) == 0 {
+		return "[error] usage: sed 's/old/new/[g]' [file]"
+	}
+
+	inPlace := false
+	var filePath string
+	var pattern string
+
+	for _, a := range args {
+		if a == "-i" || a == "--in-place" {
+			inPlace = true
+		} else if strings.HasPrefix(a, "s") && len(a) > 1 {
+			// This looks like a sed pattern
+			pattern = a
+		} else if filePath == "" && !strings.HasPrefix(a, "-") {
+			filePath = a
+		}
+	}
+
+	if pattern == "" {
+		return "[error] usage: sed 's/old/new/[g]' [file]"
+	}
+
+	// Parse pattern: s/old/new/flags
+	parts := strings.Split(pattern[1:], "/")
+	if len(parts) < 2 {
+		return "[error] invalid sed pattern. Use: s/old/new/[g]"
+	}
+
+	oldStr := parts[0]
+	newStr := parts[1]
+	global := len(parts) >= 3 && strings.Contains(parts[2], "g")
+
+	var content string
+	if filePath != "" && stdin == "" {
+		// Read from file
+		abs, err := resolvePath(filePath)
+		if err != nil {
+			return fmt.Sprintf("[error] sed: %v", err)
+		}
+		data, err := os.ReadFile(abs)
+		if err != nil {
+			return fmt.Sprintf("[error] sed: %v", err)
+		}
+		content = string(data)
+	} else if stdin != "" {
+		// Use stdin
+		content = stdin
+	} else {
+		return "[error] sed: no input (use file path or pipe from stdin)"
+	}
+
+	// Apply sed replacement
+	if global {
+		content = strings.ReplaceAll(content, oldStr, newStr)
+	} else {
+		content = strings.Replace(content, oldStr, newStr, 1)
+	}
+
+	if inPlace && filePath != "" {
+		abs, err := resolvePath(filePath)
+		if err != nil {
+			return fmt.Sprintf("[error] sed: %v", err)
+		}
+		if err := os.WriteFile(abs, []byte(content), 0644); err != nil {
+			return fmt.Sprintf("[error] sed: %v", err)
+		}
+		return fmt.Sprintf("Modified %s", filePath)
+	}
+
+	return content
+}
+
 func FsMemory(args []string, stdin string) string {
 	if len(args) == 0 {
 		return "[error] usage: memory store <topic> <data> | memory get <topic> | memory list | memory forget <topic>"

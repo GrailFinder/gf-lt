@@ -266,6 +266,18 @@ func execBuiltin(name string, args []string, stdin string) string {
 		}
 		fsRootDir = abs
 		return fmt.Sprintf("Changed directory to: %s", fsRootDir)
+	case "go":
+		// Allow all go subcommands
+		if len(args) == 0 {
+			return "[error] usage: go <subcommand> [options]"
+		}
+		cmd := exec.Command("go", args...)
+		cmd.Dir = fsRootDir
+		output, err := cmd.CombinedOutput()
+		if err != nil {
+			return fmt.Sprintf("[error] go %s: %v\n%s", args[0], err, string(output))
+		}
+		return string(output)
 	}
 	return ""
 }

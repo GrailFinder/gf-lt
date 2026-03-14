@@ -537,6 +537,7 @@ func getHelp(args []string) string {
   mkdir <dir>     - create directory
   pwd             - print working directory
   cd <dir>        - change directory
+  sed 's/old/new/[g]' [file] - text replacement
   
   # Text processing
   echo <args>     - echo back input
@@ -550,6 +551,9 @@ func getHelp(args []string) string {
   
   # Git (read-only)
   git <cmd>       - git commands (status, log, diff, show, branch, etc.)
+  
+  # Go
+  go <cmd>        - go commands (run, build, test, mod, etc.)
   
   # Memory
   memory store <topic> <data>  - save to memory
@@ -650,6 +654,27 @@ Use: run "command" to execute.`
   Print working directory.
   Example:
     run "pwd"`
+	case "sed":
+		return `sed 's/old/new/[g]' [file]
+  Stream editor for text replacement.
+  Options:
+    -i  in-place editing
+    -g  global replacement (replace all)
+  Examples:
+    run "sed 's/foo/bar/' file.txt"
+    run "sed 's/foo/bar/g' file.txt" (global)
+    run "sed -i 's/foo/bar/' file.txt" (in-place)
+    run "cat file.txt | sed 's/foo/bar/'" (pipe from stdin)`
+	case "go":
+		return `go <command>
+  Go toolchain commands.
+  Allowed: run, build, test, mod, get, install, clean, fmt, vet, etc.
+  Examples:
+    run "go run main.go"
+    run "go build ./..."
+    run "go test ./..."
+    run "go mod tidy"
+    run "go get github.com/package"`
 	default:
 		return fmt.Sprintf("No help available for: %s. Use: run \"help\" for all commands.", cmd)
 	}
@@ -931,65 +956,6 @@ func todoDelete(args map[string]string) []byte {
 	return jsonResult
 }
 
-var gitReadSubcommands = map[string]bool{
-	"status":    true,
-	"log":       true,
-	"diff":      true,
-	"show":      true,
-	"branch":    true,
-	"reflog":    true,
-	"rev-parse": true,
-	"shortlog":  true,
-	"describe":  true,
-}
-
-func isCommandAllowed(command string, args ...string) bool {
-	allowedCommands := map[string]bool{
-		"cd":     true,
-		"grep":   true,
-		"sed":    true,
-		"awk":    true,
-		"find":   true,
-		"cat":    true,
-		"head":   true,
-		"tail":   true,
-		"sort":   true,
-		"uniq":   true,
-		"wc":     true,
-		"ls":     true,
-		"echo":   true,
-		"cut":    true,
-		"tr":     true,
-		"cp":     true,
-		"mv":     true,
-		"rm":     true,
-		"mkdir":  true,
-		"rmdir":  true,
-		"pwd":    true,
-		"df":     true,
-		"free":   true,
-		"ps":     true,
-		"top":    true,
-		"du":     true,
-		"whoami": true,
-		"date":   true,
-		"uname":  true,
-		"git":    true,
-		"go":     true,
-	}
-	// Allow all go subcommands (go run, go mod tidy, go test, etc.)
-	if strings.HasPrefix(command, "go ") && allowedCommands["go"] {
-		return true
-	}
-	if command == "git" && len(args) > 0 {
-		return gitReadSubcommands[args[0]]
-	}
-	if !allowedCommands[command] {
-		return false
-	}
-	return true
-}
-
 func summarizeChat(args map[string]string) []byte {
 	if len(chatBody.Messages) == 0 {
 		return []byte("No chat history to summarize.")
@@ -1150,108 +1116,6 @@ func argsToSlice(args map[string]string) []string {
 	return result
 }
 
-func cmdLs(args map[string]string) []byte {
-	return []byte(tools.FsLs(argsToSlice(args), ""))
-}
-
-func cmdCat(args map[string]string) []byte {
-	return []byte(tools.FsCat(argsToSlice(args), ""))
-}
-
-func cmdSee(args map[string]string) []byte {
-	return []byte(tools.FsSee(argsToSlice(args), ""))
-}
-
-func cmdWrite(args map[string]string) []byte {
-	// write needs special handling - content might be in args or stdin
-	slice := argsToSlice(args)
-	// If there's a "content" key, append it
-	if content, ok := args["content"]; ok && content != "" {
-		slice = append(slice, content)
-	}
-	return []byte(tools.FsWrite(slice, ""))
-}
-
-func cmdStat(args map[string]string) []byte {
-	return []byte(tools.FsStat(argsToSlice(args), ""))
-}
-
-func cmdRm(args map[string]string) []byte {
-	return []byte(tools.FsRm(argsToSlice(args), ""))
-}
-
-func cmdCp(args map[string]string) []byte {
-	return []byte(tools.FsCp(argsToSlice(args), ""))
-}
-
-func cmdMv(args map[string]string) []byte {
-	return []byte(tools.FsMv(argsToSlice(args), ""))
-}
-
-func cmdMkdir(args map[string]string) []byte {
-	return []byte(tools.FsMkdir(argsToSlice(args), ""))
-}
-
-func cmdEcho(args map[string]string) []byte {
-	return []byte(tools.FsEcho(argsToSlice(args), ""))
-}
-
-func cmdTime(args map[string]string) []byte {
-	return []byte(tools.FsTime(argsToSlice(args), ""))
-}
-
-func cmdGrep(args map[string]string) []byte {
-	// grep needs special handling - pattern and flags
-	slice := argsToSlice(args)
-	// Check for pattern key
-	if pattern, ok := args["pattern"]; ok && pattern != "" {
-		slice = append([]string{pattern}, slice...)
-	}
-	return []byte(tools.FsGrep(slice, ""))
-}
-
-func cmdHead(args map[string]string) []byte {
-	slice := argsToSlice(args)
-	return []byte(tools.FsHead(slice, ""))
-}
-
-func cmdTail(args map[string]string) []byte {
-	slice := argsToSlice(args)
-	return []byte(tools.FsTail(slice, ""))
-}
-
-func cmdWc(args map[string]string) []byte {
-	slice := argsToSlice(args)
-	return []byte(tools.FsWc(slice, ""))
-}
-
-func cmdSort(args map[string]string) []byte {
-	slice := argsToSlice(args)
-	return []byte(tools.FsSort(slice, ""))
-}
-
-func cmdUniq(args map[string]string) []byte {
-	slice := argsToSlice(args)
-	return []byte(tools.FsUniq(slice, ""))
-}
-
-func cmdGit(args map[string]string) []byte {
-	slice := argsToSlice(args)
-	// Check for subcommand key
-	if subcmd, ok := args["subcommand"]; ok && subcmd != "" {
-		slice = append([]string{subcmd}, slice...)
-	}
-	return []byte(tools.FsGit(slice, ""))
-}
-
-func cmdPwd(args map[string]string) []byte {
-	return []byte(tools.FsPwd(argsToSlice(args), ""))
-}
-
-func cmdCd(args map[string]string) []byte {
-	return []byte(tools.FsCd(argsToSlice(args), ""))
-}
-
 func cmdMemory(args map[string]string) []byte {
 	return []byte(tools.FsMemory(argsToSlice(args), ""))
 }
@@ -1295,18 +1159,6 @@ var fnMap = map[string]fnSig{
 	"websearch_raw": websearchRaw,
 	"read_url":      readURL,
 	"read_url_raw":  readURLRaw,
-	// Unix-style file commands (replacing file_* tools)
-	"ls":    cmdLs,
-	"cat":   cmdCat,
-	"see":   cmdSee,
-	"write": cmdWrite,
-	"stat":  cmdStat,
-	"rm":    cmdRm,
-	"cp":    cmdCp,
-	"mv":    cmdMv,
-	"mkdir": cmdMkdir,
-	"pwd":   cmdPwd,
-	"cd":    cmdCd,
 	// Unified run command
 	"run":            runCmd,
 	"summarize_chat": summarizeChat,
@@ -1912,238 +1764,6 @@ var baseTools = []models.Tool{
 	models.Tool{
 		Type: "function",
 		Function: models.ToolFunc{
-			Name:        "memory",
-			Description: "Memory management. Usage: memory store <topic> <data> | memory get <topic> | memory list | memory forget <topic>",
-			Parameters: models.ToolFuncParams{
-				Type:     "object",
-				Required: []string{"subcommand"},
-				Properties: map[string]models.ToolArgProps{
-					"subcommand": models.ToolArgProps{
-						Type:        "string",
-						Description: "subcommand: store, get, list, topics, forget, delete",
-					},
-					"topic": models.ToolArgProps{
-						Type:        "string",
-						Description: "topic/key for memory",
-					},
-					"data": models.ToolArgProps{
-						Type:        "string",
-						Description: "data to store",
-					},
-				},
-			},
-		},
-	},
-	// Unix-style file commands
-	// ls
-	models.Tool{
-		Type: "function",
-		Function: models.ToolFunc{
-			Name:        "ls",
-			Description: "List files in a directory. Usage: ls [dir]",
-			Parameters: models.ToolFuncParams{
-				Type:     "object",
-				Required: []string{},
-				Properties: map[string]models.ToolArgProps{
-					"path": models.ToolArgProps{
-						Type:        "string",
-						Description: "directory to list (optional, defaults to current directory)",
-					},
-				},
-			},
-		},
-	},
-	// cat
-	models.Tool{
-		Type: "function",
-		Function: models.ToolFunc{
-			Name:        "cat",
-			Description: "Read file content. Usage: cat <path>. Use -b flag for base64 output (for binary files).",
-			Parameters: models.ToolFuncParams{
-				Type:     "object",
-				Required: []string{"path"},
-				Properties: map[string]models.ToolArgProps{
-					"path": models.ToolArgProps{
-						Type:        "string",
-						Description: "path of the file to read",
-					},
-				},
-			},
-		},
-	},
-	// see
-	models.Tool{
-		Type: "function",
-		Function: models.ToolFunc{
-			Name:        "see",
-			Description: "View an image file and return it for multimodal LLM viewing. Supports png, jpg, jpeg, gif, webp, svg.",
-			Parameters: models.ToolFuncParams{
-				Type:     "object",
-				Required: []string{"path"},
-				Properties: map[string]models.ToolArgProps{
-					"path": models.ToolArgProps{
-						Type:        "string",
-						Description: "path of the image file to view",
-					},
-				},
-			},
-		},
-	},
-	// write
-	models.Tool{
-		Type: "function",
-		Function: models.ToolFunc{
-			Name:        "write",
-			Description: "Write content to a file. Will overwrite any content present. Usage: write <path> [content]. Use -b flag for base64 input (for binary files).",
-			Parameters: models.ToolFuncParams{
-				Type:     "object",
-				Required: []string{"path"},
-				Properties: map[string]models.ToolArgProps{
-					"path": models.ToolArgProps{
-						Type:        "string",
-						Description: "path of the file to write to",
-					},
-					"content": models.ToolArgProps{
-						Type:        "string",
-						Description: "content to write to the file",
-					},
-				},
-			},
-		},
-	},
-	// stat
-	models.Tool{
-		Type: "function",
-		Function: models.ToolFunc{
-			Name:        "stat",
-			Description: "Get file information (size, type, modified time). Usage: stat <path>",
-			Parameters: models.ToolFuncParams{
-				Type:     "object",
-				Required: []string{"path"},
-				Properties: map[string]models.ToolArgProps{
-					"path": models.ToolArgProps{
-						Type:        "string",
-						Description: "path of the file to get info for",
-					},
-				},
-			},
-		},
-	},
-	// rm
-	models.Tool{
-		Type: "function",
-		Function: models.ToolFunc{
-			Name:        "rm",
-			Description: "Delete a file. Usage: rm <path>",
-			Parameters: models.ToolFuncParams{
-				Type:     "object",
-				Required: []string{"path"},
-				Properties: map[string]models.ToolArgProps{
-					"path": models.ToolArgProps{
-						Type:        "string",
-						Description: "path of the file to delete",
-					},
-				},
-			},
-		},
-	},
-	// cp
-	models.Tool{
-		Type: "function",
-		Function: models.ToolFunc{
-			Name:        "cp",
-			Description: "Copy a file. Usage: cp <src> <dst>",
-			Parameters: models.ToolFuncParams{
-				Type:     "object",
-				Required: []string{"src", "dst"},
-				Properties: map[string]models.ToolArgProps{
-					"src": models.ToolArgProps{
-						Type:        "string",
-						Description: "source file path",
-					},
-					"dst": models.ToolArgProps{
-						Type:        "string",
-						Description: "destination file path",
-					},
-				},
-			},
-		},
-	},
-	// mv
-	models.Tool{
-		Type: "function",
-		Function: models.ToolFunc{
-			Name:        "mv",
-			Description: "Move/rename a file. Usage: mv <src> <dst>",
-			Parameters: models.ToolFuncParams{
-				Type:     "object",
-				Required: []string{"src", "dst"},
-				Properties: map[string]models.ToolArgProps{
-					"src": models.ToolArgProps{
-						Type:        "string",
-						Description: "source file path",
-					},
-					"dst": models.ToolArgProps{
-						Type:        "string",
-						Description: "destination file path",
-					},
-				},
-			},
-		},
-	},
-	// mkdir
-	models.Tool{
-		Type: "function",
-		Function: models.ToolFunc{
-			Name:        "mkdir",
-			Description: "Create a directory. Usage: mkdir <dir>",
-			Parameters: models.ToolFuncParams{
-				Type:     "object",
-				Required: []string{"dir"},
-				Properties: map[string]models.ToolArgProps{
-					"dir": models.ToolArgProps{
-						Type:        "string",
-						Description: "directory path to create",
-					},
-				},
-			},
-		},
-	},
-	// pwd
-	models.Tool{
-		Type: "function",
-		Function: models.ToolFunc{
-			Name:        "pwd",
-			Description: "Print working directory. Returns the current directory path.",
-			Parameters: models.ToolFuncParams{
-				Type:       "object",
-				Required:   []string{},
-				Properties: map[string]models.ToolArgProps{},
-			},
-		},
-	},
-	// cd
-	models.Tool{
-		Type: "function",
-		Function: models.ToolFunc{
-			Name:        "cd",
-			Description: "Change working directory. Usage: cd <dir>",
-			Parameters: models.ToolFuncParams{
-				Type:     "object",
-				Required: []string{"dir"},
-				Properties: map[string]models.ToolArgProps{
-					"dir": models.ToolArgProps{
-						Type:        "string",
-						Description: "directory to change to",
-					},
-				},
-			},
-		},
-	},
-	// run - unified command
-	models.Tool{
-		Type: "function",
-		Function: models.ToolFunc{
 			Name:        "run",
 			Description: "Execute commands: shell, git, memory, todo. Usage: run \"<command>\". Examples: run \"ls -la\", run \"git status\", run \"memory store foo bar\", run \"memory get foo\", run \"todo create task\", run \"help\", run \"help memory\"",
 			Parameters: models.ToolFuncParams{
@@ -2153,167 +1773,6 @@ var baseTools = []models.Tool{
 					"command": models.ToolArgProps{
 						Type:        "string",
 						Description: "command to execute. Use: run \"help\" for all commands, run \"help <cmd>\" for specific help. Examples: ls, cat, grep, git status, memory store, todo create, etc.",
-					},
-				},
-			},
-		},
-	},
-	// echo
-	models.Tool{
-		Type: "function",
-		Function: models.ToolFunc{
-			Name:        "echo",
-			Description: "Echo back the input. Usage: echo [args] or pipe stdin",
-			Parameters: models.ToolFuncParams{
-				Type:     "object",
-				Required: []string{},
-				Properties: map[string]models.ToolArgProps{
-					"args": models.ToolArgProps{
-						Type:        "string",
-						Description: "arguments to echo",
-					},
-				},
-			},
-		},
-	},
-	// time
-	models.Tool{
-		Type: "function",
-		Function: models.ToolFunc{
-			Name:        "time",
-			Description: "Return the current time.",
-			Parameters: models.ToolFuncParams{
-				Type:       "object",
-				Required:   []string{},
-				Properties: map[string]models.ToolArgProps{},
-			},
-		},
-	},
-	// grep
-	models.Tool{
-		Type: "function",
-		Function: models.ToolFunc{
-			Name:        "grep",
-			Description: "Filter lines matching a pattern. Usage: grep [-i] [-v] [-c] <pattern>. -i: ignore case, -v: invert match, -c: count matches.",
-			Parameters: models.ToolFuncParams{
-				Type:     "object",
-				Required: []string{"pattern"},
-				Properties: map[string]models.ToolArgProps{
-					"pattern": models.ToolArgProps{
-						Type:        "string",
-						Description: "pattern to search for",
-					},
-				},
-			},
-		},
-	},
-	// head
-	models.Tool{
-		Type: "function",
-		Function: models.ToolFunc{
-			Name:        "head",
-			Description: "Show first N lines. Usage: head [n] or head -n <n>. Default: 10",
-			Parameters: models.ToolFuncParams{
-				Type:     "object",
-				Required: []string{},
-				Properties: map[string]models.ToolArgProps{
-					"n": models.ToolArgProps{
-						Type:        "string",
-						Description: "number of lines (optional, default 10)",
-					},
-				},
-			},
-		},
-	},
-	// tail
-	models.Tool{
-		Type: "function",
-		Function: models.ToolFunc{
-			Name:        "tail",
-			Description: "Show last N lines. Usage: tail [n] or tail -n <n>. Default: 10",
-			Parameters: models.ToolFuncParams{
-				Type:     "object",
-				Required: []string{},
-				Properties: map[string]models.ToolArgProps{
-					"n": models.ToolArgProps{
-						Type:        "string",
-						Description: "number of lines (optional, default 10)",
-					},
-				},
-			},
-		},
-	},
-	// wc
-	models.Tool{
-		Type: "function",
-		Function: models.ToolFunc{
-			Name:        "wc",
-			Description: "Count lines, words, chars. Usage: wc [-l] [-w] [-c]. -l: lines, -w: words, -c: chars.",
-			Parameters: models.ToolFuncParams{
-				Type:     "object",
-				Required: []string{},
-				Properties: map[string]models.ToolArgProps{
-					"flag": models.ToolArgProps{
-						Type:        "string",
-						Description: "optional flag: -l, -w, or -c",
-					},
-				},
-			},
-		},
-	},
-	// sort
-	models.Tool{
-		Type: "function",
-		Function: models.ToolFunc{
-			Name:        "sort",
-			Description: "Sort lines. Usage: sort [-r] [-n]. -r: reverse, -n: numeric sort.",
-			Parameters: models.ToolFuncParams{
-				Type:     "object",
-				Required: []string{},
-				Properties: map[string]models.ToolArgProps{
-					"reverse": models.ToolArgProps{
-						Type:        "string",
-						Description: "use -r for reverse sort",
-					},
-					"numeric": models.ToolArgProps{
-						Type:        "string",
-						Description: "use -n for numeric sort",
-					},
-				},
-			},
-		},
-	},
-	// uniq
-	models.Tool{
-		Type: "function",
-		Function: models.ToolFunc{
-			Name:        "uniq",
-			Description: "Remove duplicate lines. Usage: uniq [-c] to show count.",
-			Parameters: models.ToolFuncParams{
-				Type:     "object",
-				Required: []string{},
-				Properties: map[string]models.ToolArgProps{
-					"count": models.ToolArgProps{
-						Type:        "string",
-						Description: "use -c to show count of occurrences",
-					},
-				},
-			},
-		},
-	},
-	// git (read-only)
-	models.Tool{
-		Type: "function",
-		Function: models.ToolFunc{
-			Name:        "git",
-			Description: "Execute read-only git commands. Allowed: status, log, diff, show, branch, reflog, rev-parse, shortlog, describe.",
-			Parameters: models.ToolFuncParams{
-				Type:     "object",
-				Required: []string{"subcommand"},
-				Properties: map[string]models.ToolArgProps{
-					"subcommand": models.ToolArgProps{
-						Type:        "string",
-						Description: "git subcommand (status, log, diff, show, branch, reflog, rev-parse, shortlog, describe)",
 					},
 				},
 			},
