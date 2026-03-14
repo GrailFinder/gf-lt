@@ -522,9 +522,8 @@ func runCmd(args map[string]string) []byte {
 		// browser <action> [args...] - Playwright browser automation
 		return runBrowserCommand(rest, args)
 	default:
-		// Everything else: shell with pipe/chaining support
-		result := tools.ExecChain(commandStr)
-		return []byte(result)
+		// Unknown subcommand - return help to remind user of available commands
+		return []byte(getHelp(nil))
 	}
 }
 
