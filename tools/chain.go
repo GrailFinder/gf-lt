@@ -32,10 +32,8 @@ func ParseChain(input string) []Segment {
 	var current strings.Builder
 	runes := []rune(input)
 	n := len(runes)
-
 	for i := 0; i < n; i++ {
 		ch := runes[i]
-
 		// handle quotes
 		if ch == '\'' || ch == '"' {
 			quote := ch
@@ -50,7 +48,6 @@ func ParseChain(input string) []Segment {
 			}
 			continue
 		}
-
 		// &&
 		if ch == '&' && i+1 < n && runes[i+1] == '&' {
 			segments = append(segments, Segment{
@@ -61,7 +58,6 @@ func ParseChain(input string) []Segment {
 			i++ // skip second &
 			continue
 		}
-
 		// ;
 		if ch == ';' {
 			segments = append(segments, Segment{
@@ -71,7 +67,6 @@ func ParseChain(input string) []Segment {
 			current.Reset()
 			continue
 		}
-
 		// ||
 		if ch == '|' && i+1 < n && runes[i+1] == '|' {
 			segments = append(segments, Segment{
@@ -82,7 +77,6 @@ func ParseChain(input string) []Segment {
 			i++ // skip second |
 			continue
 		}
-
 		// | (single pipe)
 		if ch == '|' {
 			segments = append(segments, Segment{
@@ -92,16 +86,13 @@ func ParseChain(input string) []Segment {
 			current.Reset()
 			continue
 		}
-
 		current.WriteRune(ch)
 	}
-
 	// last segment
 	last := strings.TrimSpace(current.String())
 	if last != "" {
 		segments = append(segments, Segment{Raw: last, Op: OpNone})
 	}
-
 	return segments
 }
 
@@ -112,12 +103,10 @@ func ExecChain(command string) string {
 	if len(segments) == 0 {
 		return "[error] empty command"
 	}
-
 	var collected []string
 	var lastOutput string
 	var lastErr error
 	pipeInput := ""
-
 	for i, seg := range segments {
 		if i > 0 {
 			prevOp := segments[i-1].Op
@@ -130,7 +119,6 @@ func ExecChain(command string) string {
 				continue
 			}
 		}
-
 		// determine stdin for this segment
 		segStdin := ""
 		if i == 0 {
@@ -138,9 +126,7 @@ func ExecChain(command string) string {
 		} else if segments[i-1].Op == OpPipe {
 			segStdin = lastOutput
 		}
-
 		lastOutput, lastErr = execSingle(seg.Raw, segStdin)
-
 		// pipe: output flows to next command's stdin
 		// && or ;: collect output
 		if i < len(segments)-1 && seg.Op == OpPipe {
@@ -150,7 +136,6 @@ func ExecChain(command string) string {
 			collected = append(collected, lastOutput)
 		}
 	}
-
 	return strings.Join(collected, "\n")
 }
 
@@ -160,15 +145,12 @@ func execSingle(command, stdin string) (string, error) {
 	if len(parts) == 0 {
 		return "", fmt.Errorf("empty command")
 	}
-
 	name := parts[0]
 	args := parts[1:]
-
 	// Check if it's a built-in Go command
 	if result := execBuiltin(name, args, stdin); result != "" {
 		return result, nil
 	}
-
 	// Otherwise execute as system command
 	cmd := exec.Command(name, args...)
 	if stdin != "" {
@@ -187,7 +169,6 @@ func tokenize(input string) []string {
 	var current strings.Builder
 	inQuote := false
 	var quoteChar rune
-
 	for _, ch := range input {
 		if inQuote {
 			if ch == quoteChar {
@@ -197,13 +178,11 @@ func tokenize(input string) []string {
 			}
 			continue
 		}
-
 		if ch == '\'' || ch == '"' {
 			inQuote = true
 			quoteChar = ch
 			continue
 		}
-
 		if ch == ' ' || ch == '\t' {
 			if current.Len() > 0 {
 				tokens = append(tokens, current.String())
@@ -211,14 +190,11 @@ func tokenize(input string) []string {
 			}
 			continue
 		}
-
 		current.WriteRune(ch)
 	}
-
 	if current.Len() > 0 {
 		tokens = append(tokens, current.String())
 	}
-
 	return tokens
 }
 
@@ -242,7 +218,7 @@ func execBuiltin(name string, args []string, stdin string) string {
 		path := args[0]
 		abs := path
 		if !filepath.IsAbs(path) {
-			abs = filepath.Join(fsRootDir, path)
+			abs = filepath.Join(cfg.FilePickerDir, path)
 		}
 		data, err := os.ReadFile(abs)
 		if err != nil {
@@ -250,16 +226,16 @@ func execBuiltin(name string, args []string, stdin string) string {
 		}
 		return string(data)
 	case "pwd":
-		return fsRootDir
+		return cfg.FilePickerDir
 	case "cd":
 		if len(args) == 0 {
 			return "[error] usage: cd <dir>"
 		}
 		dir := args[0]
-		// Resolve relative to fsRootDir
+		// Resolve relative to cfg.FilePickerDir
 		abs := dir
 		if !filepath.IsAbs(dir) {
-			abs = filepath.Join(fsRootDir, dir)
+			abs = filepath.Join(cfg.FilePickerDir, dir)
 		}
 		abs = filepath.Clean(abs)
 		info, err := os.Stat(abs)
@@ -269,8 +245,8 @@ func execBuiltin(name string, args []string, stdin string) string {
 		if !info.IsDir() {
 			return fmt.Sprintf("[error] cd: not a directory: %s", dir)
 		}
-		fsRootDir = abs
-		return fmt.Sprintf("Changed directory to: %s", fsRootDir)
+		cfg.FilePickerDir = abs
+		return fmt.Sprintf("Changed directory to: %s", cfg.FilePickerDir)
 	case "mkdir":
 		if len(args) == 0 {
 			return "[error] usage: mkdir [-p] <dir>"
@@ -289,7 +265,7 @@ func execBuiltin(name string, args []string, stdin string) string {
 		}
 		abs := dirPath
 		if !filepath.IsAbs(dirPath) {
-			abs = filepath.Join(fsRootDir, dirPath)
+			abs = filepath.Join(cfg.FilePickerDir, dirPath)
 		}
 		abs = filepath.Clean(abs)
 		var mkdirFunc func(string, os.FileMode) error
@@ -315,7 +291,7 @@ func execBuiltin(name string, args []string, stdin string) string {
 		}
 		abs := dir
 		if !filepath.IsAbs(dir) {
-			abs = filepath.Join(fsRootDir, dir)
+			abs = filepath.Join(cfg.FilePickerDir, dir)
 		}
 		entries, err := os.ReadDir(abs)
 		if err != nil {
@@ -347,7 +323,7 @@ func execBuiltin(name string, args []string, stdin string) string {
 			return "[error] usage: go <subcommand> [options]"
 		}
 		cmd := exec.Command("go", args...)
-		cmd.Dir = fsRootDir
+		cmd.Dir = cfg.FilePickerDir
 		output, err := cmd.CombinedOutput()
 		if err != nil {
 			return fmt.Sprintf("[error] go %s: %v\n%s", args[0], err, string(output))

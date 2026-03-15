@@ -14,7 +14,6 @@ import (
 	"time"
 )
 
-var fsRootDir string
 var memoryStore MemoryStore
 var agentRole string
 
@@ -31,11 +30,11 @@ func SetMemoryStore(store MemoryStore, role string) {
 }
 
 func SetFSRoot(dir string) {
-	fsRootDir = dir
+	cfg.FilePickerDir = dir
 }
 
 func GetFSRoot() string {
-	return fsRootDir
+	return cfg.FilePickerDir
 }
 
 func SetFSCwd(dir string) error {
@@ -50,26 +49,24 @@ func SetFSCwd(dir string) error {
 	if !info.IsDir() {
 		return fmt.Errorf("not a directory: %s", dir)
 	}
-	fsRootDir = abs
+	cfg.FilePickerDir = abs
 	return nil
 }
 
 func resolvePath(rel string) (string, error) {
-	if fsRootDir == "" {
+	if cfg.FilePickerDir == "" {
 		return "", fmt.Errorf("fs root not set")
 	}
-
 	if filepath.IsAbs(rel) {
 		abs := filepath.Clean(rel)
-		if !strings.HasPrefix(abs, fsRootDir+string(os.PathSeparator)) && abs != fsRootDir {
+		if !strings.HasPrefix(abs, cfg.FilePickerDir+string(os.PathSeparator)) && abs != cfg.FilePickerDir {
 			return "", fmt.Errorf("path escapes fs root: %s", rel)
 		}
 		return abs, nil
 	}
-
-	abs := filepath.Join(fsRootDir, rel)
+	abs := filepath.Join(cfg.FilePickerDir, rel)
 	abs = filepath.Clean(abs)
-	if !strings.HasPrefix(abs, fsRootDir+string(os.PathSeparator)) && abs != fsRootDir {
+	if !strings.HasPrefix(abs, cfg.FilePickerDir+string(os.PathSeparator)) && abs != cfg.FilePickerDir {
 		return "", fmt.Errorf("path escapes fs root: %s", rel)
 	}
 	return abs, nil
@@ -100,12 +97,10 @@ func FsLs(args []string, stdin string) string {
 	if err != nil {
 		return fmt.Sprintf("[error] %v", err)
 	}
-
 	entries, err := os.ReadDir(abs)
 	if err != nil {
 		return fmt.Sprintf("[error] ls: %v", err)
 	}
-
 	var out strings.Builder
 	for _, e := range entries {
 		info, _ := e.Info()
@@ -136,17 +131,14 @@ func FsCat(args []string, stdin string) string {
 	if path == "" {
 		return "[error] usage: cat <path>"
 	}
-
 	abs, err := resolvePath(path)
 	if err != nil {
 		return fmt.Sprintf("[error] %v", err)
 	}
-
 	data, err := os.ReadFile(abs)
 	if err != nil {
 		return fmt.Sprintf("[error] cat: %v", err)
 	}
-
 	if b64 {
 		result := base64.StdEncoding.EncodeToString(data)
 		if IsImageFile(path) {
@@ -162,7 +154,6 @@ func FsViewImg(args []string, stdin string) string {
 		return "[error] usage: view_img <image-path>"
 	}
 	path := args[0]
-
 	var abs string
 	if filepath.IsAbs(path) {
 		abs = path
@@ -173,20 +164,16 @@ func FsViewImg(args []string, stdin string) string {
 			return fmt.Sprintf("[error] %v", err)
 		}
 	}
-
 	if _, err := os.Stat(abs); err != nil {
 		return fmt.Sprintf("[error] view_img: %v", err)
 	}
-
 	if !IsImageFile(path) {
 		return fmt.Sprintf("[error] not an image file: %s (use cat to read text files)", path)
 	}
-
 	dataURL, err := models.CreateImageURLFromPath(abs)
 	if err != nil {
 		return fmt.Sprintf("[error] view_img: %v", err)
 	}
-
 	result := models.MultimodalToolResp{
 		Type: "multimodal_content",
 		Parts: []map[string]string{
@@ -222,16 +209,13 @@ func FsWrite(args []string, stdin string) string {
 	if path == "" {
 		return "[error] usage: write <path> [content] or pipe stdin"
 	}
-
 	abs, err := resolvePath(path)
 	if err != nil {
 		return fmt.Sprintf("[error] %v", err)
 	}
-
 	if err := os.MkdirAll(filepath.Dir(abs), 0o755); err != nil {
 		return fmt.Sprintf("[error] mkdir: %v", err)
 	}
-
 	var data []byte
 	if b64 {
 		src := stdin
@@ -251,18 +235,14 @@ func FsWrite(args []string, stdin string) string {
 			data = []byte(stdin)
 		}
 	}
-
 	if err := os.WriteFile(abs, data, 0o644); err != nil {
 		return fmt.Sprintf("[error] write: %v", err)
 	}
-
 	size := humanSize(int64(len(data)))
 	result := fmt.Sprintf("Written %s → %s", size, path)
-
 	if IsImageFile(path) {
 		result += fmt.Sprintf("\n![image](file://%s)", abs)
 	}
-
 	return result
 }
 
@@ -270,17 +250,14 @@ func FsStat(args []string, stdin string) string {
 	if len(args) == 0 {
 		return "[error] usage: stat <path>"
 	}
-
 	abs, err := resolvePath(args[0])
 	if err != nil {
 		return fmt.Sprintf("[error] %v", err)
 	}
-
 	info, err := os.Stat(abs)
 	if err != nil {
 		return fmt.Sprintf("[error] stat: %v", err)
 	}
-
 	mime := "application/octet-stream"
 	if IsImageFile(args[0]) {
 		ext := strings.ToLower(filepath.Ext(args[0]))
@@ -297,7 +274,6 @@ func FsStat(args []string, stdin string) string {
 			mime = "image/svg+xml"
 		}
 	}
-
 	var out strings.Builder
 	fmt.Fprintf(&out, "File: %s\n", args[0])
 	fmt.Fprintf(&out, "Size: %s (%d bytes)\n", humanSize(info.Size()), info.Size())
@@ -313,12 +289,10 @@ func FsRm(args []string, stdin string) string {
 	if len(args) == 0 {
 		return "[error] usage: rm <path>"
 	}
-
 	abs, err := resolvePath(args[0])
 	if err != nil {
 		return fmt.Sprintf("[error] %v", err)
 	}
-
 	if err := os.RemoveAll(abs); err != nil {
 		return fmt.Sprintf("[error] rm: %v", err)
 	}
@@ -329,7 +303,6 @@ func FsCp(args []string, stdin string) string {
 	if len(args) < 2 {
 		return "[error] usage: cp <src> <dst>"
 	}
-
 	srcAbs, err := resolvePath(args[0])
 	if err != nil {
 		return fmt.Sprintf("[error] %v", err)
@@ -338,16 +311,13 @@ func FsCp(args []string, stdin string) string {
 	if err != nil {
 		return fmt.Sprintf("[error] %v", err)
 	}
-
 	data, err := os.ReadFile(srcAbs)
 	if err != nil {
 		return fmt.Sprintf("[error] cp read: %v", err)
 	}
-
 	if err := os.MkdirAll(filepath.Dir(dstAbs), 0o755); err != nil {
 		return fmt.Sprintf("[error] cp mkdir: %v", err)
 	}
-
 	if err := os.WriteFile(dstAbs, data, 0o644); err != nil {
 		return fmt.Sprintf("[error] cp write: %v", err)
 	}
@@ -358,7 +328,6 @@ func FsMv(args []string, stdin string) string {
 	if len(args) < 2 {
 		return "[error] usage: mv <src> <dst>"
 	}
-
 	srcAbs, err := resolvePath(args[0])
 	if err != nil {
 		return fmt.Sprintf("[error] %v", err)
@@ -367,11 +336,9 @@ func FsMv(args []string, stdin string) string {
 	if err != nil {
 		return fmt.Sprintf("[error] %v", err)
 	}
-
 	if err := os.MkdirAll(filepath.Dir(dstAbs), 0o755); err != nil {
 		return fmt.Sprintf("[error] mv mkdir: %v", err)
 	}
-
 	if err := os.Rename(srcAbs, dstAbs); err != nil {
 		return fmt.Sprintf("[error] mv: %v", err)
 	}
@@ -382,10 +349,8 @@ func FsMkdir(args []string, stdin string) string {
 	if len(args) == 0 {
 		return "[error] usage: mkdir [-p] <dir>"
 	}
-
 	createParents := false
 	var dirPath string
-
 	for _, a := range args {
 		if a == "-p" || a == "--parents" {
 			createParents = true
@@ -393,27 +358,22 @@ func FsMkdir(args []string, stdin string) string {
 			dirPath = a
 		}
 	}
-
 	if dirPath == "" {
 		return "[error] usage: mkdir [-p] <dir>"
 	}
-
 	abs, err := resolvePath(dirPath)
 	if err != nil {
 		return fmt.Sprintf("[error] %v", err)
 	}
-
 	var mkdirFunc func(string, os.FileMode) error
 	if createParents {
 		mkdirFunc = os.MkdirAll
 	} else {
 		mkdirFunc = os.Mkdir
 	}
-
 	if err := mkdirFunc(abs, 0o755); err != nil {
 		return fmt.Sprintf("[error] mkdir: %v", err)
 	}
-
 	if createParents {
 		return fmt.Sprintf("Created %s (with parents)", dirPath)
 	}
@@ -459,7 +419,6 @@ func FsGrep(args []string, stdin string) string {
 	if ignoreCase {
 		pattern = strings.ToLower(pattern)
 	}
-
 	lines := strings.Split(stdin, "\n")
 	var matched []string
 	for _, line := range lines {
@@ -549,7 +508,6 @@ func FsSort(args []string, stdin string) string {
 			numeric = true
 		}
 	}
-
 	sortFunc := func(i, j int) bool {
 		if numeric {
 			ni, _ := strconv.Atoi(lines[i])
@@ -564,7 +522,6 @@ func FsSort(args []string, stdin string) string {
 		}
 		return lines[i] < lines[j]
 	}
-
 	sort.Slice(lines, sortFunc)
 	return strings.Join(lines, "\n")
 }
@@ -577,7 +534,6 @@ func FsUniq(args []string, stdin string) string {
 			showCount = true
 		}
 	}
-
 	var result []string
 	var prev string
 	first := true
@@ -623,17 +579,14 @@ func FsGit(args []string, stdin string) string {
 	if len(args) == 0 {
 		return "[error] usage: git <subcommand> [options]"
 	}
-
 	subcmd := args[0]
 	if !allowedGitSubcommands[subcmd] {
 		return fmt.Sprintf("[error] git: '%s' is not an allowed git command. Allowed: status, log, diff, show, branch, reflog, rev-parse, shortlog, describe, rev-list", subcmd)
 	}
-
 	abs, err := resolvePath(".")
 	if err != nil {
 		return fmt.Sprintf("[error] git: %v", err)
 	}
-
 	// Pass all args to git (first arg is subcommand, rest are options)
 	cmd := exec.Command("git", args...)
 	cmd.Dir = abs
@@ -645,7 +598,7 @@ func FsGit(args []string, stdin string) string {
 }
 
 func FsPwd(args []string, stdin string) string {
-	return fsRootDir
+	return cfg.FilePickerDir
 }
 
 func FsCd(args []string, stdin string) string {
@@ -664,19 +617,17 @@ func FsCd(args []string, stdin string) string {
 	if !info.IsDir() {
 		return fmt.Sprintf("[error] cd: not a directory: %s", dir)
 	}
-	fsRootDir = abs
-	return fmt.Sprintf("Changed directory to: %s", fsRootDir)
+	cfg.FilePickerDir = abs
+	return fmt.Sprintf("Changed directory to: %s", cfg.FilePickerDir)
 }
 
 func FsSed(args []string, stdin string) string {
 	if len(args) == 0 {
 		return "[error] usage: sed 's/old/new/[g]' [file]"
 	}
-
 	inPlace := false
 	var filePath string
 	var pattern string
-
 	for _, a := range args {
 		if a == "-i" || a == "--in-place" {
 			inPlace = true
@@ -687,21 +638,17 @@ func FsSed(args []string, stdin string) string {
 			filePath = a
 		}
 	}
-
 	if pattern == "" {
 		return "[error] usage: sed 's/old/new/[g]' [file]"
 	}
-
 	// Parse pattern: s/old/new/flags
 	parts := strings.Split(pattern[1:], "/")
 	if len(parts) < 2 {
 		return "[error] invalid sed pattern. Use: s/old/new/[g]"
 	}
-
 	oldStr := parts[0]
 	newStr := parts[1]
 	global := len(parts) >= 3 && strings.Contains(parts[2], "g")
-
 	var content string
 	if filePath != "" && stdin == "" {
 		// Read from file
@@ -720,14 +667,12 @@ func FsSed(args []string, stdin string) string {
 	} else {
 		return "[error] sed: no input (use file path or pipe from stdin)"
 	}
-
 	// Apply sed replacement
 	if global {
 		content = strings.ReplaceAll(content, oldStr, newStr)
 	} else {
 		content = strings.Replace(content, oldStr, newStr, 1)
 	}
-
 	if inPlace && filePath != "" {
 		abs, err := resolvePath(filePath)
 		if err != nil {
@@ -738,7 +683,6 @@ func FsSed(args []string, stdin string) string {
 		}
 		return fmt.Sprintf("Modified %s", filePath)
 	}
-
 	return content
 }
 
@@ -746,11 +690,9 @@ func FsMemory(args []string, stdin string) string {
 	if len(args) == 0 {
 		return "[error] usage: memory store <topic> <data> | memory get <topic> | memory list | memory forget <topic>"
 	}
-
 	if memoryStore == nil {
 		return "[error] memory store not initialized"
 	}
-
 	switch args[0] {
 	case "store":
 		if len(args) < 3 && stdin == "" {
@@ -768,7 +710,6 @@ func FsMemory(args []string, stdin string) string {
 			return fmt.Sprintf("[error] failed to store: %v", err)
 		}
 		return fmt.Sprintf("Stored under topic: %s", topic)
-
 	case "get":
 		if len(args) < 2 {
 			return "[error] usage: memory get <topic>"
@@ -779,7 +720,6 @@ func FsMemory(args []string, stdin string) string {
 			return fmt.Sprintf("[error] failed to recall: %v", err)
 		}
 		return fmt.Sprintf("Topic: %s\n%s", topic, data)
-
 	case "list", "topics":
 		topics, err := memoryStore.RecallTopics(agentRole)
 		if err != nil {
@@ -789,7 +729,6 @@ func FsMemory(args []string, stdin string) string {
 			return "No topics stored."
 		}
 		return "Topics: " + strings.Join(topics, ", ")
-
 	case "forget", "delete":
 		if len(args) < 2 {
 			return "[error] usage: memory forget <topic>"
@@ -800,7 +739,6 @@ func FsMemory(args []string, stdin string) string {
 			return fmt.Sprintf("[error] failed to forget: %v", err)
 		}
 		return fmt.Sprintf("Deleted topic: %s", topic)
-
 	default:
 		return fmt.Sprintf("[error] unknown subcommand: %s. Use: store, get, list, topics, forget, delete", args[0])
 	}

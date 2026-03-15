@@ -58,7 +58,7 @@ var (
 	roleToID             = map[string]string{}
 	modelHasVision       bool
 	windowToolsAvailable bool
-	tooler               *tools.Tools
+	// tooler               *tools.Tools
 	//
 	orator          Orator
 	asr             STT
@@ -478,7 +478,7 @@ func UpdateToolCapabilities() {
 	modelHasVision = false
 	if cfg == nil || cfg.CurrentAPI == "" {
 		logger.Warn("cannot determine model capabilities: cfg or CurrentAPI is nil")
-		tooler.RegisterWindowTools(modelHasVision)
+		// tooler.RegisterWindowTools(modelHasVision)
 		return
 	}
 	prevHasVision := modelHasVision
@@ -491,7 +491,7 @@ func UpdateToolCapabilities() {
 			showToast("window tools", "Window capture-and-view unavailable: model lacks vision support")
 		}
 	}
-	tooler.RegisterWindowTools(modelHasVision)
+	// tooler.RegisterWindowTools(modelHasVision)
 }
 
 // monitorModelLoad starts a goroutine that periodically checks if the specified model is loaded.
@@ -1138,7 +1138,7 @@ func findCall(msg, toolCall string) bool {
 		// The ID should come from the streaming response (chunk.ToolID) set earlier.
 		// Some tools like todo_create have "id" in their arguments which is NOT the tool call ID.
 	} else {
-		jsStr := tools.ToolCallRE.FindString(msg)
+		jsStr := models.ToolCallRE.FindString(msg)
 		if jsStr == "" { // no tool call case
 			return false
 		}
@@ -1206,17 +1206,42 @@ func findCall(msg, toolCall string) bool {
 		Args: mapToString(lastToolCall.Args),
 	}
 	// call a func
-	_, ok := tools.FnMap[fc.Name]
-	if !ok {
-		m := fc.Name + " is not implemented"
+	// _, ok := tools.FnMap[fc.Name]
+	// if !ok {
+	// 	m := fc.Name + " is not implemented"
+	// 	// Create tool response message with the proper tool_call_id
+	// 	toolResponseMsg := models.RoleMsg{
+	// 		Role:       cfg.ToolRole,
+	// 		Content:    m,
+	// 		ToolCallID: lastToolCall.ID, // Use the stored tool call ID
+	// 	}
+	// 	chatBody.Messages = append(chatBody.Messages, toolResponseMsg)
+	// 	logger.Debug("findCall: added tool not implemented response", "role", toolResponseMsg.Role, "content_len", len(toolResponseMsg.Content), "tool_call_id", toolResponseMsg.ToolCallID, "message_count_after_add", len(chatBody.Messages))
+	// 	// Clear the stored tool call ID after using it
+	// 	lastToolCall.ID = ""
+	// 	// Trigger the assistant to continue processing with the new tool response
+	// 	// by calling chatRound with empty content to continue the assistant's response
+	// 	crr := &models.ChatRoundReq{
+	// 		Role: cfg.AssistantRole,
+	// 	}
+	// 	// failed to find tool
+	// 	chatRoundChan <- crr
+	// 	return true
+	// }
+	// Show tool call progress indicator before execution
+	fmt.Fprintf(textView, "\n[yellow::i][tool: %s...][-:-:-]", fc.Name)
+	toolRunningMode.Store(true)
+	resp, okT := tools.CallToolWithAgent(fc.Name, fc.Args)
+	if !okT {
 		// Create tool response message with the proper tool_call_id
 		toolResponseMsg := models.RoleMsg{
 			Role:       cfg.ToolRole,
-			Content:    m,
+			Content:    string(resp),
 			ToolCallID: lastToolCall.ID, // Use the stored tool call ID
 		}
 		chatBody.Messages = append(chatBody.Messages, toolResponseMsg)
-		logger.Debug("findCall: added tool not implemented response", "role", toolResponseMsg.Role, "content_len", len(toolResponseMsg.Content), "tool_call_id", toolResponseMsg.ToolCallID, "message_count_after_add", len(chatBody.Messages))
+		logger.Debug("findCall: added tool not implemented response", "role", toolResponseMsg.Role,
+			"content_len", len(toolResponseMsg.Content), "tool_call_id", toolResponseMsg.ToolCallID)
 		// Clear the stored tool call ID after using it
 		lastToolCall.ID = ""
 		// Trigger the assistant to continue processing with the new tool response
@@ -1228,10 +1253,6 @@ func findCall(msg, toolCall string) bool {
 		chatRoundChan <- crr
 		return true
 	}
-	// Show tool call progress indicator before execution
-	fmt.Fprintf(textView, "\n[yellow::i][tool: %s...][-:-:-]", fc.Name)
-	toolRunningMode.Store(true)
-	resp := tools.CallToolWithAgent(fc.Name, fc.Args)
 	toolRunningMode.Store(false)
 	toolMsg := string(resp)
 	logger.Info("llm used a tool call", "tool_name", fc.Name, "too_args", fc.Args, "id", fc.ID, "tool_resp", toolMsg)
@@ -1289,7 +1310,6 @@ func findCall(msg, toolCall string) bool {
 	fmt.Fprintf(textView, "%s[-:-:b](%d) <%s>: [-:-:-]\n%s\n",
 		"\n\n", len(chatBody.Messages), cfg.ToolRole, toolResponseMsg.GetText())
 	chatBody.Messages = append(chatBody.Messages, toolResponseMsg)
-	logger.Debug("findCall: added actual tool response", "role", toolResponseMsg.Role, "content_len", len(toolResponseMsg.Content), "tool_call_id", toolResponseMsg.ToolCallID, "message_count_after_add", len(chatBody.Messages))
 	// Clear the stored tool call ID after using it
 	lastToolCall.ID = ""
 	// Trigger the assistant to continue processing with the new tool response
@@ -1310,11 +1330,19 @@ func chatToTextSlice(messages []models.RoleMsg, showSys bool) []string {
 			// This is a tool call indicator - show collapsed
 			if toolCollapsed {
 				toolName := messages[i].ToolCall.Name
-				resp[i] = strings.ReplaceAll(fmt.Sprintf("%s\n%s\n[yellow::i][tool call: %s (press Ctrl+T to expand)][-:-:-]\n", icon, messages[i].GetText(), toolName), "\n\n", "\n")
+				resp[i] = strings.ReplaceAll(
+					fmt.Sprintf(
+						"%s\n%s\n[yellow::i][tool call: %s (press Ctrl+T to expand)][-:-:-]\n",
+						icon, messages[i].GetText(), toolName),
+					"\n\n", "\n")
 			} else {
 				// Show full tool call info
 				toolName := messages[i].ToolCall.Name
-				resp[i] = strings.ReplaceAll(fmt.Sprintf("%s\n%s\n[yellow::i][tool call: %s][-:-:-]\nargs: %s\nid: %s\n", icon, messages[i].GetText(), toolName, messages[i].ToolCall.Args, messages[i].ToolCall.ID), "\n\n", "\n")
+				resp[i] = strings.ReplaceAll(
+					fmt.Sprintf(
+						"%s\n%s\n[yellow::i][tool call: %s][-:-:-]\nargs: %s\nid: %s\n",
+						icon, messages[i].GetText(), toolName, messages[i].ToolCall.Args, messages[i].ToolCall.ID),
+					"\n\n", "\n")
 			}
 			continue
 		}
@@ -1348,7 +1376,7 @@ func chatToText(messages []models.RoleMsg, showSys bool) string {
 	text := strings.Join(s, "\n")
 	// Collapse thinking blocks if enabled
 	if thinkingCollapsed {
-		text = tools.ThinkRE.ReplaceAllStringFunc(text, func(match string) string {
+		text = models.ThinkRE.ReplaceAllStringFunc(text, func(match string) string {
 			// Extract content between <think> and </think>
 			start := len("<think>")
 			end := len(match) - len("</think>")
@@ -1364,7 +1392,9 @@ func chatToText(messages []models.RoleMsg, showSys bool) string {
 			startIdx := strings.Index(text, "<think>")
 			if startIdx != -1 {
 				content := text[startIdx+len("<think>"):]
-				placeholder := fmt.Sprintf("[yellow::i][thinking... (%d chars) (press Alt+T to expand)][-:-:-]", len(content))
+				placeholder := fmt.Sprintf(
+					"[yellow::i][thinking... (%d chars) (press Alt+T to expand)][-:-:-]",
+					len(content))
 				text = text[:startIdx] + placeholder
 			}
 		}
@@ -1476,8 +1506,11 @@ func summarizeAndStartNewChat() {
 		return
 	}
 	showToast("info", "Summarizing chat history...")
+	arg := map[string]string{
+		"chat": chatToText(chatBody.Messages, false),
+	}
 	// Call the summarize_chat tool via agent
-	summaryBytes := tools.CallToolWithAgent("summarize_chat", map[string]string{})
+	summaryBytes, _ := tools.CallToolWithAgent("summarize_chat", arg)
 	summary := string(summaryBytes)
 	if summary == "" {
 		showToast("error", "Failed to generate summary")
@@ -1588,6 +1621,7 @@ func init() {
 	cachedModelColor.Store("orange")
 	go chatWatcher(ctx)
 	initTUI()
-	tooler = tools.InitTools(cfg, logger, store)
-	tooler.RegisterWindowTools(modelHasVision)
+	tools.InitTools(cfg, logger, store)
+	// tooler = tools.InitTools(cfg, logger, store)
+	// tooler.RegisterWindowTools(modelHasVision)
 }

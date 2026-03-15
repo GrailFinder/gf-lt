@@ -12,87 +12,6 @@ import (
 	"github.com/playwright-community/playwright-go"
 )
 
-var browserToolSysMsg = `
-Additional browser automation tools (Playwright):
-[
-{
-    "name": "pw_start",
-    "args": [],
-    "when_to_use": "start a browser instance before doing any browser automation. Must be called first."
-},
-{
-    "name": "pw_stop",
-    "args": [],
-    "when_to_use": "stop the browser instance when done with automation."
-},
-{
-    "name": "pw_is_running",
-    "args": [],
-    "when_to_use": "check if browser is currently running."
-},
-{
-    "name": "pw_navigate",
-    "args": ["url"],
-    "when_to_use": "open a specific URL in the web browser."
-},
-{
-    "name": "pw_click",
-    "args": ["selector", "index"],
-    "when_to_use": "click on an element on the current webpage. Use 'index' for multiple matches (default 0)."
-},
-{
-    "name": "pw_fill",
-    "args": ["selector", "text", "index"],
-    "when_to_use": "type text into an input field. Use 'index' for multiple matches (default 0)."
-},
-{
-    "name": "pw_extract_text",
-    "args": ["selector"],
-    "when_to_use": "extract text content from the page or specific elements. Use selector 'body' for all page text."
-},
-{
-    "name": "pw_screenshot",
-    "args": ["selector", "full_page"],
-    "when_to_use": "take a screenshot of the page or a specific element. Returns a file path to the image. Use to verify actions or inspect visual state."
-},
-{
-    "name": "pw_screenshot_and_view",
-    "args": ["selector", "full_page"],
-    "when_to_use": "take a screenshot and return the image for viewing. Use to visually verify page state."
-},
-{
-    "name": "pw_wait_for_selector",
-    "args": ["selector", "timeout"],
-    "when_to_use": "wait for an element to appear on the page before proceeding with further actions."
-},
-{
-    "name": "pw_drag",
-    "args": ["x1", "y1", "x2", "y2"],
-    "when_to_use": "drag the mouse from point (x1,y1) to (x2,y2)."
-},
-{
-    "name": "pw_click_at",
-    "args": ["x", "y"],
-    "when_to_use": "click at specific X,Y coordinates on the page. Use when you know the exact position."
-},
-{
-    "name": "pw_get_html",
-    "args": ["selector"],
-    "when_to_use": "get the HTML content of the page or a specific element. Use to understand page structure or extract raw HTML."
-},
-{
-    "name": "pw_get_dom",
-    "args": ["selector"],
-    "when_to_use": "get a structured DOM representation with tag, attributes, text, and children. Use to inspect element hierarchy and properties."
-},
-{
-    "name": "pw_search_elements",
-    "args": ["text", "selector"],
-    "when_to_use": "search for elements by text content or CSS selector. Returns matching elements with their tags, text, and HTML."
-}
-]
-`
-
 var (
 	pw             *playwright.Playwright
 	browser        playwright.Browser
@@ -532,6 +451,7 @@ func pwDragBySelector(args map[string]string) []byte {
 	return []byte(fmt.Sprintf(`{"success": true, "message": "%s"}`, msg))
 }
 
+// nolint:unused
 func pwClickAt(args map[string]string) []byte {
 	x, ok := args["x"]
 	if !ok {
@@ -682,6 +602,7 @@ func pwGetDOM(args map[string]string) []byte {
 	return []byte(fmt.Sprintf(`{"dom": %s}`, string(data)))
 }
 
+// nolint:unused
 func pwSearchElements(args map[string]string) []byte {
 	text := args["text"]
 	selector := args["selector"]

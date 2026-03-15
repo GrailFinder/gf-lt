@@ -850,7 +850,7 @@ func initTUI() {
 		if event.Key() == tcell.KeyF9 {
 			// table of codeblocks to copy
 			text := textView.GetText(false)
-			cb := tools.CodeBlockRE.FindAllString(text, -1)
+			cb := models.CodeBlockRE.FindAllString(text, -1)
 			if len(cb) == 0 {
 				showToast("notify", "no code blocks in chat")
 				return nil
@@ -1147,7 +1147,7 @@ func initTUI() {
 				}
 				// check if plain text
 				if !injectRole {
-					matches := tools.RoleRE.FindStringSubmatch(msgText)
+					matches := models.RoleRE.FindStringSubmatch(msgText)
 					if len(matches) > 1 {
 						persona = matches[1]
 						msgText = strings.TrimLeft(msgText[len(matches[0]):], " ")

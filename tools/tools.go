@@ -8,11 +8,9 @@ import (
 	"gf-lt/config"
 	"gf-lt/models"
 	"gf-lt/storage"
-	"io"
 	"log/slog"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -25,20 +23,6 @@ import (
 )
 
 var (
-	ToolCallRE         = regexp.MustCompile(`__tool_call__\s*([\s\S]*?)__tool_call__`)
-	QuotesRE           = regexp.MustCompile(`(".*?")`)
-	StarRE             = regexp.MustCompile(`(\*.*?\*)`)
-	ThinkRE            = regexp.MustCompile(`(?s)<think>.*?</think>`)
-	toolCallRE         = ToolCallRE
-	quotesRE           = QuotesRE
-	starRE             = StarRE
-	thinkRE            = ThinkRE
-	CodeBlockRE        = regexp.MustCompile(`(?s)\x60{3}(?:.*?)\n(.*?)\n\s*\x60{3}\s*`)
-	SingleBacktickRE   = regexp.MustCompile(`\x60([^\x60]*)\x60`)
-	codeBlockRE        = CodeBlockRE
-	singleBacktickRE   = SingleBacktickRE
-	RoleRE             = regexp.MustCompile(`^(\w+):`)
-	SysLabels          = []string{"assistant"}
 	RpDefenitionSysMsg = `
 For this roleplay immersion is at most importance.
 Every character thinks and acts based on their personality and setting of the roleplay.
@@ -115,31 +99,7 @@ After that you are free to respond to the user.
 	ragSearchSysPrompt = `Synthesize the document search results, extracting key information and presenting a concise answer. Provide sources and document IDs where relevant.`
 	readURLSysPrompt   = `Extract and summarize the content from the webpage. Provide key information, main points, and any relevant details.`
 	summarySysPrompt   = `Please provide a concise summary of the following conversation. Focus on key points, decisions, and actions. Provide only the summary, no additional commentary.`
-	webAgentClient     *agent.AgentClient
-	webAgentClientOnce sync.Once
-	webAgentsOnce      sync.Once
 )
-
-var windowToolSysMsg = `
-Additional window tools (available only if xdotool and maim are installed):
-[
-{
-"name":"list_windows",
-"args": [],
-"when_to_use": "when asked to list visible windows; returns map of window ID to window name"
-},
-{
-"name":"capture_window",
-"args": ["window"],
-"when_to_use": "when asked to take a screenshot of a specific window; saves to /tmp; window can be ID or name substring; returns file path"
-},
-{
-"name":"capture_window_and_view",
-"args": ["window"],
-"when_to_use": "when asked to take a screenshot of a specific window and show it; saves to /tmp and returns image for viewing; window can be ID or name substring"
-}
-]
-`
 
 var WebSearcher searcher.WebSurfer
 
@@ -156,9 +116,22 @@ type Tools struct {
 	logger               *slog.Logger
 	store                storage.FullRepo
 	WindowToolsAvailable bool
-	getTokenFunc         func() string
-	webAgentClient       *agent.AgentClient
-	webAgentClientOnce   sync.Once
+	// getTokenFunc         func() string
+	webAgentClient     *agent.AgentClient
+	webAgentClientOnce sync.Once
+	webSearchAgent     agent.AgenterB
+}
+
+func (t *Tools) initAgentsB() {
+	t.GetWebAgentClient()
+	t.webSearchAgent = agent.NewWebAgentB(t.webAgentClient, webSearchSysPrompt)
+	agent.RegisterB("rag_search", agent.NewWebAgentB(t.webAgentClient, ragSearchSysPrompt))
+	// Register websearch agent
+	agent.RegisterB("websearch", agent.NewWebAgentB(t.webAgentClient, webSearchSysPrompt))
+	// Register read_url agent
+	agent.RegisterB("read_url", agent.NewWebAgentB(t.webAgentClient, readURLSysPrompt))
+	// Register summarize_chat agent
+	agent.RegisterB("summarize_chat", agent.NewWebAgentB(t.webAgentClient, summarySysPrompt))
 }
 
 func InitTools(cfg *config.Config, logger *slog.Logger, store storage.FullRepo) *Tools {
@@ -201,6 +174,7 @@ func InitTools(cfg *config.Config, logger *slog.Logger, store storage.FullRepo) 
 		store:  store,
 	}
 	t.checkWindowTools()
+	t.initAgentsB()
 	return t
 }
 
@@ -224,17 +198,17 @@ func SetTokenFunc(fn func() string) {
 	getTokenFunc = fn
 }
 
-func getWebAgentClient() *agent.AgentClient {
-	webAgentClientOnce.Do(func() {
+func (t *Tools) GetWebAgentClient() *agent.AgentClient {
+	t.webAgentClientOnce.Do(func() {
 		getToken := func() string {
 			if getTokenFunc != nil {
 				return getTokenFunc()
 			}
 			return ""
 		}
-		webAgentClient = agent.NewAgentClient(cfg, logger, getToken)
+		t.webAgentClient = agent.NewAgentClient(cfg, logger, getToken)
 	})
-	return webAgentClient
+	return t.webAgentClient
 }
 
 func RegisterWindowTools(modelHasVision bool) {
@@ -242,27 +216,13 @@ func RegisterWindowTools(modelHasVision bool) {
 	// Window tools registration happens here if needed
 }
 
-func RegisterPlaywrightTools() {
-	removePlaywrightToolsFromBaseTools()
-	if cfg != nil && cfg.PlaywrightEnabled {
-		// Playwright tools are registered here
-	}
-}
-
-// 	webAgentsOnce.Do(func() {
-// 		client := getWebAgentClient()
-// 		// Register rag_search agent
-// 		agent.RegisterB("rag_search", agent.NewWebAgentB(client, ragSearchSysPrompt))
-// 		// Register websearch agent
-// 		agent.RegisterB("websearch", agent.NewWebAgentB(client, webSearchSysPrompt))
-// 		// Register read_url agent
-// 		agent.RegisterB("read_url", agent.NewWebAgentB(client, readURLSysPrompt))
-// 		// Register summarize_chat agent
-// 		agent.RegisterB("summarize_chat", agent.NewWebAgentB(client, summarySysPrompt))
-// 	})
+// func RegisterPlaywrightTools() {
+// 	removePlaywrightToolsFromBaseTools()
+// 	if cfg != nil && cfg.PlaywrightEnabled {
+// 		// Playwright tools are registered here
+// 	}
 // }
 
-// web search (depends on extra server)
 func websearch(args map[string]string) []byte {
 	// make http request return bytes
 	query, ok := args["query"]
@@ -407,89 +367,6 @@ func readURLRaw(args map[string]string) []byte {
 	return []byte(fmt.Sprintf("%+v", resp))
 }
 
-// // Helper functions for file operations
-// func resolvePath(p string) string {
-// 	if filepath.IsAbs(p) {
-// 		return p
-// 	}
-// 	return filepath.Join(cfg.FilePickerDir, p)
-// }
-
-func readStringFromFile(filename string) (string, error) {
-	data, err := os.ReadFile(filename)
-	if err != nil {
-		return "", err
-	}
-	return string(data), nil
-}
-
-func writeStringToFile(filename string, data string) error {
-	return os.WriteFile(filename, []byte(data), 0644)
-}
-
-func appendStringToFile(filename string, data string) error {
-	file, err := os.OpenFile(filename, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-	_, err = file.WriteString(data)
-	return err
-}
-
-func removeFile(filename string) error {
-	return os.Remove(filename)
-}
-
-func moveFile(src, dst string) error {
-	// First try with os.Rename (works within same filesystem)
-	if err := os.Rename(src, dst); err == nil {
-		return nil
-	}
-	// If that fails (e.g., cross-filesystem), copy and delete
-	return copyAndRemove(src, dst)
-}
-
-func copyFile(src, dst string) error {
-	srcFile, err := os.Open(src)
-	if err != nil {
-		return err
-	}
-	defer srcFile.Close()
-	dstFile, err := os.Create(dst)
-	if err != nil {
-		return err
-	}
-	defer dstFile.Close()
-	_, err = io.Copy(dstFile, srcFile)
-	return err
-}
-
-func copyAndRemove(src, dst string) error {
-	// Copy the file
-	if err := copyFile(src, dst); err != nil {
-		return err
-	}
-	// Remove the source file
-	return os.Remove(src)
-}
-
-func listDirectory(path string) ([]string, error) {
-	entries, err := os.ReadDir(path)
-	if err != nil {
-		return nil, err
-	}
-	var files []string
-	for _, entry := range entries {
-		if entry.IsDir() {
-			files = append(files, entry.Name()+"/") // Add "/" to indicate directory
-		} else {
-			files = append(files, entry.Name())
-		}
-	}
-	return files, nil
-}
-
 // Unified run command - single entry point for shell, memory, and todo
 func runCmd(args map[string]string) []byte {
 	commandStr := args["command"]
@@ -498,16 +375,13 @@ func runCmd(args map[string]string) []byte {
 		logger.Error(msg)
 		return []byte(msg)
 	}
-
 	// Parse the command - first word is subcommand
 	parts := strings.Fields(commandStr)
 	if len(parts) == 0 {
 		return []byte("[error] empty command")
 	}
-
 	subcmd := parts[0]
 	rest := parts[1:]
-
 	// Route to appropriate handler
 	switch subcmd {
 	case "help":
@@ -566,10 +440,8 @@ Actions:
   wait <selector>    - wait for element
   drag <from> <to>   - drag element`)
 	}
-
 	action := args[0]
 	rest := args[1:]
-
 	switch action {
 	case "start":
 		return pwStart(originalArgs)
@@ -916,9 +788,7 @@ func handleTodoSubcommand(args []string, originalArgs map[string]string) []byte 
 	if len(args) == 0 {
 		return []byte("usage: todo create|read|update|delete")
 	}
-
 	subcmd := args[0]
-
 	switch subcmd {
 	case "create":
 		task := strings.Join(args[1:], " ")
@@ -929,26 +799,22 @@ func handleTodoSubcommand(args []string, originalArgs map[string]string) []byte 
 			return []byte("usage: todo create <task>")
 		}
 		return todoCreate(map[string]string{"task": task})
-
 	case "read":
 		id := ""
 		if len(args) > 1 {
 			id = args[1]
 		}
 		return todoRead(map[string]string{"id": id})
-
 	case "update":
 		if len(args) < 2 {
 			return []byte("usage: todo update <id> <status>")
 		}
 		return todoUpdate(map[string]string{"id": args[1], "status": args[2]})
-
 	case "delete":
 		if len(args) < 2 {
 			return []byte("usage: todo delete <id>")
 		}
 		return todoDelete(map[string]string{"id": args[1]})
-
 	default:
 		return []byte(fmt.Sprintf("unknown todo subcommand: %s", subcmd))
 	}
@@ -962,55 +828,53 @@ func executeCommand(args map[string]string) []byte {
 		logger.Error(msg)
 		return []byte(msg)
 	}
-
 	// Use chain execution for pipe/chaining support
 	result := ExecChain(commandStr)
 	return []byte(result)
 }
 
-// handleCdCommand handles the cd command to update FilePickerDir
-func handleCdCommand(args []string) []byte {
-	var targetDir string
-	if len(args) == 0 {
-		// cd with no args goes to home directory
-		homeDir, err := os.UserHomeDir()
-		if err != nil {
-			msg := "cd: cannot determine home directory: " + err.Error()
-			logger.Error(msg)
-			return []byte(msg)
-		}
-		targetDir = homeDir
-	} else {
-		targetDir = args[0]
-	}
-	// Resolve relative paths against current FilePickerDir
-	if !filepath.IsAbs(targetDir) {
-		targetDir = filepath.Join(cfg.FilePickerDir, targetDir)
-	}
-	// Verify the directory exists
-	info, err := os.Stat(targetDir)
-	if err != nil {
-		msg := "cd: " + targetDir + ": " + err.Error()
-		logger.Error(msg)
-		return []byte(msg)
-	}
-	if !info.IsDir() {
-		msg := "cd: " + targetDir + ": not a directory"
-		logger.Error(msg)
-		return []byte(msg)
-	}
-
-	// Update FilePickerDir
-	absDir, err := filepath.Abs(targetDir)
-	if err != nil {
-		msg := "cd: failed to resolve path: " + err.Error()
-		logger.Error(msg)
-		return []byte(msg)
-	}
-	cfg.FilePickerDir = absDir
-	msg := "FilePickerDir changed to: " + absDir
-	return []byte(msg)
-}
+// // handleCdCommand handles the cd command to update FilePickerDir
+// func handleCdCommand(args []string) []byte {
+// 	var targetDir string
+// 	if len(args) == 0 {
+// 		// cd with no args goes to home directory
+// 		homeDir, err := os.UserHomeDir()
+// 		if err != nil {
+// 			msg := "cd: cannot determine home directory: " + err.Error()
+// 			logger.Error(msg)
+// 			return []byte(msg)
+// 		}
+// 		targetDir = homeDir
+// 	} else {
+// 		targetDir = args[0]
+// 	}
+// 	// Resolve relative paths against current FilePickerDir
+// 	if !filepath.IsAbs(targetDir) {
+// 		targetDir = filepath.Join(cfg.FilePickerDir, targetDir)
+// 	}
+// 	// Verify the directory exists
+// 	info, err := os.Stat(targetDir)
+// 	if err != nil {
+// 		msg := "cd: " + targetDir + ": " + err.Error()
+// 		logger.Error(msg)
+// 		return []byte(msg)
+// 	}
+// 	if !info.IsDir() {
+// 		msg := "cd: " + targetDir + ": not a directory"
+// 		logger.Error(msg)
+// 		return []byte(msg)
+// 	}
+// 	// Update FilePickerDir
+// 	absDir, err := filepath.Abs(targetDir)
+// 	if err != nil {
+// 		msg := "cd: failed to resolve path: " + err.Error()
+// 		logger.Error(msg)
+// 		return []byte(msg)
+// 	}
+// 	cfg.FilePickerDir = absDir
+// 	msg := "FilePickerDir changed to: " + absDir
+// 	return []byte(msg)
+// }
 
 // Helper functions for command execution
 // Todo structure
@@ -1405,8 +1269,8 @@ var FnMap = map[string]fnSig{
 	"view_img":      viewImgTool,
 	"help":          helpTool,
 	// Unified run command
-	"run": runCmd,
-	// "summarize_chat": summarizeChat,
+	"run":            runCmd,
+	"summarize_chat": summarizeChat,
 }
 
 func removeWindowToolsFromBaseTools() {
@@ -1427,476 +1291,485 @@ func removeWindowToolsFromBaseTools() {
 	delete(FnMap, "capture_window_and_view")
 }
 
-func removePlaywrightToolsFromBaseTools() {
-	playwrightToolNames := map[string]bool{
-		"pw_start":               true,
-		"pw_stop":                true,
-		"pw_is_running":          true,
-		"pw_navigate":            true,
-		"pw_click":               true,
-		"pw_click_at":            true,
-		"pw_fill":                true,
-		"pw_extract_text":        true,
-		"pw_screenshot":          true,
-		"pw_screenshot_and_view": true,
-		"pw_wait_for_selector":   true,
-		"pw_drag":                true,
+func summarizeChat(args map[string]string) []byte {
+	data, err := json.Marshal(args)
+	if err != nil {
+		return []byte("error: failed to marshal arguments")
 	}
-	var filtered []models.Tool
-	for _, tool := range BaseTools {
-		if !playwrightToolNames[tool.Function.Name] {
-			filtered = append(filtered, tool)
-		}
-	}
-	BaseTools = filtered
-	delete(FnMap, "pw_start")
-	delete(FnMap, "pw_stop")
-	delete(FnMap, "pw_is_running")
-	delete(FnMap, "pw_navigate")
-	delete(FnMap, "pw_click")
-	delete(FnMap, "pw_click_at")
-	delete(FnMap, "pw_fill")
-	delete(FnMap, "pw_extract_text")
-	delete(FnMap, "pw_screenshot")
-	delete(FnMap, "pw_screenshot_and_view")
-	delete(FnMap, "pw_wait_for_selector")
-	delete(FnMap, "pw_drag")
+	return []byte(data)
 }
 
-func (t *Tools) RegisterWindowTools(modelHasVision bool) {
-	removeWindowToolsFromBaseTools()
-	if t.WindowToolsAvailable {
-		FnMap["list_windows"] = listWindows
-		FnMap["capture_window"] = captureWindow
-		windowTools := []models.Tool{
-			{
-				Type: "function",
-				Function: models.ToolFunc{
-					Name:        "list_windows",
-					Description: "List all visible windows with their IDs and names. Returns a map of window ID to window name.",
-					Parameters: models.ToolFuncParams{
-						Type:       "object",
-						Required:   []string{},
-						Properties: map[string]models.ToolArgProps{},
-					},
-				},
-			},
-			{
-				Type: "function",
-				Function: models.ToolFunc{
-					Name:        "capture_window",
-					Description: "Capture a screenshot of a specific window and save it to /tmp. Requires window parameter (window ID or name substring).",
-					Parameters: models.ToolFuncParams{
-						Type:     "object",
-						Required: []string{"window"},
-						Properties: map[string]models.ToolArgProps{
-							"window": models.ToolArgProps{
-								Type:        "string",
-								Description: "window ID or window name (partial match)",
-							},
-						},
-					},
-				},
-			},
-		}
-		if modelHasVision {
-			FnMap["capture_window_and_view"] = captureWindowAndView
-			windowTools = append(windowTools, models.Tool{
-				Type: "function",
-				Function: models.ToolFunc{
-					Name:        "capture_window_and_view",
-					Description: "Capture a screenshot of a specific window, save it to /tmp, and return the image for viewing. Requires window parameter (window ID or name substring).",
-					Parameters: models.ToolFuncParams{
-						Type:     "object",
-						Required: []string{"window"},
-						Properties: map[string]models.ToolArgProps{
-							"window": models.ToolArgProps{
-								Type:        "string",
-								Description: "window ID or window name (partial match)",
-							},
-						},
-					},
-				},
-			})
-		}
-		BaseTools = append(BaseTools, windowTools...)
-		ToolSysMsg += windowToolSysMsg
-	}
-}
+// func removePlaywrightToolsFromBaseTools() {
+// 	playwrightToolNames := map[string]bool{
+// 		"pw_start":               true,
+// 		"pw_stop":                true,
+// 		"pw_is_running":          true,
+// 		"pw_navigate":            true,
+// 		"pw_click":               true,
+// 		"pw_click_at":            true,
+// 		"pw_fill":                true,
+// 		"pw_extract_text":        true,
+// 		"pw_screenshot":          true,
+// 		"pw_screenshot_and_view": true,
+// 		"pw_wait_for_selector":   true,
+// 		"pw_drag":                true,
+// 	}
+// 	var filtered []models.Tool
+// 	for _, tool := range BaseTools {
+// 		if !playwrightToolNames[tool.Function.Name] {
+// 			filtered = append(filtered, tool)
+// 		}
+// 	}
+// 	BaseTools = filtered
+// 	delete(FnMap, "pw_start")
+// 	delete(FnMap, "pw_stop")
+// 	delete(FnMap, "pw_is_running")
+// 	delete(FnMap, "pw_navigate")
+// 	delete(FnMap, "pw_click")
+// 	delete(FnMap, "pw_click_at")
+// 	delete(FnMap, "pw_fill")
+// 	delete(FnMap, "pw_extract_text")
+// 	delete(FnMap, "pw_screenshot")
+// 	delete(FnMap, "pw_screenshot_and_view")
+// 	delete(FnMap, "pw_wait_for_selector")
+// 	delete(FnMap, "pw_drag")
+// }
 
-var browserAgentSysPrompt = `You are an autonomous browser automation agent. Your goal is to complete the user's task by intelligently using browser automation 
+// func (t *Tools) RegisterWindowTools(modelHasVision bool) {
+// 	removeWindowToolsFromBaseTools()
+// 	if t.WindowToolsAvailable {
+// 		FnMap["list_windows"] = listWindows
+// 		FnMap["capture_window"] = captureWindow
+// 		windowTools := []models.Tool{
+// 			{
+// 				Type: "function",
+// 				Function: models.ToolFunc{
+// 					Name:        "list_windows",
+// 					Description: "List all visible windows with their IDs and names. Returns a map of window ID to window name.",
+// 					Parameters: models.ToolFuncParams{
+// 						Type:       "object",
+// 						Required:   []string{},
+// 						Properties: map[string]models.ToolArgProps{},
+// 					},
+// 				},
+// 			},
+// 			{
+// 				Type: "function",
+// 				Function: models.ToolFunc{
+// 					Name:        "capture_window",
+// 					Description: "Capture a screenshot of a specific window and save it to /tmp. Requires window parameter (window ID or name substring).",
+// 					Parameters: models.ToolFuncParams{
+// 						Type:     "object",
+// 						Required: []string{"window"},
+// 						Properties: map[string]models.ToolArgProps{
+// 							"window": models.ToolArgProps{
+// 								Type:        "string",
+// 								Description: "window ID or window name (partial match)",
+// 							},
+// 						},
+// 					},
+// 				},
+// 			},
+// 		}
+// 		if modelHasVision {
+// 			FnMap["capture_window_and_view"] = captureWindowAndView
+// 			windowTools = append(windowTools, models.Tool{
+// 				Type: "function",
+// 				Function: models.ToolFunc{
+// 					Name:        "capture_window_and_view",
+// 					Description: "Capture a screenshot of a specific window, save it to /tmp, and return the image for viewing. Requires window parameter (window ID or name substring).",
+// 					Parameters: models.ToolFuncParams{
+// 						Type:     "object",
+// 						Required: []string{"window"},
+// 						Properties: map[string]models.ToolArgProps{
+// 							"window": models.ToolArgProps{
+// 								Type:        "string",
+// 								Description: "window ID or window name (partial match)",
+// 							},
+// 						},
+// 					},
+// 				},
+// 			})
+// 		}
+// 		BaseTools = append(BaseTools, windowTools...)
+// 		ToolSysMsg += windowToolSysMsg
+// 	}
+// }
 
-Important: The browser may already be running from a previous task! Always check pw_is_running first before starting a new browser.
+// for pw agentA
+// var browserAgentSysPrompt = `You are an autonomous browser automation agent. Your goal is to complete the user's task by intelligently using browser automation
 
-Available tools:
-- pw_start: Start browser (only if not already running)
-- pw_stop: Stop browser (only when you're truly done and browser is no longer needed)
-- pw_is_running: Check if browser is running
-- pw_navigate: Go to a URL
-- pw_click: Click an element by CSS selector
-- pw_fill: Type text into an input
-- pw_extract_text: Get text from page/element
-- pw_screenshot: Take a screenshot (returns file path)
-- pw_screenshot_and_view: Take screenshot with image for viewing
-- pw_wait_for_selector: Wait for element to appear
-- pw_drag: Drag mouse from one point to another
-- pw_click_at: Click at X,Y coordinates
-- pw_get_html: Get HTML content
-- pw_get_dom: Get structured DOM tree
-- pw_search_elements: Search for elements by text or selector
+// Important: The browser may already be running from a previous task! Always check pw_is_running first before starting a new browser.
 
-Workflow:
-1. First, check if browser is already running (pw_is_running)
-2. Only start browser if not already running (pw_start)
-3. Navigate to required pages (pw_navigate)
-4. Interact with elements as needed (click, fill, etc.)
-5. Extract information or take screenshots as requested
-6. IMPORTANT: Do NOT stop the browser when done! Leave it running so the user can continue interacting with the page in subsequent requests.
+// Available tools:
+// - pw_start: Start browser (only if not already running)
+// - pw_stop: Stop browser (only when you're truly done and browser is no longer needed)
+// - pw_is_running: Check if browser is running
+// - pw_navigate: Go to a URL
+// - pw_click: Click an element by CSS selector
+// - pw_fill: Type text into an input
+// - pw_extract_text: Get text from page/element
+// - pw_screenshot: Take a screenshot (returns file path)
+// - pw_screenshot_and_view: Take screenshot with image for viewing
+// - pw_wait_for_selector: Wait for element to appear
+// - pw_drag: Drag mouse from one point to another
+// - pw_click_at: Click at X,Y coordinates
+// - pw_get_html: Get HTML content
+// - pw_get_dom: Get structured DOM tree
+// - pw_search_elements: Search for elements by text or selector
 
-Always provide clear feedback about what you're doing and what you found.`
+// Workflow:
+// 1. First, check if browser is already running (pw_is_running)
+// 2. Only start browser if not already running (pw_start)
+// 3. Navigate to required pages (pw_navigate)
+// 4. Interact with elements as needed (click, fill, etc.)
+// 5. Extract information or take screenshots as requested
+// 6. IMPORTANT: Do NOT stop the browser when done! Leave it running so the user can continue interacting with the page in subsequent requests.
 
-func runBrowserAgent(args map[string]string) []byte {
-	task, ok := args["task"]
-	if !ok || task == "" {
-		return []byte(`{"error": "task argument is required"}`)
-	}
-	client := getWebAgentClient()
-	pwAgent := agent.NewPWAgent(client, browserAgentSysPrompt)
-	pwAgent.SetTools(agent.GetPWTools())
-	return pwAgent.ProcessTask(task)
-}
+// Always provide clear feedback about what you're doing and what you found.`
 
-func registerPlaywrightTools() {
-	removePlaywrightToolsFromBaseTools()
-	if cfg != nil && cfg.PlaywrightEnabled {
-		FnMap["pw_start"] = pwStart
-		FnMap["pw_stop"] = pwStop
-		FnMap["pw_is_running"] = pwIsRunning
-		FnMap["pw_navigate"] = pwNavigate
-		FnMap["pw_click"] = pwClick
-		FnMap["pw_click_at"] = pwClickAt
-		FnMap["pw_fill"] = pwFill
-		FnMap["pw_extract_text"] = pwExtractText
-		FnMap["pw_screenshot"] = pwScreenshot
-		FnMap["pw_screenshot_and_view"] = pwScreenshotAndView
-		FnMap["pw_wait_for_selector"] = pwWaitForSelector
-		FnMap["pw_drag"] = pwDrag
-		FnMap["pw_get_html"] = pwGetHTML
-		FnMap["pw_get_dom"] = pwGetDOM
-		FnMap["pw_search_elements"] = pwSearchElements
-		playwrightTools := []models.Tool{
-			{
-				Type: "function",
-				Function: models.ToolFunc{
-					Name:        "pw_start",
-					Description: "Start a Playwright browser instance. Call this first before using other pw_  Uses headless mode by default (set PlaywrightHeadless=false in config for GUI).",
-					Parameters: models.ToolFuncParams{
-						Type:       "object",
-						Required:   []string{},
-						Properties: map[string]models.ToolArgProps{},
-					},
-				},
-			},
-			{
-				Type: "function",
-				Function: models.ToolFunc{
-					Name:        "pw_stop",
-					Description: "Stop the Playwright browser instance. Call when done with browser automation.",
-					Parameters: models.ToolFuncParams{
-						Type:       "object",
-						Required:   []string{},
-						Properties: map[string]models.ToolArgProps{},
-					},
-				},
-			},
-			{
-				Type: "function",
-				Function: models.ToolFunc{
-					Name:        "pw_is_running",
-					Description: "Check if Playwright browser is currently running.",
-					Parameters: models.ToolFuncParams{
-						Type:       "object",
-						Required:   []string{},
-						Properties: map[string]models.ToolArgProps{},
-					},
-				},
-			},
-			{
-				Type: "function",
-				Function: models.ToolFunc{
-					Name:        "pw_navigate",
-					Description: "Navigate to a URL in the browser.",
-					Parameters: models.ToolFuncParams{
-						Type:     "object",
-						Required: []string{"url"},
-						Properties: map[string]models.ToolArgProps{
-							"url": models.ToolArgProps{
-								Type:        "string",
-								Description: "URL to navigate to",
-							},
-						},
-					},
-				},
-			},
-			{
-				Type: "function",
-				Function: models.ToolFunc{
-					Name:        "pw_click",
-					Description: "Click on an element using CSS selector. Use 'index' for multiple matches (default 0).",
-					Parameters: models.ToolFuncParams{
-						Type:     "object",
-						Required: []string{"selector"},
-						Properties: map[string]models.ToolArgProps{
-							"selector": models.ToolArgProps{
-								Type:        "string",
-								Description: "CSS selector for the element to click",
-							},
-							"index": models.ToolArgProps{
-								Type:        "string",
-								Description: "optional index for multiple matches (default 0)",
-							},
-						},
-					},
-				},
-			},
-			{
-				Type: "function",
-				Function: models.ToolFunc{
-					Name:        "pw_fill",
-					Description: "Fill an input field with text using CSS selector.",
-					Parameters: models.ToolFuncParams{
-						Type:     "object",
-						Required: []string{"selector", "text"},
-						Properties: map[string]models.ToolArgProps{
-							"selector": models.ToolArgProps{
-								Type:        "string",
-								Description: "CSS selector for the input element",
-							},
-							"text": models.ToolArgProps{
-								Type:        "string",
-								Description: "text to fill into the input",
-							},
-							"index": models.ToolArgProps{
-								Type:        "string",
-								Description: "optional index for multiple matches (default 0)",
-							},
-						},
-					},
-				},
-			},
-			{
-				Type: "function",
-				Function: models.ToolFunc{
-					Name:        "pw_extract_text",
-					Description: "Extract text content from the page or specific elements using CSS selector. Use 'body' for all page text.",
-					Parameters: models.ToolFuncParams{
-						Type:     "object",
-						Required: []string{"selector"},
-						Properties: map[string]models.ToolArgProps{
-							"selector": models.ToolArgProps{
-								Type:        "string",
-								Description: "CSS selector (use 'body' for all page text)",
-							},
-						},
-					},
-				},
-			},
-			{
-				Type: "function",
-				Function: models.ToolFunc{
-					Name:        "pw_screenshot",
-					Description: "Take a screenshot of the page or a specific element. Returns file path to saved image.",
-					Parameters: models.ToolFuncParams{
-						Type:     "object",
-						Required: []string{},
-						Properties: map[string]models.ToolArgProps{
-							"selector": models.ToolArgProps{
-								Type:        "string",
-								Description: "optional CSS selector for element to screenshot",
-							},
-							"full_page": models.ToolArgProps{
-								Type:        "string",
-								Description: "optional: 'true' to capture full page (default false)",
-							},
-						},
-					},
-				},
-			},
-			{
-				Type: "function",
-				Function: models.ToolFunc{
-					Name:        "pw_screenshot_and_view",
-					Description: "Take a screenshot and return the image for viewing. Use when model needs to see the screenshot.",
-					Parameters: models.ToolFuncParams{
-						Type:     "object",
-						Required: []string{},
-						Properties: map[string]models.ToolArgProps{
-							"selector": models.ToolArgProps{
-								Type:        "string",
-								Description: "optional CSS selector for element to screenshot",
-							},
-							"full_page": models.ToolArgProps{
-								Type:        "string",
-								Description: "optional: 'true' to capture full page (default false)",
-							},
-						},
-					},
-				},
-			},
-			{
-				Type: "function",
-				Function: models.ToolFunc{
-					Name:        "pw_wait_for_selector",
-					Description: "Wait for an element to appear on the page.",
-					Parameters: models.ToolFuncParams{
-						Type:     "object",
-						Required: []string{"selector"},
-						Properties: map[string]models.ToolArgProps{
-							"selector": models.ToolArgProps{
-								Type:        "string",
-								Description: "CSS selector to wait for",
-							},
-							"timeout": models.ToolArgProps{
-								Type:        "string",
-								Description: "optional timeout in ms (default 30000)",
-							},
-						},
-					},
-				},
-			},
-			{
-				Type: "function",
-				Function: models.ToolFunc{
-					Name:        "pw_drag",
-					Description: "Drag the mouse from one point to another.",
-					Parameters: models.ToolFuncParams{
-						Type:     "object",
-						Required: []string{"x1", "y1", "x2", "y2"},
-						Properties: map[string]models.ToolArgProps{
-							"x1": models.ToolArgProps{
-								Type:        "string",
-								Description: "starting X coordinate",
-							},
-							"y1": models.ToolArgProps{
-								Type:        "string",
-								Description: "starting Y coordinate",
-							},
-							"x2": models.ToolArgProps{
-								Type:        "string",
-								Description: "ending X coordinate",
-							},
-							"y2": models.ToolArgProps{
-								Type:        "string",
-								Description: "ending Y coordinate",
-							},
-						},
-					},
-				},
-			},
-			{
-				Type: "function",
-				Function: models.ToolFunc{
-					Name:        "pw_get_html",
-					Description: "Get the HTML content of the page or a specific element.",
-					Parameters: models.ToolFuncParams{
-						Type:     "object",
-						Required: []string{},
-						Properties: map[string]models.ToolArgProps{
-							"selector": models.ToolArgProps{
-								Type:        "string",
-								Description: "optional CSS selector (default: body)",
-							},
-						},
-					},
-				},
-			},
-			{
-				Type: "function",
-				Function: models.ToolFunc{
-					Name:        "pw_get_dom",
-					Description: "Get a structured DOM representation of an element with tag, attributes, text, and children.",
-					Parameters: models.ToolFuncParams{
-						Type:     "object",
-						Required: []string{},
-						Properties: map[string]models.ToolArgProps{
-							"selector": models.ToolArgProps{
-								Type:        "string",
-								Description: "optional CSS selector (default: body)",
-							},
-						},
-					},
-				},
-			},
-			{
-				Type: "function",
-				Function: models.ToolFunc{
-					Name:        "pw_search_elements",
-					Description: "Search for elements by text content or CSS selector. Returns matching elements with their tags, text, and HTML.",
-					Parameters: models.ToolFuncParams{
-						Type:     "object",
-						Required: []string{},
-						Properties: map[string]models.ToolArgProps{
-							"text": models.ToolArgProps{
-								Type:        "string",
-								Description: "text to search for in elements",
-							},
-							"selector": models.ToolArgProps{
-								Type:        "string",
-								Description: "CSS selector to search for",
-							},
-						},
-					},
-				},
-			},
-		}
-		BaseTools = append(BaseTools, playwrightTools...)
-		ToolSysMsg += browserToolSysMsg
-		agent.RegisterPWTool("pw_start", pwStart)
-		agent.RegisterPWTool("pw_stop", pwStop)
-		agent.RegisterPWTool("pw_is_running", pwIsRunning)
-		agent.RegisterPWTool("pw_navigate", pwNavigate)
-		agent.RegisterPWTool("pw_click", pwClick)
-		agent.RegisterPWTool("pw_click_at", pwClickAt)
-		agent.RegisterPWTool("pw_fill", pwFill)
-		agent.RegisterPWTool("pw_extract_text", pwExtractText)
-		agent.RegisterPWTool("pw_screenshot", pwScreenshot)
-		agent.RegisterPWTool("pw_screenshot_and_view", pwScreenshotAndView)
-		agent.RegisterPWTool("pw_wait_for_selector", pwWaitForSelector)
-		agent.RegisterPWTool("pw_drag", pwDrag)
-		agent.RegisterPWTool("pw_get_html", pwGetHTML)
-		agent.RegisterPWTool("pw_get_dom", pwGetDOM)
-		agent.RegisterPWTool("pw_search_elements", pwSearchElements)
-		browserAgentTool := []models.Tool{
-			{
-				Type: "function",
-				Function: models.ToolFunc{
-					Name:        "browser_agent",
-					Description: "Autonomous browser automation agent. Use for complex multi-step browser tasks like 'go to website, login, and take screenshot'. The agent will plan and execute steps automatically using browser ",
-					Parameters: models.ToolFuncParams{
-						Type:     "object",
-						Required: []string{"task"},
-						Properties: map[string]models.ToolArgProps{
-							"task": {Type: "string", Description: "The task to accomplish, e.g., 'go to github.com and take a screenshot of the homepage'"},
-						},
-					},
-				},
-			},
-		}
-		BaseTools = append(BaseTools, browserAgentTool...)
-		FnMap["browser_agent"] = runBrowserAgent
-	}
-}
+// func (t *Tools) runBrowserAgent(args map[string]string) []byte {
+// 	task, ok := args["task"]
+// 	if !ok || task == "" {
+// 		return []byte(`{"error": "task argument is required"}`)
+// 	}
+// 	client := t.GetWebAgentClient()
+// 	pwAgent := agent.NewPWAgent(client, browserAgentSysPrompt)
+// 	pwAgent.SetTools(agent.GetPWTools())
+// 	return pwAgent.ProcessTask(task)
+// }
 
-func CallToolWithAgent(name string, args map[string]string) []byte {
+// func registerPlaywrightTools() {
+// 	removePlaywrightToolsFromBaseTools()
+// 	if cfg != nil && cfg.PlaywrightEnabled {
+// 		FnMap["pw_start"] = pwStart
+// 		FnMap["pw_stop"] = pwStop
+// 		FnMap["pw_is_running"] = pwIsRunning
+// 		FnMap["pw_navigate"] = pwNavigate
+// 		FnMap["pw_click"] = pwClick
+// 		FnMap["pw_click_at"] = pwClickAt
+// 		FnMap["pw_fill"] = pwFill
+// 		FnMap["pw_extract_text"] = pwExtractText
+// 		FnMap["pw_screenshot"] = pwScreenshot
+// 		FnMap["pw_screenshot_and_view"] = pwScreenshotAndView
+// 		FnMap["pw_wait_for_selector"] = pwWaitForSelector
+// 		FnMap["pw_drag"] = pwDrag
+// 		FnMap["pw_get_html"] = pwGetHTML
+// 		FnMap["pw_get_dom"] = pwGetDOM
+// 		FnMap["pw_search_elements"] = pwSearchElements
+// 		playwrightTools := []models.Tool{
+// 			{
+// 				Type: "function",
+// 				Function: models.ToolFunc{
+// 					Name:        "pw_start",
+// 					Description: "Start a Playwright browser instance. Call this first before using other pw_  Uses headless mode by default (set PlaywrightHeadless=false in config for GUI).",
+// 					Parameters: models.ToolFuncParams{
+// 						Type:       "object",
+// 						Required:   []string{},
+// 						Properties: map[string]models.ToolArgProps{},
+// 					},
+// 				},
+// 			},
+// 			{
+// 				Type: "function",
+// 				Function: models.ToolFunc{
+// 					Name:        "pw_stop",
+// 					Description: "Stop the Playwright browser instance. Call when done with browser automation.",
+// 					Parameters: models.ToolFuncParams{
+// 						Type:       "object",
+// 						Required:   []string{},
+// 						Properties: map[string]models.ToolArgProps{},
+// 					},
+// 				},
+// 			},
+// 			{
+// 				Type: "function",
+// 				Function: models.ToolFunc{
+// 					Name:        "pw_is_running",
+// 					Description: "Check if Playwright browser is currently running.",
+// 					Parameters: models.ToolFuncParams{
+// 						Type:       "object",
+// 						Required:   []string{},
+// 						Properties: map[string]models.ToolArgProps{},
+// 					},
+// 				},
+// 			},
+// 			{
+// 				Type: "function",
+// 				Function: models.ToolFunc{
+// 					Name:        "pw_navigate",
+// 					Description: "Navigate to a URL in the browser.",
+// 					Parameters: models.ToolFuncParams{
+// 						Type:     "object",
+// 						Required: []string{"url"},
+// 						Properties: map[string]models.ToolArgProps{
+// 							"url": models.ToolArgProps{
+// 								Type:        "string",
+// 								Description: "URL to navigate to",
+// 							},
+// 						},
+// 					},
+// 				},
+// 			},
+// 			{
+// 				Type: "function",
+// 				Function: models.ToolFunc{
+// 					Name:        "pw_click",
+// 					Description: "Click on an element using CSS selector. Use 'index' for multiple matches (default 0).",
+// 					Parameters: models.ToolFuncParams{
+// 						Type:     "object",
+// 						Required: []string{"selector"},
+// 						Properties: map[string]models.ToolArgProps{
+// 							"selector": models.ToolArgProps{
+// 								Type:        "string",
+// 								Description: "CSS selector for the element to click",
+// 							},
+// 							"index": models.ToolArgProps{
+// 								Type:        "string",
+// 								Description: "optional index for multiple matches (default 0)",
+// 							},
+// 						},
+// 					},
+// 				},
+// 			},
+// 			{
+// 				Type: "function",
+// 				Function: models.ToolFunc{
+// 					Name:        "pw_fill",
+// 					Description: "Fill an input field with text using CSS selector.",
+// 					Parameters: models.ToolFuncParams{
+// 						Type:     "object",
+// 						Required: []string{"selector", "text"},
+// 						Properties: map[string]models.ToolArgProps{
+// 							"selector": models.ToolArgProps{
+// 								Type:        "string",
+// 								Description: "CSS selector for the input element",
+// 							},
+// 							"text": models.ToolArgProps{
+// 								Type:        "string",
+// 								Description: "text to fill into the input",
+// 							},
+// 							"index": models.ToolArgProps{
+// 								Type:        "string",
+// 								Description: "optional index for multiple matches (default 0)",
+// 							},
+// 						},
+// 					},
+// 				},
+// 			},
+// 			{
+// 				Type: "function",
+// 				Function: models.ToolFunc{
+// 					Name:        "pw_extract_text",
+// 					Description: "Extract text content from the page or specific elements using CSS selector. Use 'body' for all page text.",
+// 					Parameters: models.ToolFuncParams{
+// 						Type:     "object",
+// 						Required: []string{"selector"},
+// 						Properties: map[string]models.ToolArgProps{
+// 							"selector": models.ToolArgProps{
+// 								Type:        "string",
+// 								Description: "CSS selector (use 'body' for all page text)",
+// 							},
+// 						},
+// 					},
+// 				},
+// 			},
+// 			{
+// 				Type: "function",
+// 				Function: models.ToolFunc{
+// 					Name:        "pw_screenshot",
+// 					Description: "Take a screenshot of the page or a specific element. Returns file path to saved image.",
+// 					Parameters: models.ToolFuncParams{
+// 						Type:     "object",
+// 						Required: []string{},
+// 						Properties: map[string]models.ToolArgProps{
+// 							"selector": models.ToolArgProps{
+// 								Type:        "string",
+// 								Description: "optional CSS selector for element to screenshot",
+// 							},
+// 							"full_page": models.ToolArgProps{
+// 								Type:        "string",
+// 								Description: "optional: 'true' to capture full page (default false)",
+// 							},
+// 						},
+// 					},
+// 				},
+// 			},
+// 			{
+// 				Type: "function",
+// 				Function: models.ToolFunc{
+// 					Name:        "pw_screenshot_and_view",
+// 					Description: "Take a screenshot and return the image for viewing. Use when model needs to see the screenshot.",
+// 					Parameters: models.ToolFuncParams{
+// 						Type:     "object",
+// 						Required: []string{},
+// 						Properties: map[string]models.ToolArgProps{
+// 							"selector": models.ToolArgProps{
+// 								Type:        "string",
+// 								Description: "optional CSS selector for element to screenshot",
+// 							},
+// 							"full_page": models.ToolArgProps{
+// 								Type:        "string",
+// 								Description: "optional: 'true' to capture full page (default false)",
+// 							},
+// 						},
+// 					},
+// 				},
+// 			},
+// 			{
+// 				Type: "function",
+// 				Function: models.ToolFunc{
+// 					Name:        "pw_wait_for_selector",
+// 					Description: "Wait for an element to appear on the page.",
+// 					Parameters: models.ToolFuncParams{
+// 						Type:     "object",
+// 						Required: []string{"selector"},
+// 						Properties: map[string]models.ToolArgProps{
+// 							"selector": models.ToolArgProps{
+// 								Type:        "string",
+// 								Description: "CSS selector to wait for",
+// 							},
+// 							"timeout": models.ToolArgProps{
+// 								Type:        "string",
+// 								Description: "optional timeout in ms (default 30000)",
+// 							},
+// 						},
+// 					},
+// 				},
+// 			},
+// 			{
+// 				Type: "function",
+// 				Function: models.ToolFunc{
+// 					Name:        "pw_drag",
+// 					Description: "Drag the mouse from one point to another.",
+// 					Parameters: models.ToolFuncParams{
+// 						Type:     "object",
+// 						Required: []string{"x1", "y1", "x2", "y2"},
+// 						Properties: map[string]models.ToolArgProps{
+// 							"x1": models.ToolArgProps{
+// 								Type:        "string",
+// 								Description: "starting X coordinate",
+// 							},
+// 							"y1": models.ToolArgProps{
+// 								Type:        "string",
+// 								Description: "starting Y coordinate",
+// 							},
+// 							"x2": models.ToolArgProps{
+// 								Type:        "string",
+// 								Description: "ending X coordinate",
+// 							},
+// 							"y2": models.ToolArgProps{
+// 								Type:        "string",
+// 								Description: "ending Y coordinate",
+// 							},
+// 						},
+// 					},
+// 				},
+// 			},
+// 			{
+// 				Type: "function",
+// 				Function: models.ToolFunc{
+// 					Name:        "pw_get_html",
+// 					Description: "Get the HTML content of the page or a specific element.",
+// 					Parameters: models.ToolFuncParams{
+// 						Type:     "object",
+// 						Required: []string{},
+// 						Properties: map[string]models.ToolArgProps{
+// 							"selector": models.ToolArgProps{
+// 								Type:        "string",
+// 								Description: "optional CSS selector (default: body)",
+// 							},
+// 						},
+// 					},
+// 				},
+// 			},
+// 			{
+// 				Type: "function",
+// 				Function: models.ToolFunc{
+// 					Name:        "pw_get_dom",
+// 					Description: "Get a structured DOM representation of an element with tag, attributes, text, and children.",
+// 					Parameters: models.ToolFuncParams{
+// 						Type:     "object",
+// 						Required: []string{},
+// 						Properties: map[string]models.ToolArgProps{
+// 							"selector": models.ToolArgProps{
+// 								Type:        "string",
+// 								Description: "optional CSS selector (default: body)",
+// 							},
+// 						},
+// 					},
+// 				},
+// 			},
+// 			{
+// 				Type: "function",
+// 				Function: models.ToolFunc{
+// 					Name:        "pw_search_elements",
+// 					Description: "Search for elements by text content or CSS selector. Returns matching elements with their tags, text, and HTML.",
+// 					Parameters: models.ToolFuncParams{
+// 						Type:     "object",
+// 						Required: []string{},
+// 						Properties: map[string]models.ToolArgProps{
+// 							"text": models.ToolArgProps{
+// 								Type:        "string",
+// 								Description: "text to search for in elements",
+// 							},
+// 							"selector": models.ToolArgProps{
+// 								Type:        "string",
+// 								Description: "CSS selector to search for",
+// 							},
+// 						},
+// 					},
+// 				},
+// 			},
+// 		}
+// 		BaseTools = append(BaseTools, playwrightTools...)
+// 		ToolSysMsg += browserToolSysMsg
+// 		agent.RegisterPWTool("pw_start", pwStart)
+// 		agent.RegisterPWTool("pw_stop", pwStop)
+// 		agent.RegisterPWTool("pw_is_running", pwIsRunning)
+// 		agent.RegisterPWTool("pw_navigate", pwNavigate)
+// 		agent.RegisterPWTool("pw_click", pwClick)
+// 		agent.RegisterPWTool("pw_click_at", pwClickAt)
+// 		agent.RegisterPWTool("pw_fill", pwFill)
+// 		agent.RegisterPWTool("pw_extract_text", pwExtractText)
+// 		agent.RegisterPWTool("pw_screenshot", pwScreenshot)
+// 		agent.RegisterPWTool("pw_screenshot_and_view", pwScreenshotAndView)
+// 		agent.RegisterPWTool("pw_wait_for_selector", pwWaitForSelector)
+// 		agent.RegisterPWTool("pw_drag", pwDrag)
+// 		agent.RegisterPWTool("pw_get_html", pwGetHTML)
+// 		agent.RegisterPWTool("pw_get_dom", pwGetDOM)
+// 		agent.RegisterPWTool("pw_search_elements", pwSearchElements)
+// 		browserAgentTool := []models.Tool{
+// 			{
+// 				Type: "function",
+// 				Function: models.ToolFunc{
+// 					Name:        "browser_agent",
+// 					Description: "Autonomous browser automation agent. Use for complex multi-step browser tasks like 'go to website, login, and take screenshot'. The agent will plan and execute steps automatically using browser ",
+// 					Parameters: models.ToolFuncParams{
+// 						Type:     "object",
+// 						Required: []string{"task"},
+// 						Properties: map[string]models.ToolArgProps{
+// 							"task": {Type: "string", Description: "The task to accomplish, e.g., 'go to github.com and take a screenshot of the homepage'"},
+// 						},
+// 					},
+// 				},
+// 			},
+// 		}
+// 		BaseTools = append(BaseTools, browserAgentTool...)
+// 		FnMap["browser_agent"] = tooler.runBrowserAgent
+// 	}
+// }
+
+func CallToolWithAgent(name string, args map[string]string) ([]byte, bool) {
 	f, ok := FnMap[name]
 	if !ok {
-		return []byte(fmt.Sprintf("tool %s not found", name))
+		return []byte(fmt.Sprintf("tool %s not found", name)), false
 	}
 	raw := f(args)
 	if a := agent.Get(name); a != nil {
-		return a.Process(args, raw)
+		return a.Process(args, raw), true
 	}
-	return raw
+	return raw, true
 }
 
 // openai style def

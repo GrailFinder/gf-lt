@@ -30,13 +30,13 @@ func detectAPI(api string) (isCompletion, isChat, isDeepSeek, isOpenRouter bool)
 }
 
 type AgentClient struct {
-	cfg            *config.Config
-	getToken       func() string
-	log            *slog.Logger
-	chatBody       *models.ChatBody
-	sysprompt      string
-	lastToolCallID string
-	tools          []models.Tool
+	cfg       *config.Config
+	getToken  func() string
+	log       *slog.Logger
+	chatBody  *models.ChatBody
+	sysprompt string
+	// lastToolCallID string
+	tools []models.Tool
 }
 
 func NewAgentClient(cfg *config.Config, log *slog.Logger, gt func() string) *AgentClient {
