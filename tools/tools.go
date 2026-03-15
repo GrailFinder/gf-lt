@@ -61,11 +61,6 @@ Your current tools:
 "name":"read_url_raw",
 "args": ["url"],
 "when_to_use": "get raw content from a webpage"
-},
-{
-"name":"browser_agent",
-"args": ["task"],
-"when_to_use": "autonomous browser automation for complex multi-step tasks like login, form filling, scraping"
 }
 ]
 </tools>
