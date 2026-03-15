@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"gf-lt/models"
+	"gf-lt/tools"
 	"image"
 	_ "image/jpeg"
 	_ "image/png"
@@ -849,7 +850,7 @@ func initTUI() {
 		if event.Key() == tcell.KeyF9 {
 			// table of codeblocks to copy
 			text := textView.GetText(false)
-			cb := codeBlockRE.FindAllString(text, -1)
+			cb := tools.CodeBlockRE.FindAllString(text, -1)
 			if len(cb) == 0 {
 				showToast("notify", "no code blocks in chat")
 				return nil
@@ -948,7 +949,7 @@ func initTUI() {
 		if event.Key() == tcell.KeyCtrlK {
 			// add message from tools
 			cfg.ToolUse = !cfg.ToolUse
-			updateToolCapabilities()
+			UpdateToolCapabilities()
 			updateStatusLine()
 			return nil
 		}
@@ -1054,7 +1055,7 @@ func initTUI() {
 		if event.Key() == tcell.KeyCtrlC {
 			logger.Info("caught Ctrl+C via tcell event")
 			go func() {
-				if err := pwShutDown(); err != nil {
+				if err := tools.PwShutDown(); err != nil {
 					logger.Error("shutdown failed", "err", err)
 				}
 				app.Stop()
@@ -1146,7 +1147,7 @@ func initTUI() {
 				}
 				// check if plain text
 				if !injectRole {
-					matches := roleRE.FindStringSubmatch(msgText)
+					matches := tools.RoleRE.FindStringSubmatch(msgText)
 					if len(matches) > 1 {
 						persona = matches[1]
 						msgText = strings.TrimLeft(msgText[len(matches[0]):], " ")

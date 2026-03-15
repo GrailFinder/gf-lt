@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"gf-lt/models"
+	"gf-lt/tools"
 	"io"
 	"strings"
 )
@@ -11,10 +12,10 @@ import (
 var imageAttachmentPath string // Global variable to track image attachment for next message
 var lastImg string             // for ctrl+j
 
-// containsToolSysMsg checks if the toolSysMsg already exists in the chat body
+// containsToolSysMsg checks if the tools.ToolSysMsg already exists in the chat body
 func containsToolSysMsg() bool {
 	for i := range chatBody.Messages {
-		if chatBody.Messages[i].Role == cfg.ToolRole && chatBody.Messages[i].Content == toolSysMsg {
+		if chatBody.Messages[i].Role == cfg.ToolRole && chatBody.Messages[i].Content == tools.ToolSysMsg {
 			return true
 		}
 	}
@@ -144,7 +145,7 @@ func (lcp LCPCompletion) FormMsg(msg, role string, resume bool) (io.Reader, erro
 	}
 	// sending description of the tools and how to use them
 	if cfg.ToolUse && !resume && role == cfg.UserRole && !containsToolSysMsg() {
-		chatBody.Messages = append(chatBody.Messages, models.RoleMsg{Role: cfg.ToolRole, Content: toolSysMsg})
+		chatBody.Messages = append(chatBody.Messages, models.RoleMsg{Role: cfg.ToolRole, Content: tools.ToolSysMsg})
 	}
 	filteredMessages, botPersona := filterMessagesForCurrentCharacter(chatBody.Messages)
 	// Build prompt and extract images inline as we process each message
@@ -331,7 +332,7 @@ func (op LCPChat) FormMsg(msg, role string, resume bool) (io.Reader, error) {
 		Tools:    nil,
 	}
 	if cfg.ToolUse && !resume && role != cfg.ToolRole {
-		req.Tools = baseTools // set tools to use
+		req.Tools = tools.BaseTools // set tools to use
 	}
 	data, err := json.Marshal(req)
 	if err != nil {
@@ -384,7 +385,7 @@ func (ds DeepSeekerCompletion) FormMsg(msg, role string, resume bool) (io.Reader
 	}
 	// sending description of the tools and how to use them
 	if cfg.ToolUse && !resume && role == cfg.UserRole && !containsToolSysMsg() {
-		chatBody.Messages = append(chatBody.Messages, models.RoleMsg{Role: cfg.ToolRole, Content: toolSysMsg})
+		chatBody.Messages = append(chatBody.Messages, models.RoleMsg{Role: cfg.ToolRole, Content: tools.ToolSysMsg})
 	}
 	filteredMessages, botPersona := filterMessagesForCurrentCharacter(chatBody.Messages)
 	messages := make([]string, len(filteredMessages))
@@ -536,7 +537,7 @@ func (or OpenRouterCompletion) FormMsg(msg, role string, resume bool) (io.Reader
 	}
 	// sending description of the tools and how to use them
 	if cfg.ToolUse && !resume && role == cfg.UserRole && !containsToolSysMsg() {
-		chatBody.Messages = append(chatBody.Messages, models.RoleMsg{Role: cfg.ToolRole, Content: toolSysMsg})
+		chatBody.Messages = append(chatBody.Messages, models.RoleMsg{Role: cfg.ToolRole, Content: tools.ToolSysMsg})
 	}
 	filteredMessages, botPersona := filterMessagesForCurrentCharacter(chatBody.Messages)
 	messages := make([]string, len(filteredMessages))
@@ -671,7 +672,7 @@ func (or OpenRouterChat) FormMsg(msg, role string, resume bool) (io.Reader, erro
 	bodyCopy.Messages = consolidateAssistantMessages(bodyCopy.Messages)
 	orBody := models.NewOpenRouterChatReq(*bodyCopy, defaultLCPProps, cfg.ReasoningEffort)
 	if cfg.ToolUse && !resume && role != cfg.ToolRole {
-		orBody.Tools = baseTools // set tools to use
+		orBody.Tools = tools.BaseTools // set tools to use
 	}
 	data, err := json.Marshal(orBody)
 	if err != nil {

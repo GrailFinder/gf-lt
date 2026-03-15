@@ -1,4 +1,4 @@
-package main
+package tools
 
 import (
 	"encoding/json"
@@ -101,7 +101,7 @@ var (
 	page           playwright.Page
 )
 
-func pwShutDown() error {
+func PwShutDown() error {
 	if pw == nil {
 		return nil
 	}
@@ -109,7 +109,7 @@ func pwShutDown() error {
 	return pw.Stop()
 }
 
-func installPW() error {
+func InstallPW() error {
 	err := playwright.Install(&playwright.RunOptions{Verbose: false})
 	if err != nil {
 		logger.Warn("playwright not available", "error", err)
@@ -118,7 +118,7 @@ func installPW() error {
 	return nil
 }
 
-func checkPlaywright() error {
+func CheckPlaywright() error {
 	var err error
 	pw, err = playwright.Run()
 	if err != nil {

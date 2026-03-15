@@ -139,7 +139,7 @@ func showAPILinkSelectionPopup() {
 	apiListWidget.SetSelectedFunc(func(index int, mainText string, secondaryText string, shortcut rune) {
 		// Update the API in config
 		cfg.CurrentAPI = mainText
-		// updateToolCapabilities()
+		// tools.UpdateToolCapabilities()
 		// Update model list based on new API
 		// Helper function to get model list for a given API (same as in props_table.go)
 		getModelListForAPI := func(api string) []string {
@@ -159,7 +159,7 @@ func showAPILinkSelectionPopup() {
 		if len(newModelList) > 0 && !slices.Contains(newModelList, chatBody.Model) {
 			chatBody.Model = strings.TrimPrefix(newModelList[0], models.LoadedMark)
 			cfg.CurrentModel = chatBody.Model
-			updateToolCapabilities()
+			UpdateToolCapabilities()
 		}
 		pages.RemovePage("apiLinkSelectionPopup")
 		app.SetFocus(textArea)

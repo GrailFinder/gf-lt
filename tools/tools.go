@@ -1,4 +1,4 @@
-package main
+package tools
 
 import (
 	"context"
@@ -8,8 +8,8 @@ import (
 	"gf-lt/config"
 	"gf-lt/models"
 	"gf-lt/storage"
-	"gf-lt/tools"
 	"io"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -25,20 +25,26 @@ import (
 )
 
 var (
-	toolCallRE         = regexp.MustCompile(`__tool_call__\s*([\s\S]*?)__tool_call__`)
-	quotesRE           = regexp.MustCompile(`(".*?")`)
-	starRE             = regexp.MustCompile(`(\*.*?\*)`)
-	thinkRE            = regexp.MustCompile(`(<think>\s*([\s\S]*?)</think>)`)
-	codeBlockRE        = regexp.MustCompile(`(?s)\x60{3}(?:.*?)\n(.*?)\n\s*\x60{3}\s*`)
-	singleBacktickRE   = regexp.MustCompile(`\x60([^\x60]*)\x60`)
-	roleRE             = regexp.MustCompile(`^(\w+):`)
-	rpDefenitionSysMsg = `
+	ToolCallRE         = regexp.MustCompile(`__tool_call__\s*([\s\S]*?)__tool_call__`)
+	QuotesRE           = regexp.MustCompile(`(".*?")`)
+	StarRE             = regexp.MustCompile(`(\*.*?\*)`)
+	ThinkRE            = regexp.MustCompile(`(?s)<think>.*?</think>`)
+	toolCallRE         = ToolCallRE
+	quotesRE           = QuotesRE
+	starRE             = StarRE
+	thinkRE            = ThinkRE
+	CodeBlockRE        = regexp.MustCompile(`(?s)\x60{3}(?:.*?)\n(.*?)\n\s*\x60{3}\s*`)
+	SingleBacktickRE   = regexp.MustCompile(`\x60([^\x60]*)\x60`)
+	codeBlockRE        = CodeBlockRE
+	singleBacktickRE   = SingleBacktickRE
+	RoleRE             = regexp.MustCompile(`^(\w+):`)
+	SysLabels          = []string{"assistant"}
+	RpDefenitionSysMsg = `
 For this roleplay immersion is at most importance.
 Every character thinks and acts based on their personality and setting of the roleplay.
 Meta discussions outside of roleplay is allowed if clearly labeled as out of character, for example: (ooc: {msg}) or <ooc>{msg}</ooc>.
 `
-	basicSysMsg = `Large Language Model that helps user with any of his requests.`
-	toolSysMsg  = `You can do functions call if needed.
+	ToolSysMsg = `You can do functions call if needed.
 Your current tools:
 <tools>
 [
@@ -109,17 +115,6 @@ After that you are free to respond to the user.
 	ragSearchSysPrompt = `Synthesize the document search results, extracting key information and presenting a concise answer. Provide sources and document IDs where relevant.`
 	readURLSysPrompt   = `Extract and summarize the content from the webpage. Provide key information, main points, and any relevant details.`
 	summarySysPrompt   = `Please provide a concise summary of the following conversation. Focus on key points, decisions, and actions. Provide only the summary, no additional commentary.`
-	basicCard          = &models.CharCard{
-		ID:        models.ComputeCardID("assistant", "basic_sys"),
-		SysPrompt: basicSysMsg,
-		FirstMsg:  defaultFirstMsg,
-		Role:      "assistant",
-		FilePath:  "basic_sys",
-	}
-	sysMap    = map[string]*models.CharCard{}
-	roleToID  = map[string]string{}
-	sysLabels = []string{"assistant"}
-
 	webAgentClient     *agent.AgentClient
 	webAgentClientOnce sync.Once
 	webAgentsOnce      sync.Once
@@ -149,19 +144,45 @@ Additional window tools (available only if xdotool and maim are installed):
 var WebSearcher searcher.WebSurfer
 
 var (
-	windowToolsAvailable bool
-	xdotoolPath          string
-	maimPath             string
-	modelHasVision       bool
+	xdotoolPath  string
+	maimPath     string
+	logger       *slog.Logger
+	cfg          *config.Config
+	getTokenFunc func() string
 )
 
-func initTools() {
-	sysMap[basicCard.ID] = basicCard
-	roleToID["assistant"] = basicCard.ID
+type Tools struct {
+	cfg                  *config.Config
+	logger               *slog.Logger
+	store                storage.FullRepo
+	WindowToolsAvailable bool
+	getTokenFunc         func() string
+	webAgentClient       *agent.AgentClient
+	webAgentClientOnce   sync.Once
+}
+
+func InitTools(cfg *config.Config, logger *slog.Logger, store storage.FullRepo) *Tools {
+	logger = logger
+	cfg = cfg
+	if cfg.PlaywrightEnabled {
+		if err := CheckPlaywright(); err != nil {
+			// slow, need a faster check if playwright install
+			if err := InstallPW(); err != nil {
+				logger.Error("failed to install playwright", "error", err)
+				os.Exit(1)
+				return nil
+			}
+			if err := CheckPlaywright(); err != nil {
+				logger.Error("failed to run playwright", "error", err)
+				os.Exit(1)
+				return nil
+			}
+		}
+	}
 	// Initialize fs root directory
-	tools.SetFSRoot(cfg.FilePickerDir)
+	SetFSRoot(cfg.FilePickerDir)
 	// Initialize memory store
-	tools.SetMemoryStore(&memoryAdapter{store: store, cfg: cfg}, cfg.AssistantRole)
+	SetMemoryStore(&memoryAdapter{store: store, cfg: cfg}, cfg.AssistantRole)
 	sa, err := searcher.NewWebSurfer(searcher.SearcherTypeScraper, "")
 	if err != nil {
 		if logger != nil {
@@ -174,87 +195,72 @@ func initTools() {
 	if err := rag.Init(cfg, logger, store); err != nil {
 		logger.Warn("failed to init rag; rag_search tool will not be available", "error", err)
 	}
-	checkWindowTools()
-	registerWindowTools()
-}
-
-func GetCardByRole(role string) *models.CharCard {
-	cardID, ok := roleToID[role]
-	if !ok {
-		return nil
+	t := &Tools{
+		cfg:    cfg,
+		logger: logger,
+		store:  store,
 	}
-	return sysMap[cardID]
+	t.checkWindowTools()
+	return t
 }
 
-func checkWindowTools() {
+func (t *Tools) checkWindowTools() {
 	xdotoolPath, _ = exec.LookPath("xdotool")
 	maimPath, _ = exec.LookPath("maim")
-	windowToolsAvailable = xdotoolPath != "" && maimPath != ""
-	if windowToolsAvailable {
-		logger.Info("window tools available: xdotool and maim found")
+	t.WindowToolsAvailable = xdotoolPath != "" && maimPath != ""
+	if t.WindowToolsAvailable {
+		t.logger.Info("window tools available: xdotool and maim found")
 	} else {
 		if xdotoolPath == "" {
-			logger.Warn("xdotool not found, window listing tools will not be available")
+			t.logger.Warn("xdotool not found, window listing tools will not be available")
 		}
 		if maimPath == "" {
-			logger.Warn("maim not found, window capture tools will not be available")
+			t.logger.Warn("maim not found, window capture tools will not be available")
 		}
 	}
 }
 
-func updateToolCapabilities() {
-	if !cfg.ToolUse {
-		return
-	}
-	modelHasVision = false
-	if cfg == nil || cfg.CurrentAPI == "" {
-		logger.Warn("cannot determine model capabilities: cfg or CurrentAPI is nil")
-		registerWindowTools()
-		// fnMap["browser_agent"] = runBrowserAgent
-		return
-	}
-	prevHasVision := modelHasVision
-	modelHasVision = ModelHasVision(cfg.CurrentAPI, cfg.CurrentModel)
-	if modelHasVision {
-		logger.Info("model has vision support", "model", cfg.CurrentModel, "api", cfg.CurrentAPI)
-	} else {
-		logger.Info("model does not have vision support", "model", cfg.CurrentModel, "api", cfg.CurrentAPI)
-		if windowToolsAvailable && !prevHasVision && !modelHasVision {
-			showToast("window tools", "Window capture-and-view unavailable: model lacks vision support")
-		}
-	}
-	registerWindowTools()
-	// fnMap["browser_agent"] = runBrowserAgent
+func SetTokenFunc(fn func() string) {
+	getTokenFunc = fn
 }
 
-// getWebAgentClient returns a singleton AgentClient for web agents.
 func getWebAgentClient() *agent.AgentClient {
 	webAgentClientOnce.Do(func() {
 		getToken := func() string {
-			if chunkParser == nil {
-				return ""
+			if getTokenFunc != nil {
+				return getTokenFunc()
 			}
-			return chunkParser.GetToken()
+			return ""
 		}
 		webAgentClient = agent.NewAgentClient(cfg, logger, getToken)
 	})
 	return webAgentClient
 }
 
-// registerWebAgents registers WebAgentB instances for websearch and read_url tools.
-func registerWebAgents() {
-	webAgentsOnce.Do(func() {
-		client := getWebAgentClient()
-		// Register rag_search agent
-		agent.RegisterB("rag_search", agent.NewWebAgentB(client, ragSearchSysPrompt))
-		// Register websearch agent
-		agent.RegisterB("websearch", agent.NewWebAgentB(client, webSearchSysPrompt))
-		// Register read_url agent
-		agent.RegisterB("read_url", agent.NewWebAgentB(client, readURLSysPrompt))
-		// Register summarize_chat agent
-		agent.RegisterB("summarize_chat", agent.NewWebAgentB(client, summarySysPrompt))
-	})
+func RegisterWindowTools(modelHasVision bool) {
+	removeWindowToolsFromBaseTools()
+	// Window tools registration happens here if needed
 }
+
+func RegisterPlaywrightTools() {
+	removePlaywrightToolsFromBaseTools()
+	if cfg != nil && cfg.PlaywrightEnabled {
+		// Playwright tools are registered here
+	}
+}
+
+// 	webAgentsOnce.Do(func() {
+// 		client := getWebAgentClient()
+// 		// Register rag_search agent
+// 		agent.RegisterB("rag_search", agent.NewWebAgentB(client, ragSearchSysPrompt))
+// 		// Register websearch agent
+// 		agent.RegisterB("websearch", agent.NewWebAgentB(client, webSearchSysPrompt))
+// 		// Register read_url agent
+// 		agent.RegisterB("read_url", agent.NewWebAgentB(client, readURLSysPrompt))
+// 		// Register summarize_chat agent
+// 		agent.RegisterB("summarize_chat", agent.NewWebAgentB(client, summarySysPrompt))
+// 	})
+// }
 
 // web search (depends on extra server)
 func websearch(args map[string]string) []byte {
@@ -401,13 +407,13 @@ func readURLRaw(args map[string]string) []byte {
 	return []byte(fmt.Sprintf("%+v", resp))
 }
 
-// Helper functions for file operations
-func resolvePath(p string) string {
-	if filepath.IsAbs(p) {
-		return p
-	}
-	return filepath.Join(cfg.FilePickerDir, p)
-}
+// // Helper functions for file operations
+// func resolvePath(p string) string {
+// 	if filepath.IsAbs(p) {
+// 		return p
+// 	}
+// 	return filepath.Join(cfg.FilePickerDir, p)
+// }
 
 func readStringFromFile(filename string) (string, error) {
 	data, err := os.ReadFile(filename)
@@ -510,7 +516,7 @@ func runCmd(args map[string]string) []byte {
 		return []byte(getHelp(rest))
 	case "memory":
 		// memory store <topic> <data> | memory get <topic> | memory list | memory forget <topic>
-		return []byte(tools.FsMemory(append([]string{"store"}, rest...), ""))
+		return []byte(FsMemory(append([]string{"store"}, rest...), ""))
 	case "todo":
 		// todo create|read|update|delete - route to existing todo handlers
 		return []byte(handleTodoSubcommand(rest, args))
@@ -525,7 +531,7 @@ func runCmd(args map[string]string) []byte {
 		return captureWindowAndView(args)
 	case "view_img":
 		// view_img <file> - view image for multimodal
-		return []byte(tools.FsViewImg(rest, ""))
+		return []byte(FsViewImg(rest, ""))
 	case "browser":
 		// browser <action> [args...] - Playwright browser automation
 		return runBrowserCommand(rest, args)
@@ -534,7 +540,7 @@ func runCmd(args map[string]string) []byte {
 		return executeCommand(args)
 	case "git":
 		// git has its own whitelist in FsGit
-		return []byte(tools.FsGit(rest, ""))
+		return []byte(FsGit(rest, ""))
 	default:
 		// Unknown subcommand - tell user to run help tool
 		return []byte("[error] command not allowed. Run 'help' tool to see available commands.")
@@ -958,7 +964,7 @@ func executeCommand(args map[string]string) []byte {
 	}
 
 	// Use chain execution for pipe/chaining support
-	result := tools.ExecChain(commandStr)
+	result := ExecChain(commandStr)
 	return []byte(result)
 }
 
@@ -977,12 +983,10 @@ func handleCdCommand(args []string) []byte {
 	} else {
 		targetDir = args[0]
 	}
-
 	// Resolve relative paths against current FilePickerDir
 	if !filepath.IsAbs(targetDir) {
 		targetDir = filepath.Join(cfg.FilePickerDir, targetDir)
 	}
-
 	// Verify the directory exists
 	info, err := os.Stat(targetDir)
 	if err != nil {
@@ -1188,7 +1192,7 @@ func viewImgTool(args map[string]string) []byte {
 		logger.Error(msg)
 		return []byte(msg)
 	}
-	result := tools.FsViewImg([]string{file}, "")
+	result := FsViewImg([]string{file}, "")
 	return []byte(result)
 }
 
@@ -1204,14 +1208,14 @@ func helpTool(args map[string]string) []byte {
 	return []byte(getHelp(rest))
 }
 
-func summarizeChat(args map[string]string) []byte {
-	if len(chatBody.Messages) == 0 {
-		return []byte("No chat history to summarize.")
-	}
-	// Format chat history for the agent
-	chatText := chatToText(chatBody.Messages, true) // include system and tool messages
-	return []byte(chatText)
-}
+// func summarizeChat(args map[string]string) []byte {
+// 	if len(chatBody.Messages) == 0 {
+// 		return []byte("No chat history to summarize.")
+// 	}
+// 	// Format chat history for the agent
+// 	chatText := chatToText(chatBody.Messages, true) // include system and tool messages
+// 	return []byte(chatText)
+// }
 
 func windowIDToHex(decimalID string) string {
 	id, err := strconv.ParseInt(decimalID, 10, 64)
@@ -1222,9 +1226,6 @@ func windowIDToHex(decimalID string) string {
 }
 
 func listWindows(args map[string]string) []byte {
-	if !windowToolsAvailable {
-		return []byte("window tools not available: xdotool or maim not found")
-	}
 	cmd := exec.Command(xdotoolPath, "search", "--name", ".")
 	output, err := cmd.Output()
 	if err != nil {
@@ -1257,9 +1258,6 @@ func listWindows(args map[string]string) []byte {
 }
 
 func captureWindow(args map[string]string) []byte {
-	if !windowToolsAvailable {
-		return []byte("window tools not available: xdotool or maim not found")
-	}
 	window, ok := args["window"]
 	if !ok || window == "" {
 		return []byte("window parameter required (window ID or name)")
@@ -1294,9 +1292,6 @@ func captureWindow(args map[string]string) []byte {
 }
 
 func captureWindowAndView(args map[string]string) []byte {
-	if !windowToolsAvailable {
-		return []byte("window tools not available: xdotool or maim not found")
-	}
 	window, ok := args["window"]
 	if !ok || window == "" {
 		return []byte("window parameter required (window ID or name)")
@@ -1365,7 +1360,7 @@ func argsToSlice(args map[string]string) []string {
 }
 
 func cmdMemory(args map[string]string) []byte {
-	return []byte(tools.FsMemory(argsToSlice(args), ""))
+	return []byte(FsMemory(argsToSlice(args), ""))
 }
 
 type memoryAdapter struct {
@@ -1400,7 +1395,7 @@ func (m *memoryAdapter) Forget(agent, topic string) error {
 	return m.store.Forget(agent, topic)
 }
 
-var fnMap = map[string]fnSig{
+var FnMap = map[string]fnSig{
 	"memory":        cmdMemory,
 	"rag_search":    ragsearch,
 	"websearch":     websearch,
@@ -1410,8 +1405,8 @@ var fnMap = map[string]fnSig{
 	"view_img":      viewImgTool,
 	"help":          helpTool,
 	// Unified run command
-	"run":            runCmd,
-	"summarize_chat": summarizeChat,
+	"run": runCmd,
+	// "summarize_chat": summarizeChat,
 }
 
 func removeWindowToolsFromBaseTools() {
@@ -1421,15 +1416,15 @@ func removeWindowToolsFromBaseTools() {
 		"capture_window_and_view": true,
 	}
 	var filtered []models.Tool
-	for _, tool := range baseTools {
+	for _, tool := range BaseTools {
 		if !windowToolNames[tool.Function.Name] {
 			filtered = append(filtered, tool)
 		}
 	}
-	baseTools = filtered
-	delete(fnMap, "list_windows")
-	delete(fnMap, "capture_window")
-	delete(fnMap, "capture_window_and_view")
+	BaseTools = filtered
+	delete(FnMap, "list_windows")
+	delete(FnMap, "capture_window")
+	delete(FnMap, "capture_window_and_view")
 }
 
 func removePlaywrightToolsFromBaseTools() {
@@ -1448,31 +1443,31 @@ func removePlaywrightToolsFromBaseTools() {
 		"pw_drag":                true,
 	}
 	var filtered []models.Tool
-	for _, tool := range baseTools {
+	for _, tool := range BaseTools {
 		if !playwrightToolNames[tool.Function.Name] {
 			filtered = append(filtered, tool)
 		}
 	}
-	baseTools = filtered
-	delete(fnMap, "pw_start")
-	delete(fnMap, "pw_stop")
-	delete(fnMap, "pw_is_running")
-	delete(fnMap, "pw_navigate")
-	delete(fnMap, "pw_click")
-	delete(fnMap, "pw_click_at")
-	delete(fnMap, "pw_fill")
-	delete(fnMap, "pw_extract_text")
-	delete(fnMap, "pw_screenshot")
-	delete(fnMap, "pw_screenshot_and_view")
-	delete(fnMap, "pw_wait_for_selector")
-	delete(fnMap, "pw_drag")
+	BaseTools = filtered
+	delete(FnMap, "pw_start")
+	delete(FnMap, "pw_stop")
+	delete(FnMap, "pw_is_running")
+	delete(FnMap, "pw_navigate")
+	delete(FnMap, "pw_click")
+	delete(FnMap, "pw_click_at")
+	delete(FnMap, "pw_fill")
+	delete(FnMap, "pw_extract_text")
+	delete(FnMap, "pw_screenshot")
+	delete(FnMap, "pw_screenshot_and_view")
+	delete(FnMap, "pw_wait_for_selector")
+	delete(FnMap, "pw_drag")
 }
 
-func registerWindowTools() {
+func (t *Tools) RegisterWindowTools(modelHasVision bool) {
 	removeWindowToolsFromBaseTools()
-	if windowToolsAvailable {
-		fnMap["list_windows"] = listWindows
-		fnMap["capture_window"] = captureWindow
+	if t.WindowToolsAvailable {
+		FnMap["list_windows"] = listWindows
+		FnMap["capture_window"] = captureWindow
 		windowTools := []models.Tool{
 			{
 				Type: "function",
@@ -1505,7 +1500,7 @@ func registerWindowTools() {
 			},
 		}
 		if modelHasVision {
-			fnMap["capture_window_and_view"] = captureWindowAndView
+			FnMap["capture_window_and_view"] = captureWindowAndView
 			windowTools = append(windowTools, models.Tool{
 				Type: "function",
 				Function: models.ToolFunc{
@@ -1524,12 +1519,12 @@ func registerWindowTools() {
 				},
 			})
 		}
-		baseTools = append(baseTools, windowTools...)
-		toolSysMsg += windowToolSysMsg
+		BaseTools = append(BaseTools, windowTools...)
+		ToolSysMsg += windowToolSysMsg
 	}
 }
 
-var browserAgentSysPrompt = `You are an autonomous browser automation agent. Your goal is to complete the user's task by intelligently using browser automation tools.
+var browserAgentSysPrompt = `You are an autonomous browser automation agent. Your goal is to complete the user's task by intelligently using browser automation 
 
 Important: The browser may already be running from a previous task! Always check pw_is_running first before starting a new browser.
 
@@ -1574,27 +1569,27 @@ func runBrowserAgent(args map[string]string) []byte {
 func registerPlaywrightTools() {
 	removePlaywrightToolsFromBaseTools()
 	if cfg != nil && cfg.PlaywrightEnabled {
-		fnMap["pw_start"] = pwStart
-		fnMap["pw_stop"] = pwStop
-		fnMap["pw_is_running"] = pwIsRunning
-		fnMap["pw_navigate"] = pwNavigate
-		fnMap["pw_click"] = pwClick
-		fnMap["pw_click_at"] = pwClickAt
-		fnMap["pw_fill"] = pwFill
-		fnMap["pw_extract_text"] = pwExtractText
-		fnMap["pw_screenshot"] = pwScreenshot
-		fnMap["pw_screenshot_and_view"] = pwScreenshotAndView
-		fnMap["pw_wait_for_selector"] = pwWaitForSelector
-		fnMap["pw_drag"] = pwDrag
-		fnMap["pw_get_html"] = pwGetHTML
-		fnMap["pw_get_dom"] = pwGetDOM
-		fnMap["pw_search_elements"] = pwSearchElements
+		FnMap["pw_start"] = pwStart
+		FnMap["pw_stop"] = pwStop
+		FnMap["pw_is_running"] = pwIsRunning
+		FnMap["pw_navigate"] = pwNavigate
+		FnMap["pw_click"] = pwClick
+		FnMap["pw_click_at"] = pwClickAt
+		FnMap["pw_fill"] = pwFill
+		FnMap["pw_extract_text"] = pwExtractText
+		FnMap["pw_screenshot"] = pwScreenshot
+		FnMap["pw_screenshot_and_view"] = pwScreenshotAndView
+		FnMap["pw_wait_for_selector"] = pwWaitForSelector
+		FnMap["pw_drag"] = pwDrag
+		FnMap["pw_get_html"] = pwGetHTML
+		FnMap["pw_get_dom"] = pwGetDOM
+		FnMap["pw_search_elements"] = pwSearchElements
 		playwrightTools := []models.Tool{
 			{
 				Type: "function",
 				Function: models.ToolFunc{
 					Name:        "pw_start",
-					Description: "Start a Playwright browser instance. Call this first before using other pw_ tools. Uses headless mode by default (set PlaywrightHeadless=false in config for GUI).",
+					Description: "Start a Playwright browser instance. Call this first before using other pw_  Uses headless mode by default (set PlaywrightHeadless=false in config for GUI).",
 					Parameters: models.ToolFuncParams{
 						Type:       "object",
 						Required:   []string{},
@@ -1854,8 +1849,8 @@ func registerPlaywrightTools() {
 				},
 			},
 		}
-		baseTools = append(baseTools, playwrightTools...)
-		toolSysMsg += browserToolSysMsg
+		BaseTools = append(BaseTools, playwrightTools...)
+		ToolSysMsg += browserToolSysMsg
 		agent.RegisterPWTool("pw_start", pwStart)
 		agent.RegisterPWTool("pw_stop", pwStop)
 		agent.RegisterPWTool("pw_is_running", pwIsRunning)
@@ -1876,7 +1871,7 @@ func registerPlaywrightTools() {
 				Type: "function",
 				Function: models.ToolFunc{
 					Name:        "browser_agent",
-					Description: "Autonomous browser automation agent. Use for complex multi-step browser tasks like 'go to website, login, and take screenshot'. The agent will plan and execute steps automatically using browser tools.",
+					Description: "Autonomous browser automation agent. Use for complex multi-step browser tasks like 'go to website, login, and take screenshot'. The agent will plan and execute steps automatically using browser ",
 					Parameters: models.ToolFuncParams{
 						Type:     "object",
 						Required: []string{"task"},
@@ -1887,15 +1882,13 @@ func registerPlaywrightTools() {
 				},
 			},
 		}
-		baseTools = append(baseTools, browserAgentTool...)
-		fnMap["browser_agent"] = runBrowserAgent
+		BaseTools = append(BaseTools, browserAgentTool...)
+		FnMap["browser_agent"] = runBrowserAgent
 	}
 }
 
-// callToolWithAgent calls the tool and applies any registered agent.
-func callToolWithAgent(name string, args map[string]string) []byte {
-	registerWebAgents()
-	f, ok := fnMap[name]
+func CallToolWithAgent(name string, args map[string]string) []byte {
+	f, ok := FnMap[name]
 	if !ok {
 		return []byte(fmt.Sprintf("tool %s not found", name))
 	}
@@ -1907,7 +1900,7 @@ func callToolWithAgent(name string, args map[string]string) []byte {
 }
 
 // openai style def
-var baseTools = []models.Tool{
+var BaseTools = []models.Tool{
 	// rag_search
 	models.Tool{
 		Type: "function",

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"gf-lt/models"
 	"gf-lt/pngmeta"
+	"gf-lt/tools"
 	"image"
 	"os"
 	"os/exec"
@@ -86,8 +87,8 @@ func stripThinkingFromMsg(msg *models.RoleMsg) *models.RoleMsg {
 	}
 	// Strip thinking from assistant messages
 	msgText := msg.GetText()
-	if thinkRE.MatchString(msgText) {
-		cleanedText := thinkRE.ReplaceAllString(msgText, "")
+	if tools.ThinkRE.MatchString(msgText) {
+		cleanedText := tools.ThinkRE.ReplaceAllString(msgText, "")
 		cleanedText = strings.TrimSpace(cleanedText)
 		msg.SetText(cleanedText)
 	}
@@ -148,7 +149,7 @@ func colorText() {
 	placeholderThink := "__THINK_BLOCK_%d__"
 	counterThink := 0
 	// Replace code blocks with placeholders and store their styled versions
-	text = codeBlockRE.ReplaceAllStringFunc(text, func(match string) string {
+	text = tools.CodeBlockRE.ReplaceAllStringFunc(text, func(match string) string {
 		// Style the code block and store it
 		styled := fmt.Sprintf("[red::i]%s[-:-:-]", match)
 		codeBlocks = append(codeBlocks, styled)
@@ -157,7 +158,7 @@ func colorText() {
 		counter++
 		return id
 	})
-	text = thinkRE.ReplaceAllStringFunc(text, func(match string) string {
+	text = tools.ThinkRE.ReplaceAllStringFunc(text, func(match string) string {
 		// Style the code block and store it
 		styled := fmt.Sprintf("[red::i]%s[-:-:-]", match)
 		thinkBlocks = append(thinkBlocks, styled)
@@ -167,10 +168,10 @@ func colorText() {
 		return id
 	})
 	// Step 2: Apply other regex styles to the non-code parts
-	text = quotesRE.ReplaceAllString(text, `[orange::-]$1[-:-:-]`)
-	text = starRE.ReplaceAllString(text, `[turquoise::i]$1[-:-:-]`)
-	text = singleBacktickRE.ReplaceAllString(text, "`[pink::i]$1[-:-:-]`")
-	// text = thinkRE.ReplaceAllString(text, `[yellow::i]$1[-:-:-]`)
+	text = tools.QuotesRE.ReplaceAllString(text, `[orange::-]$1[-:-:-]`)
+	text = tools.StarRE.ReplaceAllString(text, `[turquoise::i]$1[-:-:-]`)
+	text = tools.SingleBacktickRE.ReplaceAllString(text, "`[pink::i]$1[-:-:-]`")
+	// text = tools.ThinkRE.ReplaceAllString(text, `[yellow::i]$1[-:-:-]`)
 	// Step 3: Restore the styled code blocks from placeholders
 	for i, cb := range codeBlocks {
 		text = strings.Replace(text, fmt.Sprintf(placeholder, i), cb, 1)
@@ -188,7 +189,7 @@ func updateStatusLine() {
 
 func initSysCards() ([]string, error) {
 	labels := []string{}
-	labels = append(labels, sysLabels...)
+	labels = append(labels, tools.SysLabels...)
 	cards, err := pngmeta.ReadDirCards(cfg.SysDir, cfg.UserRole, logger)
 	if err != nil {
 		logger.Error("failed to read sys dir", "error", err)
@@ -1014,4 +1015,12 @@ func triggerPrivateMessageResponses(msg *models.RoleMsg) {
 	fmt.Fprint(textView, roleToIcon(recipient))
 	fmt.Fprint(textView, "[-:-:-]\n")
 	chatRoundChan <- crr
+}
+
+func GetCardByRole(role string) *models.CharCard {
+	cardID, ok := roleToID[role]
+	if !ok {
+		return nil
+	}
+	return sysMap[cardID]
 }

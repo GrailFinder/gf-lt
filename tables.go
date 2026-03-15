@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"gf-lt/tools"
 	"image"
 	"os"
 	"path"
@@ -171,7 +172,7 @@ func makeChatTable(chatMap map[string]models.Chat) *tview.Table {
 			return
 		case "move sysprompt onto 1st msg":
 			chatBody.Messages[1].Content = chatBody.Messages[0].Content + chatBody.Messages[1].Content
-			chatBody.Messages[0].Content = rpDefenitionSysMsg
+			chatBody.Messages[0].Content = tools.RpDefenitionSysMsg
 			textView.SetText(chatToText(chatBody.Messages, cfg.ShowSys))
 			activeChatName = selectedChat
 			pages.RemovePage(historyPage)

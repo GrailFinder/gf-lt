@@ -11,6 +11,7 @@ import (
 	"gf-lt/models"
 	"gf-lt/rag"
 	"gf-lt/storage"
+	"gf-lt/tools"
 	"html"
 	"io"
 	"log/slog"
@@ -27,26 +28,38 @@ import (
 )
 
 var (
-	httpClient      = &http.Client{}
-	cfg             *config.Config
-	logger          *slog.Logger
-	logLevel        = new(slog.LevelVar)
-	ctx, cancel     = context.WithCancel(context.Background())
-	activeChatName  string
-	chatRoundChan   = make(chan *models.ChatRoundReq, 1)
-	chunkChan       = make(chan string, 10)
-	openAIToolChan  = make(chan string, 10)
-	streamDone      = make(chan bool, 1)
-	chatBody        *models.ChatBody
-	store           storage.FullRepo
-	defaultFirstMsg = "Hello! What can I do for you?"
-	defaultStarter  = []models.RoleMsg{}
-	interruptResp   atomic.Bool
-	ragger          *rag.RAG
-	chunkParser     ChunkParser
-	lastToolCall    *models.FuncCall
-	lastRespStats   *models.ResponseStats
+	httpClient     = &http.Client{}
+	cfg            *config.Config
+	logger         *slog.Logger
+	logLevel       = new(slog.LevelVar)
+	ctx, cancel    = context.WithCancel(context.Background())
+	activeChatName string
+	chatRoundChan  = make(chan *models.ChatRoundReq, 1)
+	chunkChan      = make(chan string, 10)
+	openAIToolChan = make(chan string, 10)
+	streamDone     = make(chan bool, 1)
+	chatBody       *models.ChatBody
+	store          storage.FullRepo
+	defaultStarter = []models.RoleMsg{}
+	interruptResp  atomic.Bool
+	ragger         *rag.RAG
+	chunkParser    ChunkParser
+	lastToolCall   *models.FuncCall
+	lastRespStats  *models.ResponseStats
 	//nolint:unused // TTS_ENABLED conditionally uses this
+	basicCard = &models.CharCard{
+		ID:        models.ComputeCardID("assistant", "basic_sys"),
+		SysPrompt: models.BasicSysMsg,
+		FirstMsg:  models.DefaultFirstMsg,
+		Role:      "assistant",
+		FilePath:  "basic_sys",
+	}
+	sysMap               = map[string]*models.CharCard{}
+	roleToID             = map[string]string{}
+	modelHasVision       bool
+	windowToolsAvailable bool
+	tooler               *tools.Tools
+	//
 	orator          Orator
 	asr             STT
 	localModelsMu   sync.RWMutex
@@ -456,6 +469,29 @@ func ModelHasVision(api, modelID string) bool {
 		}
 		return models.HasVision(modelID)
 	}
+}
+
+func UpdateToolCapabilities() {
+	if !cfg.ToolUse {
+		return
+	}
+	modelHasVision = false
+	if cfg == nil || cfg.CurrentAPI == "" {
+		logger.Warn("cannot determine model capabilities: cfg or CurrentAPI is nil")
+		tooler.RegisterWindowTools(modelHasVision)
+		return
+	}
+	prevHasVision := modelHasVision
+	modelHasVision = ModelHasVision(cfg.CurrentAPI, cfg.CurrentModel)
+	if modelHasVision {
+		logger.Info("model has vision support", "model", cfg.CurrentModel, "api", cfg.CurrentAPI)
+	} else {
+		logger.Info("model does not have vision support", "model", cfg.CurrentModel, "api", cfg.CurrentAPI)
+		if windowToolsAvailable && !prevHasVision && !modelHasVision {
+			showToast("window tools", "Window capture-and-view unavailable: model lacks vision support")
+		}
+	}
+	tooler.RegisterWindowTools(modelHasVision)
 }
 
 // monitorModelLoad starts a goroutine that periodically checks if the specified model is loaded.
@@ -1102,7 +1138,7 @@ func findCall(msg, toolCall string) bool {
 		// The ID should come from the streaming response (chunk.ToolID) set earlier.
 		// Some tools like todo_create have "id" in their arguments which is NOT the tool call ID.
 	} else {
-		jsStr := toolCallRE.FindString(msg)
+		jsStr := tools.ToolCallRE.FindString(msg)
 		if jsStr == "" { // no tool call case
 			return false
 		}
@@ -1170,7 +1206,7 @@ func findCall(msg, toolCall string) bool {
 		Args: mapToString(lastToolCall.Args),
 	}
 	// call a func
-	_, ok := fnMap[fc.Name]
+	_, ok := tools.FnMap[fc.Name]
 	if !ok {
 		m := fc.Name + " is not implemented"
 		// Create tool response message with the proper tool_call_id
@@ -1195,7 +1231,7 @@ func findCall(msg, toolCall string) bool {
 	// Show tool call progress indicator before execution
 	fmt.Fprintf(textView, "\n[yellow::i][tool: %s...][-:-:-]", fc.Name)
 	toolRunningMode.Store(true)
-	resp := callToolWithAgent(fc.Name, fc.Args)
+	resp := tools.CallToolWithAgent(fc.Name, fc.Args)
 	toolRunningMode.Store(false)
 	toolMsg := string(resp)
 	logger.Info("llm used a tool call", "tool_name", fc.Name, "too_args", fc.Args, "id", fc.ID, "tool_resp", toolMsg)
@@ -1312,7 +1348,7 @@ func chatToText(messages []models.RoleMsg, showSys bool) string {
 	text := strings.Join(s, "\n")
 	// Collapse thinking blocks if enabled
 	if thinkingCollapsed {
-		text = thinkRE.ReplaceAllStringFunc(text, func(match string) string {
+		text = tools.ThinkRE.ReplaceAllStringFunc(text, func(match string) string {
 			// Extract content between <think> and </think>
 			start := len("<think>")
 			end := len(match) - len("</think>")
@@ -1409,7 +1445,7 @@ func updateModelLists() {
 			chatBody.Model = m
 			cachedModelColor.Store("green")
 			updateStatusLine()
-			updateToolCapabilities()
+			UpdateToolCapabilities()
 			app.Draw()
 			return
 		}
@@ -1441,7 +1477,7 @@ func summarizeAndStartNewChat() {
 	}
 	showToast("info", "Summarizing chat history...")
 	// Call the summarize_chat tool via agent
-	summaryBytes := callToolWithAgent("summarize_chat", map[string]string{})
+	summaryBytes := tools.CallToolWithAgent("summarize_chat", map[string]string{})
 	summary := string(summaryBytes)
 	if summary == "" {
 		showToast("error", "Failed to generate summary")
@@ -1477,8 +1513,8 @@ func init() {
 		return
 	}
 	defaultStarter = []models.RoleMsg{
-		{Role: "system", Content: basicSysMsg},
-		{Role: cfg.AssistantRole, Content: defaultFirstMsg},
+		{Role: "system", Content: models.BasicSysMsg},
+		{Role: cfg.AssistantRole, Content: models.DefaultFirstMsg},
 	}
 	logfile, err := os.OpenFile(cfg.LogFile,
 		os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
@@ -1489,6 +1525,8 @@ func init() {
 		return
 	}
 	// load cards
+	sysMap[basicCard.ID] = basicCard
+	roleToID["assistant"] = basicCard.ID
 	basicCard.Role = cfg.AssistantRole
 	logLevel.Set(slog.LevelInfo)
 	logger = slog.New(slog.NewTextHandler(logfile, &slog.HandlerOptions{Level: logLevel}))
@@ -1530,15 +1568,14 @@ func init() {
 	}
 	if cfg.PlaywrightEnabled {
 		go func() {
-			if err := checkPlaywright(); err != nil {
-				// slow, need a faster check if playwright install
-				if err := installPW(); err != nil {
+			if err := tools.CheckPlaywright(); err != nil {
+				if err := tools.InstallPW(); err != nil {
 					logger.Error("failed to install playwright", "error", err)
 					cancel()
 					os.Exit(1)
 					return
 				}
-				if err := checkPlaywright(); err != nil {
+				if err := tools.CheckPlaywright(); err != nil {
 					logger.Error("failed to run playwright", "error", err)
 					cancel()
 					os.Exit(1)
@@ -1551,5 +1588,6 @@ func init() {
 	cachedModelColor.Store("orange")
 	go chatWatcher(ctx)
 	initTUI()
-	initTools()
+	tooler = tools.InitTools(cfg, logger, store)
+	tooler.RegisterWindowTools(modelHasVision)
 }
