@@ -386,8 +386,6 @@ func pwDragBySelector(args map[string]string) []byte {
 	if !browserStarted || page == nil {
 		return []byte(`{"error": "Browser not started. Call pw_start first."}`)
 	}
-
-	// Get center coordinates of both elements using JavaScript
 	fromJS := fmt.Sprintf(`
 		function getCenter(selector) {
 			const el = document.querySelector(selector);
@@ -406,7 +404,6 @@ func pwDragBySelector(args map[string]string) []byte {
 		}
 		getCenter(%q)
 	`, toSelector)
-
 	fromResult, err := page.Evaluate(fromJS)
 	if err != nil {
 		return []byte(fmt.Sprintf(`{"error": "failed to get from element: %s"}`, err.Error()))
@@ -417,7 +414,6 @@ func pwDragBySelector(args map[string]string) []byte {
 	}
 	fromX := fromMap["x"].(float64)
 	fromY := fromMap["y"].(float64)
-
 	toResult, err := page.Evaluate(toJS)
 	if err != nil {
 		return []byte(fmt.Sprintf(`{"error": "failed to get to element: %s"}`, err.Error()))
@@ -428,8 +424,6 @@ func pwDragBySelector(args map[string]string) []byte {
 	}
 	toX := toMap["x"].(float64)
 	toY := toMap["y"].(float64)
-
-	// Perform the drag using coordinates
 	mouse := page.Mouse()
 	err = mouse.Move(fromX, fromY)
 	if err != nil {

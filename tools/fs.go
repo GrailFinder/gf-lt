@@ -3,6 +3,7 @@ package tools
 import (
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"gf-lt/models"
 	"os"
@@ -30,6 +31,9 @@ func SetMemoryStore(store MemoryStore, role string) {
 }
 
 func SetFSRoot(dir string) {
+	if cfg == nil {
+		return
+	}
 	cfg.FilePickerDir = dir
 }
 
@@ -55,7 +59,7 @@ func SetFSCwd(dir string) error {
 
 func resolvePath(rel string) (string, error) {
 	if cfg.FilePickerDir == "" {
-		return "", fmt.Errorf("fs root not set")
+		return "", errors.New("fs root not set")
 	}
 	if filepath.IsAbs(rel) {
 		abs := filepath.Clean(rel)
@@ -104,11 +108,12 @@ func FsLs(args []string, stdin string) string {
 	var out strings.Builder
 	for _, e := range entries {
 		info, _ := e.Info()
-		if e.IsDir() {
+		switch {
+		case e.IsDir():
 			fmt.Fprintf(&out, "d  %-8s %s/\n", "-", e.Name())
-		} else if info != nil {
+		case info != nil:
 			fmt.Fprintf(&out, "f  %-8s %s\n", humanSize(info.Size()), e.Name())
-		} else {
+		default:
 			fmt.Fprintf(&out, "f  %-8s %s\n", "?", e.Name())
 		}
 	}
@@ -198,12 +203,15 @@ func FsWrite(args []string, stdin string) string {
 	var path string
 	var contentParts []string
 	for _, a := range args {
-		if a == "-b" || a == "--base64" {
+		switch a {
+		case "-b", "--base64":
 			b64 = true
-		} else if path == "" {
-			path = a
-		} else {
-			contentParts = append(contentParts, a)
+		default:
+			if path == "" {
+				path = a
+			} else {
+				contentParts = append(contentParts, a)
+			}
 		}
 	}
 	if path == "" {
@@ -296,7 +304,7 @@ func FsRm(args []string, stdin string) string {
 	if err := os.RemoveAll(abs); err != nil {
 		return fmt.Sprintf("[error] rm: %v", err)
 	}
-	return fmt.Sprintf("Removed %s", args[0])
+	return "Removed " + args[0]
 }
 
 func FsCp(args []string, stdin string) string {
@@ -375,9 +383,9 @@ func FsMkdir(args []string, stdin string) string {
 		return fmt.Sprintf("[error] mkdir: %v", err)
 	}
 	if createParents {
-		return fmt.Sprintf("Created %s (with parents)", dirPath)
+		return "Created " + dirPath + " (with parents)"
 	}
-	return fmt.Sprintf("Created %s", dirPath)
+	return "Created " + dirPath
 }
 
 // Text processing commands
@@ -435,7 +443,7 @@ func FsGrep(args []string, stdin string) string {
 		}
 	}
 	if countOnly {
-		return fmt.Sprintf("%d", len(matched))
+		return strconv.Itoa(len(matched))
 	}
 	return strings.Join(matched, "\n")
 }
@@ -487,11 +495,11 @@ func FsWc(args []string, stdin string) string {
 	if len(args) > 0 {
 		switch args[0] {
 		case "-l":
-			return fmt.Sprintf("%d", lines)
+			return strconv.Itoa(lines)
 		case "-w":
-			return fmt.Sprintf("%d", words)
+			return strconv.Itoa(words)
 		case "-c":
-			return fmt.Sprintf("%d", chars)
+			return strconv.Itoa(chars)
 		}
 	}
 	return fmt.Sprintf("%d lines, %d words, %d chars", lines, words, chars)
@@ -502,9 +510,10 @@ func FsSort(args []string, stdin string) string {
 	reverse := false
 	numeric := false
 	for _, a := range args {
-		if a == "-r" {
+		switch a {
+		case "-r":
 			reverse = true
-		} else if a == "-n" {
+		case "-n":
 			numeric = true
 		}
 	}
@@ -615,10 +624,10 @@ func FsCd(args []string, stdin string) string {
 		return fmt.Sprintf("[error] cd: %v", err)
 	}
 	if !info.IsDir() {
-		return fmt.Sprintf("[error] cd: not a directory: %s", dir)
+		return "[error] cd: not a directory: " + dir
 	}
 	cfg.FilePickerDir = abs
-	return fmt.Sprintf("Changed directory to: %s", cfg.FilePickerDir)
+	return "Changed directory to: " + cfg.FilePickerDir
 }
 
 func FsSed(args []string, stdin string) string {
@@ -629,13 +638,15 @@ func FsSed(args []string, stdin string) string {
 	var filePath string
 	var pattern string
 	for _, a := range args {
-		if a == "-i" || a == "--in-place" {
+		switch a {
+		case "-i", "--in-place":
 			inPlace = true
-		} else if strings.HasPrefix(a, "s") && len(a) > 1 {
-			// This looks like a sed pattern
-			pattern = a
-		} else if filePath == "" && !strings.HasPrefix(a, "-") {
-			filePath = a
+		default:
+			if strings.HasPrefix(a, "s") && len(a) > 1 {
+				pattern = a
+			} else if filePath == "" && !strings.HasPrefix(a, "-") {
+				filePath = a
+			}
 		}
 	}
 	if pattern == "" {
@@ -650,8 +661,8 @@ func FsSed(args []string, stdin string) string {
 	newStr := parts[1]
 	global := len(parts) >= 3 && strings.Contains(parts[2], "g")
 	var content string
-	if filePath != "" && stdin == "" {
-		// Read from file
+	switch {
+	case filePath != "" && stdin == "":
 		abs, err := resolvePath(filePath)
 		if err != nil {
 			return fmt.Sprintf("[error] sed: %v", err)
@@ -661,10 +672,9 @@ func FsSed(args []string, stdin string) string {
 			return fmt.Sprintf("[error] sed: %v", err)
 		}
 		content = string(data)
-	} else if stdin != "" {
-		// Use stdin
+	case stdin != "":
 		content = stdin
-	} else {
+	default:
 		return "[error] sed: no input (use file path or pipe from stdin)"
 	}
 	// Apply sed replacement
@@ -681,7 +691,7 @@ func FsSed(args []string, stdin string) string {
 		if err := os.WriteFile(abs, []byte(content), 0644); err != nil {
 			return fmt.Sprintf("[error] sed: %v", err)
 		}
-		return fmt.Sprintf("Modified %s", filePath)
+		return "Modified " + filePath
 	}
 	return content
 }
@@ -709,7 +719,7 @@ func FsMemory(args []string, stdin string) string {
 		if err != nil {
 			return fmt.Sprintf("[error] failed to store: %v", err)
 		}
-		return fmt.Sprintf("Stored under topic: %s", topic)
+		return "Stored under topic: " + topic
 	case "get":
 		if len(args) < 2 {
 			return "[error] usage: memory get <topic>"
@@ -738,7 +748,7 @@ func FsMemory(args []string, stdin string) string {
 		if err != nil {
 			return fmt.Sprintf("[error] failed to forget: %v", err)
 		}
-		return fmt.Sprintf("Deleted topic: %s", topic)
+		return "Deleted topic: " + topic
 	default:
 		return fmt.Sprintf("[error] unknown subcommand: %s. Use: store, get, list, topics, forget, delete", args[0])
 	}

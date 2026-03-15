@@ -52,6 +52,7 @@ func (d dummyStore) ChatGetMaxID() (uint32, error)                         { ret
 func (d dummyStore) Memorise(m *models.Memory) (*models.Memory, error) { return m, nil }
 func (d dummyStore) Recall(agent, topic string) (string, error)        { return "", nil }
 func (d dummyStore) RecallTopics(agent string) ([]string, error)       { return nil, nil }
+func (d dummyStore) Forget(agent, topic string) error                  { return nil }
 
 // VectorRepo methods (not used but required by interface)
 func (d dummyStore) WriteVector(row *models.VectorRow) error { return nil }

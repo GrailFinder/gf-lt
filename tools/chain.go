@@ -1,10 +1,12 @@
 package tools
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 )
 
@@ -143,7 +145,7 @@ func ExecChain(command string) string {
 func execSingle(command, stdin string) (string, error) {
 	parts := tokenize(command)
 	if len(parts) == 0 {
-		return "", fmt.Errorf("empty command")
+		return "", errors.New("empty command")
 	}
 	name := parts[0]
 	args := parts[1:]
@@ -243,10 +245,10 @@ func execBuiltin(name string, args []string, stdin string) string {
 			return fmt.Sprintf("[error] cd: %v", err)
 		}
 		if !info.IsDir() {
-			return fmt.Sprintf("[error] cd: not a directory: %s", dir)
+			return "[error] cd: not a directory: " + dir
 		}
 		cfg.FilePickerDir = abs
-		return fmt.Sprintf("Changed directory to: %s", cfg.FilePickerDir)
+		return "Changed directory to: " + cfg.FilePickerDir
 	case "mkdir":
 		if len(args) == 0 {
 			return "[error] usage: mkdir [-p] <dir>"
@@ -278,9 +280,9 @@ func execBuiltin(name string, args []string, stdin string) string {
 			return fmt.Sprintf("[error] mkdir: %v", err)
 		}
 		if createParents {
-			return fmt.Sprintf("Created %s (with parents)", dirPath)
+			return "Created " + dirPath + " (with parents)"
 		}
-		return fmt.Sprintf("Created %s", dirPath)
+		return "Created " + dirPath
 	case "ls":
 		dir := "."
 		for _, a := range args {
@@ -300,16 +302,17 @@ func execBuiltin(name string, args []string, stdin string) string {
 		var out strings.Builder
 		for _, e := range entries {
 			info, _ := e.Info()
-			if e.IsDir() {
+			switch {
+			case e.IsDir():
 				fmt.Fprintf(&out, "d  %-8s %s/\n", "-", e.Name())
-			} else if info != nil {
+			case info != nil:
 				size := info.Size()
-				sizeStr := fmt.Sprintf("%d", size)
+				sizeStr := strconv.FormatInt(size, 10)
 				if size > 1024 {
 					sizeStr = fmt.Sprintf("%.1fKB", float64(size)/1024)
 				}
 				fmt.Fprintf(&out, "f  %-8s %s\n", sizeStr, e.Name())
-			} else {
+			default:
 				fmt.Fprintf(&out, "f  %-8s %s\n", "?", e.Name())
 			}
 		}

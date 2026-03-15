@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"gf-lt/models"
@@ -252,7 +253,6 @@ func findToolCall(resp []byte) (func() []byte, string, bool) {
 	if err := json.Unmarshal(resp, &genericResp); err != nil {
 		return findToolCallFromText(string(resp))
 	}
-
 	if choices, ok := genericResp["choices"].([]interface{}); ok && len(choices) > 0 {
 		if firstChoice, ok := choices[0].(map[string]interface{}); ok {
 			if message, ok := firstChoice["message"].(map[string]interface{}); ok {
@@ -268,11 +268,9 @@ func findToolCall(resp []byte) (func() []byte, string, bool) {
 			}
 		}
 	}
-
 	if content, ok := genericResp["content"].(string); ok {
 		return findToolCallFromText(content)
 	}
-
 	return findToolCallFromText(string(resp))
 }
 
@@ -280,20 +278,17 @@ func parseOpenAIToolCall(toolCalls []interface{}) (func() []byte, string, bool) 
 	if len(toolCalls) == 0 {
 		return nil, "", false
 	}
-
 	tc := toolCalls[0].(map[string]interface{})
 	id, _ := tc["id"].(string)
 	function, _ := tc["function"].(map[string]interface{})
 	name, _ := function["name"].(string)
 	argsStr, _ := function["arguments"].(string)
-
 	var args map[string]string
 	if err := json.Unmarshal([]byte(argsStr), &args); err != nil {
 		return func() []byte {
 			return []byte(fmt.Sprintf(`{"error": "failed to parse arguments: %v"}`, err))
 		}, id, true
 	}
-
 	return func() []byte {
 		fn, ok := pwToolMap[name]
 		if !ok {
@@ -308,12 +303,10 @@ func findToolCallFromText(text string) (func() []byte, string, bool) {
 	if jsStr == "" {
 		return nil, "", false
 	}
-
 	jsStr = strings.TrimSpace(jsStr)
 	jsStr = strings.TrimPrefix(jsStr, "__tool_call__")
 	jsStr = strings.TrimSuffix(jsStr, "__tool_call__")
 	jsStr = strings.TrimSpace(jsStr)
-
 	start := strings.Index(jsStr, "{")
 	end := strings.LastIndex(jsStr, "}")
 	if start == -1 || end == -1 || end <= start {
@@ -321,20 +314,16 @@ func findToolCallFromText(text string) (func() []byte, string, bool) {
 			return []byte(`{"error": "no valid JSON found in tool call"}`)
 		}, "", true
 	}
-
 	jsStr = jsStr[start : end+1]
-
 	var fc models.FuncCall
 	if err := json.Unmarshal([]byte(jsStr), &fc); err != nil {
 		return func() []byte {
 			return []byte(fmt.Sprintf(`{"error": "failed to parse tool call: %v}`, err))
 		}, "", true
 	}
-
 	if fc.ID == "" {
 		fc.ID = "call_" + generateToolCallID()
 	}
-
 	return func() []byte {
 		fn, ok := pwToolMap[fc.Name]
 		if !ok {
@@ -345,5 +334,5 @@ func findToolCallFromText(text string) (func() []byte, string, bool) {
 }
 
 func generateToolCallID() string {
-	return fmt.Sprintf("%d", len(pwToolMap)%10000)
+	return strconv.Itoa(len(pwToolMap) % 10000)
 }

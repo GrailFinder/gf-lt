@@ -135,8 +135,8 @@ func (t *Tools) initAgentsB() {
 }
 
 func InitTools(cfg *config.Config, logger *slog.Logger, store storage.FullRepo) *Tools {
-	logger = logger
-	cfg = cfg
+	_ = logger
+	_ = cfg
 	if cfg.PlaywrightEnabled {
 		if err := CheckPlaywright(); err != nil {
 			// slow, need a faster check if playwright install
@@ -392,8 +392,7 @@ func runCmd(args map[string]string) []byte {
 		// memory store <topic> <data> | memory get <topic> | memory list | memory forget <topic>
 		return []byte(FsMemory(append([]string{"store"}, rest...), ""))
 	case "todo":
-		// todo create|read|update|delete - route to existing todo handlers
-		return []byte(handleTodoSubcommand(rest, args))
+		return handleTodoSubcommand(rest, args)
 	case "window", "windows":
 		// window list - list all windows
 		return listWindows(args)
@@ -545,7 +544,7 @@ Actions:
 			"toSelector":   rest[1],
 		})
 	default:
-		return []byte(fmt.Sprintf("unknown browser action: %s", action))
+		return []byte("unknown browser action: " + action)
 	}
 }
 
@@ -816,7 +815,7 @@ func handleTodoSubcommand(args []string, originalArgs map[string]string) []byte 
 		}
 		return todoDelete(map[string]string{"id": args[1]})
 	default:
-		return []byte(fmt.Sprintf("unknown todo subcommand: %s", subcmd))
+		return []byte("unknown todo subcommand: " + subcmd)
 	}
 }
 
@@ -1296,7 +1295,7 @@ func summarizeChat(args map[string]string) []byte {
 	if err != nil {
 		return []byte("error: failed to marshal arguments")
 	}
-	return []byte(data)
+	return data
 }
 
 // func removePlaywrightToolsFromBaseTools() {

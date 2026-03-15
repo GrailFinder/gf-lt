@@ -57,15 +57,12 @@ func (a *PWAgent) setToolCallOnLastMessage(resp []byte, toolCallID string) {
 	if toolCallID == "" {
 		return
 	}
-
 	var genericResp map[string]interface{}
 	if err := json.Unmarshal(resp, &genericResp); err != nil {
 		return
 	}
-
 	var name string
 	var args map[string]string
-
 	if choices, ok := genericResp["choices"].([]interface{}); ok && len(choices) > 0 {
 		if firstChoice, ok := choices[0].(map[string]interface{}); ok {
 			if message, ok := firstChoice["message"].(map[string]interface{}); ok {
@@ -74,19 +71,17 @@ func (a *PWAgent) setToolCallOnLastMessage(resp []byte, toolCallID string) {
 						if fn, ok := tc["function"].(map[string]interface{}); ok {
 							name, _ = fn["name"].(string)
 							argsStr, _ := fn["arguments"].(string)
-							json.Unmarshal([]byte(argsStr), &args)
+							_ = json.Unmarshal([]byte(argsStr), &args)
 						}
 					}
 				}
 			}
 		}
 	}
-
 	if name == "" {
 		content, _ := genericResp["content"].(string)
 		name = extractToolNameFromText(content)
 	}
-
 	lastIdx := len(a.chatBody.Messages) - 1
 	if lastIdx >= 0 {
 		a.chatBody.Messages[lastIdx].ToolCallID = toolCallID
@@ -110,14 +105,12 @@ func extractToolNameFromText(text string) string {
 	jsStr = strings.TrimPrefix(jsStr, "__tool_call__")
 	jsStr = strings.TrimSuffix(jsStr, "__tool_call__")
 	jsStr = strings.TrimSpace(jsStr)
-
 	start := strings.Index(jsStr, "{")
 	end := strings.LastIndex(jsStr, "}")
 	if start == -1 || end == -1 || end <= start {
 		return ""
 	}
 	jsStr = jsStr[start : end+1]
-
 	var fc models.FuncCall
 	if err := json.Unmarshal([]byte(jsStr), &fc); err != nil {
 		return ""
