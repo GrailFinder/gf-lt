@@ -25,6 +25,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/rivo/tview"
 )
 
 var (
@@ -46,7 +48,63 @@ var (
 	chunkParser    ChunkParser
 	lastToolCall   *models.FuncCall
 	lastRespStats  *models.ResponseStats
-	//nolint:unused // TTS_ENABLED conditionally uses this
+
+	outputHandler OutputHandler
+	cliPrevOutput string
+	cliRespDone   chan bool
+)
+
+type OutputHandler interface {
+	Write(p string)
+	Writef(format string, args ...interface{})
+	ScrollToEnd()
+}
+
+type TUIOutputHandler struct {
+	tv *tview.TextView
+}
+
+func (h *TUIOutputHandler) Write(p string) {
+	if h.tv != nil {
+		fmt.Fprint(h.tv, p)
+	}
+	if cfg != nil && cfg.CLIMode {
+		fmt.Print(p)
+		cliPrevOutput = p
+	}
+}
+
+func (h *TUIOutputHandler) Writef(format string, args ...interface{}) {
+	s := fmt.Sprintf(format, args...)
+	if h.tv != nil {
+		fmt.Fprint(h.tv, s)
+	}
+	if cfg != nil && cfg.CLIMode {
+		fmt.Print(s)
+		cliPrevOutput = s
+	}
+}
+
+func (h *TUIOutputHandler) ScrollToEnd() {
+	if h.tv != nil {
+		h.tv.ScrollToEnd()
+	}
+}
+
+type CLIOutputHandler struct{}
+
+func (h *CLIOutputHandler) Write(p string) {
+	fmt.Print(p)
+}
+
+func (h *CLIOutputHandler) Writef(format string, args ...interface{}) {
+	fmt.Printf(format, args...)
+}
+
+func (h *CLIOutputHandler) ScrollToEnd() {
+}
+
+var (
 	basicCard = &models.CharCard{
 		ID:        models.ComputeCardID("assistant", "basic_sys"),
 		SysPrompt: models.BasicSysMsg,
@@ -800,6 +858,10 @@ func chatWatcher(ctx context.Context) {
 
 // inpired by https://github.com/rivo/tview/issues/225
 func showSpinner() {
+	if cfg.CLIMode {
+		showSpinnerCLI()
+		return
+	}
 	spinners := []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
 	var i int
 	botPersona := cfg.AssistantRole
@@ -824,6 +886,12 @@ func showSpinner() {
 	app.QueueUpdateDraw(func() {
 		textArea.SetTitle("input")
 	})
+}
+
+func showSpinnerCLI() {
+	for botRespMode.Load() || toolRunningMode.Load() {
+		time.Sleep(400 * time.Millisecond)
+	}
 }
 
 func chatRound(r *models.ChatRoundReq) error {
@@ -858,13 +926,22 @@ func chatRound(r *models.ChatRoundReq) error {
 			Role: botPersona, Content: "",
 		})
 		nl := "\n\n"
-		prevText := textView.GetText(true)
-		if strings.HasSuffix(prevText, nl) {
-			nl = ""
-		} else if strings.HasSuffix(prevText, "\n") {
-			nl = "\n"
+		prevText := cliPrevOutput
+		if cfg.CLIMode {
+			if strings.HasSuffix(prevText, nl) {
+				nl = ""
+			} else if strings.HasSuffix(prevText, "\n") {
+				nl = "\n"
+			}
+		} else {
+			prevText = textView.GetText(true)
+			if strings.HasSuffix(prevText, nl) {
+				nl = ""
+			} else if strings.HasSuffix(prevText, "\n") {
+				nl = "\n"
+			}
 		}
-		fmt.Fprintf(textView, "%s[-:-:b](%d) %s[-:-:-]\n", nl, msgIdx, roleToIcon(botPersona))
+		outputHandler.Writef("%s[-:-:b](%d) %s[-:-:-]\n", nl, msgIdx, roleToIcon(botPersona))
 	} else {
 		msgIdx = len(chatBody.Messages) - 1
 	}
@@ -886,9 +963,9 @@ out:
 				thinkingBuffer.WriteString(chunk)
 				if thinkingCollapsed {
 					// Show placeholder immediately when thinking starts in collapsed mode
-					fmt.Fprint(textView, "[yellow::i][thinking... (press Alt+T to expand)][-:-:-]")
+					outputHandler.Write("[yellow::i][thinking... (press Alt+T to expand)][-:-:-]")
 					if cfg.AutoScrollEnabled {
-						textView.ScrollToEnd()
+						outputHandler.ScrollToEnd()
 					}
 					respText.WriteString(chunk)
 					continue
@@ -903,7 +980,7 @@ out:
 						respText.WriteString(chunk)
 						justExitedThinkingCollapsed = true
 						if cfg.AutoScrollEnabled {
-							textView.ScrollToEnd()
+							outputHandler.ScrollToEnd()
 						}
 						continue
 					}
@@ -920,32 +997,32 @@ out:
 				chunk = "\n\n" + chunk
 				justExitedThinkingCollapsed = false
 			}
-			fmt.Fprint(textView, chunk)
+			outputHandler.Write(chunk)
 			respText.WriteString(chunk)
 			// Update the message in chatBody.Messages so it persists during Alt+T
 			if !r.Resume {
 				chatBody.Messages[msgIdx].Content += respText.String()
 			}
 			if cfg.AutoScrollEnabled {
-				textView.ScrollToEnd()
+				outputHandler.ScrollToEnd()
 			}
 			// Send chunk to audio stream handler
 			if cfg.TTS_ENABLED {
 				TTSTextChan <- chunk
 			}
 		case toolChunk := <-openAIToolChan:
-			fmt.Fprint(textView, toolChunk)
+			outputHandler.Write(toolChunk)
 			toolResp.WriteString(toolChunk)
 			if cfg.AutoScrollEnabled {
-				textView.ScrollToEnd()
+				outputHandler.ScrollToEnd()
 			}
 		case <-streamDone:
 			for len(chunkChan) > 0 {
 				chunk := <-chunkChan
-				fmt.Fprint(textView, chunk)
+				outputHandler.Write(chunk)
 				respText.WriteString(chunk)
 				if cfg.AutoScrollEnabled {
-					textView.ScrollToEnd()
+					outputHandler.ScrollToEnd()
 				}
 				if cfg.TTS_ENABLED {
 					TTSTextChan <- chunk
@@ -987,6 +1064,12 @@ out:
 	cleanChatBody()
 	refreshChatDisplay()
 	updateStatusLine()
+	if cfg.CLIMode && cliRespDone != nil {
+		select {
+		case cliRespDone <- true:
+		default:
+		}
+	}
 	// bot msg is done;
 	// now check it for func call
 	// logChat(activeChatName, chatBody.Messages)
@@ -1229,7 +1312,7 @@ func findCall(msg, toolCall string) bool {
 	// 	return true
 	// }
 	// Show tool call progress indicator before execution
-	fmt.Fprintf(textView, "\n[yellow::i][tool: %s...][-:-:-]", fc.Name)
+	outputHandler.Writef("\n[yellow::i][tool: %s...][-:-:-]", fc.Name)
 	toolRunningMode.Store(true)
 	resp, okT := tools.CallToolWithAgent(fc.Name, fc.Args)
 	if !okT {
@@ -1307,7 +1390,7 @@ func findCall(msg, toolCall string) bool {
 			IsShellCommand: isShellCommand,
 		}
 	}
-	fmt.Fprintf(textView, "%s[-:-:b](%d) <%s>: [-:-:-]\n%s\n",
+	outputHandler.Writef("%s[-:-:b](%d) <%s>: [-:-:-]\n%s\n",
 		"\n\n", len(chatBody.Messages), cfg.ToolRole, toolResponseMsg.GetText())
 	chatBody.Messages = append(chatBody.Messages, toolResponseMsg)
 	// Clear the stored tool call ID after using it
@@ -1500,6 +1583,31 @@ func refreshLocalModelsIfEmpty() {
 	localModelsMu.Unlock()
 }
 
+func startNewCLIChat() []models.RoleMsg {
+	id, err := store.ChatGetMaxID()
+	if err != nil {
+		logger.Error("failed to get chat id", "error", err)
+	}
+	id++
+	charToStart(cfg.AssistantRole, false)
+	newChat := &models.Chat{
+		ID:        id,
+		Name:      fmt.Sprintf("%d_%s", id, cfg.AssistantRole),
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+		Msgs:      "",
+		Agent:     cfg.AssistantRole,
+	}
+	activeChatName = newChat.Name
+	chatMap[newChat.Name] = newChat
+	cliPrevOutput = ""
+	return chatBody.Messages
+}
+
+func startNewCLIErrors() []models.RoleMsg {
+	return startNewCLIChat()
+}
+
 func summarizeAndStartNewChat() {
 	if len(chatBody.Messages) == 0 {
 		showToast("info", "No chat history to summarize")
@@ -1526,8 +1634,10 @@ func summarizeAndStartNewChat() {
 	}
 	chatBody.Messages = append(chatBody.Messages, toolMsg)
 	// Update UI
-	textView.SetText(chatToText(chatBody.Messages, cfg.ShowSys))
-	colorText()
+	if !cfg.CLIMode {
+		textView.SetText(chatToText(chatBody.Messages, cfg.ShowSys))
+		colorText()
+	}
 	// Update storage
 	if err := updateStorageChat(activeChatName, chatBody.Messages); err != nil {
 		logger.Warn("failed to update storage after injecting summary", "error", err)
@@ -1585,7 +1695,12 @@ func init() {
 		return
 	}
 	lastToolCall = &models.FuncCall{}
-	lastChat := loadOldChatOrGetNew()
+	var lastChat []models.RoleMsg
+	if cfg.CLIMode {
+		lastChat = startNewCLIErrors()
+	} else {
+		lastChat = loadOldChatOrGetNew()
+	}
 	chatBody = &models.ChatBody{
 		Model:    "modelname",
 		Stream:   true,
@@ -1620,7 +1735,9 @@ func init() {
 	// atomic default values
 	cachedModelColor.Store("orange")
 	go chatWatcher(ctx)
-	initTUI()
+	if !cfg.CLIMode {
+		initTUI()
+	}
 	tools.InitTools(cfg, logger, store)
 	// tooler = tools.InitTools(cfg, logger, store)
 	// tooler.RegisterWindowTools(modelHasVision)

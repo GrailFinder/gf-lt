@@ -230,6 +230,7 @@ func initTUI() {
 	tview.Styles = colorschemes["default"]
 	app = tview.NewApplication()
 	pages = tview.NewPages()
+	outputHandler = &TUIOutputHandler{tv: textView}
 	shellInput = tview.NewInputField().
 		SetLabel(fmt.Sprintf("[%s]$ ", cfg.FilePickerDir)). // dynamic prompt
 		SetFieldWidth(0).
