@@ -30,18 +30,21 @@ var (
 	focusSwitcher         = map[tview.Primitive]tview.Primitive{}
 	app               *tview.Application
 	cliCardPath       string
+	cliContinue       bool
+	cliMsg            string
 )
 
 func main() {
 	flag.BoolVar(&cfg.CLIMode, "cli", false, "Run in CLI mode without TUI")
+	flag.BoolVar(&cfg.ToolUse, "tools", true, "run with tools")
 	flag.StringVar(&cliCardPath, "card", "", "Path to syscard JSON file")
+	flag.BoolVar(&cliContinue, "continue", false, "Continue from last chat (by agent or card)")
+	flag.StringVar(&cliMsg, "msg", "", "Send message and exit (one-shot mode)")
 	flag.Parse()
-
 	if cfg.CLIMode {
 		runCLIMode()
 		return
 	}
-
 	pages.AddPage("main", flex, true, true)
 	if err := app.SetRoot(pages,
 		true).EnableMouse(cfg.EnableMouse).EnablePaste(true).Run(); err != nil {
@@ -53,7 +56,6 @@ func main() {
 func runCLIMode() {
 	outputHandler = &CLIOutputHandler{}
 	cliRespDone = make(chan bool, 1)
-
 	if cliCardPath != "" {
 		card, err := pngmeta.ReadCardJson(cliCardPath)
 		if err != nil {
@@ -66,16 +68,38 @@ func runCLIMode() {
 		charToStart(card.Role, false)
 		fmt.Printf("Loaded syscard: %s (%s)\n", card.Role, card.FilePath)
 	}
-
-	startNewCLIChat()
-
+	if cliContinue {
+		if cliCardPath != "" {
+			history, err := loadAgentsLastChat(cfg.AssistantRole)
+			if err != nil {
+				fmt.Printf("No previous chat found for %s, starting new chat\n", cfg.AssistantRole)
+				startNewCLIChat()
+			} else {
+				chatBody.Messages = history
+				fmt.Printf("Continued chat: %s\n", activeChatName)
+			}
+		} else {
+			chatBody.Messages = loadOldChatOrGetNew()
+			fmt.Printf("Continued chat: %s\n", activeChatName)
+		}
+	} else {
+		startNewCLIChat()
+	}
 	printCLIWelcome()
-
 	go func() {
 		<-ctx.Done()
 		os.Exit(0)
 	}()
-
+	if cliMsg != "" {
+		persona := cfg.UserRole
+		if cfg.WriteNextMsgAs != "" {
+			persona = cfg.WriteNextMsgAs
+		}
+		chatRoundChan <- &models.ChatRoundReq{Role: persona, UserMsg: cliMsg}
+		<-cliRespDone
+		fmt.Println()
+		return
+	}
 	scanner := bufio.NewScanner(os.Stdin)
 	for {
 		fmt.Print("> ")
@@ -86,7 +110,6 @@ func runCLIMode() {
 		if msg == "" {
 			continue
 		}
-
 		if strings.HasPrefix(msg, "/") {
 			if !handleCLICommand(msg) {
 				return
@@ -94,7 +117,6 @@ func runCLIMode() {
 			fmt.Println()
 			continue
 		}
-
 		persona := cfg.UserRole
 		if cfg.WriteNextMsgAs != "" {
 			persona = cfg.WriteNextMsgAs
@@ -196,7 +218,8 @@ func handleCLICommand(msg string) bool {
 		fmt.Printf("Loaded chat: %s\n", name)
 	case "/model", "/m":
 		if len(args) == 0 {
-			fmt.Printf("Current model: %s\n", chatBody.Model)
+			// fmt.Printf("Current model: %s\n", chatBody.Model)
+			fmt.Println("Models: ", LocalModels)
 			return true
 		}
 		chatBody.Model = args[0]
