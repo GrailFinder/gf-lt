@@ -9,6 +9,7 @@ config.toml
 sysprompts/*
 !sysprompts/alice_bob_carl.json
 !sysprompts/coding_assistant.json
+!cli-tests/sort-text/task.txt
 history_bak/
 .aider*
 tags

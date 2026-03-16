@@ -1,0 +1,2 @@
+go to /tmp/sort-text, create directories: animals, colors
+sort /tmp/sort-text/*.txt into created directories by text content
