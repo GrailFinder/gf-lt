@@ -2,7 +2,7 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-LOG_FILE="$SCRIPT_DIR/run.log"
+LOG_FILE=$(ls -t "$SCRIPT_DIR"/*_run.log 2>/dev/null | head -1)
 
 PASS=0
 FAIL=0
