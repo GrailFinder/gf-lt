@@ -19,3 +19,4 @@ chat_exports/*.json
 ragimport
 .env
 onnx/
+*.log

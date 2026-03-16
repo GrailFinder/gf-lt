@@ -134,10 +134,10 @@ func (t *Tools) initAgentsB() {
 	agent.RegisterB("summarize_chat", agent.NewWebAgentB(t.webAgentClient, summarySysPrompt))
 }
 
-func InitTools(cfg *config.Config, logger *slog.Logger, store storage.FullRepo) *Tools {
-	_ = logger
-	_ = cfg
-	if cfg.PlaywrightEnabled {
+func InitTools(initCfg *config.Config, logger *slog.Logger, store storage.FullRepo) *Tools {
+	logger = logger
+	cfg = initCfg
+	if initCfg.PlaywrightEnabled {
 		if err := CheckPlaywright(); err != nil {
 			// slow, need a faster check if playwright install
 			if err := InstallPW(); err != nil {
