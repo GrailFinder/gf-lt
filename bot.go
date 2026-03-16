@@ -1064,14 +1064,7 @@ out:
 	cleanChatBody()
 	refreshChatDisplay()
 	updateStatusLine()
-	if cfg.CLIMode && cliRespDone != nil {
-		select {
-		case cliRespDone <- true:
-		default:
-		}
-	}
-	// bot msg is done;
-	// now check it for func call
+	// bot msg is done; now check it for func call
 	// logChat(activeChatName, chatBody.Messages)
 	if err := updateStorageChat(activeChatName, chatBody.Messages); err != nil {
 		logger.Warn("failed to update storage", "error", err, "name", activeChatName)
@@ -1082,7 +1075,15 @@ out:
 		return nil
 	}
 	if findCall(respTextNoThink, toolResp.String()) {
+		// Tool was found and executed, subsequent chatRound will signal cliRespDone when complete
 		return nil
+	}
+	// No tool call - signal completion now
+	if cfg.CLIMode && cliRespDone != nil {
+		select {
+		case cliRespDone <- true:
+		default:
+		}
 	}
 	// Check if this message was sent privately to specific characters
 	// If so, trigger those characters to respond if that char is not controlled by user
