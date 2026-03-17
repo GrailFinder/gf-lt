@@ -1,0 +1,2 @@
+go to /tmp/sort-img, create directories: has-animals, no-animals
+sort images in /tmp/sort-img into created directories by content
