@@ -75,6 +75,8 @@ type Config struct {
 	// playwright browser
 	PlaywrightEnabled bool `toml:"PlaywrightEnabled"`
 	PlaywrightDebug   bool `toml:"PlaywrightDebug"` // !headless
+	// CLI mode
+	CLIMode bool
 }
 
 func LoadConfig(fn string) (*Config, error) {

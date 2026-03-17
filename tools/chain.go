@@ -150,7 +150,7 @@ func execSingle(command, stdin string) (string, error) {
 	name := parts[0]
 	args := parts[1:]
 	// Check if it's a built-in Go command
-	if result := execBuiltin(name, args, stdin); result != "" {
+	if result, isBuiltin := execBuiltin(name, args, stdin); isBuiltin {
 		return result, nil
 	}
 	// Otherwise execute as system command
@@ -201,21 +201,23 @@ func tokenize(input string) []string {
 }
 
 // execBuiltin executes a built-in command if it exists.
-func execBuiltin(name string, args []string, stdin string) string {
+// Returns (result, true) if it was a built-in (even if result is empty).
+// Returns ("", false) if it's not a built-in command.
+func execBuiltin(name string, args []string, stdin string) (string, bool) {
 	switch name {
 	case "echo":
 		if stdin != "" {
-			return stdin
+			return stdin, true
 		}
-		return strings.Join(args, " ")
+		return strings.Join(args, " "), true
 	case "time":
-		return "2006-01-02 15:04:05 MST"
+		return "2006-01-02 15:04:05 MST", true
 	case "cat":
 		if len(args) == 0 {
 			if stdin != "" {
-				return stdin
+				return stdin, true
 			}
-			return ""
+			return "", true
 		}
 		path := args[0]
 		abs := path
@@ -224,14 +226,14 @@ func execBuiltin(name string, args []string, stdin string) string {
 		}
 		data, err := os.ReadFile(abs)
 		if err != nil {
-			return fmt.Sprintf("[error] cat: %v", err)
+			return fmt.Sprintf("[error] cat: %v", err), true
 		}
-		return string(data)
+		return string(data), true
 	case "pwd":
-		return cfg.FilePickerDir
+		return cfg.FilePickerDir, true
 	case "cd":
 		if len(args) == 0 {
-			return "[error] usage: cd <dir>"
+			return "[error] usage: cd <dir>", true
 		}
 		dir := args[0]
 		// Resolve relative to cfg.FilePickerDir
@@ -242,16 +244,16 @@ func execBuiltin(name string, args []string, stdin string) string {
 		abs = filepath.Clean(abs)
 		info, err := os.Stat(abs)
 		if err != nil {
-			return fmt.Sprintf("[error] cd: %v", err)
+			return fmt.Sprintf("[error] cd: %v", err), true
 		}
 		if !info.IsDir() {
-			return "[error] cd: not a directory: " + dir
+			return "[error] cd: not a directory: " + dir, true
 		}
 		cfg.FilePickerDir = abs
-		return "Changed directory to: " + cfg.FilePickerDir
+		return "Changed directory to: " + cfg.FilePickerDir, true
 	case "mkdir":
 		if len(args) == 0 {
-			return "[error] usage: mkdir [-p] <dir>"
+			return "[error] usage: mkdir [-p] <dir>", true
 		}
 		createParents := false
 		var dirPath string
@@ -263,7 +265,7 @@ func execBuiltin(name string, args []string, stdin string) string {
 			}
 		}
 		if dirPath == "" {
-			return "[error] usage: mkdir [-p] <dir>"
+			return "[error] usage: mkdir [-p] <dir>", true
 		}
 		abs := dirPath
 		if !filepath.IsAbs(dirPath) {
@@ -277,12 +279,12 @@ func execBuiltin(name string, args []string, stdin string) string {
 			mkdirFunc = os.Mkdir
 		}
 		if err := mkdirFunc(abs, 0o755); err != nil {
-			return fmt.Sprintf("[error] mkdir: %v", err)
+			return fmt.Sprintf("[error] mkdir: %v", err), true
 		}
 		if createParents {
-			return "Created " + dirPath + " (with parents)"
+			return "Created " + dirPath + " (with parents)", true
 		}
-		return "Created " + dirPath
+		return "Created " + dirPath, true
 	case "ls":
 		dir := "."
 		for _, a := range args {
@@ -297,7 +299,7 @@ func execBuiltin(name string, args []string, stdin string) string {
 		}
 		entries, err := os.ReadDir(abs)
 		if err != nil {
-			return fmt.Sprintf("[error] ls: %v", err)
+			return fmt.Sprintf("[error] ls: %v", err), true
 		}
 		var out strings.Builder
 		for _, e := range entries {
@@ -317,21 +319,98 @@ func execBuiltin(name string, args []string, stdin string) string {
 			}
 		}
 		if out.Len() == 0 {
-			return "(empty directory)"
+			return "(empty directory)", true
 		}
-		return strings.TrimRight(out.String(), "\n")
+		return strings.TrimRight(out.String(), "\n"), true
 	case "go":
 		// Allow all go subcommands
 		if len(args) == 0 {
-			return "[error] usage: go <subcommand> [options]"
+			return "[error] usage: go <subcommand> [options]", true
 		}
 		cmd := exec.Command("go", args...)
 		cmd.Dir = cfg.FilePickerDir
 		output, err := cmd.CombinedOutput()
 		if err != nil {
-			return fmt.Sprintf("[error] go %s: %v\n%s", args[0], err, string(output))
+			return fmt.Sprintf("[error] go %s: %v\n%s", args[0], err, string(output)), true
 		}
-		return string(output)
+		return string(output), true
+	case "cp":
+		if len(args) < 2 {
+			return "[error] usage: cp <source> <dest>", true
+		}
+		src := args[0]
+		dst := args[1]
+		if !filepath.IsAbs(src) {
+			src = filepath.Join(cfg.FilePickerDir, src)
+		}
+		if !filepath.IsAbs(dst) {
+			dst = filepath.Join(cfg.FilePickerDir, dst)
+		}
+		data, err := os.ReadFile(src)
+		if err != nil {
+			return fmt.Sprintf("[error] cp: %v", err), true
+		}
+		err = os.WriteFile(dst, data, 0644)
+		if err != nil {
+			return fmt.Sprintf("[error] cp: %v", err), true
+		}
+		return "Copied " + src + " to " + dst, true
+	case "mv":
+		if len(args) < 2 {
+			return "[error] usage: mv <source> <dest>", true
+		}
+		src := args[0]
+		dst := args[1]
+		if !filepath.IsAbs(src) {
+			src = filepath.Join(cfg.FilePickerDir, src)
+		}
+		if !filepath.IsAbs(dst) {
+			dst = filepath.Join(cfg.FilePickerDir, dst)
+		}
+		err := os.Rename(src, dst)
+		if err != nil {
+			return fmt.Sprintf("[error] mv: %v", err), true
+		}
+		return "Moved " + src + " to " + dst, true
+	case "rm":
+		if len(args) == 0 {
+			return "[error] usage: rm [-r] <file>", true
+		}
+		recursive := false
+		var target string
+		for _, a := range args {
+			if a == "-r" || a == "-rf" || a == "-fr" || a == "-recursive" {
+				recursive = true
+			} else if target == "" {
+				target = a
+			}
+		}
+		if target == "" {
+			return "[error] usage: rm [-r] <file>", true
+		}
+		abs := target
+		if !filepath.IsAbs(target) {
+			abs = filepath.Join(cfg.FilePickerDir, target)
+		}
+		info, err := os.Stat(abs)
+		if err != nil {
+			return fmt.Sprintf("[error] rm: %v", err), true
+		}
+		if info.IsDir() {
+			if recursive {
+				err = os.RemoveAll(abs)
+				if err != nil {
+					return fmt.Sprintf("[error] rm: %v", err), true
+				}
+				return "Removed " + abs, true
+			}
+			return "[error] rm: is a directory (use -r)", true
+		}
+		err = os.Remove(abs)
+		if err != nil {
+			return fmt.Sprintf("[error] rm: %v", err), true
+		}
+		return "Removed " + abs, true
 	}
-	return ""
+	return "", false
 }
