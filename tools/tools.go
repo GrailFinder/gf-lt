@@ -691,7 +691,7 @@ Use: run "command" to execute.`
     -c  count matches
   Example:
     run "grep error" (from stdin)
-    run "grep -i warning log.txt"`
+    run "grep -i warn log.txt"`
 	case "cd":
 		return `cd <directory>
   Change working directory.
