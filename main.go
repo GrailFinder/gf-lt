@@ -7,6 +7,8 @@ import (
 	"gf-lt/models"
 	"gf-lt/pngmeta"
 	"os"
+	"slices"
+	"strconv"
 	"strings"
 	"sync/atomic"
 
@@ -142,10 +144,12 @@ func printCLIHelp() {
 	fmt.Println("  /history, /ls          - List chat history")
 	fmt.Println("  /load <name>           - Load a specific chat by name")
 	fmt.Println("  /model <name>, /m <name> - Switch model")
+	fmt.Println("  /api <index>, /a <index>  - Switch API link (no index to list)")
 	fmt.Println("  /quit, /q, /exit       - Exit CLI mode")
 	fmt.Println()
 	fmt.Printf("Current syscard: %s\n", cfg.AssistantRole)
 	fmt.Printf("Current model: %s\n", chatBody.Model)
+	fmt.Printf("Current API: %s\n", cfg.CurrentAPI)
 	fmt.Println()
 }
 
@@ -217,13 +221,63 @@ func handleCLICommand(msg string) bool {
 		cfg.AssistantRole = chat.Agent
 		fmt.Printf("Loaded chat: %s\n", name)
 	case "/model", "/m":
+		getModelListForAPI := func(api string) []string {
+			if strings.Contains(api, "api.deepseek.com/") {
+				return []string{"deepseek-chat", "deepseek-reasoner"}
+			} else if strings.Contains(api, "openrouter.ai") {
+				return ORFreeModels
+			}
+			return LocalModels
+		}
+		modelList := getModelListForAPI(cfg.CurrentAPI)
 		if len(args) == 0 {
-			// fmt.Printf("Current model: %s\n", chatBody.Model)
-			fmt.Println("Models: ", LocalModels)
+			fmt.Println("Models:")
+			for i, model := range modelList {
+				marker := "  "
+				if model == chatBody.Model {
+					marker = "* "
+				}
+				fmt.Printf("%s%d: %s\n", marker, i, model)
+			}
+			fmt.Printf("\nCurrent model: %s\n", chatBody.Model)
+			return true
+		}
+		// Try index first, then model name
+		if idx, err := strconv.Atoi(args[0]); err == nil && idx >= 0 && idx < len(modelList) {
+			chatBody.Model = modelList[idx]
+			fmt.Printf("Switched to model: %s\n", chatBody.Model)
+			return true
+		}
+		if slices.Index(modelList, args[0]) < 0 {
+			fmt.Printf("Model '%s' not found. Use index or choose from:\n", args[0])
+			for i, model := range modelList {
+				fmt.Printf("  %d: %s\n", i, model)
+			}
 			return true
 		}
 		chatBody.Model = args[0]
 		fmt.Printf("Switched to model: %s\n", args[0])
+	case "/api", "/a":
+		if len(args) == 0 {
+			fmt.Println("API Links:")
+			for i, link := range cfg.ApiLinks {
+				marker := "  "
+				if link == cfg.CurrentAPI {
+					marker = "* "
+				}
+				fmt.Printf("%s%d: %s\n", marker, i, link)
+			}
+			fmt.Printf("\nCurrent API: %s\n", cfg.CurrentAPI)
+			return true
+		}
+		idx := 0
+		fmt.Sscanf(args[0], "%d", &idx)
+		if idx < 0 || idx >= len(cfg.ApiLinks) {
+			fmt.Printf("Invalid index. Valid range: 0-%d\n", len(cfg.ApiLinks)-1)
+			return true
+		}
+		cfg.CurrentAPI = cfg.ApiLinks[idx]
+		fmt.Printf("Switched to API: %s\n", cfg.CurrentAPI)
 	case "/quit", "/q", "/exit":
 		fmt.Println("Goodbye!")
 		return false
