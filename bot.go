@@ -48,10 +48,9 @@ var (
 	chunkParser    ChunkParser
 	lastToolCall   *models.FuncCall
 	lastRespStats  *models.ResponseStats
-
-	outputHandler OutputHandler
-	cliPrevOutput string
-	cliRespDone   chan bool
+	outputHandler  OutputHandler
+	cliPrevOutput  string
+	cliRespDone    chan bool
 )
 
 type OutputHandler interface {
@@ -65,30 +64,15 @@ type TUIOutputHandler struct {
 }
 
 func (h *TUIOutputHandler) Write(p string) {
-	if h.tv != nil {
-		fmt.Fprint(h.tv, p)
-	}
-	if cfg != nil && cfg.CLIMode {
-		fmt.Print(p)
-		cliPrevOutput = p
-	}
+	fmt.Fprint(h.tv, p)
 }
 
 func (h *TUIOutputHandler) Writef(format string, args ...interface{}) {
-	s := fmt.Sprintf(format, args...)
-	if h.tv != nil {
-		fmt.Fprint(h.tv, s)
-	}
-	if cfg != nil && cfg.CLIMode {
-		fmt.Print(s)
-		cliPrevOutput = s
-	}
+	fmt.Fprintf(h.tv, format, args...)
 }
 
 func (h *TUIOutputHandler) ScrollToEnd() {
-	if h.tv != nil {
-		h.tv.ScrollToEnd()
-	}
+	h.tv.ScrollToEnd()
 }
 
 type CLIOutputHandler struct{}
