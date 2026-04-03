@@ -201,7 +201,7 @@ func (t *Tools) GetWebAgentClient() *agent.AgentClient {
 			}
 			return ""
 		}
-		t.webAgentClient = agent.NewAgentClient(cfg, logger, getToken)
+		t.webAgentClient = agent.NewAgentClient(t.cfg, t.logger, getToken)
 	})
 	return t.webAgentClient
 }
