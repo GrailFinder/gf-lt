@@ -88,6 +88,15 @@ func LoadConfig(fn string) (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
+	// Default FilePickerDir to current working directory if not set
+	if config.FilePickerDir == "" {
+		cwd, err := os.Getwd()
+		if err != nil {
+			config.FilePickerDir = "."
+		} else {
+			config.FilePickerDir = cwd
+		}
+	}
 	config.CurrentAPI = config.ChatAPI
 	config.APIMap = map[string]string{
 		config.ChatAPI:                 config.CompletionAPI,

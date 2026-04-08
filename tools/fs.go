@@ -93,9 +93,23 @@ func IsImageFile(path string) bool {
 }
 
 func FsLs(args []string, stdin string) string {
+	showAll := false
+	longFormat := false
 	dir := ""
-	if len(args) > 0 {
-		dir = args[0]
+	for _, a := range args {
+		if strings.HasPrefix(a, "-") && !strings.HasPrefix(a, "--") {
+			flags := strings.TrimLeft(a, "-")
+			for _, c := range flags {
+				switch c {
+				case 'a':
+					showAll = true
+				case 'l':
+					longFormat = true
+				}
+			}
+		} else if a != "" && dir == "" {
+			dir = a
+		}
 	}
 	abs, err := resolvePath(dir)
 	if err != nil {
@@ -106,15 +120,29 @@ func FsLs(args []string, stdin string) string {
 		return fmt.Sprintf("[error] ls: %v", err)
 	}
 	var out strings.Builder
+	filter := func(name string) bool {
+		return showAll || !strings.HasPrefix(name, ".")
+	}
 	for _, e := range entries {
+		name := e.Name()
+		if !filter(name) {
+			continue
+		}
 		info, _ := e.Info()
-		switch {
-		case e.IsDir():
-			fmt.Fprintf(&out, "d  %-8s %s/\n", "-", e.Name())
-		case info != nil:
-			fmt.Fprintf(&out, "f  %-8s %s\n", humanSize(info.Size()), e.Name())
-		default:
-			fmt.Fprintf(&out, "f  %-8s %s\n", "?", e.Name())
+		if longFormat {
+			if e.IsDir() {
+				fmt.Fprintf(&out, "d  %-8s %s/\n", "-", name)
+			} else if info != nil {
+				fmt.Fprintf(&out, "f  %-8s %s\n", humanSize(info.Size()), name)
+			} else {
+				fmt.Fprintf(&out, "f  %-8s %s\n", "?", name)
+			}
+		} else {
+			if e.IsDir() {
+				fmt.Fprintf(&out, "%s/\n", name)
+			} else {
+				fmt.Fprintf(&out, "%s\n", name)
+			}
 		}
 	}
 	if out.Len() == 0 {
