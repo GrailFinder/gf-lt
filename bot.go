@@ -1398,10 +1398,14 @@ func chatToTextSlice(messages []models.RoleMsg, showSys bool) []string {
 			// This is a tool call indicator - show collapsed
 			if toolCollapsed {
 				toolName := messages[i].ToolCall.Name
+				argsPreview := messages[i].ToolCall.Args
+				if len(messages[i].ToolCall.Args) > 30 {
+					argsPreview = messages[i].ToolCall.Args[:30]
+				}
 				resp[i] = strings.ReplaceAll(
 					fmt.Sprintf(
-						"%s\n%s\n[yellow::i][tool call: %s (press Ctrl+T to expand)][-:-:-]\n",
-						icon, messages[i].GetText(), toolName),
+						"%s\n%s\n[yellow::i][tool call: %s %s (press Ctrl+T to expand)][-:-:-]\n",
+						icon, messages[i].GetText(), toolName, argsPreview),
 					"\n\n", "\n")
 			} else {
 				// Show full tool call info

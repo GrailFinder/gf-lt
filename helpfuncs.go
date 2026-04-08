@@ -595,7 +595,6 @@ func executeCommandAndDisplay(cmdText string) {
 			return
 		}
 	}
-
 	// Use /bin/sh to support pipes, redirects, etc.
 	cmd := exec.Command("/bin/sh", "-c", cmdText)
 	cmd.Dir = workingDir
