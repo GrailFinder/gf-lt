@@ -3,7 +3,9 @@ package tools
 import (
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 )
 
@@ -11,20 +13,24 @@ import (
 type Operator int
 
 const (
-	OpNone Operator = iota
-	OpAnd           // &&
-	OpOr            // ||
-	OpSeq           // ;
-	OpPipe          // |
+	OpNone     Operator = iota
+	OpAnd               // &&
+	OpOr                // ||
+	OpSeq               // ;
+	OpPipe              // |
+	OpRedirect          // >
+	OpAppend            // >>
 )
 
 // Segment is a single command in a chain.
 type Segment struct {
-	Raw string
-	Op  Operator // operator AFTER this segment
+	Raw        string
+	Op         Operator // operator AFTER this segment
+	RedirectTo string   // file path for > or >>
+	IsAppend   bool     // true for >>, false for >
 }
 
-// ParseChain splits a command string into segments by &&, ;, and |.
+// ParseChain splits a command string into segments by &&, ;, |, >, and >>.
 // Respects quoted strings (single and double quotes).
 func ParseChain(input string) []Segment {
 	var segments []Segment
@@ -33,6 +39,7 @@ func ParseChain(input string) []Segment {
 	n := len(runes)
 	for i := 0; i < n; i++ {
 		ch := runes[i]
+
 		// handle quotes
 		if ch == '\'' || ch == '"' {
 			quote := ch
@@ -45,6 +52,31 @@ func ParseChain(input string) []Segment {
 			if i < n {
 				current.WriteRune(runes[i])
 			}
+			continue
+		}
+		// >>
+		if ch == '>' && i+1 < n && runes[i+1] == '>' {
+			cmd := strings.TrimSpace(current.String())
+			if cmd != "" {
+				segments = append(segments, Segment{
+					Raw: cmd,
+					Op:  OpAppend,
+				})
+			}
+			current.Reset()
+			i++ // skip second >
+			continue
+		}
+		// >
+		if ch == '>' {
+			cmd := strings.TrimSpace(current.String())
+			if cmd != "" {
+				segments = append(segments, Segment{
+					Raw: cmd,
+					Op:  OpRedirect,
+				})
+			}
+			current.Reset()
 			continue
 		}
 		// &&
@@ -102,6 +134,54 @@ func ExecChain(command string) string {
 	if len(segments) == 0 {
 		return "[error] empty command"
 	}
+
+	// Handle redirects: find the segment with OpRedirect or OpAppend
+	// The NEXT segment (if any) is the target file
+	var redirectTo string
+	var isAppend bool
+	redirectIdx := -1
+	for i, seg := range segments {
+		if seg.Op == OpRedirect || seg.Op == OpAppend {
+			redirectIdx = i
+			isAppend = seg.Op == OpAppend
+			break
+		}
+	}
+
+	if redirectIdx >= 0 && redirectIdx+1 < len(segments) {
+		// The segment after redirect is the target path
+		targetPath, err := resolveRedirectPath(segments[redirectIdx+1].Raw)
+		if err != nil {
+			return fmt.Sprintf("[error] redirect: %v", err)
+		}
+		redirectTo = targetPath
+		// Get the redirect command BEFORE removing segments
+		redirectCmd := segments[redirectIdx].Raw
+		// Remove both the redirect segment and its target
+		segments = append(segments[:redirectIdx], segments[redirectIdx+2:]...)
+
+		// Execute the redirect command explicitly
+		var lastOutput string
+		var lastErr error
+		lastOutput, lastErr = execSingle(redirectCmd, "")
+		if lastErr != nil {
+			return fmt.Sprintf("[error] redirect: %v", lastErr)
+		}
+		// Write output to file
+		if err := writeFile(redirectTo, lastOutput, isAppend); err != nil {
+			return fmt.Sprintf("[error] redirect: %v", err)
+		}
+		mode := "Wrote"
+		if isAppend {
+			mode = "Appended"
+		}
+		size := humanSizeChain(int64(len(lastOutput)))
+		return fmt.Sprintf("%s %s → %s", mode, size, filepath.Base(redirectTo))
+	} else if redirectIdx >= 0 && redirectIdx+1 >= len(segments) {
+		// Redirect but no target file
+		return "[error] redirect: target file required"
+	}
+
 	var collected []string
 	var lastOutput string
 	var lastErr error
@@ -109,16 +189,13 @@ func ExecChain(command string) string {
 	for i, seg := range segments {
 		if i > 0 {
 			prevOp := segments[i-1].Op
-			// && semantics: skip if previous failed
 			if prevOp == OpAnd && lastErr != nil {
 				continue
 			}
-			// || semantics: skip if previous succeeded
 			if prevOp == OpOr && lastErr == nil {
 				continue
 			}
 		}
-		// determine stdin for this segment
 		segStdin := ""
 		if i == 0 {
 			segStdin = pipeInput
@@ -126,8 +203,6 @@ func ExecChain(command string) string {
 			segStdin = lastOutput
 		}
 		lastOutput, lastErr = execSingle(seg.Raw, segStdin)
-		// pipe: output flows to next command's stdin
-		// && or ;: collect output
 		if i < len(segments)-1 && seg.Op == OpPipe {
 			continue
 		}
@@ -135,6 +210,21 @@ func ExecChain(command string) string {
 			collected = append(collected, lastOutput)
 		}
 	}
+
+	// Handle redirect if present
+	if redirectTo != "" {
+		output := lastOutput
+		if err := writeFile(redirectTo, output, isAppend); err != nil {
+			return fmt.Sprintf("[error] redirect: %v", err)
+		}
+		mode := "Wrote"
+		if isAppend {
+			mode = "Appended"
+		}
+		size := humanSizeChain(int64(len(output)))
+		return fmt.Sprintf("%s %s → %s", mode, size, filepath.Base(redirectTo))
+	}
+
 	return strings.Join(collected, "\n")
 }
 
@@ -204,8 +294,6 @@ func tokenize(input string) []string {
 }
 
 // execBuiltin executes a built-in command if it exists.
-// Returns (result, true) if it was a built-in (even if result is empty).
-// Returns ("", false) if it's not a built-in command.
 func execBuiltin(name string, args []string, stdin string) (string, error) {
 	var result string
 	switch name {
@@ -263,4 +351,46 @@ func execBuiltin(name string, args []string, stdin string) (string, error) {
 		return result, errors.New(result)
 	}
 	return result, nil
+}
+
+// resolveRedirectPath resolves the target path for a redirect operator
+func resolveRedirectPath(path string) (string, error) {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return "", errors.New("redirect target required")
+	}
+	abs, err := resolvePath(path)
+	if err != nil {
+		return "", err
+	}
+	return abs, nil
+}
+
+// writeFile writes content to a file (truncate or append)
+func writeFile(path, content string, append bool) error {
+	flags := os.O_CREATE | os.O_WRONLY
+	if append {
+		flags |= os.O_APPEND
+	} else {
+		flags |= os.O_TRUNC
+	}
+	f, err := os.OpenFile(path, flags, 0644)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	_, err = f.WriteString(content)
+	return err
+}
+
+// humanSizeChain returns human-readable file size
+func humanSizeChain(n int64) string {
+	switch {
+	case n >= 1<<20:
+		return fmt.Sprintf("%.1fMB", float64(n)/float64(1<<20))
+	case n >= 1<<10:
+		return fmt.Sprintf("%.1fKB", float64(n)/float64(1<<10))
+	default:
+		return fmt.Sprintf("%dB", n)
+	}
 }

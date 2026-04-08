@@ -391,3 +391,33 @@ func TestChaining(t *testing.T) {
 		})
 	}
 }
+
+func TestRedirect(t *testing.T) {
+	tmpFile := filepath.Join(cfg.FilePickerDir, "test_redirect.txt")
+	os.Remove(tmpFile)
+	defer os.Remove(tmpFile)
+
+	// Test echo >
+	result1 := ExecChain("echo hello world > " + tmpFile)
+	if !strings.Contains(result1, "Wrote") {
+		t.Errorf("echo > failed: %q", result1)
+	}
+
+	// Test cat
+	result2 := ExecChain("cat " + tmpFile)
+	if !strings.Contains(result2, "hello") {
+		t.Errorf("cat failed: %q", result2)
+	}
+
+	// Test echo >>
+	result3 := ExecChain("echo more >> " + tmpFile)
+	if !strings.Contains(result3, "Appended") {
+		t.Errorf("echo >> failed: %q", result3)
+	}
+
+	// Test cat after append
+	result4 := ExecChain("cat " + tmpFile)
+	if !strings.Contains(result4, "hello") || !strings.Contains(result4, "more") {
+		t.Errorf("cat after append failed: %q", result4)
+	}
+}
