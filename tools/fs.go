@@ -162,7 +162,10 @@ func FsCat(args []string, stdin string) string {
 		}
 	}
 	if path == "" {
-		return "[error] usage: cat <path>"
+		if stdin != "" {
+			return stdin
+		}
+		return "[error] usage: cat <path> or cat (with stdin)"
 	}
 	abs, err := resolvePath(path)
 	if err != nil {
@@ -426,12 +429,13 @@ func FsTime(args []string, stdin string) string {
 
 func FsGrep(args []string, stdin string) string {
 	if len(args) == 0 {
-		return "[error] usage: grep [-i] [-v] [-c] <pattern>"
+		return "[error] usage: grep [-i] [-v] [-c] <pattern> [file]"
 	}
 	ignoreCase := false
 	invert := false
 	countOnly := false
 	var pattern string
+	var filePath string
 	for _, a := range args {
 		switch a {
 		case "-i":
@@ -441,16 +445,35 @@ func FsGrep(args []string, stdin string) string {
 		case "-c":
 			countOnly = true
 		default:
-			pattern = a
+			if pattern == "" {
+				pattern = a
+			} else if filePath == "" {
+				filePath = a
+			}
 		}
 	}
 	if pattern == "" {
 		return "[error] pattern required"
 	}
+	var lines []string
+	if filePath != "" {
+		abs, err := resolvePath(filePath)
+		if err != nil {
+			return fmt.Sprintf("[error] grep: %v", err)
+		}
+		data, err := os.ReadFile(abs)
+		if err != nil {
+			return fmt.Sprintf("[error] grep: %v", err)
+		}
+		lines = strings.Split(string(data), "\n")
+	} else if stdin != "" {
+		lines = strings.Split(stdin, "\n")
+	} else {
+		return "[error] grep: no input (use file path or pipe from stdin)"
+	}
 	if ignoreCase {
 		pattern = strings.ToLower(pattern)
 	}
-	lines := strings.Split(stdin, "\n")
 	var matched []string
 	for _, line := range lines {
 		haystack := line
@@ -473,6 +496,7 @@ func FsGrep(args []string, stdin string) string {
 
 func FsHead(args []string, stdin string) string {
 	n := 10
+	var filePath string
 	for i, a := range args {
 		if a == "-n" && i+1 < len(args) {
 			if parsed, err := strconv.Atoi(args[i+1]); err == nil {
@@ -482,9 +506,26 @@ func FsHead(args []string, stdin string) string {
 			continue
 		} else if parsed, err := strconv.Atoi(a); err == nil {
 			n = parsed
+		} else if filePath == "" && !strings.HasPrefix(a, "-") {
+			filePath = a
 		}
 	}
-	lines := strings.Split(stdin, "\n")
+	var lines []string
+	if filePath != "" {
+		abs, err := resolvePath(filePath)
+		if err != nil {
+			return fmt.Sprintf("[error] head: %v", err)
+		}
+		data, err := os.ReadFile(abs)
+		if err != nil {
+			return fmt.Sprintf("[error] head: %v", err)
+		}
+		lines = strings.Split(string(data), "\n")
+	} else if stdin != "" {
+		lines = strings.Split(stdin, "\n")
+	} else {
+		return "[error] head: no input (use file path or pipe from stdin)"
+	}
 	if n > 0 && len(lines) > n {
 		lines = lines[:n]
 	}
@@ -493,6 +534,7 @@ func FsHead(args []string, stdin string) string {
 
 func FsTail(args []string, stdin string) string {
 	n := 10
+	var filePath string
 	for i, a := range args {
 		if a == "-n" && i+1 < len(args) {
 			if parsed, err := strconv.Atoi(args[i+1]); err == nil {
@@ -502,9 +544,26 @@ func FsTail(args []string, stdin string) string {
 			continue
 		} else if parsed, err := strconv.Atoi(a); err == nil {
 			n = parsed
+		} else if filePath == "" && !strings.HasPrefix(a, "-") {
+			filePath = a
 		}
 	}
-	lines := strings.Split(stdin, "\n")
+	var lines []string
+	if filePath != "" {
+		abs, err := resolvePath(filePath)
+		if err != nil {
+			return fmt.Sprintf("[error] tail: %v", err)
+		}
+		data, err := os.ReadFile(abs)
+		if err != nil {
+			return fmt.Sprintf("[error] tail: %v", err)
+		}
+		lines = strings.Split(string(data), "\n")
+	} else if stdin != "" {
+		lines = strings.Split(stdin, "\n")
+	} else {
+		return "[error] tail: no input (use file path or pipe from stdin)"
+	}
 	if n > 0 && len(lines) > n {
 		lines = lines[len(lines)-n:]
 	}
@@ -512,9 +571,34 @@ func FsTail(args []string, stdin string) string {
 }
 
 func FsWc(args []string, stdin string) string {
-	lines := len(strings.Split(stdin, "\n"))
-	words := len(strings.Fields(stdin))
-	chars := len(stdin)
+	var content string
+	var filePath string
+	for _, a := range args {
+		if strings.HasPrefix(a, "-") {
+			continue
+		}
+		if filePath == "" {
+			filePath = a
+		}
+	}
+	if filePath != "" {
+		abs, err := resolvePath(filePath)
+		if err != nil {
+			return fmt.Sprintf("[error] wc: %v", err)
+		}
+		data, err := os.ReadFile(abs)
+		if err != nil {
+			return fmt.Sprintf("[error] wc: %v", err)
+		}
+		content = string(data)
+	} else if stdin != "" {
+		content = stdin
+	} else {
+		return "[error] wc: no input (use file path or pipe from stdin)"
+	}
+	lines := len(strings.Split(content, "\n"))
+	words := len(strings.Fields(content))
+	chars := len(content)
 	if len(args) > 0 {
 		switch args[0] {
 		case "-l":
@@ -529,16 +613,36 @@ func FsWc(args []string, stdin string) string {
 }
 
 func FsSort(args []string, stdin string) string {
-	lines := strings.Split(stdin, "\n")
 	reverse := false
 	numeric := false
+	var filePath string
 	for _, a := range args {
 		switch a {
 		case "-r":
 			reverse = true
 		case "-n":
 			numeric = true
+		default:
+			if filePath == "" && !strings.HasPrefix(a, "-") {
+				filePath = a
+			}
 		}
+	}
+	var lines []string
+	if filePath != "" {
+		abs, err := resolvePath(filePath)
+		if err != nil {
+			return fmt.Sprintf("[error] sort: %v", err)
+		}
+		data, err := os.ReadFile(abs)
+		if err != nil {
+			return fmt.Sprintf("[error] sort: %v", err)
+		}
+		lines = strings.Split(string(data), "\n")
+	} else if stdin != "" {
+		lines = strings.Split(stdin, "\n")
+	} else {
+		return "[error] sort: no input (use file path or pipe from stdin)"
 	}
 	sortFunc := func(i, j int) bool {
 		if numeric {
@@ -559,12 +663,30 @@ func FsSort(args []string, stdin string) string {
 }
 
 func FsUniq(args []string, stdin string) string {
-	lines := strings.Split(stdin, "\n")
 	showCount := false
+	var filePath string
 	for _, a := range args {
 		if a == "-c" {
 			showCount = true
+		} else if filePath == "" && !strings.HasPrefix(a, "-") {
+			filePath = a
 		}
+	}
+	var lines []string
+	if filePath != "" {
+		abs, err := resolvePath(filePath)
+		if err != nil {
+			return fmt.Sprintf("[error] uniq: %v", err)
+		}
+		data, err := os.ReadFile(abs)
+		if err != nil {
+			return fmt.Sprintf("[error] uniq: %v", err)
+		}
+		lines = strings.Split(string(data), "\n")
+	} else if stdin != "" {
+		lines = strings.Split(stdin, "\n")
+	} else {
+		return "[error] uniq: no input (use file path or pipe from stdin)"
 	}
 	var result []string
 	var prev string
