@@ -18,3 +18,4 @@ ragimport
 .env
 onnx/
 *.log
+log.txt

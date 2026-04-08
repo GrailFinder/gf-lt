@@ -193,11 +193,6 @@ func FsViewImg(args []string, stdin string) string {
 	return string(jsonResult)
 }
 
-// FsSee is deprecated, use FsViewImg
-func FsSee(args []string, stdin string) string {
-	return FsViewImg(args, stdin)
-}
-
 func FsWrite(args []string, stdin string) string {
 	b64 := false
 	var path string
