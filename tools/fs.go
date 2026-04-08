@@ -420,7 +420,11 @@ func FsEcho(args []string, stdin string) string {
 	if stdin != "" {
 		return stdin
 	}
-	return strings.Join(args, " ")
+	result := strings.Join(args, " ")
+	if result != "" {
+		result += "\n"
+	}
+	return result
 }
 
 func FsTime(args []string, stdin string) string {
@@ -564,6 +568,9 @@ func FsTail(args []string, stdin string) string {
 	} else {
 		return "[error] tail: no input (use file path or pipe from stdin)"
 	}
+	for len(lines) > 0 && lines[len(lines)-1] == "" {
+		lines = lines[:len(lines)-1]
+	}
 	if n > 0 && len(lines) > n {
 		lines = lines[len(lines)-n:]
 	}
@@ -596,6 +603,7 @@ func FsWc(args []string, stdin string) string {
 	} else {
 		return "[error] wc: no input (use file path or pipe from stdin)"
 	}
+	content = strings.TrimRight(content, "\n")
 	lines := len(strings.Split(content, "\n"))
 	words := len(strings.Fields(content))
 	chars := len(content)
@@ -644,6 +652,9 @@ func FsSort(args []string, stdin string) string {
 	} else {
 		return "[error] sort: no input (use file path or pipe from stdin)"
 	}
+	for len(lines) > 0 && lines[len(lines)-1] == "" {
+		lines = lines[:len(lines)-1]
+	}
 	sortFunc := func(i, j int) bool {
 		if numeric {
 			ni, _ := strconv.Atoi(lines[i])
@@ -689,29 +700,21 @@ func FsUniq(args []string, stdin string) string {
 		return "[error] uniq: no input (use file path or pipe from stdin)"
 	}
 	var result []string
-	var prev string
-	first := true
-	count := 0
+	seen := make(map[string]bool)
+	countMap := make(map[string]int)
 	for _, line := range lines {
-		if first || line != prev {
-			if !first && showCount {
-				result = append(result, fmt.Sprintf("%d %s", count, prev))
-			} else if !first {
-				result = append(result, prev)
-			}
-			count = 1
-			prev = line
-			first = false
-		} else {
-			count++
+		countMap[line]++
+		if !seen[line] {
+			seen[line] = true
+			result = append(result, line)
 		}
 	}
-	if !first {
-		if showCount {
-			result = append(result, fmt.Sprintf("%d %s", count, prev))
-		} else {
-			result = append(result, prev)
+	if showCount {
+		var counted []string
+		for _, line := range result {
+			counted = append(counted, fmt.Sprintf("%d %s", countMap[line], line))
 		}
+		return strings.Join(counted, "\n")
 	}
 	return strings.Join(result, "\n")
 }
@@ -798,7 +801,7 @@ func FsSed(args []string, stdin string) string {
 		return "[error] usage: sed 's/old/new/[g]' [file]"
 	}
 	// Parse pattern: s/old/new/flags
-	parts := strings.Split(pattern[1:], "/")
+	parts := strings.Split(pattern[2:], "/")
 	if len(parts) < 2 {
 		return "[error] invalid sed pattern. Use: s/old/new/[g]"
 	}

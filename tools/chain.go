@@ -147,19 +147,25 @@ func execSingle(command, stdin string) (string, error) {
 	name := parts[0]
 	args := parts[1:]
 	// Check if it's a built-in Go command
-	if result, isBuiltin := execBuiltin(name, args, stdin); isBuiltin {
+	result, err := execBuiltin(name, args, stdin)
+	if err == nil {
 		return result, nil
 	}
-	// Otherwise execute as system command
-	cmd := exec.Command(name, args...)
-	if stdin != "" {
-		cmd.Stdin = strings.NewReader(stdin)
+	// Check if it's a "not a builtin" error (meaning we should try system command)
+	if err.Error() == "not a builtin" {
+		// Execute as system command
+		cmd := exec.Command(name, args...)
+		if stdin != "" {
+			cmd.Stdin = strings.NewReader(stdin)
+		}
+		output, err := cmd.CombinedOutput()
+		if err != nil {
+			return string(output), err
+		}
+		return string(output), nil
 	}
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		return string(output), err
-	}
-	return string(output), nil
+	// It's a builtin that returned an error
+	return result, err
 }
 
 // tokenize splits a command string by whitespace, respecting quotes.
@@ -200,56 +206,61 @@ func tokenize(input string) []string {
 // execBuiltin executes a built-in command if it exists.
 // Returns (result, true) if it was a built-in (even if result is empty).
 // Returns ("", false) if it's not a built-in command.
-func execBuiltin(name string, args []string, stdin string) (string, bool) {
+func execBuiltin(name string, args []string, stdin string) (string, error) {
+	var result string
 	switch name {
 	case "echo":
-		return FsEcho(args, stdin), true
+		result = FsEcho(args, stdin)
 	case "time":
-		return FsTime(args, stdin), true
+		result = FsTime(args, stdin)
 	case "cat":
-		return FsCat(args, stdin), true
+		result = FsCat(args, stdin)
 	case "pwd":
-		return FsPwd(args, stdin), true
+		result = FsPwd(args, stdin)
 	case "cd":
-		return FsCd(args, stdin), true
+		result = FsCd(args, stdin)
 	case "mkdir":
-		return FsMkdir(args, stdin), true
+		result = FsMkdir(args, stdin)
 	case "ls":
-		return FsLs(args, stdin), true
+		result = FsLs(args, stdin)
 	case "cp":
-		return FsCp(args, stdin), true
+		result = FsCp(args, stdin)
 	case "mv":
-		return FsMv(args, stdin), true
+		result = FsMv(args, stdin)
 	case "rm":
-		return FsRm(args, stdin), true
+		result = FsRm(args, stdin)
 	case "grep":
-		return FsGrep(args, stdin), true
+		result = FsGrep(args, stdin)
 	case "head":
-		return FsHead(args, stdin), true
+		result = FsHead(args, stdin)
 	case "tail":
-		return FsTail(args, stdin), true
+		result = FsTail(args, stdin)
 	case "wc":
-		return FsWc(args, stdin), true
+		result = FsWc(args, stdin)
 	case "sort":
-		return FsSort(args, stdin), true
+		result = FsSort(args, stdin)
 	case "uniq":
-		return FsUniq(args, stdin), true
+		result = FsUniq(args, stdin)
 	case "sed":
-		return FsSed(args, stdin), true
+		result = FsSed(args, stdin)
 	case "stat":
-		return FsStat(args, stdin), true
+		result = FsStat(args, stdin)
 	case "go":
-		// go is special - runs system command with FilePickerDir as working directory
 		if len(args) == 0 {
-			return "[error] usage: go <subcommand> [options]", true
+			return "[error] usage: go <subcommand> [options]", nil
 		}
 		cmd := exec.Command("go", args...)
 		cmd.Dir = cfg.FilePickerDir
 		output, err := cmd.CombinedOutput()
 		if err != nil {
-			return fmt.Sprintf("[error] go %s: %v\n%s", args[0], err, string(output)), true
+			return fmt.Sprintf("[error] go %s: %v\n%s", args[0], err, string(output)), nil
 		}
-		return string(output), true
+		return string(output), nil
+	default:
+		return "", errors.New("not a builtin")
 	}
-	return "", false
+	if strings.HasPrefix(result, "[error]") {
+		return result, errors.New(result)
+	}
+	return result, nil
 }
