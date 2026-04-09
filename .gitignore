@@ -19,3 +19,4 @@ ragimport
 onnx/
 *.log
 log.txt
+dumps/

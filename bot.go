@@ -634,12 +634,57 @@ func finalizeRespStats(tokenCount int, startTime time.Time) {
 	}
 }
 
+func dumpRequestToFile(api string, body []byte, token string, statusCode int, respError string) {
+	dumpDir := "dumps"
+	if err := os.MkdirAll(dumpDir, 0755); err != nil {
+		logger.Warn("failed to create dumps directory", "error", err)
+		return
+	}
+
+	timestamp := time.Now().Format("20060102_150405")
+	bodyFilename := fmt.Sprintf("%s/request_%s_%d_body.json", dumpDir, timestamp, statusCode)
+	curlFilename := fmt.Sprintf("%s/request_%s_%d.curl", dumpDir, timestamp, statusCode)
+
+	if err := os.WriteFile(bodyFilename, body, 0644); err != nil {
+		logger.Warn("failed to write request body dump", "error", err, "filename", bodyFilename)
+		return
+	}
+
+	var authPart string
+	if token != "" {
+		authPart = fmt.Sprintf(`-H "Authorization: Bearer %s"`, token)
+	}
+
+	curlCmd := fmt.Sprintf(`curl -X POST "%s" \
+  -H "Content-Type: application/json" \
+  %s \
+  --data-binary @%s`,
+		api, authPart, bodyFilename)
+
+	if err := os.WriteFile(curlFilename, []byte(curlCmd), 0644); err != nil {
+		logger.Warn("failed to write request dump", "error", err, "filename", curlFilename)
+		return
+	}
+
+	logger.Info("request dump saved", "curl_file", curlFilename, "body_file", bodyFilename, "status", statusCode)
+}
+
 // sendMsgToLLM expects streaming resp
 func sendMsgToLLM(body io.Reader) {
 	choseChunkParser()
 	// openrouter does not respect stop strings, so we have to cut the message ourselves
 	stopStrings := chatBody.MakeStopSliceExcluding("", listChatRoles())
-	req, err := http.NewRequest("POST", cfg.CurrentAPI, body)
+
+	// Read body content for potential dump on error
+	bodyBytes, err := io.ReadAll(body)
+	if err != nil {
+		logger.Error("failed to read request body", "error", err)
+		showToast("error", "apicall failed:"+err.Error())
+		streamDone <- true
+		return
+	}
+
+	req, err := http.NewRequest("POST", cfg.CurrentAPI, bytes.NewReader(bodyBytes))
 	if err != nil {
 		logger.Error("newreq error", "error", err)
 		showToast("error", "apicall failed:"+err.Error())
@@ -661,7 +706,7 @@ func sendMsgToLLM(body io.Reader) {
 	// Check if the initial response is an error before starting to stream
 	if resp.StatusCode >= 400 {
 		// Read the response body to get detailed error information
-		bodyBytes, err := io.ReadAll(resp.Body)
+		respBodyBytes, err := io.ReadAll(resp.Body)
 		if err != nil {
 			logger.Error("failed to read error response body", "error", err, "status_code", resp.StatusCode)
 			detailedError := fmt.Sprintf("HTTP Status: %d, Failed to read response body: %v", resp.StatusCode, err)
@@ -671,8 +716,9 @@ func sendMsgToLLM(body io.Reader) {
 			return
 		}
 		// Parse the error response for detailed information
-		detailedError := extractDetailedErrorFromBytes(bodyBytes, resp.StatusCode)
+		detailedError := extractDetailedErrorFromBytes(respBodyBytes, resp.StatusCode)
 		logger.Error("API returned error status", "status_code", resp.StatusCode, "detailed_error", detailedError)
+		dumpRequestToFile(cfg.CurrentAPI, bodyBytes, chunkParser.GetToken(), resp.StatusCode, detailedError)
 		showToast("API Error", detailedError)
 		resp.Body.Close()
 		streamDone <- true
