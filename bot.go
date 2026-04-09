@@ -6,6 +6,7 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"gf-lt/config"
 	"gf-lt/models"
@@ -1724,6 +1725,13 @@ func init() {
 	// atomic default values
 	cachedModelColor.Store("orange")
 	go chatWatcher(ctx)
+	// parse flags
+	flag.BoolVar(&cfg.CLIMode, "cli", false, "Run in CLI mode without TUI")
+	flag.BoolVar(&cfg.ToolUse, "tools", true, "run with tools")
+	flag.StringVar(&cliCardPath, "card", "", "Path to syscard JSON file")
+	flag.BoolVar(&cliContinue, "continue", false, "Continue from last chat (by agent or card)")
+	flag.StringVar(&cliMsg, "msg", "", "Send message and exit (one-shot mode)")
+	flag.Parse()
 	if !cfg.CLIMode {
 		initTUI()
 	}

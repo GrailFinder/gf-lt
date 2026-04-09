@@ -2,7 +2,6 @@ package main
 
 import (
 	"bufio"
-	"flag"
 	"fmt"
 	"gf-lt/models"
 	"gf-lt/pngmeta"
@@ -37,12 +36,6 @@ var (
 )
 
 func main() {
-	flag.BoolVar(&cfg.CLIMode, "cli", false, "Run in CLI mode without TUI")
-	flag.BoolVar(&cfg.ToolUse, "tools", true, "run with tools")
-	flag.StringVar(&cliCardPath, "card", "", "Path to syscard JSON file")
-	flag.BoolVar(&cliContinue, "continue", false, "Continue from last chat (by agent or card)")
-	flag.StringVar(&cliMsg, "msg", "", "Send message and exit (one-shot mode)")
-	flag.Parse()
 	if cfg.CLIMode {
 		runCLIMode()
 		return
