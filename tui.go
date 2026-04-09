@@ -51,6 +51,7 @@ var (
 	helpPage       = "helpPage"
 	renamePage     = "renamePage"
 	RAGPage        = "RAGPage"
+	dbTablesPage   = "dbTables"
 	propsPage      = "propsPage"
 	codeBlockPage  = "codeBlockPage"
 	imgPage        = "imgPage"

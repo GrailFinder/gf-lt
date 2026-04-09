@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"database/sql"
 	"gf-lt/models"
 	"log/slog"
 
@@ -12,6 +13,12 @@ type FullRepo interface {
 	ChatHistory
 	Memories
 	VectorRepo
+	TableLister
+}
+
+type TableLister interface {
+	ListTables() ([]string, error)
+	GetTableColumns(table string) ([]TableColumn, error)
 }
 
 type ChatHistory interface {
@@ -129,4 +136,25 @@ func NewProviderSQL(dbPath string, logger *slog.Logger) FullRepo {
 // DB returns the underlying database connection
 func (p ProviderSQL) DB() *sqlx.DB {
 	return p.db
+}
+
+type TableColumn struct {
+	CID     int            `db:"cid"`
+	Name    string         `db:"name"`
+	Type    string         `db:"type"`
+	NotNull bool           `db:"notnull"`
+	DFltVal sql.NullString `db:"dflt_value"`
+	PK      int            `db:"pk"`
+}
+
+func (p ProviderSQL) ListTables() ([]string, error) {
+	resp := []string{}
+	err := p.db.Select(&resp, "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name;")
+	return resp, err
+}
+
+func (p ProviderSQL) GetTableColumns(table string) ([]TableColumn, error) {
+	resp := []TableColumn{}
+	err := p.db.Select(&resp, "PRAGMA table_info("+table+");")
+	return resp, err
 }
