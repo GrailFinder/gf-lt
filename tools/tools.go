@@ -35,7 +35,12 @@ Your current tools:
 {
 "name":"run",
 "args": ["command"],
-"when_to_use": "Main tool for file operations, shell commands, memory, git, and todo. Use run \"help\" for all commands. Examples: run \"ls -la\", run \"help\", run \"mkdir -p foo/bar\", run \"cat file.txt\", run \"write file.txt content\", run \"view_img image.png\", run \"git status\", run \"memory store foo bar\", run \"todo create task\", run \"grep pattern file\", run \"cd /path\", run \"pwd\", run \"find . -name *.txt\", run \"file image.png\", run \"head file\", run \"tail file\", run \"wc -l file\", run \"sort file\", run \"uniq file\", run \"sed 's/old/new/' file\", run \"echo text\", run \"go build ./...\", run \"time\", run \"stat file\", run \"cp src dst\", run \"mv src dst\", run \"rm file\""
+"when_to_use": "Main tool for file operations, shell commands, memory, git, and todo. Use run "help" for all commands. Examples: run "ls -la", run "help", run "mkdir -p foo/bar", run "cat file.txt", run "write file.txt content", run "git status", run "memory store foo bar", run "todo create task", run "grep pattern file", run "cd /path", run "pwd", run "find . -name *.txt", run "file image.png", run "head file", run "tail file", run "wc -l file", run "sort file", run "uniq file", run "sed 's/old/new/' file", run "echo text", run "go build ./...", run "time", run "stat file", run "cp src dst", run "mv src dst", run "rm file"
+},
+{
+"name":"browser",
+"args": ["action", "args"],
+"when_to_use": "Playwright browser automation. Actions: start, stop, running, go <url>, click <selector>, fill <selector> <text>, text [selector], html [selector], screenshot [path], screenshot_and_view, wait <selector>, drag <x1> <y1> <x2> <y2>. Example: browser start, browser go https://example.com, browser click #submit-button"
 },
 {
 "name":"view_img",
@@ -415,6 +420,36 @@ func runCmd(args map[string]string) []byte {
 	}
 }
 
+// browserCmd handles top-level browser tool calls
+func browserCmd(args map[string]string) []byte {
+	action, _ := args["action"]
+	argsStr, _ := args["args"]
+	// Parse args string into slice (space-separated, respecting quoted strings)
+	var browserArgs []string
+	if argsStr != "" {
+		browserArgs = strings.Fields(argsStr)
+	}
+	if action == "" {
+		return []byte(`usage: browser <action> [args...]
+Actions:
+  start              - start browser
+  stop               - stop browser
+  running            - check if running
+  go <url>           - navigate to URL
+  click <selector>   - click element
+  fill <selector> <text> - fill input
+  text [selector]    - extract text
+  html [selector]    - get HTML
+  screenshot [path]  - take screenshot
+  screenshot_and_view - take and view screenshot
+  wait <selector>    - wait for element
+  drag <from> <to>   - drag element`)
+	}
+	// Prepend action to args for runBrowserCommand
+	fullArgs := append([]string{action}, browserArgs...)
+	return runBrowserCommand(fullArgs, args)
+}
+
 // runBrowserCommand routes browser subcommands to Playwright handlers
 func runBrowserCommand(args []string, originalArgs map[string]string) []byte {
 	if len(args) == 0 {
@@ -538,6 +573,33 @@ Actions:
 			"fromSelector": rest[0],
 			"toSelector":   rest[1],
 		})
+	case "help":
+		return []byte(`browser <action> [args]
+Playwright browser automation.
+Actions:
+  start              - start browser
+  stop               - stop browser
+  running            - check if browser is running
+  go <url>          - navigate to URL
+  click <selector>  - click element (use index for multiple: click #btn 1)
+  fill <sel> <text> - fill input field
+  text [selector]   - extract text (from element or whole page)
+  html [selector]   - get HTML (from element or whole page)
+  screenshot [path] - take screenshot
+  screenshot_and_view - take and view screenshot
+  wait <selector>   - wait for element to appear
+  drag <x1> <y1> <x2> <y2> - drag by coordinates
+  drag <sel1> <sel2> - drag by selectors (center points)
+Examples:
+  browser start
+  browser go https://example.com
+  browser click #submit-button
+  browser fill #search-input hello
+  browser text
+  browser screenshot
+  browser screenshot_and_view
+  browser drag 100 200 300 400
+  browser drag #item1 #container2`)
 	default:
 		return []byte("unknown browser action: " + action)
 	}
@@ -596,20 +658,6 @@ func getHelp(args []string) string {
   window              - list available windows
   capture <name>    - capture a window screenshot
   capture_and_view <name> - capture and view screenshot
-  
-  # Browser (requires Playwright)
-  browser start           - start browser
-  browser stop            - stop browser
-  browser running         - check if running
-  browser go <url>        - navigate to URL
-  browser click <sel>     - click element
-  browser fill <sel> <txt> - fill input
-  browser text [sel]     - extract text
-  browser html [sel]      - get HTML
-  browser screenshot     - take screenshot
-  browser wait <sel>     - wait for element
-  browser drag <x1> <y1> <x2> <y2> - drag by coordinates
-  browser drag <sel1> <sel2> - drag by selectors (center points)
 
   # System
   <any shell command> - run shell command directly
@@ -747,31 +795,6 @@ Use: run "command" to execute.`
   Requires: xdotool and maim
   Examples:
     run "capture_and_view Firefox"`
-	case "browser":
-		return `browser <action> [args]
-  Playwright browser automation.
-  Requires: Playwright browser server running
-  Actions:
-    start              - start browser
-    stop               - stop browser
-    running            - check if browser is running
-    go <url>           - navigate to URL
-    click <selector>   - click element (use index for multiple: click #btn 1)
-    fill <selector> <text> - fill input field
-    text [selector]   - extract text (from element or whole page)
-    html [selector]   - get HTML (from element or whole page)
-    screenshot [path] - take screenshot
-    wait <selector>   - wait for element to appear
-    drag <from> <to>  - drag element to another element
-  Examples:
-    run "browser start"
-    run "browser go https://example.com"
-    run "browser click #submit-button"
-    run "browser fill #search-input hello"
-    run "browser text"
-    run "browser screenshot"
-    run "browser drag 100 200 300 400"
-    run "browser drag #item1 #container2"`
 	default:
 		return fmt.Sprintf("No help available for: %s. Use: run \"help\" for all commands.", cmd)
 	}
@@ -1263,7 +1286,9 @@ var FnMap = map[string]fnSig{
 	"view_img":      viewImgTool,
 	"help":          helpTool,
 	// Unified run command
-	"run":            runCmd,
+	"run": runCmd,
+	// Browser tool - routes to runBrowserCommand
+	"browser":        browserCmd,
 	"summarize_chat": summarizeChat,
 }
 
@@ -1447,6 +1472,28 @@ var BaseTools = []models.Tool{
 					"command": models.ToolArgProps{
 						Type:        "string",
 						Description: "command to execute. Use: run \"help\" for all commands, run \"help <cmd>\" for specific help. Examples: ls, cat, grep, git status, memory store, todo create, etc.",
+					},
+				},
+			},
+		},
+	},
+	// browser - Playwright browser automation
+	models.Tool{
+		Type: "function",
+		Function: models.ToolFunc{
+			Name:        "browser",
+			Description: "Playwright browser automation. Actions: start (launch browser), stop (close browser), running (check if browser is running), go <url> (navigate), click <selector> [index] (click element), fill <selector> <text> (type into input), text [selector] (extract text), html [selector] (get HTML), screenshot [path] (take screenshot), screenshot_and_view (take and view), wait <selector> (wait for element), drag <x1> <y1> <x2> <y2> (drag by coords) or drag <sel1> <sel2> (drag by selectors)",
+			Parameters: models.ToolFuncParams{
+				Type:     "object",
+				Required: []string{"action"},
+				Properties: map[string]models.ToolArgProps{
+					"action": models.ToolArgProps{
+						Type:        "string",
+						Description: "Browser action: start, stop, running, go, click, fill, text, html, screenshot, screenshot_and_view, wait, drag",
+					},
+					"args": models.ToolArgProps{
+						Type:        "string",
+						Description: "Arguments for the action (e.g., URL for go, selector for click, etc.)",
 					},
 				},
 			},
