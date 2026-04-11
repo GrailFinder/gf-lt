@@ -4,8 +4,8 @@ github.com/BurntSushi/toml v1.5.0 h1:W5quZX/G/csjUnuI8SUYlsHs9M38FC7znL0lIO+DvMg
 github.com/BurntSushi/toml v1.5.0/go.mod h1:ukJfTF/6rtPPRCnwkur4qwRxa8vTRFBF0uk2lLoLwho=
 github.com/GrailFinder/google-translate-tts v0.1.4 h1:NJoPZUGfBrmouQMN19MUcNPNUx4tmf4a8OZRME4E4Mg=
 github.com/GrailFinder/google-translate-tts v0.1.4/go.mod h1:YIOLKR7sObazdUCrSex3u9OVBovU55eYgWa25vsQJ18=
-github.com/GrailFinder/searchagent v0.2.0 h1:U2GVjLh/9xZt0xX9OcYk9Q2fMkyzyTiADPUmUisRdtQ=
-github.com/GrailFinder/searchagent v0.2.0/go.mod h1:d66tn5+22LI8IGJREUsRBT60P0sFdgQgvQRqyvgItrs=
+github.com/GrailFinder/searchagent v0.2.1 h1:c2A8UXEkAMhJgheUzhz4eRH4qvDfRJdZ0PB+Pf6TTAo=
+github.com/GrailFinder/searchagent v0.2.1/go.mod h1:d66tn5+22LI8IGJREUsRBT60P0sFdgQgvQRqyvgItrs=
 github.com/PuerkitoBio/goquery v1.11.0 h1:jZ7pwMQXIITcUXNH83LLk+txlaEy6NVOfTuP43xxfqw=
 github.com/PuerkitoBio/goquery v1.11.0/go.mod h1:wQHgxUOU3JGuj3oD/QFfxUdlzW6xPHfqyHre6VMY4DQ=
 github.com/andybalholm/cascadia v1.3.3 h1:AG2YHrzJIm4BZ19iwJ/DAua6Btl3IwJX+VI4kktS1LM=
