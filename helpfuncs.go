@@ -181,7 +181,9 @@ func colorText() {
 	for i, tb := range thinkBlocks {
 		text = strings.Replace(text, fmt.Sprintf(placeholderThink, i), tb, 1)
 	}
-	text = strings.ReplaceAll(text, `$\rightarrow$`, "->")
+	// text = strings.ReplaceAll(text, `$\rightarrow$`, "->")
+	text = RenderLatex(text)
+	text = AlignMarkdownTables(text)
 	textView.SetText(text)
 }
 
