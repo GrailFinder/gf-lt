@@ -134,7 +134,8 @@ func printCLIHelp() {
 	fmt.Println("  /new, /n               - Start a new chat (clears conversation)")
 	fmt.Println("  /card <path>, /c <path> - Load a different syscard")
 	fmt.Println("  /undo, /u              - Delete last message")
-	fmt.Println("  /history, /ls          - List chat history")
+	fmt.Println("  /history, /ls          - List chat sessions")
+	fmt.Println("  /hs [index]            - Show chat history (messages)")
 	fmt.Println("  /load <name>           - Load a specific chat by name")
 	fmt.Println("  /model <name>, /m <name> - Switch model")
 	fmt.Println("  /api <index>, /a <index>  - Switch API link (no index to list)")
@@ -213,6 +214,31 @@ func handleCLICommand(msg string) bool {
 		activeChatName = name
 		cfg.AssistantRole = chat.Agent
 		fmt.Printf("Loaded chat: %s\n", name)
+	case "/hs":
+		if len(chatBody.Messages) == 0 {
+			fmt.Println("No messages in current chat.")
+			return true
+		}
+		if len(args) == 0 {
+			fmt.Println("Chat history:")
+			for i := range chatBody.Messages {
+				fmt.Printf("%d: %s\n", i, MsgToText(i, &chatBody.Messages[i]))
+			}
+			return true
+		}
+		idx, err := strconv.Atoi(args[0])
+		if err != nil {
+			fmt.Printf("Invalid index: %s\n", args[0])
+			return true
+		}
+		if idx < 0 {
+			idx = len(chatBody.Messages) + idx
+		}
+		if idx < 0 || idx >= len(chatBody.Messages) {
+			fmt.Printf("Index out of range (0-%d)\n", len(chatBody.Messages)-1)
+			return true
+		}
+		fmt.Printf("%d: %s\n", idx, MsgToText(idx, &chatBody.Messages[idx]))
 	case "/model", "/m":
 		getModelListForAPI := func(api string) []string {
 			if strings.Contains(api, "api.deepseek.com/") {
