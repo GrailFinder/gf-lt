@@ -1593,7 +1593,9 @@ func updateModelLists() {
 			cachedModelColor.Store("green")
 			updateStatusLine()
 			UpdateToolCapabilities()
-			app.Draw()
+			if !cfg.CLIMode {
+				app.Draw() // raw?
+			}
 			return
 		}
 	}
@@ -1779,6 +1781,7 @@ func init() {
 	if !cfg.CLIMode {
 		initTUI()
 	}
+	go updateModelLists()
 	tools.InitTools(cfg, logger, store)
 	// tooler = tools.InitTools(cfg, logger, store)
 	// tooler.RegisterWindowTools(modelHasVision)

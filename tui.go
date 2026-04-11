@@ -1200,5 +1200,4 @@ func initTUI() {
 		}
 		return event
 	})
-	go updateModelLists()
 }
