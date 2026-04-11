@@ -125,8 +125,6 @@ var (
 	orModelsData    *models.ORModels
 )
 
-var thinkBlockRE = regexp.MustCompile(`(?s)<think>.*?</think>`)
-
 // parseKnownToTag extracts known_to list from content using configured tag.
 // Returns cleaned content and list of character names.
 func parseKnownToTag(content string) []string {
@@ -1101,7 +1099,7 @@ out:
 		logger.Warn("failed to update storage", "error", err, "name", activeChatName)
 	}
 	// Strip think blocks before parsing for tool calls
-	respTextNoThink := thinkBlockRE.ReplaceAllString(respText.String(), "")
+	respTextNoThink := models.ThinkRE.ReplaceAllString(respText.String(), "")
 	if interruptResp.Load() {
 		return nil
 	}
