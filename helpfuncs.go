@@ -98,6 +98,9 @@ func stripThinkingFromMsg(msg *models.RoleMsg) *models.RoleMsg {
 // It filters messages for the character the user is currently "writing as"
 // and updates the textView with the filtered conversation
 func refreshChatDisplay() {
+	if cfg.CLIMode {
+		return
+	}
 	// Determine which character's view to show
 	viewingAs := cfg.UserRole
 	if cfg.WriteNextMsgAs != "" {
@@ -183,6 +186,9 @@ func colorText() {
 }
 
 func updateStatusLine() {
+	if cfg.CLIMode {
+		return // no status line in cli mode
+	}
 	status := makeStatusLine()
 	statusLineWidget.SetText(status)
 }
@@ -1022,4 +1028,20 @@ func GetCardByRole(role string) *models.CharCard {
 		return nil
 	}
 	return sysMap[cardID]
+}
+
+func notifySend(topic, message string) error {
+	// Sanitize message to remove control characters that notify-send doesn't handle
+	sanitized := strings.Map(func(r rune) rune {
+		if r < 32 && r != '\t' {
+			return -1
+		}
+		return r
+	}, message)
+	// Truncate if too long
+	if len(sanitized) > 200 {
+		sanitized = sanitized[:197] + "..."
+	}
+	cmd := exec.Command("notify-send", topic, sanitized)
+	return cmd.Run()
 }

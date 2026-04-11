@@ -144,6 +144,13 @@ func setShellMode(enabled bool) {
 // showToast displays a temporary notification in the bottom-right corner.
 // It auto-hides after 3 seconds.
 func showToast(title, message string) {
+	if cfg.UseNotifySend {
+		notifySend(title, message)
+		return
+	}
+	if cfg.CLIMode {
+		return
+	}
 	sanitize := func(s string, maxLen int) string {
 		sanitized := strings.Map(func(r rune) rune {
 			if r < 32 && r != '\t' {
