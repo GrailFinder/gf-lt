@@ -2,9 +2,11 @@ package main
 
 import (
 	"bufio"
+	"flag"
 	"fmt"
 	"gf-lt/models"
 	"gf-lt/pngmeta"
+	"gf-lt/tools"
 	"os"
 	"slices"
 	"strconv"
@@ -36,6 +38,22 @@ var (
 )
 
 func main() {
+	// parse flags
+	flag.BoolVar(&cfg.CLIMode, "cli", false, "Run in CLI mode without TUI")
+	flag.BoolVar(&cfg.ToolUse, "tools", true, "run with tools")
+	flag.StringVar(&cfg.CurrentModel, "model", "modelname", "name of the model to use")
+	flag.StringVar(&cliCardPath, "card", "", "Path to syscard JSON file")
+	flag.BoolVar(&cliContinue, "continue", false, "Continue from last chat (by agent or card)")
+	flag.StringVar(&cliMsg, "msg", "", "Send message and exit (one-shot mode)")
+	flag.Parse()
+	if !cfg.CLIMode {
+		initTUI()
+	}
+	chatBody.Model = cfg.CurrentModel
+	go updateModelLists()
+	tools.InitTools(cfg, logger, store)
+	// tooler = tools.InitTools(cfg, logger, store)
+	// tooler.RegisterWindowTools(modelHasVision)
 	if cfg.CLIMode {
 		runCLIMode()
 		return

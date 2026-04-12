@@ -30,6 +30,7 @@ type Config struct {
 	DBPATH                        string `toml:"DBPATH"`
 	FilePickerDir                 string `toml:"FilePickerDir"`
 	FilePickerExts                string `toml:"FilePickerExts"`
+	FSAllowOutOfRoot              bool   `toml:"FSAllowOutOfRoot"`
 	ImagePreview                  bool   `toml:"ImagePreview"`
 	EnableMouse                   bool   `toml:"EnableMouse"`
 	// embeddings

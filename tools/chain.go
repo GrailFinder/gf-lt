@@ -135,8 +135,7 @@ func ExecChain(command string) string {
 		return "[error] empty command"
 	}
 
-	// Handle redirects: find the segment with OpRedirect or OpAppend
-	// The NEXT segment (if any) is the target file
+	// Check if we have a redirect
 	var redirectTo string
 	var isAppend bool
 	redirectIdx := -1
@@ -149,25 +148,30 @@ func ExecChain(command string) string {
 	}
 
 	if redirectIdx >= 0 && redirectIdx+1 < len(segments) {
-		// The segment after redirect is the target path
 		targetPath, err := resolveRedirectPath(segments[redirectIdx+1].Raw)
 		if err != nil {
 			return fmt.Sprintf("[error] redirect: %v", err)
 		}
 		redirectTo = targetPath
-		// Get the redirect command BEFORE removing segments
 		redirectCmd := segments[redirectIdx].Raw
+
+		// Check if there's chaining after redirect by looking at the operator of the segment AFTER the target
+		// The segment at redirectIdx+1 is the target file, and its Op tells us what operator follows
+		hasChainingAfterRedirect := false
+		if redirectIdx+1 < len(segments) && segments[redirectIdx+1].Op != OpNone && segments[redirectIdx+1].Op != OpPipe {
+			hasChainingAfterRedirect = true
+		}
+
 		// Remove both the redirect segment and its target
 		segments = append(segments[:redirectIdx], segments[redirectIdx+2:]...)
 
-		// Execute the redirect command explicitly
+		// Execute the redirect command
 		var lastOutput string
 		var lastErr error
 		lastOutput, lastErr = execSingle(redirectCmd, "")
 		if lastErr != nil {
 			return fmt.Sprintf("[error] redirect: %v", lastErr)
 		}
-		// Write output to file
 		if err := writeFile(redirectTo, lastOutput, isAppend); err != nil {
 			return fmt.Sprintf("[error] redirect: %v", err)
 		}
@@ -176,9 +180,25 @@ func ExecChain(command string) string {
 			mode = "Appended"
 		}
 		size := humanSizeChain(int64(len(lastOutput)))
-		return fmt.Sprintf("%s %s → %s", mode, size, filepath.Base(redirectTo))
+		redirectResult := fmt.Sprintf("%s %s → %s", mode, size, filepath.Base(redirectTo))
+
+		// If no remaining segments or no chaining, just return the write confirmation
+		if len(segments) == 0 || !hasChainingAfterRedirect {
+			return redirectResult
+		}
+
+		// There are remaining commands after the redirect
+		collected := []string{redirectResult}
+
+		// Execute remaining commands
+		for _, seg := range segments {
+			lastOutput, lastErr = execSingle(seg.Raw, "")
+			if lastOutput != "" {
+				collected = append(collected, lastOutput)
+			}
+		}
+		return strings.Join(collected, "\n")
 	} else if redirectIdx >= 0 && redirectIdx+1 >= len(segments) {
-		// Redirect but no target file
 		return "[error] redirect: target file required"
 	}
 

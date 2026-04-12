@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -61,16 +62,17 @@ func resolvePath(rel string) (string, error) {
 	if cfg.FilePickerDir == "" {
 		return "", errors.New("fs root not set")
 	}
-	if filepath.IsAbs(rel) {
+	isAbs := filepath.IsAbs(rel)
+	if isAbs {
 		abs := filepath.Clean(rel)
-		if !strings.HasPrefix(abs, cfg.FilePickerDir+string(os.PathSeparator)) && abs != cfg.FilePickerDir {
+		if !cfg.FSAllowOutOfRoot && !strings.HasPrefix(abs, cfg.FilePickerDir+string(os.PathSeparator)) && abs != cfg.FilePickerDir {
 			return "", fmt.Errorf("path escapes fs root: %s", rel)
 		}
 		return abs, nil
 	}
 	abs := filepath.Join(cfg.FilePickerDir, rel)
 	abs = filepath.Clean(abs)
-	if !strings.HasPrefix(abs, cfg.FilePickerDir+string(os.PathSeparator)) && abs != cfg.FilePickerDir {
+	if !cfg.FSAllowOutOfRoot && !strings.HasPrefix(abs, cfg.FilePickerDir+string(os.PathSeparator)) && abs != cfg.FilePickerDir {
 		return "", fmt.Errorf("path escapes fs root: %s", rel)
 	}
 	return abs, nil
@@ -111,6 +113,59 @@ func FsLs(args []string, stdin string) string {
 			dir = a
 		}
 	}
+
+	hasGlob := strings.ContainsAny(dir, "*?[")
+
+	if hasGlob {
+		absDir := cfg.FilePickerDir
+		if filepath.IsAbs(dir) {
+			absDir = filepath.Dir(dir)
+		} else if strings.Contains(dir, "/") {
+			absDir = filepath.Join(cfg.FilePickerDir, filepath.Dir(dir))
+		}
+		globPattern := filepath.Base(dir)
+		fullPattern := filepath.Join(absDir, globPattern)
+
+		matches, err := filepath.Glob(fullPattern)
+		if err != nil {
+			return fmt.Sprintf("[error] ls: %v", err)
+		}
+		if len(matches) == 0 {
+			return "[error] ls: no such file or directory"
+		}
+		var out strings.Builder
+		filter := func(name string) bool {
+			return showAll || !strings.HasPrefix(name, ".")
+		}
+		for _, match := range matches {
+			info, err := os.Stat(match)
+			if err != nil {
+				continue
+			}
+			name := filepath.Base(match)
+			if !filter(name) {
+				continue
+			}
+			if longFormat {
+				if info.IsDir() {
+					fmt.Fprintf(&out, "d  %-8s %s/\n", "-", name)
+				} else {
+					fmt.Fprintf(&out, "f  %-8s %s\n", humanSize(info.Size()), name)
+				}
+			} else {
+				if info.IsDir() {
+					fmt.Fprintf(&out, "%s/\n", name)
+				} else {
+					fmt.Fprintf(&out, "%s\n", name)
+				}
+			}
+		}
+		if out.Len() == 0 {
+			return "(empty directory)"
+		}
+		return strings.TrimRight(out.String(), "\n")
+	}
+
 	abs, err := resolvePath(dir)
 	if err != nil {
 		return fmt.Sprintf("[error] %v", err)
@@ -153,36 +208,59 @@ func FsLs(args []string, stdin string) string {
 
 func FsCat(args []string, stdin string) string {
 	b64 := false
-	var path string
+	var paths []string
 	for _, a := range args {
 		if a == "-b" || a == "--base64" {
 			b64 = true
-		} else if path == "" {
-			path = a
+		} else if a != "" {
+			paths = append(paths, a)
 		}
 	}
-	if path == "" {
+	if len(paths) == 0 {
 		if stdin != "" {
 			return stdin
 		}
 		return "[error] usage: cat <path> or cat (with stdin)"
 	}
-	abs, err := resolvePath(path)
-	if err != nil {
-		return fmt.Sprintf("[error] %v", err)
-	}
-	data, err := os.ReadFile(abs)
-	if err != nil {
-		return fmt.Sprintf("[error] cat: %v", err)
-	}
-	if b64 {
-		result := base64.StdEncoding.EncodeToString(data)
-		if IsImageFile(path) {
-			result += fmt.Sprintf("\n![image](file://%s)", abs)
+
+	var allFiles []string
+	for _, path := range paths {
+		if strings.ContainsAny(path, "*?[") {
+			matches, err := filepath.Glob(path)
+			if err != nil {
+				return fmt.Sprintf("[error] cat: %v", err)
+			}
+			allFiles = append(allFiles, matches...)
+		} else {
+			allFiles = append(allFiles, path)
 		}
-		return result
 	}
-	return string(data)
+
+	if len(allFiles) == 0 {
+		return "[error] cat: no files found"
+	}
+
+	var results []string
+	for _, path := range allFiles {
+		abs, err := resolvePath(path)
+		if err != nil {
+			return fmt.Sprintf("[error] %v", err)
+		}
+		data, err := os.ReadFile(abs)
+		if err != nil {
+			return fmt.Sprintf("[error] cat: %v", err)
+		}
+		if b64 {
+			result := base64.StdEncoding.EncodeToString(data)
+			if IsImageFile(path) {
+				result += fmt.Sprintf("\n![image](file://%s)", abs)
+			}
+			results = append(results, result)
+		} else {
+			results = append(results, string(data))
+		}
+	}
+	return strings.Join(results, "")
 }
 
 func FsViewImg(args []string, stdin string) string {
@@ -323,60 +401,211 @@ func FsRm(args []string, stdin string) string {
 	if len(args) == 0 {
 		return "[error] usage: rm <path>"
 	}
-	abs, err := resolvePath(args[0])
-	if err != nil {
-		return fmt.Sprintf("[error] %v", err)
+	force := false
+	var paths []string
+	for _, a := range args {
+		if a == "-f" || a == "--force" {
+			force = true
+		} else if !strings.HasPrefix(a, "-") {
+			paths = append(paths, a)
+		}
 	}
-	if err := os.RemoveAll(abs); err != nil {
-		return fmt.Sprintf("[error] rm: %v", err)
+	if len(paths) == 0 {
+		return "[error] usage: rm <path>"
 	}
-	return "Removed " + args[0]
+
+	var removed []string
+	var errs []string
+	for _, path := range paths {
+		if strings.ContainsAny(path, "*?[") {
+			matches, err := filepath.Glob(path)
+			if err != nil {
+				if !force {
+					return fmt.Sprintf("[error] rm: %v", err)
+				}
+				continue
+			}
+			for _, m := range matches {
+				if err := os.RemoveAll(m); err != nil {
+					if !force {
+						errs = append(errs, fmt.Sprintf("%v", err))
+					}
+					continue
+				}
+				removed = append(removed, m)
+			}
+		} else {
+			abs, err := resolvePath(path)
+			if err != nil {
+				if !force {
+					return fmt.Sprintf("[error] %v", err)
+				}
+				continue
+			}
+			if err := os.RemoveAll(abs); err != nil {
+				if !force {
+					return fmt.Sprintf("[error] rm: %v", err)
+				}
+				continue
+			}
+			removed = append(removed, path)
+		}
+	}
+	if len(removed) == 0 && len(errs) > 0 {
+		return "[error] rm: " + strings.Join(errs, "; ")
+	}
+	return "Removed " + strings.Join(removed, ", ")
 }
 
 func FsCp(args []string, stdin string) string {
 	if len(args) < 2 {
 		return "[error] usage: cp <src> <dst>"
 	}
-	srcAbs, err := resolvePath(args[0])
-	if err != nil {
-		return fmt.Sprintf("[error] %v", err)
+	srcPattern := args[0]
+	dstPath := args[1]
+
+	// Check if dst is an existing directory (ends with / or is a directory)
+	dstIsDir := strings.HasSuffix(dstPath, "/")
+	if !dstIsDir {
+		if info, err := os.Stat(dstPath); err == nil && info.IsDir() {
+			dstIsDir = true
+		}
 	}
-	dstAbs, err := resolvePath(args[1])
-	if err != nil {
-		return fmt.Sprintf("[error] %v", err)
+
+	// Check for single file copy (no glob and dst doesn't end with / and is not an existing dir)
+	hasGlob := strings.ContainsAny(srcPattern, "*?[")
+
+	// Single source file to a specific file path (not a glob, not a directory)
+	if !hasGlob && !dstIsDir {
+		// Check if destination is an existing file - if not, treat as single file copy
+		if info, err := os.Stat(dstPath); err != nil || !info.IsDir() {
+			srcAbs, err := resolvePath(srcPattern)
+			if err != nil {
+				return fmt.Sprintf("[error] %v", err)
+			}
+			data, err := os.ReadFile(srcAbs)
+			if err != nil {
+				return fmt.Sprintf("[error] cp read: %v", err)
+			}
+			if err := os.WriteFile(dstPath, data, 0o644); err != nil {
+				return fmt.Sprintf("[error] cp write: %v", err)
+			}
+			return fmt.Sprintf("Copied %s → %s (%s)", srcPattern, dstPath, humanSize(int64(len(data))))
+		}
 	}
-	data, err := os.ReadFile(srcAbs)
-	if err != nil {
-		return fmt.Sprintf("[error] cp read: %v", err)
+
+	// Copy to directory (either glob, or explicit directory)
+	var srcFiles []string
+	if hasGlob {
+		matches, err := filepath.Glob(srcPattern)
+		if err != nil {
+			return fmt.Sprintf("[error] cp: %v", err)
+		}
+		if len(matches) == 0 {
+			return "[error] cp: no files match pattern"
+		}
+		srcFiles = matches
+	} else {
+		srcFiles = []string{srcPattern}
 	}
-	if err := os.MkdirAll(filepath.Dir(dstAbs), 0o755); err != nil {
-		return fmt.Sprintf("[error] cp mkdir: %v", err)
+
+	var results []string
+	for _, srcPath := range srcFiles {
+		srcAbs, err := resolvePath(srcPath)
+		if err != nil {
+			return fmt.Sprintf("[error] %v", err)
+		}
+		data, err := os.ReadFile(srcAbs)
+		if err != nil {
+			return fmt.Sprintf("[error] cp read: %v", err)
+		}
+
+		dstAbs, err := resolvePath(filepath.Join(dstPath, filepath.Base(srcPath)))
+		if err != nil {
+			return fmt.Sprintf("[error] %v", err)
+		}
+		if err := os.MkdirAll(filepath.Dir(dstAbs), 0o755); err != nil {
+			return fmt.Sprintf("[error] cp mkdir: %v", err)
+		}
+		if err := os.WriteFile(dstAbs, data, 0o644); err != nil {
+			return fmt.Sprintf("[error] cp write: %v", err)
+		}
+		results = append(results, fmt.Sprintf("%s → %s (%s)", srcPath, filepath.Join(dstPath, filepath.Base(srcPath)), humanSize(int64(len(data)))))
 	}
-	if err := os.WriteFile(dstAbs, data, 0o644); err != nil {
-		return fmt.Sprintf("[error] cp write: %v", err)
-	}
-	return fmt.Sprintf("Copied %s → %s (%s)", args[0], args[1], humanSize(int64(len(data))))
+	return strings.Join(results, ", ")
 }
 
 func FsMv(args []string, stdin string) string {
 	if len(args) < 2 {
 		return "[error] usage: mv <src> <dst>"
 	}
-	srcAbs, err := resolvePath(args[0])
-	if err != nil {
-		return fmt.Sprintf("[error] %v", err)
+	srcPattern := args[0]
+	dstPath := args[1]
+
+	// Check if dst is an existing directory (ends with / or is a directory)
+	dstIsDir := strings.HasSuffix(dstPath, "/")
+	if !dstIsDir {
+		if info, err := os.Stat(dstPath); err == nil && info.IsDir() {
+			dstIsDir = true
+		}
 	}
-	dstAbs, err := resolvePath(args[1])
-	if err != nil {
-		return fmt.Sprintf("[error] %v", err)
+
+	// Check for single file move (no glob and dst doesn't end with / and is not an existing dir)
+	hasGlob := strings.ContainsAny(srcPattern, "*?[")
+
+	// Single source file to a specific file path (not a glob, not a directory)
+	if !hasGlob && !dstIsDir {
+		// Check if destination is an existing file - if not, treat as single file move
+		if info, err := os.Stat(dstPath); err != nil || !info.IsDir() {
+			srcAbs, err := resolvePath(srcPattern)
+			if err != nil {
+				return fmt.Sprintf("[error] %v", err)
+			}
+			if err := os.MkdirAll(filepath.Dir(dstPath), 0o755); err != nil {
+				return fmt.Sprintf("[error] mv mkdir: %v", err)
+			}
+			if err := os.Rename(srcAbs, dstPath); err != nil {
+				return fmt.Sprintf("[error] mv: %v", err)
+			}
+			return fmt.Sprintf("Moved %s → %s", srcPattern, dstPath)
+		}
 	}
-	if err := os.MkdirAll(filepath.Dir(dstAbs), 0o755); err != nil {
-		return fmt.Sprintf("[error] mv mkdir: %v", err)
+
+	// Move to directory (either glob, or explicit directory)
+	var srcFiles []string
+	if hasGlob {
+		matches, err := filepath.Glob(srcPattern)
+		if err != nil {
+			return fmt.Sprintf("[error] mv: %v", err)
+		}
+		if len(matches) == 0 {
+			return "[error] mv: no files match pattern"
+		}
+		srcFiles = matches
+	} else {
+		srcFiles = []string{srcPattern}
 	}
-	if err := os.Rename(srcAbs, dstAbs); err != nil {
-		return fmt.Sprintf("[error] mv: %v", err)
+
+	var results []string
+	for _, srcPath := range srcFiles {
+		srcAbs, err := resolvePath(srcPath)
+		if err != nil {
+			return fmt.Sprintf("[error] %v", err)
+		}
+
+		dstAbs, err := resolvePath(filepath.Join(dstPath, filepath.Base(srcPath)))
+		if err != nil {
+			return fmt.Sprintf("[error] %v", err)
+		}
+		if err := os.MkdirAll(filepath.Dir(dstAbs), 0o755); err != nil {
+			return fmt.Sprintf("[error] mv mkdir: %v", err)
+		}
+		if err := os.Rename(srcAbs, dstAbs); err != nil {
+			return fmt.Sprintf("[error] mv: %v", err)
+		}
+		results = append(results, fmt.Sprintf("%s → %s", srcPath, filepath.Join(dstPath, filepath.Base(srcPath))))
 	}
-	return fmt.Sprintf("Moved %s → %s", args[0], args[1])
+	return strings.Join(results, ", ")
 }
 
 func FsMkdir(args []string, stdin string) string {
@@ -433,14 +662,31 @@ func FsTime(args []string, stdin string) string {
 
 func FsGrep(args []string, stdin string) string {
 	if len(args) == 0 {
-		return "[error] usage: grep [-i] [-v] [-c] <pattern> [file]"
+		return "[error] usage: grep [-i] [-v] [-c] [-E] <pattern> [file]"
 	}
 	ignoreCase := false
 	invert := false
 	countOnly := false
+	useRegex := false
 	var pattern string
 	var filePath string
 	for _, a := range args {
+		if strings.HasPrefix(a, "-") && !strings.HasPrefix(a, "--") && len(a) > 1 {
+			flags := strings.TrimLeft(a, "-")
+			for _, c := range flags {
+				switch c {
+				case 'i':
+					ignoreCase = true
+				case 'v':
+					invert = true
+				case 'c':
+					countOnly = true
+				case 'E':
+					useRegex = true
+				}
+			}
+			continue
+		}
 		switch a {
 		case "-i":
 			ignoreCase = true
@@ -448,6 +694,8 @@ func FsGrep(args []string, stdin string) string {
 			invert = true
 		case "-c":
 			countOnly = true
+		case "-E":
+			useRegex = true
 		default:
 			if pattern == "" {
 				pattern = a
@@ -475,16 +723,32 @@ func FsGrep(args []string, stdin string) string {
 	} else {
 		return "[error] grep: no input (use file path or pipe from stdin)"
 	}
-	if ignoreCase {
-		pattern = strings.ToLower(pattern)
-	}
+
 	var matched []string
 	for _, line := range lines {
-		haystack := line
-		if ignoreCase {
-			haystack = strings.ToLower(line)
+		var match bool
+		if useRegex {
+			re, err := regexp.Compile(pattern)
+			if err != nil {
+				return fmt.Sprintf("[error] grep: invalid regex: %v", err)
+			}
+			match = re.MatchString(line)
+			if ignoreCase && !match {
+				reIC, err := regexp.Compile("(?i)" + pattern)
+				if err == nil {
+					match = reIC.MatchString(line)
+				}
+			}
+		} else {
+			haystack := line
+			if ignoreCase {
+				haystack = strings.ToLower(line)
+				patternLower := strings.ToLower(pattern)
+				match = strings.Contains(haystack, patternLower)
+			} else {
+				match = strings.Contains(haystack, pattern)
+			}
 		}
-		match := strings.Contains(haystack, pattern)
 		if invert {
 			match = !match
 		}

@@ -126,6 +126,9 @@ func makePropsTable(props map[string]float32) *tview.Table {
 	addCheckboxRow("Image Preview (file picker)", cfg.ImagePreview, func(checked bool) {
 		cfg.ImagePreview = checked
 	})
+	addCheckboxRow("Allow FS out of root", cfg.FSAllowOutOfRoot, func(checked bool) {
+		cfg.FSAllowOutOfRoot = checked
+	})
 	addCheckboxRow("Auto turn (for cards with many chars)", cfg.AutoTurn, func(checked bool) {
 		cfg.AutoTurn = checked
 	})
