@@ -20,3 +20,4 @@ onnx/
 *.log
 log.txt
 dumps/
+batteries/whisper.cpp
