@@ -183,7 +183,6 @@ func colorText() {
 	}
 	// text = strings.ReplaceAll(text, `$\rightarrow$`, "->")
 	text = RenderLatex(text)
-	text = AlignMarkdownTables(text)
 	textView.SetText(text)
 }
 
