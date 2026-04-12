@@ -22,4 +22,5 @@ go run . -cli -msg "$TASK"
 
 echo ""
 echo "=== Done ==="
+cp "$LOG_FILE" "$SCRIPT_DIR/latest_run.log"
 echo "Log file: $LOG_FILE"
