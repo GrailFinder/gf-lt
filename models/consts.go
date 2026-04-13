@@ -22,6 +22,7 @@ var (
 	StarRE           = regexp.MustCompile(`(\*.*?\*)`)
 	ThinkRE          = regexp.MustCompile(`(?s)<think>.*?</think>`)
 	CodeBlockRE      = regexp.MustCompile(`(?s)\x60{3}(?:.*?)\n(.*?)\n\s*\x60{3}\s*`)
+	CodeBlockLeftRE  = regexp.MustCompile(`(?s)\x60{3}(?:.*?)\n`)
 	SingleBacktickRE = regexp.MustCompile(`\x60([^\x60]*)\x60`)
 	RoleRE           = regexp.MustCompile(`^(\w+):`)
 )

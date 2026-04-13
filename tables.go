@@ -622,7 +622,7 @@ func makeAgentTable(agentList []string) *tview.Table {
 }
 
 func makeCodeBlockTable(codeBlocks []string) *tview.Table {
-	actions := []string{"copy"}
+	actions := []string{"copy", "copy with backticks"}
 	rows, cols := len(codeBlocks), len(actions)+1
 	table := tview.NewTable().
 		SetBorders(true)
@@ -672,6 +672,18 @@ func makeCodeBlockTable(codeBlocks []string) *tview.Table {
 		// notification := fmt.Sprintf("chat: %s; action: %s", selectedChat, tc.Text)
 		switch tc.Text {
 		case "copy":
+			// cleanup backticks from selected
+			selected = models.CodeBlockLeftRE.ReplaceAllString(selected, "")
+			selected = strings.TrimRight(selected, "\n")
+			if err := copyToClipboard(selected); err != nil {
+				showToast("error", err.Error())
+			}
+			showToast("copied", selected)
+			pages.RemovePage(codeBlockPage)
+			app.SetFocus(textArea)
+			return
+		case "copy with backticks":
+			selected = strings.TrimRight(selected, "\n")
 			if err := copyToClipboard(selected); err != nil {
 				showToast("error", err.Error())
 			}
