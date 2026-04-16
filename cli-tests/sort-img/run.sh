@@ -18,7 +18,6 @@ echo ""
 echo "=== Running task ==="
 TASK=$(cat "$SCRIPT_DIR/task.txt")
 LMODEL=${LMODEL:-Qwen3.5-9B-Q6_K}
-cd ../../
 go run . -cli -msg "$TASK" -model "$LMODEL"
 
 echo ""
