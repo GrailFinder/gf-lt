@@ -188,3 +188,113 @@ func superscriptify(inner string, supMap map[rune]string, specialSup map[string]
 	}
 	return out.String()
 }
+
+// alignAllMarkdownTables finds every Markdown table in the document,
+// realigns its columns, and returns the whole document with all tables aligned.
+func alignMarkdownTables(md string) string {
+	lines := strings.Split(md, "\n")
+	// Precompile regexes for performance
+	var (
+		tagRe  = regexp.MustCompile(`\[[a-zA-Z0-9:;\-#]*\]`) // tview tags [red], [i], [turquoise::i], [-]
+		mdRe   = regexp.MustCompile(`[*_` + "`" + `]`)
+		ansiRe = regexp.MustCompile(`\x1b\[[0-9;]*[a-zA-Z]`)
+	)
+	// visualWidth strips all formatting and returns display width
+	visualWidth := func(s string) int {
+		plain := tagRe.ReplaceAllString(s, "")
+		plain = mdRe.ReplaceAllString(plain, "")
+		plain = ansiRe.ReplaceAllString(plain, "")
+		return len([]rune(plain))
+	}
+	// alignSingleTable takes a slice of lines representing one table
+	// and returns aligned lines for that table.
+	alignSingleTable := func(tableLines []string) []string {
+		// Parse rows, skip any separator line (contains "---" and "|")
+		var rows [][]string
+		for _, line := range tableLines {
+			if strings.Contains(line, "---") && strings.Contains(line, "|") {
+				continue
+			}
+			parts := strings.Split(line, "|")
+			if len(parts) > 0 && parts[0] == "" {
+				parts = parts[1:]
+			}
+			if len(parts) > 0 && parts[len(parts)-1] == "" {
+				parts = parts[:len(parts)-1]
+			}
+			row := make([]string, len(parts))
+			for j, p := range parts {
+				row[j] = strings.TrimSpace(p)
+			}
+			rows = append(rows, row)
+		}
+		if len(rows) == 0 {
+			return tableLines // return original if nothing left (shouldn't happen)
+		}
+		colCount := len(rows[0])
+		// Ensure consistent column count (some rows may have extra empty cells)
+		for i, row := range rows {
+			if len(row) < colCount {
+				for len(row) < colCount {
+					row = append(row, "")
+				}
+				rows[i] = row
+			} else if len(row) > colCount {
+				rows[i] = row[:colCount]
+			}
+		}
+		// Compute max visual width per column
+		widths := make([]int, colCount)
+		for _, row := range rows {
+			for j := 0; j < colCount; j++ {
+				w := visualWidth(row[j])
+				if w > widths[j] {
+					widths[j] = w
+				}
+			}
+		}
+		for j := 0; j < colCount; j++ {
+			if widths[j] < 3 {
+				widths[j] = 3
+			}
+		}
+		// Rebuild aligned table
+		var out []string
+		for _, row := range rows {
+			var b strings.Builder
+			b.WriteString("|")
+			for j := 0; j < colCount; j++ {
+				cell := row[j]
+				pad := widths[j] - visualWidth(cell)
+				b.WriteString(" ")
+				b.WriteString(cell)
+				b.WriteString(strings.Repeat(" ", pad))
+				b.WriteString(" |")
+			}
+			out = append(out, b.String())
+		}
+		return out
+	}
+	// Process the whole document line by line
+	var resultLines []string
+	i := 0
+	for i < len(lines) {
+		line := lines[i]
+		if strings.Contains(line, "|") {
+			// Start of a table block
+			start := i
+			for i < len(lines) && strings.Contains(lines[i], "|") {
+				i++
+			}
+			end := i // end is exclusive
+			tableBlock := lines[start:end]
+			alignedBlock := alignSingleTable(tableBlock)
+			resultLines = append(resultLines, alignedBlock...)
+		} else {
+			// Non-table line, copy as-is
+			resultLines = append(resultLines, line)
+			i++
+		}
+	}
+	return strings.Join(resultLines, "\n")
+}
