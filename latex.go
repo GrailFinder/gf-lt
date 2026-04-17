@@ -194,27 +194,21 @@ func superscriptify(inner string, supMap map[rune]string, specialSup map[string]
 func alignMarkdownTables(md string) string {
 	lines := strings.Split(md, "\n")
 	// Precompile regexes for performance
-	var (
-		tagRe  = regexp.MustCompile(`\[[a-zA-Z0-9:;\-#]*\]`) // tview tags [red], [i], [turquoise::i], [-]
-		mdRe   = regexp.MustCompile(`[*_` + "`" + `]`)
-		ansiRe = regexp.MustCompile(`\x1b\[[0-9;]*[a-zA-Z]`)
-	)
-	// visualWidth strips all formatting and returns display width
+	// Visible characters like *, _, ` are counted normally.
 	visualWidth := func(s string) int {
+		// Remove tview region tags like [red], [i], [turquoise::i], [-], [:#abc], etc.
+		tagRe := regexp.MustCompile(`\[[a-zA-Z0-9:;\-#]*\]`)
 		plain := tagRe.ReplaceAllString(s, "")
-		plain = mdRe.ReplaceAllString(plain, "")
+		// Remove ANSI escape sequences (just in case)
+		ansiRe := regexp.MustCompile(`\x1b\[[0-9;]*[a-zA-Z]`)
 		plain = ansiRe.ReplaceAllString(plain, "")
 		return len([]rune(plain))
 	}
 	// alignSingleTable takes a slice of lines representing one table
 	// and returns aligned lines for that table.
 	alignSingleTable := func(tableLines []string) []string {
-		// Parse rows, skip any separator line (contains "---" and "|")
 		var rows [][]string
 		for _, line := range tableLines {
-			if strings.Contains(line, "---") && strings.Contains(line, "|") {
-				continue
-			}
 			parts := strings.Split(line, "|")
 			if len(parts) > 0 && parts[0] == "" {
 				parts = parts[1:]
@@ -260,6 +254,7 @@ func alignMarkdownTables(md string) string {
 		}
 		// Rebuild aligned table
 		var out []string
+		out = append(out, "\n")
 		for _, row := range rows {
 			var b strings.Builder
 			b.WriteString("|")
@@ -273,6 +268,7 @@ func alignMarkdownTables(md string) string {
 			}
 			out = append(out, b.String())
 		}
+		out = append(out, "\n")
 		return out
 	}
 	// Process the whole document line by line
