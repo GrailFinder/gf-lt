@@ -15,6 +15,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"gf-lt/rag"
@@ -28,6 +29,7 @@ For this roleplay immersion is at most importance.
 Every character thinks and acts based on their personality and setting of the roleplay.
 Meta discussions outside of roleplay is allowed if clearly labeled as out of character, for example: (ooc: {msg}) or <ooc>{msg}</ooc>.
 `
+	taskActive atomic.Bool
 	ToolSysMsg = `You can do functions call if needed.
 Your current tools:
 <tools>
@@ -1066,6 +1068,20 @@ func todoDelete(args map[string]string) []byte {
 	return jsonResult
 }
 
+func taskDone(args map[string]string) []byte {
+	taskActive.Store(false)
+	result := map[string]string{
+		"message": "task marked as done",
+	}
+	jsonResult, err := json.Marshal(result)
+	if err != nil {
+		msg := "failed to marshal result; error: " + err.Error()
+		logger.Error(msg)
+		return []byte(msg)
+	}
+	return jsonResult
+}
+
 func viewImgTool(args map[string]string) []byte {
 	file, ok := args["file"]
 	if !ok || file == "" {
@@ -1290,6 +1306,7 @@ var FnMap = map[string]fnSig{
 	// Browser tool - routes to runBrowserCommand
 	"browser":        browserCmd,
 	"summarize_chat": summarizeChat,
+	"task_done":      taskDone,
 }
 
 func removeWindowToolsFromBaseTools() {
@@ -1454,6 +1471,24 @@ var BaseTools = []models.Tool{
 					"command": models.ToolArgProps{
 						Type:        "string",
 						Description: "optional: get help for specific command (e.g., 'help memory')",
+					},
+				},
+			},
+		},
+	},
+	// task_done
+	models.Tool{
+		Type: "function",
+		Function: models.ToolFunc{
+			Name:        "task_done",
+			Description: "Mark the current task as complete. Call this when you have finished the intended task and no more tool calls are needed.",
+			Parameters: models.ToolFuncParams{
+				Type:     "object",
+				Required: []string{},
+				Properties: map[string]models.ToolArgProps{
+					"done": models.ToolArgProps{
+						Type:        "string",
+						Description: "set to 'true' to confirm task completion",
 					},
 				},
 			},

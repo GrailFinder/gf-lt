@@ -30,27 +30,30 @@ import (
 )
 
 var (
-	httpClient     = &http.Client{}
-	cfg            *config.Config
-	logger         *slog.Logger
-	logLevel       = new(slog.LevelVar)
-	ctx, cancel    = context.WithCancel(context.Background())
-	activeChatName string
-	chatRoundChan  = make(chan *models.ChatRoundReq, 1)
-	chunkChan      = make(chan string, 10)
-	openAIToolChan = make(chan string, 10)
-	streamDone     = make(chan bool, 1)
-	chatBody       *models.ChatBody
-	store          storage.FullRepo
-	defaultStarter = []models.RoleMsg{}
-	interruptResp  atomic.Bool
-	ragger         *rag.RAG
-	chunkParser    ChunkParser
-	lastToolCall   *models.FuncCall
-	lastRespStats  *models.ResponseStats
-	outputHandler  OutputHandler
-	cliPrevOutput  string
-	cliRespDone    chan bool
+	httpClient            = &http.Client{}
+	cfg                   *config.Config
+	logger                *slog.Logger
+	logLevel              = new(slog.LevelVar)
+	ctx, cancel           = context.WithCancel(context.Background())
+	activeChatName        string
+	chatRoundChan         = make(chan *models.ChatRoundReq, 1)
+	chunkChan             = make(chan string, 10)
+	openAIToolChan        = make(chan string, 10)
+	streamDone            = make(chan bool, 1)
+	chatBody              *models.ChatBody
+	store                 storage.FullRepo
+	defaultStarter        = []models.RoleMsg{}
+	interruptResp         atomic.Bool
+	ragger                *rag.RAG
+	chunkParser           ChunkParser
+	lastToolCall          *models.FuncCall
+	lastRespStats         *models.ResponseStats
+	outputHandler         OutputHandler
+	cliPrevOutput         string
+	cliRespDone           chan bool
+	taskActive            atomic.Bool
+	hadToolCallInPrevTurn atomic.Bool
+	taskFailures          int32
 )
 
 type OutputHandler interface {
@@ -1106,6 +1109,31 @@ out:
 		// Tool was found and executed, subsequent chatRound will signal cliRespDone when complete
 		return nil
 	}
+	// No tool call - check if task is active and needs enforcement
+	if taskActive.Load() {
+		failures := atomic.AddInt32(&taskFailures, 1)
+		if failures >= 3 {
+			// Too many failures, stop enforcing and accept failure
+			taskActive.Store(false)
+			atomic.StoreInt32(&taskFailures, 0)
+			logger.Debug("task enforcement: giving up after max failures", "failures", failures)
+		} else {
+			// Inject reminder
+			reminderMsg := "Received a message without a tool call while task is in progress. Either call task_done to complete the task or proceed with the intended tool call."
+			toolResponseMsg := models.RoleMsg{
+				Role:    cfg.ToolRole,
+				Content: reminderMsg,
+			}
+			chatBody.Messages = append(chatBody.Messages, toolResponseMsg)
+			logger.Debug("task enforcement: injected reminder", "taskActive", taskActive.Load(), "failures", failures)
+			// Trigger next round to get LLM to either call task_done or make a tool call
+			crr := &models.ChatRoundReq{
+				Role: cfg.AssistantRole,
+			}
+			chatRoundChan <- crr
+			return nil
+		}
+	}
 	// No tool call - signal completion now
 	if cfg.CLIMode && cliRespDone != nil {
 		select {
@@ -1252,6 +1280,13 @@ func findCall(msg, toolCall string) bool {
 	} else {
 		jsStr := models.ToolCallRE.FindString(msg)
 		if jsStr == "" { // no tool call case
+			// Check if this is second consecutive tool call turn (task start)
+			if hadToolCallInPrevTurn.Load() {
+				taskActive.Store(true)
+				logger.Debug("task started: second consecutive tool call turn", "taskActive", taskActive.Load())
+			}
+			// Reset the prev turn tracker
+			hadToolCallInPrevTurn.Store(false)
 			return false
 		}
 		// Remove prefix/suffix with flexible whitespace handling
@@ -1422,6 +1457,11 @@ func findCall(msg, toolCall string) bool {
 	outputHandler.Writef("%s[-:-:b](%d) <%s>: [-:-:-]\n%s\n",
 		"\n\n", len(chatBody.Messages), cfg.ToolRole, toolResponseMsg.GetText())
 	chatBody.Messages = append(chatBody.Messages, toolResponseMsg)
+	// Track that we had a tool call in this turn
+	hadToolCallInPrevTurn.Store(true)
+	// Reset task tracking on successful tool call (task is proceeding)
+	taskActive.Store(false)
+	atomic.StoreInt32(&taskFailures, 0)
 	// Clear the stored tool call ID after using it
 	lastToolCall.ID = ""
 	// Trigger the assistant to continue processing with the new tool response
