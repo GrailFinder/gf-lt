@@ -1119,10 +1119,9 @@ out:
 			logger.Debug("task enforcement: giving up after max failures", "failures", failures)
 		} else {
 			// Inject reminder
-			reminderMsg := "Received a message without a tool call while task is in progress. Either call task_done to complete the task or proceed with the intended tool call."
 			toolResponseMsg := models.RoleMsg{
 				Role:    cfg.ToolRole,
-				Content: reminderMsg,
+				Content: tools.ReminderPrompt,
 			}
 			chatBody.Messages = append(chatBody.Messages, toolResponseMsg)
 			logger.Debug("task enforcement: injected reminder", "taskActive", taskActive.Load(), "failures", failures)
@@ -1281,9 +1280,10 @@ func findCall(msg, toolCall string) bool {
 		jsStr := models.ToolCallRE.FindString(msg)
 		if jsStr == "" { // no tool call case
 			// Check if this is second consecutive tool call turn (task start)
-			if hadToolCallInPrevTurn.Load() {
+			// But don't start task if previous tool was task_done (that's clearing, not starting)
+			if hadToolCallInPrevTurn.Load() && lastToolCall.Name != "task_done" {
 				taskActive.Store(true)
-				logger.Debug("task started: second consecutive tool call turn", "taskActive", taskActive.Load())
+				logger.Debug("task started: second consecutive tool call turn", "toolName", lastToolCall.Name, "taskActive", taskActive.Load())
 			}
 			// Reset the prev turn tracker
 			hadToolCallInPrevTurn.Store(false)
@@ -1454,14 +1454,31 @@ func findCall(msg, toolCall string) bool {
 			IsShellCommand: isShellCommand,
 		}
 	}
+	// Add task status to tool response
+	taskStatus := ""
+	if fc.Name == "task_done" {
+		taskStatus = "(task: done)"
+	} else if taskActive.Load() {
+		taskStatus = "(task: in progress)"
+	}
+	if taskStatus != "" {
+		// Prepend task status to the tool response content
+		if toolResponseMsg.Content != "" {
+			toolResponseMsg.Content = taskStatus + "\n" + toolResponseMsg.Content
+		} else if len(toolResponseMsg.ContentParts) > 0 {
+			// For multimodal responses, insert at front of content parts
+			newParts := []any{models.TextContentPart{Type: "text", Text: taskStatus}}
+			toolResponseMsg.ContentParts = append(newParts, toolResponseMsg.ContentParts...)
+		}
+	}
 	outputHandler.Writef("%s[-:-:b](%d) <%s>: [-:-:-]\n%s\n",
 		"\n\n", len(chatBody.Messages), cfg.ToolRole, toolResponseMsg.GetText())
 	chatBody.Messages = append(chatBody.Messages, toolResponseMsg)
 	// Track that we had a tool call in this turn
 	hadToolCallInPrevTurn.Store(true)
-	// Reset task tracking on successful tool call (task is proceeding)
-	taskActive.Store(false)
+	// Reset task failures on successful tool call, but keep task active until task_done
 	atomic.StoreInt32(&taskFailures, 0)
+	// Note: taskActive stays true until task_done or max failures reached
 	// Clear the stored tool call ID after using it
 	lastToolCall.ID = ""
 	// Trigger the assistant to continue processing with the new tool response

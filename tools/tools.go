@@ -30,7 +30,7 @@ Every character thinks and acts based on their personality and setting of the ro
 Meta discussions outside of roleplay is allowed if clearly labeled as out of character, for example: (ooc: {msg}) or <ooc>{msg}</ooc>.
 `
 	taskActive atomic.Bool
-	ToolSysMsg = `You can do functions call if needed.
+	ToolSysMsg = `Tools are enabled. While making a tool call avoid writing anything else.
 Your current tools:
 <tools>
 [
@@ -101,6 +101,8 @@ After that you are free to respond to the user.
 	ragSearchSysPrompt = `Synthesize the document search results, extracting key information and presenting a concise answer. Provide sources and document IDs where relevant.`
 	readURLSysPrompt   = `Extract and summarize the content from the webpage. Provide key information, main points, and any relevant details.`
 	summarySysPrompt   = `Please provide a concise summary of the following conversation. Focus on key points, decisions, and actions. Provide only the summary, no additional commentary.`
+	// reminderPrompt     = `Received a message without a tool call while task is in progress. Either call task_done to complete the task or proceed with the intended tool call.`
+	ReminderPrompt = `Received a message without a tool call while task is in progress. In case task is done call task_done. Otherwsie only do next intended tool call`
 )
 
 var WebSearcher searcher.WebSurfer
@@ -1413,6 +1415,24 @@ var BaseTools = []models.Tool{
 					"url": models.ToolArgProps{
 						Type:        "string",
 						Description: "link to the webpage to read text from",
+					},
+				},
+			},
+		},
+	},
+	// view_img
+	models.Tool{
+		Type: "function",
+		Function: models.ToolFunc{
+			Name:        "view_img",
+			Description: "View an image file and get it displayed in the conversation for visual analysis. Supports: png, jpg, jpeg, gif, webp, svg.",
+			Parameters: models.ToolFuncParams{
+				Type:     "object",
+				Required: []string{"file"},
+				Properties: map[string]models.ToolArgProps{
+					"file": models.ToolArgProps{
+						Type:        "string",
+						Description: "path to the image file to view",
 					},
 				},
 			},
