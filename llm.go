@@ -22,6 +22,16 @@ func containsToolSysMsg() bool {
 	return false
 }
 
+// containsToolSysMsgChat checks if the tools.ToolSysMsgChat already exists in the chat body
+func containsToolSysMsgChat() bool {
+	for i := range chatBody.Messages {
+		if chatBody.Messages[i].Role == cfg.ToolRole && chatBody.Messages[i].Content == tools.ToolSysMsgChat {
+			return true
+		}
+	}
+	return false
+}
+
 // SetImageAttachment sets an image to be attached to the next message sent to the LLM
 func SetImageAttachment(imagePath string) {
 	imageAttachmentPath = imagePath
@@ -299,6 +309,10 @@ func (op LCPChat) FormMsg(msg, role string, resume bool) (io.Reader, error) {
 		logger.Debug("LCPChat FormMsg: added message to chatBody", "role", newMsg.Role,
 			"content_len", len(newMsg.Content), "message_count_after_add", len(chatBody.Messages))
 	}
+	// sending tool instructions for chat endpoints
+	if cfg.ToolUse && !resume && role == cfg.UserRole && !containsToolSysMsgChat() {
+		chatBody.Messages = append(chatBody.Messages, models.RoleMsg{Role: cfg.ToolRole, Content: tools.ToolSysMsgChat})
+	}
 	filteredMessages, _ := filterMessagesForCurrentCharacter(chatBody.Messages)
 	// openai /v1/chat does not support custom roles; needs to be user, assistant, system
 	// Add persona suffix to the last user message to indicate who the assistant should reply as
@@ -455,6 +469,10 @@ func (ds DeepSeekerChat) FormMsg(msg, role string, resume bool) (io.Reader, erro
 		newMsg := models.RoleMsg{Role: role, Content: msg}
 		newMsg = *processMessageTag(&newMsg)
 		chatBody.Messages = append(chatBody.Messages, newMsg)
+	}
+	// sending tool instructions for chat endpoints
+	if cfg.ToolUse && !resume && role == cfg.UserRole && !containsToolSysMsgChat() {
+		chatBody.Messages = append(chatBody.Messages, models.RoleMsg{Role: cfg.ToolRole, Content: tools.ToolSysMsgChat})
 	}
 	// Create copy of chat body with standardized user role
 	filteredMessages, _ := filterMessagesForCurrentCharacter(chatBody.Messages)
@@ -640,6 +658,10 @@ func (or OpenRouterChat) FormMsg(msg, role string, resume bool) (io.Reader, erro
 		}
 		newMsg = *processMessageTag(&newMsg)
 		chatBody.Messages = append(chatBody.Messages, newMsg)
+	}
+	// sending tool instructions for chat endpoints
+	if cfg.ToolUse && !resume && role == cfg.UserRole && !containsToolSysMsgChat() {
+		chatBody.Messages = append(chatBody.Messages, models.RoleMsg{Role: cfg.ToolRole, Content: tools.ToolSysMsgChat})
 	}
 	// Create copy of chat body with standardized user role
 	filteredMessages, _ := filterMessagesForCurrentCharacter(chatBody.Messages)
