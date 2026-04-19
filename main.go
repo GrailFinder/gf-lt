@@ -28,13 +28,17 @@ var (
 	shellHistory      []string
 	shellHistoryPos   int = -1
 	thinkingCollapsed     = false
-	toolCollapsed         = true
-	statusLineTempl       = "help (F12) | chat: [orange:-:b]%s[-:-:-] (F1) | [%s:-:b]tool use[-:-:-] (ctrl+k) | model: [%s:-:b]%s[-:-:-] (ctrl+l) | [%s:-:b]skip LLM resp[-:-:-] (F10) | API: [orange:-:b]%s[-:-:-] (ctrl+v)\nwriting as: [orange:-:b]%s[-:-:-] (ctrl+q) | bot will write as [orange:-:b]%s[-:-:-] (ctrl+x)"
-	focusSwitcher         = map[tview.Primitive]tview.Primitive{}
-	app               *tview.Application
-	cliCardPath       string
-	cliContinue       bool
-	cliMsg            string
+
+	ToolDisplayModeHidden    = 0
+	ToolDisplayModeCollapsed = 1
+	ToolDisplayModeExpanded  = 2
+	toolMode                 = ToolDisplayModeCollapsed
+	statusLineTempl          = "help (F12) | chat: [orange:-:b]%s[-:-:-] (F1) | [%s:-:b]tool use[-:-:-] (ctrl+k) | model: [%s:-:b]%s[-:-:-] (ctrl+l) | [%s:-:b]skip LLM resp[-:-:-] (F10) | API: [orange:-:b]%s[-:-:-] (ctrl+v)\nwriting as: [orange:-:b]%s[-:-:-] (ctrl+q) | bot will write as [orange:-:b]%s[-:-:-] (ctrl+x)"
+	focusSwitcher            = map[tview.Primitive]tview.Primitive{}
+	app                      *tview.Application
+	cliCardPath              string
+	cliContinue              bool
+	cliMsg                   string
 )
 
 func main() {

@@ -1491,13 +1491,51 @@ func findCall(msg, toolCall string) bool {
 }
 
 func chatToTextSlice(messages []models.RoleMsg, showSys bool) []string {
+	// When hidden, collect tool count, otherwise build full result
+	if toolMode == ToolDisplayModeHidden {
+		var toolCallCount int
+		var toolRespCount int
+		var result []string
+		for i := range messages {
+			// Count tool calls
+			if messages[i].Role == cfg.AssistantRole && messages[i].ToolCall != nil && messages[i].ToolCall.ID != "" {
+				toolCallCount++
+				continue
+			}
+			// Handle tool responses
+			if messages[i].Role == cfg.ToolRole || messages[i].Role == "tool" {
+				// Always show shell commands
+				if messages[i].IsShellCommand {
+					result = append(result, MsgToText(i, &messages[i]))
+					continue
+				}
+				// Count non-shell tool responses, skip display
+				toolRespCount++
+				continue
+			}
+			// Skip system msg when showSys is false
+			if !showSys && messages[i].Role == "system" {
+				continue
+			}
+			result = append(result, MsgToText(i, &messages[i]))
+		}
+		// Add summary line if there were tool calls/responses
+		if toolCallCount > 0 || toolRespCount > 0 {
+			total := toolCallCount + toolRespCount
+			summary := fmt.Sprintf("[-:-:b](%d) <%s>:[-:-:-]\n[yellow::i][~~%d tool calls and responses~~ (press Ctrl+T to show)][-:-:-]", len(messages)-1, cfg.ToolRole, total)
+			result = append(result, summary)
+		}
+		return result
+	}
+
+	// Collapsed or expanded mode - build result with proper indices
 	resp := make([]string, len(messages))
 	for i := range messages {
 		icon := fmt.Sprintf("[-:-:b](%d) <%s>:[-:-:-]", i, messages[i].Role)
 		// Handle tool call indicators (assistant messages with tool call but empty content)
 		if messages[i].Role == cfg.AssistantRole && messages[i].ToolCall != nil && messages[i].ToolCall.ID != "" {
 			// This is a tool call indicator - show collapsed
-			if toolCollapsed {
+			if toolMode == ToolDisplayModeCollapsed {
 				toolName := messages[i].ToolCall.Name
 				argsPreview := messages[i].ToolCall.Args
 				if len(messages[i].ToolCall.Args) > 30 {
@@ -1527,7 +1565,7 @@ func chatToTextSlice(messages []models.RoleMsg, showSys bool) []string {
 				continue
 			}
 			// Hide non-shell tool responses when collapsed
-			if toolCollapsed {
+			if toolMode == ToolDisplayModeCollapsed {
 				resp[i] = icon + "\n[yellow::i][tool resp (press Ctrl+T to expand)][-:-:-]\n"
 				continue
 			}
