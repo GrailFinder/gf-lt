@@ -152,8 +152,8 @@ func (t *Tools) initAgentsB() {
 	agent.RegisterB("summarize_chat", agent.NewWebAgentB(t.webAgentClient, summarySysPrompt))
 }
 
-func InitTools(initCfg *config.Config, logger *slog.Logger, store storage.FullRepo) *Tools {
-	logger = logger
+func InitTools(initCfg *config.Config, log *slog.Logger, store storage.FullRepo) *Tools {
+	logger = log
 	cfg = initCfg
 	if initCfg.PlaywrightEnabled {
 		if err := CheckPlaywright(); err != nil {
