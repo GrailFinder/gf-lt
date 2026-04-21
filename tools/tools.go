@@ -30,17 +30,17 @@ Every character thinks and acts based on their personality and setting of the ro
 Meta discussions outside of roleplay is allowed if clearly labeled as out of character, for example: (ooc: {msg}) or <ooc>{msg}</ooc>.
 `
 	taskActive     atomic.Bool
-	ToolSysMsgChat = `
-If you choose to call a function ONLY reply in the following format with NO suffix:
-<tool_call>
-<function=example_function_name>
-<parameter=example_parameter_1>value_1</parameter>
-...
-</function>
-</tool_call>
+	ToolSysMsgChat = `<tool_guide>
+If you choose to call a function ONLY do a tool call in openai format with NO suffix.
 When a task is in progress you MUST output either a tool call or task_done. Do not output normal text, explanations, or markdown.
-You may put optional reasoning inside <think></think> but it must come BEFORE the tool call. Never put anything after the closing </tool_call>.
+You may put optional reasoning inside <think></think> but it must come BEFORE the tool call. Never put anything after the tool call.
 If you finished with task or you got stuck and user's input required call task_done.
+Examples of common operations:
+- Write to file: run "write /path/file.txt hello world" or run "echo 'content' > /path/file.txt"
+- Edit file (sed): run "sed 's/old/new/g' /path/file.txt" (global replace), run "sed -i 's/old/new/' /path/file.txt" (in-place)
+- Read file: run "head -n 100 /path/file.txt" (first 100 lines), run "sed -n '40,55p' /path/file.txt" (specific line range)
+- Count lines: run "wc -l /path/file.txt"
+</tool_guide>
 `
 	ToolSysMsg = `Tools are enabled. While making a tool call avoid writing anything else.
 You may put optional reasoning inside <think></think> but it must come BEFORE the tool call. Never put anything after the closing </tool_call>.

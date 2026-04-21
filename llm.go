@@ -6,6 +6,7 @@ import (
 	"gf-lt/models"
 	"gf-lt/tools"
 	"io"
+	"regexp"
 	"strings"
 )
 
@@ -15,7 +16,7 @@ var lastImg string             // for ctrl+j
 // containsToolSysMsg checks if the tools.ToolSysMsg already exists in the chat body
 func containsToolSysMsg() bool {
 	for i := range chatBody.Messages {
-		if chatBody.Messages[i].Role == cfg.ToolRole && chatBody.Messages[i].Content == tools.ToolSysMsg {
+		if (chatBody.Messages[i].Role == cfg.ToolRole || chatBody.Messages[i].Role == "system") && chatBody.Messages[i].Content == tools.ToolSysMsg {
 			return true
 		}
 	}
@@ -25,11 +26,47 @@ func containsToolSysMsg() bool {
 // containsToolSysMsgChat checks if the tools.ToolSysMsgChat already exists in the chat body
 func containsToolSysMsgChat() bool {
 	for i := range chatBody.Messages {
-		if chatBody.Messages[i].Role == cfg.ToolRole && chatBody.Messages[i].Content == tools.ToolSysMsgChat {
+		if (chatBody.Messages[i].Role == cfg.ToolRole || chatBody.Messages[i].Role == "system") && chatBody.Messages[i].Content == tools.ToolSysMsgChat {
 			return true
 		}
 	}
 	return false
+}
+
+// hasToolGuide checks if the first system message already has tool guide
+func hasToolGuide(messages []models.RoleMsg) bool {
+	if len(messages) == 0 || messages[0].Role != "system" {
+		return false
+	}
+	matched, _ := regexp.MatchString(`<tool_guide>.*?</tool_guide>`, messages[0].Content)
+	return matched
+}
+
+// removeToolGuide removes tool guide from the first system message
+func removeToolGuide(messages []models.RoleMsg) []models.RoleMsg {
+	if len(messages) == 0 {
+		return messages
+	}
+	// If first message is not system, insert a new system message
+	if messages[0].Role != "system" {
+		messages = append([]models.RoleMsg{{Role: "system", Content: ""}}, messages...)
+	}
+	re := regexp.MustCompile(`(?s)<tool_guide>.*?</tool_guide>\n*\n?`)
+	messages[0].Content = re.ReplaceAllString(messages[0].Content, "")
+	return messages
+}
+
+// prependToolGuide adds tool guide to the first system message
+func prependToolGuide(messages []models.RoleMsg, toolGuide string) []models.RoleMsg {
+	if len(messages) == 0 {
+		messages = append(messages, models.RoleMsg{Role: "system", Content: ""})
+	}
+	// If first message is not system, insert a new system message at position 0
+	if messages[0].Role != "system" {
+		messages = append([]models.RoleMsg{{Role: "system", Content: ""}}, messages...)
+	}
+	messages[0].Content = toolGuide + "\n\n" + messages[0].Content
+	return messages
 }
 
 // SetImageAttachment sets an image to be attached to the next message sent to the LLM
@@ -155,7 +192,7 @@ func (lcp LCPCompletion) FormMsg(msg, role string, resume bool) (io.Reader, erro
 	}
 	// sending description of the tools and how to use them
 	if cfg.ToolUse && !resume && role == cfg.UserRole && !containsToolSysMsg() {
-		chatBody.Messages = append(chatBody.Messages, models.RoleMsg{Role: cfg.ToolRole, Content: tools.ToolSysMsg})
+		chatBody.Messages = append(chatBody.Messages, models.RoleMsg{Role: "system", Content: tools.ToolSysMsg})
 	}
 	filteredMessages, botPersona := filterMessagesForCurrentCharacter(chatBody.Messages)
 	// Build prompt and extract images inline as we process each message
@@ -310,8 +347,10 @@ func (op LCPChat) FormMsg(msg, role string, resume bool) (io.Reader, error) {
 			"content_len", len(newMsg.Content), "message_count_after_add", len(chatBody.Messages))
 	}
 	// sending tool instructions for chat endpoints
-	if cfg.ToolUse && !resume && role == cfg.UserRole && !containsToolSysMsgChat() {
-		chatBody.Messages = append(chatBody.Messages, models.RoleMsg{Role: cfg.ToolRole, Content: tools.ToolSysMsgChat})
+	// Update chatBody.Messages with tool guide (persist to stored messages)
+	chatBody.Messages = removeToolGuide(chatBody.Messages)
+	if cfg.ToolUse && !resume && role == cfg.UserRole {
+		chatBody.Messages = prependToolGuide(chatBody.Messages, tools.ToolSysMsgChat)
 	}
 	filteredMessages, _ := filterMessagesForCurrentCharacter(chatBody.Messages)
 	// openai /v1/chat does not support custom roles; needs to be user, assistant, system
@@ -399,7 +438,7 @@ func (ds DeepSeekerCompletion) FormMsg(msg, role string, resume bool) (io.Reader
 	}
 	// sending description of the tools and how to use them
 	if cfg.ToolUse && !resume && role == cfg.UserRole && !containsToolSysMsg() {
-		chatBody.Messages = append(chatBody.Messages, models.RoleMsg{Role: cfg.ToolRole, Content: tools.ToolSysMsg})
+		chatBody.Messages = append(chatBody.Messages, models.RoleMsg{Role: "system", Content: tools.ToolSysMsg})
 	}
 	filteredMessages, botPersona := filterMessagesForCurrentCharacter(chatBody.Messages)
 	messages := make([]string, len(filteredMessages))
@@ -471,11 +510,13 @@ func (ds DeepSeekerChat) FormMsg(msg, role string, resume bool) (io.Reader, erro
 		chatBody.Messages = append(chatBody.Messages, newMsg)
 	}
 	// sending tool instructions for chat endpoints
-	if cfg.ToolUse && !resume && role == cfg.UserRole && !containsToolSysMsgChat() {
-		chatBody.Messages = append(chatBody.Messages, models.RoleMsg{Role: cfg.ToolRole, Content: tools.ToolSysMsgChat})
+	// Update chatBody.Messages with tool guide (persist to stored messages)
+	chatBody.Messages = removeToolGuide(chatBody.Messages)
+	if cfg.ToolUse && !resume && role == cfg.UserRole {
+		chatBody.Messages = prependToolGuide(chatBody.Messages, tools.ToolSysMsgChat)
 	}
-	// Create copy of chat body with standardized user role
 	filteredMessages, _ := filterMessagesForCurrentCharacter(chatBody.Messages)
+	// Create copy of chat body with standardized user role
 	// Add persona suffix to the last user message to indicate who the assistant should reply as
 	bodyCopy := &models.ChatBody{
 		Messages: make([]models.RoleMsg, len(filteredMessages)),
@@ -555,7 +596,7 @@ func (or OpenRouterCompletion) FormMsg(msg, role string, resume bool) (io.Reader
 	}
 	// sending description of the tools and how to use them
 	if cfg.ToolUse && !resume && role == cfg.UserRole && !containsToolSysMsg() {
-		chatBody.Messages = append(chatBody.Messages, models.RoleMsg{Role: cfg.ToolRole, Content: tools.ToolSysMsg})
+		chatBody.Messages = append(chatBody.Messages, models.RoleMsg{Role: "system", Content: tools.ToolSysMsg})
 	}
 	filteredMessages, botPersona := filterMessagesForCurrentCharacter(chatBody.Messages)
 	messages := make([]string, len(filteredMessages))
@@ -660,11 +701,13 @@ func (or OpenRouterChat) FormMsg(msg, role string, resume bool) (io.Reader, erro
 		chatBody.Messages = append(chatBody.Messages, newMsg)
 	}
 	// sending tool instructions for chat endpoints
-	if cfg.ToolUse && !resume && role == cfg.UserRole && !containsToolSysMsgChat() {
-		chatBody.Messages = append(chatBody.Messages, models.RoleMsg{Role: cfg.ToolRole, Content: tools.ToolSysMsgChat})
+	// Update chatBody.Messages with tool guide (persist to stored messages)
+	chatBody.Messages = removeToolGuide(chatBody.Messages)
+	if cfg.ToolUse && !resume && role == cfg.UserRole {
+		chatBody.Messages = prependToolGuide(chatBody.Messages, tools.ToolSysMsgChat)
 	}
-	// Create copy of chat body with standardized user role
 	filteredMessages, _ := filterMessagesForCurrentCharacter(chatBody.Messages)
+	// Create copy of chat body with standardized user role
 	// Add persona suffix to the last user message to indicate who the assistant should reply as
 	bodyCopy := &models.ChatBody{
 		Messages: make([]models.RoleMsg, len(filteredMessages)),
