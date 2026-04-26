@@ -131,6 +131,7 @@ func makeChatTable(chatMap map[string]models.Chat) *tview.Table {
 			}
 			chatBody.Messages = history
 			textView.SetText(chatToText(chatBody.Messages, cfg.ShowSys))
+			colorText()
 			activeChatName = selectedChat
 			pages.RemovePage(historyPage)
 			return
