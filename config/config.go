@@ -6,6 +6,10 @@ import (
 	"github.com/BurntSushi/toml"
 )
 
+type MCPServerConfig struct {
+	URL string `toml:"url"`
+}
+
 type Config struct {
 	ChatAPI                       string `toml:"ChatAPI"`
 	CompletionAPI                 string `toml:"CompletionAPI"`
@@ -27,12 +31,13 @@ type Config struct {
 	WriteNextMsgAs                string
 	WriteNextMsgAsCompletionAgent string
 	SkipLLMResp                   bool
-	DBPATH                        string `toml:"DBPATH"`
-	FilePickerDir                 string `toml:"FilePickerDir"`
-	FilePickerExts                string `toml:"FilePickerExts"`
-	FSAllowOutOfRoot              bool   `toml:"FSAllowOutOfRoot"`
-	ImagePreview                  bool   `toml:"ImagePreview"`
-	EnableMouse                   bool   `toml:"EnableMouse"`
+	DBPATH                        string                     `toml:"DBPATH"`
+	FilePickerDir                 string                     `toml:"FilePickerDir"`
+	FilePickerExts                string                     `toml:"FilePickerExts"`
+	FSAllowOutOfRoot              bool                       `toml:"FSAllowOutOfRoot"`
+	ImagePreview                  bool                       `toml:"ImagePreview"`
+	EnableMouse                   bool                       `toml:"EnableMouse"`
+	MCPServers                    map[string]MCPServerConfig `toml:"MCPServers"`
 	// embeddings
 	EmbedURL           string `toml:"EmbedURL"`
 	HFToken            string `toml:"HFToken"`

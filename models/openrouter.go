@@ -31,7 +31,7 @@ type OpenRouterChatReq struct {
 	Temperature float32          `json:"temperature"`
 	MinP        float32          `json:"min_p"`
 	NPredict    int32            `json:"max_tokens"`
-	Tools       []Tool           `json:"tools"`
+	Tools       any              `json:"tools"`
 	Reasoning   *ReasoningConfig `json:"reasoning,omitempty"`
 }
 

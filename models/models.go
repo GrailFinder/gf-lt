@@ -511,7 +511,7 @@ type Tool struct {
 
 type OpenAIReq struct {
 	*ChatBody
-	Tools []Tool `json:"tools"`
+	Tools any `json:"tools"`
 }
 
 // ===

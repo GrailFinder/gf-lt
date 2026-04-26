@@ -2,8 +2,10 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"flag"
 	"fmt"
+	"gf-lt/mcp"
 	"gf-lt/models"
 	"gf-lt/pngmeta"
 	"gf-lt/tools"
@@ -36,6 +38,7 @@ var (
 	cliCardPath     string
 	cliContinue     bool
 	cliMsg          string
+	mcpManager      *mcp.Manager
 )
 
 func main() {
@@ -53,8 +56,15 @@ func main() {
 	chatBody.Model = cfg.CurrentModel
 	go updateModelLists()
 	tools.InitTools(cfg, logger, store)
-	// tooler = tools.InitTools(cfg, logger, store)
-	// tooler.RegisterWindowTools(modelHasVision)
+	if cfg.ToolUse && len(cfg.MCPServers) > 0 {
+		mcpManager = mcp.NewManager(cfg, logger)
+		if err := mcpManager.ConnectAll(context.Background()); err != nil {
+			logger.Error("failed to connect to MCP servers", "error", err)
+		} else {
+			mcpManager.RegisterToolHandlers(tools.FnMap)
+		}
+	}
+	_ = mcpManager
 	if cfg.CLIMode {
 		runCLIMode()
 		return

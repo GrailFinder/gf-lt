@@ -8,6 +8,8 @@ import (
 	"io"
 	"regexp"
 	"strings"
+
+	_ "gf-lt/mcp"
 )
 
 var imageAttachmentPath string // Global variable to track image attachment for next message
@@ -385,7 +387,14 @@ func (op LCPChat) FormMsg(msg, role string, resume bool) (io.Reader, error) {
 		Tools:    nil,
 	}
 	if cfg.ToolUse && !resume && role != cfg.ToolRole {
-		req.Tools = tools.BaseTools // set tools to use
+		var allTools []any
+		for _, t := range tools.BaseTools {
+			allTools = append(allTools, t)
+		}
+		if mcpManager != nil && mcpManager.HasTools() {
+			allTools = append(allTools, mcpManager.GetOpenAITools()...)
+		}
+		req.Tools = allTools
 	}
 	data, err := json.Marshal(req)
 	if err != nil {
@@ -737,7 +746,14 @@ func (or OpenRouterChat) FormMsg(msg, role string, resume bool) (io.Reader, erro
 	bodyCopy.Messages = consolidateAssistantMessages(bodyCopy.Messages)
 	orBody := models.NewOpenRouterChatReq(*bodyCopy, defaultLCPProps, cfg.ReasoningEffort)
 	if cfg.ToolUse && !resume && role != cfg.ToolRole {
-		orBody.Tools = tools.BaseTools // set tools to use
+		var allTools []any
+		for _, t := range tools.BaseTools {
+			allTools = append(allTools, t)
+		}
+		if mcpManager != nil && mcpManager.HasTools() {
+			allTools = append(allTools, mcpManager.GetOpenAITools()...)
+		}
+		orBody.Tools = allTools
 	}
 	data, err := json.Marshal(orBody)
 	if err != nil {

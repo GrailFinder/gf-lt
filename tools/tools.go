@@ -1257,7 +1257,7 @@ func captureWindowAndView(args map[string]string) []byte {
 	return jsonResult
 }
 
-type fnSig func(map[string]string) []byte
+type FnHandler func(map[string]string) []byte
 
 // FS Command Handlers - Unix-style file operations
 // Convert map[string]string to []string for tools package
@@ -1308,7 +1308,7 @@ func (m *memoryAdapter) Forget(agent, topic string) error {
 	return m.store.Forget(agent, topic)
 }
 
-var FnMap = map[string]fnSig{
+var FnMap = map[string]FnHandler{
 	"memory":        cmdMemory,
 	"rag_search":    ragsearch,
 	"websearch":     websearch,
