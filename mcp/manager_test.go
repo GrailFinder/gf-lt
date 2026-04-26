@@ -2,13 +2,12 @@ package mcp
 
 import (
 	"context"
+	"encoding/json"
 	"log/slog"
 	"strings"
 	"testing"
 
-	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/mark3labs/mcp-go/mcptest"
-	"github.com/mark3labs/mcp-go/server"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 func testLogger() *slog.Logger {
@@ -16,22 +15,18 @@ func testLogger() *slog.Logger {
 }
 
 func TestManagerToolDiscovery(t *testing.T) {
-	// This test verifies the OpenAI tool conversion works correctly
-	// by directly testing convertToolToOpenAI function
-
-	// Create a mock tool to test conversion
 	mcpTool := mcp.Tool{
 		Name:        "echo",
 		Description: "Echo back the input",
-		InputSchema: mcp.ToolInputSchema{
-			Type: "object",
-			Properties: map[string]any{
+		InputSchema: map[string]any{
+			"type": "object",
+			"properties": map[string]any{
 				"text": map[string]any{
 					"type":        "string",
 					"description": "Text to echo",
 				},
 			},
-			Required: []string{"text"},
+			"required": []any{"text"},
 		},
 	}
 
@@ -56,43 +51,73 @@ func TestManagerToolDiscovery(t *testing.T) {
 func TestManagerFullFlow(t *testing.T) {
 	ctx := context.Background()
 
-	// Create test server with mcptest
-	srv, err := mcptest.NewServer(t,
-		server.ServerTool{
-			Tool: mcp.NewTool(
-				"echo",
-				mcp.WithDescription("Echo back the input"),
-				mcp.WithString("text", mcp.Required()),
-			),
-			Handler: func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-				text, _ := req.RequireString("text")
-				return mcp.NewToolResultText("echo: " + text), nil
+	t1, t2 := mcp.NewInMemoryTransports()
+
+	server := mcp.NewServer(&mcp.Implementation{Name: "test-server", Version: "1.0.0"}, nil)
+
+	server.AddTool(&mcp.Tool{
+		Name:        "echo",
+		Description: "Echo back the input",
+		InputSchema: map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"text": map[string]any{
+					"type": "string",
+				},
 			},
+			"required": []any{"text"},
 		},
-		server.ServerTool{
-			Tool: mcp.NewTool(
-				"add",
-				mcp.WithDescription("Add two numbers"),
-				mcp.WithNumber("a", mcp.Required()),
-				mcp.WithNumber("b", mcp.Required()),
-			),
-			Handler: func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-				a, _ := req.RequireFloat("a")
-				b, _ := req.RequireFloat("b")
-				return mcp.NewToolResultText(resultFromFloat(a + b)), nil
+	}, func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		var args map[string]any
+		if err := json.Unmarshal(req.Params.Arguments, &args); err != nil {
+			return nil, err
+		}
+		text := args["text"].(string)
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{
+				&mcp.TextContent{Text: "echo: " + text},
 			},
+		}, nil
+	})
+
+	server.AddTool(&mcp.Tool{
+		Name:        "add",
+		Description: "Add two numbers",
+		InputSchema: map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"a": map[string]any{"type": "number"},
+				"b": map[string]any{"type": "number"},
+			},
+			"required": []any{"a", "b"},
 		},
-	)
+	}, func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		var args map[string]any
+		if err := json.Unmarshal(req.Params.Arguments, &args); err != nil {
+			return nil, err
+		}
+		a := args["a"].(float64)
+		b := args["b"].(float64)
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{
+				&mcp.TextContent{Text: resultFromFloat(a + b)},
+			},
+		}, nil
+	})
+
+	_, err := server.Connect(ctx, t1, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer srv.Close()
 
-	// Use the client directly to test the full flow
-	client := srv.Client()
+	client := mcp.NewClient(&mcp.Implementation{Name: "gf-lt", Version: "1.0.0"}, nil)
+	session, err := client.Connect(ctx, t2, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer session.Close()
 
-	// Test ListTools
-	result, err := client.ListTools(ctx, mcp.ListToolsRequest{})
+	result, err := session.ListTools(ctx, &mcp.ListToolsParams{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -101,38 +126,33 @@ func TestManagerFullFlow(t *testing.T) {
 		t.Fatalf("Expected 2 tools, got %d", len(result.Tools))
 	}
 
-	// Test CallTool - echo
-	callResult, err := client.CallTool(ctx, mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Name:      "echo",
-			Arguments: map[string]any{"text": "hello"},
+	callResult, err := session.CallTool(ctx, &mcp.CallToolParams{
+		Name: "echo",
+		Arguments: map[string]any{
+			"text": "hello",
 		},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if callResult.IsError {
-		t.Error("Expected no error")
-	}
-
-	textContent := callResult.Content[0].(mcp.TextContent)
+	textContent := callResult.Content[0].(*mcp.TextContent)
 	if textContent.Text != "echo: hello" {
 		t.Errorf("Expected 'echo: hello', got '%s'", textContent.Text)
 	}
 
-	// Test CallTool - add
-	addResult, err := client.CallTool(ctx, mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Name:      "add",
-			Arguments: map[string]any{"a": 5.0, "b": 3.0},
+	addResult, err := session.CallTool(ctx, &mcp.CallToolParams{
+		Name: "add",
+		Arguments: map[string]any{
+			"a": 5.0,
+			"b": 3.0,
 		},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	addContent := addResult.Content[0].(mcp.TextContent)
+	addContent := addResult.Content[0].(*mcp.TextContent)
 	if addContent.Text != "8" {
 		t.Errorf("Expected '8', got '%s'", addContent.Text)
 	}

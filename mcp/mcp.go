@@ -8,16 +8,14 @@ import (
 	"log/slog"
 	"strings"
 
-	"github.com/mark3labs/mcp-go/client"
-	"github.com/mark3labs/mcp-go/client/transport"
-	"github.com/mark3labs/mcp-go/mcp"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 type MCPServer struct {
-	name   string
-	url    string
-	client *client.Client
-	tools  []mcp.Tool
+	name    string
+	url     string
+	session *mcp.ClientSession
+	tools   []mcp.Tool
 }
 
 const (
@@ -70,39 +68,29 @@ func (m *Manager) ConnectAll(ctx context.Context) error {
 }
 
 func (s *MCPServer) connect(ctx context.Context, logger *slog.Logger) error {
-	trans, err := transport.NewStreamableHTTP(s.url)
-	if err != nil {
-		return fmt.Errorf("failed to create HTTP transport: %w", err)
+	transport := &mcp.StreamableClientTransport{
+		Endpoint: s.url,
 	}
 
-	s.client = client.NewClient(trans)
+	client := mcp.NewClient(&mcp.Implementation{Name: ClientName, Version: ClientVersion}, nil)
 
-	if err := s.client.Start(ctx); err != nil {
-		return fmt.Errorf("failed to start MCP client: %w", err)
+	session, err := client.Connect(ctx, transport, nil)
+	if err != nil {
+		return fmt.Errorf("failed to connect to MCP server: %w", err)
 	}
 
-	_, err = s.client.Initialize(ctx, mcp.InitializeRequest{
-		Params: mcp.InitializeParams{
-			ProtocolVersion: "2024-11-05",
-			ClientInfo: mcp.Implementation{
-				Name:    ClientName,
-				Version: ClientVersion,
-			},
-			Capabilities: mcp.ClientCapabilities{},
-		},
-	})
-	if err != nil {
-		s.client.Close()
-		return fmt.Errorf("failed to initialize MCP session: %w", err)
-	}
+	s.session = session
 
-	result, err := s.client.ListTools(ctx, mcp.ListToolsRequest{})
+	result, err := session.ListTools(ctx, &mcp.ListToolsParams{})
 	if err != nil {
-		s.client.Close()
+		session.Close()
 		return fmt.Errorf("failed to list tools: %w", err)
 	}
 
-	s.tools = result.Tools
+	s.tools = make([]mcp.Tool, len(result.Tools))
+	for i, t := range result.Tools {
+		s.tools[i] = *t
+	}
 	return nil
 }
 
@@ -155,11 +143,9 @@ func (m *Manager) callTool(name string, args map[string]string) []byte {
 		mcpArgs[k] = v
 	}
 
-	result, err := server.client.CallTool(context.Background(), mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Name:      toolName,
-			Arguments: mcpArgs,
-		},
+	result, err := server.session.CallTool(context.Background(), &mcp.CallToolParams{
+		Name:      toolName,
+		Arguments: mcpArgs,
 	})
 	if err != nil {
 		return []byte(fmt.Sprintf("MCP tool call failed: %v", err))
@@ -168,7 +154,7 @@ func (m *Manager) callTool(name string, args map[string]string) []byte {
 	if result.IsError {
 		var errMsg string
 		for _, content := range result.Content {
-			if tc, ok := content.(mcp.TextContent); ok {
+			if tc, ok := content.(*mcp.TextContent); ok {
 				errMsg += tc.Text
 			}
 		}
@@ -178,16 +164,17 @@ func (m *Manager) callTool(name string, args map[string]string) []byte {
 	var output strings.Builder
 	for _, content := range result.Content {
 		switch c := content.(type) {
-		case mcp.TextContent:
+		case *mcp.TextContent:
 			output.WriteString(c.Text)
-		case mcp.ImageContent:
+		case *mcp.ImageContent:
 			output.WriteString(fmt.Sprintf("[image: %s]", c.Data))
-		case mcp.EmbeddedResource:
-			switch rc := c.Resource.(type) {
-			case mcp.TextResourceContents:
-				output.WriteString(fmt.Sprintf("[resource: %s - %s]", rc.URI, rc.Text))
-			case mcp.BlobResourceContents:
-				output.WriteString(fmt.Sprintf("[resource: %s (binary)]", rc.URI))
+		case *mcp.EmbeddedResource:
+			if c.Resource != nil {
+				if c.Resource.Text != "" {
+					output.WriteString(fmt.Sprintf("[resource: %s - %s]", c.Resource.URI, c.Resource.Text))
+				} else if len(c.Resource.Blob) > 0 {
+					output.WriteString(fmt.Sprintf("[resource: %s (binary)]", c.Resource.URI))
+				}
 			}
 		}
 	}
@@ -208,30 +195,36 @@ func convertToolToOpenAI(serverName string, tool mcp.Tool) map[string]any {
 	}
 }
 
-func convertInputSchema(schema mcp.ToolInputSchema) map[string]any {
-	result := map[string]any{
-		"type": "object",
+func convertInputSchema(schema any) map[string]any {
+	// InputSchema can be map[string]any or ToolInputSchema
+	if schemaMap, ok := schema.(map[string]any); ok {
+		result := map[string]any{
+			"type": "object",
+		}
+		if t, ok := schemaMap["type"].(string); ok {
+			result["type"] = t
+		}
+		if required, ok := schemaMap["required"].([]any); ok {
+			reqStrings := make([]string, len(required))
+			for i, r := range required {
+				if rs, ok := r.(string); ok {
+					reqStrings[i] = rs
+				}
+			}
+			result["required"] = reqStrings
+		}
+		if props, ok := schemaMap["properties"].(map[string]any); ok {
+			result["properties"] = props
+		}
+		return result
 	}
-
-	if schema.Type != "" {
-		result["type"] = schema.Type
-	}
-
-	if len(schema.Required) > 0 {
-		result["required"] = schema.Required
-	}
-
-	if schema.Properties != nil {
-		result["properties"] = schema.Properties
-	}
-
-	return result
+	return map[string]any{"type": "object"}
 }
 
 func (m *Manager) Close() {
 	for _, server := range m.servers {
-		if server.client != nil {
-			server.client.Close()
+		if server.session != nil {
+			server.session.Close()
 		}
 	}
 }
