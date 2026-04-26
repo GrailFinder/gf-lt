@@ -1522,12 +1522,11 @@ func chatToTextSlice(messages []models.RoleMsg, showSys bool) []string {
 		// Add summary line if there were tool calls/responses
 		if toolCallCount > 0 || toolRespCount > 0 {
 			total := toolCallCount + toolRespCount
-			summary := fmt.Sprintf("[-:-:b](%d) <%s>:[-:-:-]\n[yellow::i][~~%d tool calls and responses~~ (press Ctrl+T to show)][-:-:-]", len(messages)-1, cfg.ToolRole, total)
+			summary := fmt.Sprintf("\n[yellow::i][~~%d tool calls and responses~~ (press Ctrl+T to show)][-:-:-]", total)
 			result = append(result, summary)
 		}
 		return result
 	}
-
 	// Collapsed or expanded mode - build result with proper indices
 	resp := make([]string, len(messages))
 	for i := range messages {
