@@ -715,15 +715,13 @@ func initTUI() {
 			showToast("thinking", "Thinking blocks "+status)
 			return nil
 		}
-		// Handle Ctrl+T to cycle tool call/response visibility: hidden -> collapsed -> expanded
+		// Handle Ctrl+T to toggle tool call/response visibility: hidden <-> expanded
 		if event.Key() == tcell.KeyCtrlT {
-			toolMode = (toolMode + 1) % 3
+			toolModeShown.Store(!toolModeShown.Load())
 			textView.SetText(chatToText(chatBody.Messages, cfg.ShowSys))
 			colorText()
 			status := "hidden"
-			if toolMode == ToolDisplayModeCollapsed {
-				status = "collapsed"
-			} else if toolMode == ToolDisplayModeExpanded {
+			if toolModeShown.Load() {
 				status = "expanded"
 			}
 			showToast("tools", "Tool calls/responses "+status)

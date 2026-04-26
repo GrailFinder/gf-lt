@@ -1492,87 +1492,52 @@ func findCall(msg, toolCall string) bool {
 
 func chatToTextSlice(messages []models.RoleMsg, showSys bool) []string {
 	// When hidden, collect tool count, otherwise build full result
-	if toolMode == ToolDisplayModeHidden {
-		var toolCallCount int
-		var toolRespCount int
+	if !toolModeShown.Load() {
+		var toolBlockCount int
 		var result []string
 		for i := range messages {
-			// Count tool calls
-			if messages[i].Role == cfg.AssistantRole && messages[i].ToolCall != nil && messages[i].ToolCall.ID != "" {
-				toolCallCount++
-				continue
-			}
-			// Handle tool responses
-			if messages[i].Role == cfg.ToolRole || messages[i].Role == "tool" {
-				// Always show shell commands
-				if messages[i].IsShellCommand {
-					result = append(result, MsgToText(i, &messages[i]))
-					continue
-				}
-				// Count non-shell tool responses, skip display
-				toolRespCount++
-				continue
-			}
-			// Skip system msg when showSys is false
+			// Skip system msg when showSys is false (silently, no flush)
 			if !showSys && messages[i].Role == "system" {
 				continue
 			}
+			isToolCall := messages[i].Role == cfg.AssistantRole && messages[i].ToolCall != nil && messages[i].ToolCall.ID != ""
+			isToolResp := (messages[i].Role == cfg.ToolRole || messages[i].Role == "tool") && !messages[i].IsShellCommand
+			if isToolCall || isToolResp {
+				toolBlockCount++
+				continue
+			}
+			// Current message is not a tool message - flush any pending block summary
+			if toolBlockCount > 0 {
+				summary := fmt.Sprintf("[yellow::i][~~%d tool calls and responses~~ (press Ctrl+T to show)][-:-:-]\n", toolBlockCount)
+				result = append(result, summary)
+				toolBlockCount = 0
+			}
 			result = append(result, MsgToText(i, &messages[i]))
 		}
-		// Add summary line if there were tool calls/responses
-		if toolCallCount > 0 || toolRespCount > 0 {
-			total := toolCallCount + toolRespCount
-			summary := fmt.Sprintf("\n[yellow::i][~~%d tool calls and responses~~ (press Ctrl+T to show)][-:-:-]", total)
+		// Flush any remaining block at the end
+		if toolBlockCount > 0 {
+			summary := fmt.Sprintf("[yellow::i][~~%d tool calls and responses~~ (press Ctrl+T to show)][-:-:-]\n", toolBlockCount)
 			result = append(result, summary)
 		}
 		return result
 	}
-	// Collapsed or expanded mode - build result with proper indices
+	// Expanded mode - show all tool calls and responses in full detail
 	resp := make([]string, len(messages))
 	for i := range messages {
 		icon := fmt.Sprintf("[-:-:b](%d) <%s>:[-:-:-]", i, messages[i].Role)
-		// Handle tool call indicators (assistant messages with tool call but empty content)
 		if messages[i].Role == cfg.AssistantRole && messages[i].ToolCall != nil && messages[i].ToolCall.ID != "" {
-			// This is a tool call indicator - show collapsed
-			if toolMode == ToolDisplayModeCollapsed {
-				toolName := messages[i].ToolCall.Name
-				argsPreview := messages[i].ToolCall.Args
-				if len(messages[i].ToolCall.Args) > 30 {
-					argsPreview = messages[i].ToolCall.Args[:30]
-				}
-				resp[i] = strings.ReplaceAll(
-					fmt.Sprintf(
-						"%s\n%s\n[yellow::i][tool call: %s %s (press Ctrl+T to expand)][-:-:-]\n",
-						icon, messages[i].GetText(), toolName, argsPreview),
-					"\n\n", "\n")
-			} else {
-				// Show full tool call info
-				toolName := messages[i].ToolCall.Name
-				resp[i] = strings.ReplaceAll(
-					fmt.Sprintf(
-						"%s\n%s\n[yellow::i][tool call: %s][-:-:-]\nargs: %s\nid: %s\n",
-						icon, messages[i].GetText(), toolName, messages[i].ToolCall.Args, messages[i].ToolCall.ID),
-					"\n\n", "\n")
-			}
+			toolName := messages[i].ToolCall.Name
+			resp[i] = strings.ReplaceAll(
+				fmt.Sprintf(
+					"%s\n%s\n[yellow::i][tool call: %s][-:-:-]\nargs: %s\nid: %s\n",
+					icon, messages[i].GetText(), toolName, messages[i].ToolCall.Args, messages[i].ToolCall.ID),
+				"\n\n", "\n")
 			continue
 		}
-		// Handle tool responses
 		if messages[i].Role == cfg.ToolRole || messages[i].Role == "tool" {
-			// Always show shell commands
-			if messages[i].IsShellCommand {
-				resp[i] = MsgToText(i, &messages[i])
-				continue
-			}
-			// Hide non-shell tool responses when collapsed
-			if toolMode == ToolDisplayModeCollapsed {
-				resp[i] = icon + "\n[yellow::i][tool resp (press Ctrl+T to expand)][-:-:-]\n"
-				continue
-			}
-			// When expanded, show tool responses
 			resp[i] = MsgToText(i, &messages[i])
 			continue
 		}
-		// INFO: skips system msg when showSys is false
 		if !showSys && messages[i].Role == "system" {
 			continue
 		}
