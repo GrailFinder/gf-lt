@@ -1111,6 +1111,12 @@ out:
 	}
 	// No tool call - check if task is active and needs enforcement
 	if taskActive.Load() {
+		// Check if the last tool was task_done - if so, clear task state
+		if lastToolCall.Name == "task_done" {
+			taskActive.Store(false)
+			atomic.StoreInt32(&taskFailures, 0)
+			return nil
+		}
 		failures := atomic.AddInt32(&taskFailures, 1)
 		if failures >= 3 {
 			// Too many failures, stop enforcing and accept failure

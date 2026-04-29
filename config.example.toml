@@ -62,3 +62,7 @@ ReasoningEffort = "medium"
 # playwright tools
 PlaywrightEnabled = false
 PlaywrightDebug = false # when true opens in gui mode (headless=false)
+FSAllowOutOfRoot = true
+# mcp
+# [MCPServers.myserver]
+# url = "http://localhost:8099/mcp"

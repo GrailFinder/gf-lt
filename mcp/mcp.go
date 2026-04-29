@@ -69,7 +69,8 @@ func (m *Manager) ConnectAll(ctx context.Context) error {
 
 func (s *MCPServer) connect(ctx context.Context, logger *slog.Logger) error {
 	transport := &mcp.StreamableClientTransport{
-		Endpoint: s.url,
+		Endpoint:             s.url,
+		DisableStandaloneSSE: true,
 	}
 
 	client := mcp.NewClient(&mcp.Implementation{Name: ClientName, Version: ClientVersion}, nil)
