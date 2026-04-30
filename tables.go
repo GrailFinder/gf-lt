@@ -1583,3 +1583,166 @@ func showDbContentView(tableName string) {
 		return event
 	})
 }
+
+type chatImageEntry struct {
+	path     string
+	msgIndex int
+	role     string
+	hasFile  bool
+}
+
+func extractChatImages(messages []models.RoleMsg) []chatImageEntry {
+	var result []chatImageEntry
+	for i, msg := range messages {
+		if !msg.HasContentParts {
+			continue
+		}
+		for _, part := range msg.ContentParts {
+			var displayPath string
+			switch p := part.(type) {
+			case models.ImageContentPart:
+				displayPath = p.Path
+			case map[string]any:
+				if partType, exists := p["type"]; exists && partType == "image_url" {
+					if pathVal, pathExists := p["path"]; pathExists {
+						if pathStr, isStr := pathVal.(string); isStr {
+							displayPath = pathStr
+						}
+					}
+				} else {
+					continue
+				}
+			default:
+				continue
+			}
+			hasFile := displayPath != "" && tools.IsImageFile(displayPath)
+			if hasFile {
+				if _, err := os.Stat(displayPath); err != nil {
+					hasFile = false
+				}
+			}
+			result = append(result, chatImageEntry{
+				path:     displayPath,
+				msgIndex: i,
+				role:     msg.Role,
+				hasFile:  hasFile,
+			})
+		}
+	}
+	return result
+}
+
+func makeImagesTable() *tview.Flex {
+	images := extractChatImages(chatBody.Messages)
+	if len(images) == 0 {
+		showToast("info", "no images in current chat")
+		return nil
+	}
+
+	listView := tview.NewList()
+	listView.SetBorder(true).SetTitle(fmt.Sprintf("Chat Images (%d)", len(images))).SetTitleAlign(tview.AlignLeft)
+
+	statusView := tview.NewTextView()
+	statusView.SetBorder(true).SetTitle("Info").SetTitleAlign(tview.AlignLeft)
+	statusView.SetTextColor(tcell.ColorYellow)
+
+	var imgPreview *tview.Image
+	if cfg.ImagePreview {
+		imgPreview = tview.NewImage()
+		imgPreview.SetBorder(true).SetTitle("Preview").SetTitleAlign(tview.AlignLeft)
+	}
+
+	var hFlex *tview.Flex
+	if cfg.ImagePreview && imgPreview != nil {
+		hFlex = tview.NewFlex().SetDirection(tview.FlexColumn).
+			AddItem(listView, 0, 3, true).
+			AddItem(imgPreview, 0, 2, false)
+	} else {
+		hFlex = tview.NewFlex().SetDirection(tview.FlexColumn).
+			AddItem(listView, 0, 1, true)
+	}
+
+	flex := tview.NewFlex().SetDirection(tview.FlexRow)
+	flex.AddItem(hFlex, 0, 3, true)
+	flex.AddItem(statusView, 3, 0, false)
+
+	loadImagePreview := func(entryPath string) {
+		if imgPreview == nil {
+			return
+		}
+		if !tools.IsImageFile(entryPath) {
+			imgPreview.SetImage(nil)
+			return
+		}
+		file, err := os.Open(entryPath)
+		if err != nil {
+			imgPreview.SetImage(nil)
+			return
+		}
+		defer file.Close()
+		imgData, _, err := image.Decode(file)
+		if err != nil {
+			imgPreview.SetImage(nil)
+			return
+		}
+		imgPreview.SetImage(imgData)
+	}
+
+	for i, img := range images {
+		displayName := extractDisplayPath(img.path, cfg.FilePickerDir)
+		if displayName == "" {
+			displayName = fmt.Sprintf("image #%d (data-only, no file)", i)
+		}
+		label := fmt.Sprintf("%s (msg #%d, %s)", displayName, img.msgIndex, img.role)
+		if !img.hasFile {
+			label += " [gray](file not found)[-]"
+		}
+		listView.AddItem(label, "", 0, nil)
+	}
+
+	listView.SetChangedFunc(func(index int, _ string, _ string, _ rune) {
+		if index < 0 || index >= len(images) {
+			return
+		}
+		entry := images[index]
+		statusView.SetText(fmt.Sprintf("Path: %s\nMessage: #%d (%s)\nFile exists: %v",
+			entry.path, entry.msgIndex, entry.role, entry.hasFile))
+		if entry.hasFile {
+			loadImagePreview(entry.path)
+		} else {
+			if imgPreview != nil {
+				imgPreview.SetImage(nil)
+			}
+		}
+	})
+
+	flex.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		switch event.Key() {
+		case tcell.KeyEsc, tcell.KeyF1:
+			pages.RemovePage(imagesPage)
+			return nil
+		case tcell.KeyRune:
+			if event.Rune() == 'x' {
+				pages.RemovePage(imagesPage)
+				return nil
+			}
+		case tcell.KeyEnter:
+			itemIndex := listView.GetCurrentItem()
+			if itemIndex >= 0 && itemIndex < len(images) {
+				entry := images[itemIndex]
+				if entry.hasFile {
+					SetImageAttachment(entry.path)
+					showToast("image attached", entry.path)
+					pages.RemovePage(imagesPage)
+					app.SetFocus(textArea)
+				} else {
+					showToast("error", "cannot attach: file not found on disk")
+				}
+			}
+			return nil
+		}
+		return event
+	})
+
+	return flex
+}

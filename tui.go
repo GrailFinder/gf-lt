@@ -56,6 +56,7 @@ var (
 	codeBlockPage  = "codeBlockPage"
 	imgPage        = "imgPage"
 	filePickerPage = "filePicker"
+	imagesPage     = "imagesPage"
 	exportDir      = "chat_exports"
 	// For overlay search functionality
 	searchField    *tview.InputField
@@ -106,6 +107,7 @@ var (
 [yellow]Alt+t[white]: toggle thinking blocks visibility (collapse/expand <think> blocks)
 [yellow]Ctrl+t[white]: toggle tool call/response visibility (collapse/expand tool calls and non-shell tool responses)
 [yellow]Alt+i[white]: show colorscheme selection popup
+[yellow]Alt+p[white]: show images from current chat (preview, attach to next msg)
 [yellow]Insert[white]: paste from clipboard to the text area (use it instead shift+insert)
 
 === scrolling chat window (some keys similar to vim) ===
@@ -922,6 +924,14 @@ func initTUI() {
 			// open file picker
 			filePicker := makeFilePicker()
 			pages.AddPage(filePickerPage, filePicker, true, true)
+			return nil
+		}
+		if event.Key() == tcell.KeyRune && event.Rune() == 'p' && event.Modifiers()&tcell.ModAlt != 0 {
+			// show images from current chat
+			imgTable := makeImagesTable()
+			if imgTable != nil {
+				pages.AddPage(imagesPage, imgTable, true, true)
+			}
 			return nil
 		}
 		if event.Key() == tcell.KeyCtrlL {
