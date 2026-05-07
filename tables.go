@@ -20,6 +20,8 @@ import (
 	"gitlab.com/diamondburned/ueberzug-go"
 )
 
+var currentFilePickerUeberzugImg *ueberzug.Image
+
 func makeChatTable(chatMap map[string]models.Chat) *tview.Table {
 	actions := []string{"load", "rename", "delete", "update card", "move sysprompt onto 1st msg", "new_chat_from_card"}
 	chatList := make([]string, len(chatMap))
@@ -901,6 +903,10 @@ func makeFilePicker() *tview.Flex {
 					// Clear search on navigation
 					searching = false
 					searchQuery = ""
+					if currentFilePickerUeberzugImg != nil {
+						currentFilePickerUeberzugImg.Destroy()
+						currentFilePickerUeberzugImg = nil
+					}
 					if cfg.ImagePreview {
 						imgPreview.SetImage(nil)
 					}
@@ -935,6 +941,10 @@ func makeFilePicker() *tview.Flex {
 					// Clear search on navigation
 					searching = false
 					searchQuery = ""
+					if currentFilePickerUeberzugImg != nil {
+						currentFilePickerUeberzugImg.Destroy()
+						currentFilePickerUeberzugImg = nil
+					}
 					if cfg.ImagePreview {
 						imgPreview.SetImage(nil)
 					}
@@ -976,12 +986,18 @@ func makeFilePicker() *tview.Flex {
 	}
 	// Initialize the file list
 	refreshList(startDir, "")
-	// Update image preview when selection changes (unchanged)
+	// Update image preview when selection changes
 	if cfg.ImagePreview && imgPreview != nil {
 		listView.SetChangedFunc(func(index int, mainText, secondaryText string, rune rune) {
+			if currentFilePickerUeberzugImg != nil {
+				currentFilePickerUeberzugImg.Destroy()
+				currentFilePickerUeberzugImg = nil
+			}
 			itemText, _ := listView.GetItemText(index)
 			if strings.HasPrefix(itemText, "Exit file picker") || strings.HasPrefix(itemText, "../") {
-				imgPreview.SetImage(nil)
+				if imgPreview != nil {
+					imgPreview.SetImage(nil)
+				}
 				return
 			}
 			actualItemName := itemText
@@ -989,26 +1005,74 @@ func makeFilePicker() *tview.Flex {
 				actualItemName = itemText[:bracketPos]
 			}
 			if strings.HasSuffix(actualItemName, "/") {
-				imgPreview.SetImage(nil)
+				if imgPreview != nil {
+					imgPreview.SetImage(nil)
+				}
 				return
 			}
 			if !isImageFile(actualItemName) {
-				imgPreview.SetImage(nil)
+				if imgPreview != nil {
+					imgPreview.SetImage(nil)
+				}
 				return
 			}
 			filePath := path.Join(currentDisplayDir, actualItemName)
 			file, err := os.Open(filePath)
 			if err != nil {
-				imgPreview.SetImage(nil)
+				if imgPreview != nil {
+					imgPreview.SetImage(nil)
+				}
 				return
 			}
 			defer file.Close()
-			img, _, err := image.Decode(file)
+			imgData, _, err := image.Decode(file)
 			if err != nil {
-				imgPreview.SetImage(nil)
+				if imgPreview != nil {
+					imgPreview.SetImage(nil)
+				}
 				return
 			}
-			imgPreview.SetImage(img)
+			if ueberzugAvailable {
+				w, h := 0, 0
+				if imgPreview != nil {
+					_, _, w, h = imgPreview.GetRect()
+				}
+				if w == 0 && h == 0 {
+					if imgPreview != nil {
+						imgPreview.SetImage(imgData)
+					}
+					return
+				}
+				maxSize := 500
+				offset := 70
+				scaledImg := resize.Resize(0, uint(maxSize), imgData, resize.Lanczos3)
+				if imgData.Bounds().Dx() > imgData.Bounds().Dy() {
+					scaledImg = resize.Resize(uint(maxSize), 0, imgData, resize.Lanczos3)
+				}
+				imgWidth := scaledImg.Bounds().Dx()
+				screenWidth := 1920
+				var screenHeight int = 1080
+				if output, err := exec.Command("xdotool", "getdisplaygeometry").Output(); err == nil {
+					fmt.Sscanf(string(output), "%d %d", &screenWidth, &screenHeight)
+				}
+				x := screenWidth - imgWidth - offset
+				y := offset
+				uimg, err := ueberzug.NewImage(scaledImg, x, y)
+				if err != nil {
+					if imgPreview != nil {
+						imgPreview.SetImage(imgData)
+					}
+					return
+				}
+				currentFilePickerUeberzugImg = uimg
+				if imgPreview != nil {
+					imgPreview.SetImage(nil)
+				}
+			} else {
+				if imgPreview != nil {
+					imgPreview.SetImage(imgData)
+				}
+			}
 		})
 	}
 	// Set up keyboard navigation
@@ -1038,6 +1102,10 @@ func makeFilePicker() *tview.Flex {
 					itemText, _ := listView.GetItemText(itemIndex)
 					// Check for the exit option first
 					if strings.HasPrefix(itemText, "Exit file picker") {
+						if currentFilePickerUeberzugImg != nil {
+							currentFilePickerUeberzugImg.Destroy()
+							currentFilePickerUeberzugImg = nil
+						}
 						pages.RemovePage(filePickerPage)
 						return nil
 					}
@@ -1061,6 +1129,10 @@ func makeFilePicker() *tview.Flex {
 							targetDir = path.Join(currentDisplayDir, dirName)
 						}
 						// Navigate – clear search
+						if currentFilePickerUeberzugImg != nil {
+							currentFilePickerUeberzugImg.Destroy()
+							currentFilePickerUeberzugImg = nil
+						}
 						if cfg.ImagePreview && imgPreview != nil {
 							imgPreview.SetImage(nil)
 						}
@@ -1077,10 +1149,18 @@ func makeFilePicker() *tview.Flex {
 						filePath := path.Join(currentDisplayDir, actualItemName)
 						if info, err := os.Stat(filePath); err == nil && !info.IsDir() {
 							if isImageFile(actualItemName) {
+								if currentFilePickerUeberzugImg != nil {
+									currentFilePickerUeberzugImg.Destroy()
+									currentFilePickerUeberzugImg = nil
+								}
 								SetImageAttachment(filePath)
 								statusView.SetText("Image attached: " + filePath + " (will be sent with next message)")
 								pages.RemovePage(filePickerPage)
 							} else {
+								if currentFilePickerUeberzugImg != nil {
+									currentFilePickerUeberzugImg.Destroy()
+									currentFilePickerUeberzugImg = nil
+								}
 								textArea.SetText(filePath, true)
 								app.SetFocus(textArea)
 								pages.RemovePage(filePickerPage)
@@ -1109,9 +1189,17 @@ func makeFilePicker() *tview.Flex {
 		// --- Not searching ---
 		switch event.Key() {
 		case tcell.KeyEsc:
+			if currentFilePickerUeberzugImg != nil {
+				currentFilePickerUeberzugImg.Destroy()
+				currentFilePickerUeberzugImg = nil
+			}
 			pages.RemovePage(filePickerPage)
 			return nil
 		case tcell.KeyBackspace2: // Backspace to go to parent directory
+			if currentFilePickerUeberzugImg != nil {
+				currentFilePickerUeberzugImg.Destroy()
+				currentFilePickerUeberzugImg = nil
+			}
 			if cfg.ImagePreview && imgPreview != nil {
 				imgPreview.SetImage(nil)
 			}
@@ -1176,6 +1264,10 @@ func makeFilePicker() *tview.Flex {
 					}
 					// Navigate – clear search
 					logger.Info("going to dir", "dir", targetDir)
+					if currentFilePickerUeberzugImg != nil {
+						currentFilePickerUeberzugImg.Destroy()
+						currentFilePickerUeberzugImg = nil
+					}
 					if cfg.ImagePreview && imgPreview != nil {
 						imgPreview.SetImage(nil)
 					}
@@ -1191,6 +1283,10 @@ func makeFilePicker() *tview.Flex {
 					filePath := path.Join(currentDisplayDir, actualItemName)
 					if info, err := os.Stat(filePath); err == nil && !info.IsDir() {
 						if isImageFile(actualItemName) {
+							if currentFilePickerUeberzugImg != nil {
+								currentFilePickerUeberzugImg.Destroy()
+								currentFilePickerUeberzugImg = nil
+							}
 							logger.Info("setting image", "file", actualItemName)
 							SetImageAttachment(filePath)
 							logger.Info("after setting image", "file", actualItemName)
@@ -1199,6 +1295,10 @@ func makeFilePicker() *tview.Flex {
 							pages.RemovePage(filePickerPage)
 							logger.Info("after update drawn", "file", actualItemName)
 						} else {
+							if currentFilePickerUeberzugImg != nil {
+								currentFilePickerUeberzugImg.Destroy()
+								currentFilePickerUeberzugImg = nil
+							}
 							textArea.SetText(filePath, true)
 							app.SetFocus(textArea)
 							pages.RemovePage(filePickerPage)
