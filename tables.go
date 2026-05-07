@@ -5,6 +5,7 @@ import (
 	"gf-lt/tools"
 	"image"
 	"os"
+	"os/exec"
 	"path"
 	"strings"
 	"time"
@@ -14,7 +15,9 @@ import (
 	"gf-lt/rag"
 
 	"github.com/gdamore/tcell/v2"
+	"github.com/nfnt/resize"
 	"github.com/rivo/tview"
+	"gitlab.com/diamondburned/ueberzug-go"
 )
 
 func makeChatTable(chatMap map[string]models.Chat) *tview.Table {
@@ -1638,20 +1641,16 @@ func makeImagesTable() *tview.Flex {
 		showToast("info", "no images in current chat")
 		return nil
 	}
-
 	listView := tview.NewList()
 	listView.SetBorder(true).SetTitle(fmt.Sprintf("Chat Images (%d)", len(images))).SetTitleAlign(tview.AlignLeft)
-
 	statusView := tview.NewTextView()
 	statusView.SetBorder(true).SetTitle("Info").SetTitleAlign(tview.AlignLeft)
 	statusView.SetTextColor(tcell.ColorYellow)
-
 	var imgPreview *tview.Image
 	if cfg.ImagePreview {
 		imgPreview = tview.NewImage()
 		imgPreview.SetBorder(true).SetTitle("Preview").SetTitleAlign(tview.AlignLeft)
 	}
-
 	var hFlex *tview.Flex
 	if cfg.ImagePreview && imgPreview != nil {
 		hFlex = tview.NewFlex().SetDirection(tview.FlexColumn).
@@ -1661,33 +1660,81 @@ func makeImagesTable() *tview.Flex {
 		hFlex = tview.NewFlex().SetDirection(tview.FlexColumn).
 			AddItem(listView, 0, 1, true)
 	}
-
 	flex := tview.NewFlex().SetDirection(tview.FlexRow)
 	flex.AddItem(hFlex, 0, 3, true)
 	flex.AddItem(statusView, 3, 0, false)
-
+	var currentUeberzugImg *ueberzug.Image
+	cleanupUeberzug := func() {
+		if currentUeberzugImg != nil {
+			currentUeberzugImg.Destroy()
+			currentUeberzugImg = nil
+		}
+	}
 	loadImagePreview := func(entryPath string) {
-		if imgPreview == nil {
+		cleanupUeberzug()
+		if imgPreview == nil && !ueberzugAvailable {
 			return
 		}
 		if !tools.IsImageFile(entryPath) {
-			imgPreview.SetImage(nil)
+			if imgPreview != nil {
+				imgPreview.SetImage(nil)
+			}
 			return
 		}
 		file, err := os.Open(entryPath)
 		if err != nil {
-			imgPreview.SetImage(nil)
+			if imgPreview != nil {
+				imgPreview.SetImage(nil)
+			}
 			return
 		}
 		defer file.Close()
 		imgData, _, err := image.Decode(file)
 		if err != nil {
-			imgPreview.SetImage(nil)
+			if imgPreview != nil {
+				imgPreview.SetImage(nil)
+			}
 			return
 		}
-		imgPreview.SetImage(imgData)
+		if ueberzugAvailable {
+			w, h := 0, 0
+			if imgPreview != nil {
+				_, _, w, h = imgPreview.GetRect()
+			}
+			if w == 0 && h == 0 {
+				if imgPreview != nil {
+					imgPreview.SetImage(imgData)
+				}
+				return
+			}
+			maxSize := 500
+			offset := 80
+			scaledImg := resize.Resize(0, uint(maxSize), imgData, resize.Lanczos3)
+			imgWidth := scaledImg.Bounds().Dx()
+			screenWidth, screenHeight := 1920, 1080
+			if output, err := exec.Command("xdotool", "getdisplaygeometry").Output(); err == nil {
+				fmt.Sscanf(string(output), "%d %d", &screenWidth, &screenHeight)
+			}
+			x := screenWidth - imgWidth - offset
+			y := offset
+			uimg, err := ueberzug.NewImage(scaledImg, x, y)
+			if err != nil {
+				logger.Debug("failed to create ueberzug image", "error", err)
+				if imgPreview != nil {
+					imgPreview.SetImage(imgData)
+				}
+				return
+			}
+			currentUeberzugImg = uimg
+			if imgPreview != nil {
+				imgPreview.SetImage(nil)
+			}
+		} else {
+			if imgPreview != nil {
+				imgPreview.SetImage(imgData)
+			}
+		}
 	}
-
 	for i, img := range images {
 		displayName := extractDisplayPath(img.path, cfg.FilePickerDir)
 		if displayName == "" {
@@ -1699,7 +1746,6 @@ func makeImagesTable() *tview.Flex {
 		}
 		listView.AddItem(label, "", 0, nil)
 	}
-
 	listView.SetChangedFunc(func(index int, _ string, _ string, _ rune) {
 		if index < 0 || index >= len(images) {
 			return
@@ -1710,20 +1756,24 @@ func makeImagesTable() *tview.Flex {
 		if entry.hasFile {
 			loadImagePreview(entry.path)
 		} else {
+			cleanupUeberzug()
 			if imgPreview != nil {
 				imgPreview.SetImage(nil)
 			}
 		}
 	})
-
+	closeImagesTable := func() {
+		cleanupUeberzug()
+		pages.RemovePage(imagesPage)
+	}
 	flex.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		switch event.Key() {
 		case tcell.KeyEsc, tcell.KeyF1:
-			pages.RemovePage(imagesPage)
+			closeImagesTable()
 			return nil
 		case tcell.KeyRune:
 			if event.Rune() == 'x' {
-				pages.RemovePage(imagesPage)
+				closeImagesTable()
 				return nil
 			}
 		case tcell.KeyEnter:
@@ -1731,6 +1781,7 @@ func makeImagesTable() *tview.Flex {
 			if itemIndex >= 0 && itemIndex < len(images) {
 				entry := images[itemIndex]
 				if entry.hasFile {
+					cleanupUeberzug()
 					SetImageAttachment(entry.path)
 					showToast("image attached", entry.path)
 					pages.RemovePage(imagesPage)
@@ -1743,6 +1794,5 @@ func makeImagesTable() *tview.Flex {
 		}
 		return event
 	})
-
 	return flex
 }

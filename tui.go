@@ -15,6 +15,7 @@ import (
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
+	"gitlab.com/diamondburned/ueberzug-go"
 )
 
 func isFullScreenPageActive() bool {
@@ -40,9 +41,10 @@ var (
 	shellInput         *tview.InputField
 	confirmModal       *tview.Modal
 	toastTimer         *time.Timer
-	confirmPageName    = "confirm"
-	fullscreenMode     bool
-	positionVisible    bool = true
+	confirmPageName     = "confirm"
+	fullscreenMode      bool
+	positionVisible     bool = true
+	ueberzugAvailable   bool = false
 	// pages
 	historyPage    = "historyPage"
 	agentPage      = "agentPage"
@@ -235,6 +237,14 @@ func showToast(title, message string) {
 }
 
 func initTUI() {
+	// Try to initialize ueberzug for image overlay support
+	if err := ueberzug.Initialize(); err != nil {
+		logger.Debug("ueberzug not available", "error", err)
+		ueberzugAvailable = false
+	} else {
+		logger.Info("ueberzug initialized successfully")
+		ueberzugAvailable = true
+	}
 	// Start background goroutine to update model color cache
 	startModelColorUpdater()
 	tview.Styles = colorschemes["default"]
