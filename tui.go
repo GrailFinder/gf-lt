@@ -18,6 +18,8 @@ import (
 	"gitlab.com/diamondburned/ueberzug-go"
 )
 
+var termCols, termRows int
+
 func isFullScreenPageActive() bool {
 	name, _ := pages.GetFrontPage()
 	return name != "main"
@@ -249,6 +251,13 @@ func initTUI() {
 	startModelColorUpdater()
 	tview.Styles = colorschemes["default"]
 	app = tview.NewApplication()
+	// Capture terminal size using tcell
+	if screen, err := tcell.NewScreen(); err == nil {
+		if err := screen.Init(); err == nil {
+			termCols, termRows = screen.Size()
+			screen.Fini()
+		}
+	}
 	pages = tview.NewPages()
 	shellInput = tview.NewInputField().
 		SetLabel(fmt.Sprintf("[%s]$ ", cfg.FilePickerDir)). // dynamic prompt

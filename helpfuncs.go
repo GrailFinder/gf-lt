@@ -1047,3 +1047,81 @@ func notifySend(topic, message string) error {
 	cmd := exec.Command("notify-send", topic, sanitized)
 	return cmd.Run()
 }
+
+type TermGeometry struct {
+	X, Y, Width, Height int
+	Cols, Rows          int
+}
+
+func getTerminalGeometry() (TermGeometry, error) {
+	var geom TermGeometry
+
+	out, err := exec.Command("xdotool", "getactivewindow").Output()
+	if err != nil {
+		return TermGeometry{}, err
+	}
+	winID := strings.TrimSpace(string(out))
+	if winID == "0" {
+		return TermGeometry{}, fmt.Errorf("no active window")
+	}
+
+	out, err = exec.Command("xdotool", "getwindowgeometry", winID).Output()
+	if err != nil {
+		return TermGeometry{}, err
+	}
+
+	lines := strings.Split(string(out), "\n")
+	for _, line := range lines {
+		if strings.Contains(line, "Position:") {
+			fmt.Sscanf(line, " Position: %d,%d", &geom.X, &geom.Y)
+		} else if strings.Contains(line, "Geometry:") {
+			fmt.Sscanf(line, " Geometry: %dx%d", &geom.Width, &geom.Height)
+		}
+	}
+
+	if geom.Width == 0 || geom.Height == 0 {
+		return TermGeometry{}, fmt.Errorf("invalid window geometry")
+	}
+
+	// Use terminal size captured at init time
+	if termCols > 0 && termRows > 0 {
+		geom.Cols = termCols
+		geom.Rows = termRows
+	}
+	// Fallback to env vars
+	if geom.Cols == 0 || geom.Rows == 0 {
+		if cols := os.Getenv("COLUMNS"); cols != "" {
+			if n, err := strconv.Atoi(cols); err == nil && n > 0 {
+				geom.Cols = n
+			}
+		}
+		if rows := os.Getenv("LINES"); rows != "" {
+			if n, err := strconv.Atoi(rows); err == nil && n > 0 {
+				geom.Rows = n
+			}
+		}
+	}
+	// Fallback to stty
+	if geom.Cols == 0 || geom.Rows == 0 {
+		out, err := exec.Command("stty", "size").Output()
+		logger.Warn("stty result", "error", err, "output", string(out))
+		if err == nil {
+			trimmed := strings.TrimSpace(string(out))
+			if trimmed != "" {
+				fmt.Sscanf(trimmed, "%d %d", &geom.Rows, &geom.Cols)
+			}
+		}
+	}
+	if geom.Cols == 0 || geom.Rows == 0 {
+		logger.Warn("terminal geometry check", "cols", geom.Cols, "rows", geom.Rows, "termCols", termCols, "termRows", termRows)
+		return TermGeometry{}, fmt.Errorf("invalid terminal size")
+	}
+
+	return geom, nil
+}
+
+func cellToPixel(cellX, cellY int, geom TermGeometry) (pixelX, pixelY int) {
+	cellWidth := geom.Width / geom.Cols
+	cellHeight := geom.Height / geom.Rows
+	return geom.X + cellX*cellWidth, geom.Y + cellY*cellHeight
+}

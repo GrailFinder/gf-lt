@@ -5,7 +5,6 @@ import (
 	"gf-lt/tools"
 	"image"
 	"os"
-	"os/exec"
 	"path"
 	"strings"
 	"time"
@@ -1033,33 +1032,35 @@ func makeFilePicker() *tview.Flex {
 				return
 			}
 			if ueberzugAvailable {
-				w, h := 0, 0
+				cellX, cellY, cellW, cellH := 0, 0, 0, 0
 				if imgPreview != nil {
-					_, _, w, h = imgPreview.GetRect()
+					cellX, cellY, cellW, cellH = imgPreview.GetRect()
 				}
-				if w == 0 && h == 0 {
+				if cellW == 0 || cellH == 0 {
 					if imgPreview != nil {
 						imgPreview.SetImage(imgData)
 					}
 					return
 				}
-				maxSize := 500
-				offset := 70
-				scaledImg := resize.Resize(0, uint(maxSize), imgData, resize.Lanczos3)
-				if imgData.Bounds().Dx() > imgData.Bounds().Dy() {
-					scaledImg = resize.Resize(uint(maxSize), 0, imgData, resize.Lanczos3)
+
+geom, err := getTerminalGeometry()
+			if err != nil {
+				logger.Warn("ueberzug fallback: getTerminalGeometry failed", "error", err)
+				if imgPreview != nil {
+					imgPreview.SetImage(imgData)
 				}
-				imgWidth := scaledImg.Bounds().Dx()
-				screenWidth := 1920
-				var screenHeight int = 1080
-				if output, err := exec.Command("xdotool", "getdisplaygeometry").Output(); err == nil {
-					fmt.Sscanf(string(output), "%d %d", &screenWidth, &screenHeight)
-				}
-				x := screenWidth - imgWidth - offset
-				y := offset
-				uimg, err := ueberzug.NewImage(scaledImg, x, y)
-				if err != nil {
-					if imgPreview != nil {
+				return
+			}
+
+			x, y := cellToPixel(cellX, cellY, geom)
+
+			maxSize := 500
+			scaledImg := resize.Resize(0, uint(maxSize), imgData, resize.Lanczos3)
+
+			uimg, err := ueberzug.NewImage(scaledImg, x, y)
+			if err != nil {
+				logger.Warn("ueberzug fallback: NewImage failed", "error", err, "x", x, "y", y)
+				if imgPreview != nil {
 						imgPreview.SetImage(imgData)
 					}
 					return
@@ -1797,29 +1798,34 @@ func makeImagesTable() *tview.Flex {
 			return
 		}
 		if ueberzugAvailable {
-			w, h := 0, 0
+			cellX, cellY, cellW, cellH := 0, 0, 0, 0
 			if imgPreview != nil {
-				_, _, w, h = imgPreview.GetRect()
+				cellX, cellY, cellW, cellH = imgPreview.GetRect()
 			}
-			if w == 0 && h == 0 {
+			if cellW == 0 || cellH == 0 {
 				if imgPreview != nil {
 					imgPreview.SetImage(imgData)
 				}
 				return
 			}
-			maxSize := 500
-			offset := 80
-			scaledImg := resize.Resize(0, uint(maxSize), imgData, resize.Lanczos3)
-			imgWidth := scaledImg.Bounds().Dx()
-			screenWidth, screenHeight := 1920, 1080
-			if output, err := exec.Command("xdotool", "getdisplaygeometry").Output(); err == nil {
-				fmt.Sscanf(string(output), "%d %d", &screenWidth, &screenHeight)
+
+			geom, err := getTerminalGeometry()
+			if err != nil {
+				logger.Warn("ueberzug fallback: getTerminalGeometry failed", "error", err)
+				if imgPreview != nil {
+					imgPreview.SetImage(imgData)
+				}
+				return
 			}
-			x := screenWidth - imgWidth - offset
-			y := offset
+
+			x, y := cellToPixel(cellX, cellY, geom)
+
+			maxSize := 500
+			scaledImg := resize.Resize(0, uint(maxSize), imgData, resize.Lanczos3)
+
 			uimg, err := ueberzug.NewImage(scaledImg, x, y)
 			if err != nil {
-				logger.Debug("failed to create ueberzug image", "error", err)
+				logger.Warn("ueberzug fallback: NewImage failed", "error", err, "x", x, "y", y)
 				if imgPreview != nil {
 					imgPreview.SetImage(imgData)
 				}
