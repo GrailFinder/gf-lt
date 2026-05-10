@@ -52,7 +52,7 @@ var (
 	cliPrevOutput         string
 	cliRespDone           chan bool
 	taskActive            atomic.Bool
-	hadToolCallInPrevTurn atomic.Bool
+	consecutiveToolCalls  atomic.Int32
 	taskFailures          int32
 )
 
@@ -1285,14 +1285,8 @@ func findCall(msg, toolCall string) bool {
 	} else {
 		jsStr := models.ToolCallRE.FindString(msg)
 		if jsStr == "" { // no tool call case
-			// Check if this is second consecutive tool call turn (task start)
-			// But don't start task if previous tool was task_done (that's clearing, not starting)
-			if hadToolCallInPrevTurn.Load() && lastToolCall.Name != "task_done" {
-				taskActive.Store(true)
-				logger.Debug("task started: second consecutive tool call turn", "toolName", lastToolCall.Name, "taskActive", taskActive.Load())
-			}
-			// Reset the prev turn tracker
-			hadToolCallInPrevTurn.Store(false)
+			// Reset consecutive tool call counter when assistant responds with text
+			consecutiveToolCalls.Store(0)
 			return false
 		}
 		// Remove prefix/suffix with flexible whitespace handling
@@ -1477,11 +1471,22 @@ func findCall(msg, toolCall string) bool {
 			toolResponseMsg.ContentParts = append(newParts, toolResponseMsg.ContentParts...)
 		}
 	}
+	// Track consecutive tool calls for task detection
+	consecutiveToolCalls.Add(1)
+	if consecutiveToolCalls.Load() >= 2 {
+		taskActive.Store(true)
+		logger.Debug("task started: consecutive tool calls", "count", consecutiveToolCalls.Load())
+	}
+	// Check if task_done was called - clear all task state
+	if fc.Name == "task_done" {
+		taskActive.Store(false)
+		atomic.StoreInt32(&taskFailures, 0)
+		consecutiveToolCalls.Store(0)
+		logger.Debug("task_done executed: cleared task state")
+	}
 	outputHandler.Writef("%s[-:-:b](%d) <%s>: [-:-:-]\n%s\n",
 		"\n\n", len(chatBody.Messages), cfg.ToolRole, toolResponseMsg.GetText())
 	chatBody.Messages = append(chatBody.Messages, toolResponseMsg)
-	// Track that we had a tool call in this turn
-	hadToolCallInPrevTurn.Store(true)
 	// Reset task failures on successful tool call, but keep task active until task_done
 	atomic.StoreInt32(&taskFailures, 0)
 	// Note: taskActive stays true until task_done or max failures reached

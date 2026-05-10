@@ -116,7 +116,7 @@ After that you are free to respond to the user.
 	readURLSysPrompt   = `Extract and summarize the content from the webpage. Provide key information, main points, and any relevant details.`
 	summarySysPrompt   = `Please provide a concise summary of the following conversation. Focus on key points, decisions, and actions. Provide only the summary, no additional commentary.`
 	// reminderPrompt     = `Received a message without a tool call while task is in progress. Either call task_done to complete the task or proceed with the intended tool call.`
-	ReminderPrompt = `Received a message without a tool call while task is in progress. In case task is done call task_done. Otherwsie only do next intended tool call`
+	ReminderPrompt = `Reminder: task is active. If the task is complete, call task_done. Otherwise continue with the next tool call.`
 )
 
 var WebSearcher searcher.WebSurfer
