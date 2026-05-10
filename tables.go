@@ -1868,6 +1868,16 @@ func makeImagesTable() *tview.Flex {
 			}
 		}
 	})
+	flex.SetDrawFunc(func(screen tcell.Screen, x, y, w, h int) (int, int, int, int) {
+		flex.SetDrawFunc(nil)
+		go func() {
+			time.Sleep(50 * time.Millisecond)
+			if len(images) > 0 && images[0].hasFile {
+				loadImagePreview(images[0].path)
+			}
+		}()
+		return x, y, w, h
+	})
 	closeImagesTable := func() {
 		cleanupUeberzug()
 		pages.RemovePage(imagesPage)
