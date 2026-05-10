@@ -49,9 +49,9 @@ Your current tools:
 <tools>
 [
 {
-"name":"run",
+"name":"bash",
 "args": ["command"],
-"when_to_use": "Main tool for file operations, shell commands, memory, git, and todo. Use run "help" for all commands. Examples: run "ls -la", run "help", run "mkdir -p foo/bar", run "cat file.txt", run "write file.txt content", run "git status", run "memory store foo bar", run "todo create task", run "grep pattern file", run "cd /path", run "pwd", run "find . -name *.txt", run "file image.png", run "head file", run "tail file", run "wc -l file", run "sort file", run "uniq file", run "sed 's/old/new/' file", run "echo text", run "go build ./...", run "time", run "stat file", run "cp src dst", run "mv src dst", run "rm file"
+"when_to_use": "Main tool for file operations, shell commands, memory, git, and todo. Use bash "help" for all commands. Examples: bash "ls -la", bash "help", bash "mkdir -p foo/bar", bash "cat file.txt", bash "write file.txt content", bash "git status", bash "memory store foo bar", bash "todo create task", bash "grep pattern file", bash "cd /path", bash "pwd", bash "find . -name *.txt", bash "file image.png", bash "head file", bash "tail file", bash "wc -l file", bash "sort file", bash "uniq file", bash "sed 's/old/new/' file", bash "echo text", bash "go build ./...", bash "time", bash "stat file", bash "cp src dst", bash "mv src dst", bash "rm file"
 },
 {
 "name":"browser",
@@ -89,7 +89,7 @@ To make a function call return a json object within __tool_call__ tags;
 <example_request>
 __tool_call__
 {
-"name":"run",
+"name":"bash",
 "args": {"command": "ls -la /home"}
 }
 __tool_call__
@@ -680,7 +680,7 @@ func getHelp(args []string) string {
   # System
   <any shell command> - run shell command directly
 
-Use: run "command" to execute.`
+Use: bash "command" to execute.`
 	}
 
 	// Specific command help
@@ -690,27 +690,27 @@ Use: run "command" to execute.`
 		return `ls [directory]
   List files in a directory.
   Examples:
-    run "ls"
-    run "ls /home/user"
-    run "ls -la" (via shell)`
+    bash "ls"
+    bash "ls /home/user"
+    bash "ls -la" (via shell)`
 	case "cat":
 		return `cat <file>
   Read file content.
   Examples:
-    run "cat readme.md"
-    run "cat -b image.png" (base64 output)`
+    bash "cat readme.md"
+    bash "cat -b image.png" (base64 output)`
 	case "view_img":
 		return `view_img <image-file>
   View an image file for multimodal analysis.
   Supports: png, jpg, jpeg, gif, webp, svg
   Example:
-    run "view_img screenshot.png"`
+    bash "view_img screenshot.png"`
 	case "write":
 		return `write <file> [content]
   Write content to a file.
   Examples:
-    run "write notes.txt hello world"
-    run "write data.json" (with stdin)`
+    bash "write notes.txt hello world"
+    bash "write data.json" (with stdin)`
 	case "memory":
 		return `memory <subcommand> [args]
   Manage memory storage.
@@ -720,9 +720,9 @@ Use: run "command" to execute.`
     list                  - list all topics
     forget <topic>        - delete a topic
   Examples:
-    run "memory store foo bar"
-    run "memory get foo"
-    run "memory list"`
+    bash "memory store foo bar"
+    bash "memory get foo"
+    bash "memory list"`
 	case "todo":
 		return `todo <subcommand> [args]
   Manage todo list.
@@ -732,17 +732,17 @@ Use: run "command" to execute.`
     update <id> <status> - update status (pending/in_progress/completed)
     delete <id>        - delete a todo
   Examples:
-    run "todo create fix bug"
-    run "todo read"
-    run "todo update 1 completed"`
+    bash "todo create fix bug"
+    bash "todo read"
+    bash "todo update 1 completed"`
 	case "git":
 		return `git <subcommand>
   Read-only git commands.
   Allowed: status, log, diff, show, branch, reflog, rev-parse, shortlog, describe, rev-list
   Examples:
-    run "git status"
-    run "git log --oneline -5"
-    run "git diff HEAD~1"`
+    bash "git status"
+    bash "git log --oneline -5"
+    bash "git diff HEAD~1"`
 	case "grep":
 		return `grep <pattern> [options]
   Filter lines matching a pattern.
@@ -751,27 +751,27 @@ Use: run "command" to execute.`
     -v  invert match
     -c  count matches
   Example:
-    run "grep error" (from stdin)
-    run "grep -i warn log.txt"`
+    bash "grep error" (from stdin)
+    bash "grep -i warn log.txt"`
 	case "cd":
 		return `cd <directory>
   Change working directory.
   Example:
-    run "cd /tmp"
-    run "cd .."`
+    bash "cd /tmp"
+    bash "cd .."`
 	case "pwd":
 		return `pwd
   Print working directory.
   Example:
-    run "pwd"`
+    bash "pwd"`
 	case "mkdir":
 		return `mkdir [-p] <directory>
   Create a directory (use full path).
   Options:
     -p, --parents  create parent directories as needed
   Examples:
-    run "mkdir /full/path/myfolder"
-    run "mkdir -p /full/path/to/nested/folder"`
+    bash "mkdir /full/path/myfolder"
+    bash "mkdir -p /full/path/to/nested/folder"`
 	case "sed":
 		return `sed 's/old/new/[g]' [file]
   Stream editor for text replacement.
@@ -779,26 +779,26 @@ Use: run "command" to execute.`
     -i  in-place editing
     -g  global replacement (replace all)
   Examples:
-    run "sed 's/foo/bar/' file.txt"
-    run "sed 's/foo/bar/g' file.txt" (global)
-    run "sed -i 's/foo/bar/' file.txt" (in-place)
-    run "cat file.txt | sed 's/foo/bar/'" (pipe from stdin)`
+    bash "sed 's/foo/bar/' file.txt"
+    bash "sed 's/foo/bar/g' file.txt" (global)
+    bash "sed -i 's/foo/bar/' file.txt" (in-place)
+    bash "cat file.txt | sed 's/foo/bar/'" (pipe from stdin)`
 	case "go":
 		return `go <command>
   Go toolchain commands.
   Allowed: run, build, test, mod, get, install, clean, fmt, vet, etc.
   Examples:
-    run "go run main.go"
-    run "go build ./..."
-    run "go test ./..."
-    run "go mod tidy"
-    run "go get github.com/package"`
+    bash "go run main.go"
+    bash "go build ./..."
+    bash "go test ./..."
+    bash "go mod tidy"
+    bash "go get github.com/package"`
 	case "window", "windows":
 		return `window
   List available windows.
   Requires: xdotool and maim
   Example:
-    run "window"`
+    bash "window"`
 	case "capture", "screenshot":
 		return `capture <window-name-or-id>
   Capture a screenshot of a window.
@@ -814,7 +814,7 @@ Use: run "command" to execute.`
   Examples:
     run "capture_and_view Firefox"`
 	default:
-		return fmt.Sprintf("No help available for: %s. Use: run \"help\" for all commands.", cmd)
+		return fmt.Sprintf("No help available for: %s. Use: bash \"help\" for all commands.", cmd)
 	}
 }
 
@@ -1318,7 +1318,7 @@ var FnMap = map[string]FnHandler{
 	"view_img":      viewImgTool,
 	"help":          helpTool,
 	// Unified run command
-	"run": runCmd,
+	"bash": runCmd,
 	// Browser tool - routes to runBrowserCommand
 	"browser":        browserCmd,
 	"summarize_chat": summarizeChat,
@@ -1528,19 +1528,19 @@ var BaseTools = []models.Tool{
 			},
 		},
 	},
-	// run - unified command
+	// bash - unified command
 	models.Tool{
 		Type: "function",
 		Function: models.ToolFunc{
-			Name:        "run",
-			Description: "Execute commands: shell, git, memory, todo. Usage: run \"<command>\". Examples: run \"ls -la\", run \"git status\", run \"memory store foo bar\", run \"memory get foo\", run \"todo create task\", run \"help\", run \"help memory\"",
+			Name:        "bash",
+			Description: "Execute commands: shell, git, memory, todo. Usage: bash \"<command>\". Examples: bash \"ls -la\", bash \"git status\", bash \"memory store foo bar\", bash \"memory get foo\", bash \"todo create task\", bash \"help\", bash \"help memory\"",
 			Parameters: models.ToolFuncParams{
 				Type:     "object",
 				Required: []string{"command"},
 				Properties: map[string]models.ToolArgProps{
 					"command": models.ToolArgProps{
 						Type:        "string",
-						Description: "command to execute. Use: run \"help\" for all commands, run \"help <cmd>\" for specific help. Examples: ls, cat, grep, git status, memory store, todo create, etc.",
+						Description: "command to execute. Use: bash \"help\" for all commands, bash \"help <cmd>\" for specific help. Examples: ls, cat, grep, git status, memory store, todo create, etc.",
 					},
 				},
 			},
