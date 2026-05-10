@@ -292,7 +292,7 @@ func FsViewImg(args []string, stdin string) string {
 		Type: "multimodal_content",
 		Parts: []map[string]string{
 			{"type": "text", "text": "Image: " + path},
-			{"type": "image_url", "url": dataURL},
+			{"type": "image_url", "url": dataURL, "path": abs},
 		},
 	}
 	jsonResult, err := json.Marshal(result)

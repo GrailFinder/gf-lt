@@ -1420,11 +1420,14 @@ func findCall(msg, toolCall string) bool {
 				case "text":
 					contentParts = append(contentParts, models.TextContentPart{Type: "text", Text: part["text"]})
 				case "image_url":
+					imgURL := part["url"]
+					imgPath := part["path"]
 					contentParts = append(contentParts, models.ImageContentPart{
 						Type: "image_url",
+						Path: imgPath,
 						ImageURL: struct {
 							URL string `json:"url"`
-						}{URL: part["url"]},
+						}{URL: imgURL},
 					})
 				default:
 					continue
