@@ -1376,6 +1376,29 @@ func findCall(msg, toolCall string) bool {
 	// 	chatRoundChan <- crr
 	// 	return true
 	// }
+	// Check for dangerous commands that require user confirmation
+	if dangerous, label := tools.IsDangerousCommand(fc.Name, fc.Args); dangerous {
+		req := tools.ConfirmRequest{
+			ToolName: fc.Name,
+			Command:  fc.Args["command"],
+			ToolArgs: fc.Args,
+		}
+		approved := tools.RequestConfirmation(req)
+		if !approved {
+			// User denied or timed out — stop the flow, user takes over
+			toolResponseMsg := models.RoleMsg{
+				Role:       cfg.ToolRole,
+				Content:    "[denied] This command requires user confirmation: " + label,
+				ToolCallID: lastToolCall.ID,
+			}
+			chatBody.Messages = append(chatBody.Messages, toolResponseMsg)
+			lastToolCall.ID = ""
+			logger.Info("dangerous command denied by user", "tool", fc.Name, "label", label)
+			// Don't trigger chatRound — stop here, user takes over
+			return true
+		}
+		// User approved — continue with normal execution
+	}
 	// Show tool call progress indicator before execution
 	outputHandler.Writef("\n[yellow::i][tool: %s...][-:-:-]", fc.Name)
 	toolRunningMode.Store(true)

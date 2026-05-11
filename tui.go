@@ -11,6 +11,7 @@ import (
 	"path"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gdamore/tcell/v2"
@@ -42,6 +43,11 @@ var (
 	roleEditWindow     *tview.InputField
 	shellInput         *tview.InputField
 	confirmModal       *tview.Modal
+	pendingConfirmReq struct {
+		label   string
+		command string
+		resultChan chan<- bool
+	}
 	toastTimer         *time.Timer
 	confirmPageName     = "confirm"
 	fullscreenMode      bool
@@ -249,6 +255,42 @@ func initTUI() {
 	}
 	// Start background goroutine to update model color cache
 	startModelColorUpdater()
+	// Start goroutine to listen for dangerous command confirmations
+	var confirmMu sync.Mutex
+	var confirmActive bool
+	go func() {
+		for req := range tools.ConfirmChan {
+			if app == nil || confirmActive {
+				// App not ready or confirmation already in progress — deny by default
+				req.Result <- false
+				continue
+			}
+			resultCh := make(chan bool, 1)
+			confirmMu.Lock()
+			confirmActive = true
+			confirmMu.Unlock()
+			pendingConfirmReq = struct {
+				label   string
+				command string
+				resultChan chan<- bool
+			}{
+				label:   req.ToolName,
+				command: req.Command,
+				resultChan: resultCh,
+			}
+			confirmModal.SetText(fmt.Sprintf(
+				"⚠️ LLM is requesting a dangerous command:\n\n%s\n\nTool: %s\n\nDo you want to allow this?",
+				req.Command, req.ToolName))
+			app.QueueUpdateDraw(func() {
+				pages.AddPage("confirm", confirmModal, true, true)
+			})
+			approved := <-resultCh
+			confirmMu.Lock()
+			confirmActive = false
+			confirmMu.Unlock()
+			req.Result <- approved
+		}
+	}()
 	tview.Styles = colorschemes["default"]
 	app = tview.NewApplication()
 	// Capture terminal size using tcell
@@ -319,27 +361,19 @@ func initTUI() {
 		SetButtonBackgroundColor(tcell.ColorBlack).
 		SetButtonTextColor(tcell.ColorWhite).
 		SetDoneFunc(func(buttonIndex int, buttonLabel string) {
-			if buttonLabel == "Yes" {
-				persona := cfg.UserRole
-				if cfg.WriteNextMsgAs != "" {
-					persona = cfg.WriteNextMsgAs
-				}
-				chatRoundChan <- &models.ChatRoundReq{Role: persona, UserMsg: ""}
-			} // In both Yes and No, go back to the main page
-			pages.SwitchToPage("main") // or whatever your main page is named
+			approved := buttonLabel == "Yes"
+			pendingConfirmReq.resultChan <- approved
+			pages.SwitchToPage("main")
 		})
 	confirmModal.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		if event.Key() == tcell.KeyRune {
 			switch event.Rune() {
 			case 'y', 'Y':
-				persona := cfg.UserRole
-				if cfg.WriteNextMsgAs != "" {
-					persona = cfg.WriteNextMsgAs
-				}
-				chatRoundChan <- &models.ChatRoundReq{Role: persona, UserMsg: ""}
+				pendingConfirmReq.resultChan <- true
 				pages.SwitchToPage("main")
 				return nil
 			case 'n', 'N', 'x', 'X':
+				pendingConfirmReq.resultChan <- false
 				pages.SwitchToPage("main")
 				return nil
 			}
