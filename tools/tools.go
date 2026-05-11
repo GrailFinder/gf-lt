@@ -51,7 +51,7 @@ Your current tools:
 {
 "name":"bash",
 "args": ["command"],
-"when_to_use": "Main tool for file operations, shell commands, memory, git, and todo. Use bash "help" for all commands. Examples: bash "ls -la", bash "help", bash "mkdir -p foo/bar", bash "cat file.txt", bash "write file.txt content", bash "git status", bash "memory store foo bar", bash "todo create task", bash "grep pattern file", bash "cd /path", bash "pwd", bash "find . -name *.txt", bash "file image.png", bash "head file", bash "tail file", bash "wc -l file", bash "sort file", bash "uniq file", bash "sed 's/old/new/' file", bash "echo text", bash "go build ./...", bash "time", bash "stat file", bash "cp src dst", bash "mv src dst", bash "rm file"
+"when_to_use": "Main tool for file operations, shell commands, memory, git, and todo. Use bash "help" for all commands. Examples: bash "ls -la", bash "help", bash "mkdir -p foo/bar", bash "cat file.txt", bash "write file.txt content", bash "git status", bash "memory store foo bar", bash "todo create task", bash "grep pattern file", bash "grep -r pattern dir", bash "find pattern", bash "cd /path", bash "pwd", bash "find . -name *.txt", bash "file image.png", bash "head file", bash "tail file", bash "wc -l file", bash "sort file", bash "uniq file", bash "sed 's/old/new/' file", bash "echo text", bash "go build ./...", bash "time", bash "stat file", bash "cp src dst", bash "mv src dst", bash "rm file"
 },
 {
 "name":"browser",
@@ -647,7 +647,8 @@ func getHelp(args []string) string {
   # Text processing
   echo <args>     - echo back input
   time             - show current time
-  grep <pattern>  - filter lines (supports -i, -v, -c)
+  grep <pattern>  - filter lines (supports -i, -v, -c, -r for recursive)
+  find <pattern>  - find files by name recursively
   head [n]         - show first n lines
   tail [n]        - show last n lines
   wc [-l|-w|-c]   - count lines/words/chars
@@ -744,15 +745,24 @@ Use: bash "command" to execute.`
     bash "git log --oneline -5"
     bash "git diff HEAD~1"`
 	case "grep":
-		return `grep <pattern> [options]
+		return `grep <pattern> [options] [file|dir]
   Filter lines matching a pattern.
   Options:
     -i  ignore case
     -v  invert match
     -c  count matches
+    -r  recursive search in directory
+    -E  extended regex
   Example:
-    bash "grep error" (from stdin)
-    bash "grep -i warn log.txt"`
+    bash "grep error log.txt"
+    bash "grep -i warn log.txt"
+    bash "grep -r TODO ." (search recursively in current dir)`
+	case "find":
+		return `find <pattern> [directory]
+  Find files by name (recursive search).
+  Example:
+    bash "find .go"
+    bash "find *.md /project"`
 	case "cd":
 		return `cd <directory>
   Change working directory.

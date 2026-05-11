@@ -660,18 +660,71 @@ func FsTime(args []string, stdin string) string {
 	return time.Now().Format("2006-01-02 15:04:05 MST")
 }
 
+func FsFind(args []string, stdin string) string {
+	if len(args) == 0 {
+		return "[error] usage: find <pattern> [dir]"
+	}
+	pattern := args[0]
+	dir := "."
+	if len(args) > 1 {
+		dir = args[1]
+	}
+
+	abs, err := resolvePath(dir)
+	if err != nil {
+		return fmt.Sprintf("[error] find: %v", err)
+	}
+	if _, err := os.Stat(abs); err != nil {
+		return fmt.Sprintf("[error] find: %v", err)
+	}
+
+	var results []string
+	rootDir := abs
+	err = filepath.Walk(abs, func(path string, fi os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		name := fi.Name()
+		matched := false
+		if strings.Contains(name, pattern) {
+			matched = true
+		}
+		if !matched {
+			return nil
+		}
+		relPath, _ := filepath.Rel(rootDir, path)
+		if relPath == "" {
+			relPath = name
+		}
+		if fi.IsDir() {
+			results = append(results, relPath+"/")
+		} else {
+			results = append(results, relPath)
+		}
+		return nil
+	})
+	if err != nil {
+		return fmt.Sprintf("[error] find: %v", err)
+	}
+	if len(results) == 0 {
+		return "(no matches)"
+	}
+	return strings.Join(results, "\n")
+}
+
 func FsGrep(args []string, stdin string) string {
 	if len(args) == 0 {
-		return "[error] usage: grep [-i] [-v] [-c] [-E] <pattern> [file]"
+		return "[error] usage: grep [-i] [-v] [-c] [-E] [-r] <pattern> [file|dir]"
 	}
 	ignoreCase := false
 	invert := false
 	countOnly := false
 	useRegex := false
+	recursive := false
 	var pattern string
 	var filePath string
 	for _, a := range args {
-		if strings.HasPrefix(a, "-") && !strings.HasPrefix(a, "--") && len(a) > 1 {
+		if strings.HasPrefix(a, "-") && !strings.HasPrefix(a, "--") && len(a) > 1 && !strings.Contains(a, "r") {
 			flags := strings.TrimLeft(a, "-")
 			for _, c := range flags {
 				switch c {
@@ -696,6 +749,14 @@ func FsGrep(args []string, stdin string) string {
 			countOnly = true
 		case "-E":
 			useRegex = true
+		case "-r", "-R":
+			recursive = true
+		case "-ir", "-ri", "-Iv", "-vi", "-ic", "-ci", "-Ec", "-cE", "-iEc", "-Eic", "-riv", "-ivr", "-rvc", "-cvr":
+			ignoreCase = true
+			invert = strings.Contains(a, "v")
+			countOnly = strings.Contains(a, "c")
+			useRegex = strings.Contains(a, "E")
+			recursive = strings.Contains(a, "r")
 		default:
 			if pattern == "" {
 				pattern = a
@@ -707,6 +768,11 @@ func FsGrep(args []string, stdin string) string {
 	if pattern == "" {
 		return "[error] pattern required"
 	}
+
+	if recursive && filePath != "" {
+		return grepRecursive(pattern, filePath, ignoreCase, invert, countOnly, useRegex)
+	}
+
 	var lines []string
 	if filePath != "" {
 		abs, err := resolvePath(filePath)
@@ -760,6 +826,104 @@ func FsGrep(args []string, stdin string) string {
 		return strconv.Itoa(len(matched))
 	}
 	return strings.Join(matched, "\n")
+}
+
+func grepRecursive(pattern, dirOrFile string, ignoreCase, invert, countOnly, useRegex bool) string {
+	abs, err := resolvePath(dirOrFile)
+	if err != nil {
+		return fmt.Sprintf("[error] grep: %v", err)
+	}
+	info, err := os.Stat(abs)
+	if err != nil {
+		return fmt.Sprintf("[error] grep: %v", err)
+	}
+
+	var files []string
+	if info.IsDir() {
+		err = filepath.Walk(abs, func(path string, fi os.FileInfo, err error) error {
+			if err != nil {
+				return err
+			}
+			if !fi.IsDir() {
+				files = append(files, path)
+			}
+			return nil
+		})
+		if err != nil {
+			return fmt.Sprintf("[error] grep: %v", err)
+		}
+	} else {
+		files = []string{abs}
+	}
+
+	var results []string
+	totalMatches := 0
+
+	for _, filePath := range files {
+		data, err := os.ReadFile(filePath)
+		if err != nil {
+			continue
+		}
+		lines := strings.Split(string(data), "\n")
+		var matched []string
+
+		for _, line := range lines {
+			var match bool
+			if useRegex {
+				re, err := regexp.Compile(pattern)
+				if err != nil {
+					continue
+				}
+				match = re.MatchString(line)
+				if ignoreCase && !match {
+					reIC, err := regexp.Compile("(?i)" + pattern)
+					if err == nil {
+						match = reIC.MatchString(line)
+					}
+				}
+			} else {
+				haystack := line
+				if ignoreCase {
+					haystack = strings.ToLower(line)
+					patternLower := strings.ToLower(pattern)
+					match = strings.Contains(haystack, patternLower)
+				} else {
+					match = strings.Contains(haystack, pattern)
+				}
+			}
+			if invert {
+				match = !match
+			}
+			if match {
+				matched = append(matched, line)
+				totalMatches++
+			}
+		}
+
+		if len(matched) > 0 {
+			relPath, _ := filepath.Rel(cfg.FilePickerDir, filePath)
+			if relPath == "" {
+				relPath = filePath
+			}
+			if countOnly {
+				results = append(results, fmt.Sprintf("%s:%d", relPath, len(matched)))
+			} else {
+				var lineResults []string
+				for i, m := range matched {
+					lineResults = append(lineResults, fmt.Sprintf("%s:%d:%s", relPath, i+1, m))
+				}
+				results = append(results, lineResults...)
+			}
+		}
+	}
+
+	if countOnly {
+		return strconv.Itoa(totalMatches)
+	}
+	if len(results) == 0 {
+		return "(no matches)"
+	}
+	return strings.Join(results, "\n")
 }
 
 func FsHead(args []string, stdin string) string {

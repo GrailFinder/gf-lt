@@ -353,6 +353,8 @@ func execBuiltin(name string, args []string, stdin string) (string, error) {
 		result = FsSed(args, stdin)
 	case "stat":
 		result = FsStat(args, stdin)
+	case "find":
+		result = FsFind(args, stdin)
 	case "go":
 		if len(args) == 0 {
 			return "[error] usage: go <subcommand> [options]", nil
