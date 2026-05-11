@@ -1124,19 +1124,20 @@ out:
 			atomic.StoreInt32(&taskFailures, 0)
 			logger.Debug("task enforcement: giving up after max failures", "failures", failures)
 		} else {
-			// Inject reminder
-			toolResponseMsg := models.RoleMsg{
-				Role:    cfg.ToolRole,
-				Content: tools.ReminderPrompt,
-			}
-			chatBody.Messages = append(chatBody.Messages, toolResponseMsg)
-			logger.Debug("task enforcement: injected reminder", "taskActive", taskActive.Load(), "failures", failures)
-			// Trigger next round to get LLM to either call task_done or make a tool call
-			crr := &models.ChatRoundReq{
-				Role: cfg.AssistantRole,
-			}
-			chatRoundChan <- crr
-			return nil
+			// Reminder disabled - no longer inject task reminders
+			// // Inject reminder
+			// toolResponseMsg := models.RoleMsg{
+			// 	Role:    cfg.ToolRole,
+			// 	Content: tools.ReminderPrompt,
+			// }
+			// chatBody.Messages = append(chatBody.Messages, toolResponseMsg)
+			// logger.Debug("task enforcement: injected reminder", "taskActive", taskActive.Load(), "failures", failures)
+			// // Trigger next round to get LLM to either call task_done or make a tool call
+			// crr := &models.ChatRoundReq{
+			// 	Role: cfg.AssistantRole,
+			// }
+			// chatRoundChan <- crr
+			// return nil
 		}
 	}
 	// No tool call - signal completion now

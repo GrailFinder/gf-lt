@@ -53,7 +53,7 @@ Your current tools:
 {
 "name":"bash",
 "args": ["command"],
-"when_to_use": "Main tool for file operations, shell commands, memory, git, and todo. Use bash "help" for all commands. Examples: bash "ls -la", bash "help", bash "mkdir -p foo/bar", bash "cat file.txt", bash "write file.txt content", bash "git status", bash "memory store foo bar", bash "todo create task", bash "grep pattern file", bash "grep -r pattern dir", bash "find . -name '*.go'", bash "cd /path", bash "pwd", bash "find . -name *.txt", bash "file image.png", bash "head file", bash "tail file", bash "wc -l file", bash "sort file", bash "uniq file", bash "sed 's/old/new/' file", bash "echo text", bash "go build ./...", bash "time", bash "stat file", bash "cp src dst", bash "mv src dst", bash "rm file"
+"when_to_use": "Main tool for file operations, shell commands, memory, git, and todo. Use help for all commands. Examples: ls -la, help, mkdir -p foo/bar, cat file.txt, git status, memory store foo bar, todo create task, grep pattern file, grep -r pattern dir, find . -name '*.go', cd /path, pwd, head -n 100 file, tail -n 10 file, wc -l file, sort file, uniq file, sed 's/old/new/g' file, echo text, go build ./..., stat file, cp src dst, mv src dst, rm file"
 },
 {
 "name":"browser",
@@ -118,7 +118,7 @@ After that you are free to respond to the user.
 	readURLSysPrompt   = `Extract and summarize the content from the webpage. Provide key information, main points, and any relevant details.`
 	summarySysPrompt   = `Please provide a concise summary of the following conversation. Focus on key points, decisions, and actions. Provide only the summary, no additional commentary.`
 	// reminderPrompt     = `Received a message without a tool call while task is in progress. Either call task_done to complete the task or proceed with the intended tool call.`
-	ReminderPrompt = `Reminder: task is active. If the task is complete, call task_done. Otherwise continue with the next tool call.`
+	// ReminderPrompt = `Reminder: task is active. If the task is complete, call task_done. Otherwise continue with the next tool call.`
 )
 
 var WebSearcher searcher.WebSurfer
@@ -395,7 +395,10 @@ func runCmd(args map[string]string) []byte {
 		logger.Error(msg)
 		return []byte(msg)
 	}
-	// Parse the command - first word is subcommand
+	if strings.HasPrefix(commandStr, "bash ") {
+		commandStr = strings.TrimPrefix(commandStr, "bash ")
+		commandStr = strings.Trim(commandStr, "\"")
+	}
 	parts := strings.Fields(commandStr)
 	if len(parts) == 0 {
 		return []byte("[error] empty command")
@@ -683,7 +686,7 @@ func getHelp(args []string) string {
   # System
   <any shell command> - run shell command directly
 
-Use: bash "command" to execute.`
+Use: command to execute. Example: ls -la | grep foo`
 	}
 
 	// Specific command help
@@ -1550,14 +1553,14 @@ var BaseTools = []models.Tool{
 		Type: "function",
 		Function: models.ToolFunc{
 			Name:        "bash",
-			Description: "Execute commands: shell, git, memory, todo. Usage: bash \"<command>\". Examples: bash \"ls -la\", bash \"git status\", bash \"memory store foo bar\", bash \"memory get foo\", bash \"todo create task\", bash \"help\", bash \"help memory\"",
+			Description: "Execute commands: shell, git, memory, todo. Examples: ls -la, git status, memory store foo bar, todo create task, help, help memory, find . -name '*.go'",
 			Parameters: models.ToolFuncParams{
 				Type:     "object",
 				Required: []string{"command"},
 				Properties: map[string]models.ToolArgProps{
 					"command": models.ToolArgProps{
 						Type:        "string",
-						Description: "command to execute. Use: bash \"help\" for all commands, bash \"help <cmd>\" for specific help. Examples: ls, cat, grep, git status, memory store, todo create, etc.",
+						Description: "command to execute. Examples: ls, cat file.txt, grep pattern, git status, memory store, todo create, help",
 					},
 				},
 			},
