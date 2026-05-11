@@ -37,8 +37,7 @@ You may put optional reasoning inside <think></think> but it must come BEFORE th
 If you finished with task or you got stuck and user's input required call task_done.
 Examples of common operations:
 - Read file: run "cat /path/file.txt" or run "head -n 100 /path/file.txt" (first 100 lines), run "sed -n '40,55p' /path/file.txt" (line range)
-- Write to file: run "echo 'content' > /path/file.txt"
-- Edit file: run "sed -i 's/old/new/g' /path/file.txt" (in-place substitution)
+- Edit file: use file_edit to replace a line range (preferred over sed for targeted changes). Example: file_edit llm.go 182 186 "new content"
 - Count lines: run "wc -l /path/file.txt"
 - Find files: run "find . -name '*.go'"
 - Search content: run "grep -r pattern /dir"
@@ -53,7 +52,7 @@ Your current tools:
 {
 "name":"bash",
 "args": ["command"],
-"when_to_use": "Main tool for file operations, shell commands, memory, git, and todo. Use help for all commands. Examples: ls -la, help, mkdir -p foo/bar, cat file.txt, git status, memory store foo bar, todo create task, grep pattern file, grep -r pattern dir, find . -name '*.go', cd /path, pwd, head -n 100 file, tail -n 10 file, wc -l file, sort file, uniq file, sed 's/old/new/g' file, echo text, go build ./..., stat file, cp src dst, mv src dst, rm file"
+"when_to_use": "Main tool for file operations, shell commands, memory, git, and todo. Use help for all commands. Examples: ls -la, help, mkdir -p foo/bar, cat file.txt, git status, memory store foo bar, todo create task, grep pattern file, grep -r pattern dir, find . -name '*.go', cd /path, pwd, head -n 100 file, tail -n 10 file, wc -l file, sort file, uniq file, sed 's/old/new/g' file, file_edit llm.go 182 186 \"new content\", echo text, go build ./..., stat file, cp src dst, mv src dst, rm file"
 },
 {
 "name":"browser",
@@ -638,6 +637,7 @@ func getHelp(args []string) string {
   # File operations
   ls [path]       - list files in directory
   cat <file>      - read file content
+  file_edit <file> <start> <end> <content> - edit file (replace line range)
   view_img <file> - view image file
   write <file>    - write content to file
   stat <file>     - get file info
@@ -716,7 +716,16 @@ Use: command to execute. Example: ls -la | grep foo`
   Write content to a file.
   Examples:
     bash "write notes.txt hello world"
-    bash "write data.json" (with stdin)`
+    bash "write data.json" (with stdin)
+  Note: use file_edit for targeted line-range edits (more reliable than sed).`
+	case "file_edit":
+		return `file_edit <file> <start> <end> <content>
+  Edit file by replacing line range [start, end] with new content.
+  Use start <= end to replace lines, start > end to insert-only at line start.
+  Example:
+    file_edit llm.go 182 186 "new content here"
+    file_edit llm.go 5 4 "inserted at line 5"
+  Note: line numbers are 1-indexed.`
 	case "memory":
 		return `memory <subcommand> [args]
   Manage memory storage.
@@ -1337,6 +1346,9 @@ var FnMap = map[string]FnHandler{
 	"read_url_raw":  readURLRaw,
 	"view_img":      viewImgTool,
 	"help":          helpTool,
+	"file_edit": func(args map[string]string) []byte {
+		return []byte(FsFileEdit(args))
+	},
 	// Unified run command
 	"bash": runCmd,
 	// Browser tool - routes to runBrowserCommand
@@ -1583,6 +1595,32 @@ var BaseTools = []models.Tool{
 					"args": models.ToolArgProps{
 						Type:        "string",
 						Description: "Arguments for the action (e.g., URL for go, selector for click, etc.)",
+					},
+				},
+			},
+		},
+	},
+	// file_edit - targeted line range editing
+	models.Tool{
+		Type: "function",
+		Function: models.ToolFunc{
+			Name:        "file_edit",
+			Description: "Edit an existing file by replacing a line range with new content. For insert-only (no deletion): use start > end (e.g., start=5, end=4 inserts at line 5).",
+			Parameters: models.ToolFuncParams{
+				Type:     "object",
+				Required: []string{"file_path", "old_lines", "new_content"},
+				Properties: map[string]models.ToolArgProps{
+					"file_path": models.ToolArgProps{
+						Type:        "string",
+						Description: "path to the file to edit",
+					},
+					"old_lines": models.ToolArgProps{
+						Type:        "string",
+						Description: `JSON object with start and end line numbers. Use {start, end} where start <= end to replace lines [start, end]. Use start > end (e.g., {start:5, end:4}) for insert-only at line start without deleting anything. Line numbers are 1-indexed.`,
+					},
+					"new_content": models.ToolArgProps{
+						Type:        "string",
+						Description: "new content to insert (use \\n for newlines). Empty string deletes the range without inserting.",
 					},
 				},
 			},
