@@ -36,10 +36,12 @@ When a task is in progress you MUST output either a tool call or task_done. Do n
 You may put optional reasoning inside <think></think> but it must come BEFORE the tool call. Never put anything after the tool call.
 If you finished with task or you got stuck and user's input required call task_done.
 Examples of common operations:
-- Write to file: run "write /path/file.txt hello world" or run "echo 'content' > /path/file.txt"
-- Edit file (sed): run "sed 's/old/new/g' /path/file.txt" (global replace), run "sed -i 's/old/new/' /path/file.txt" (in-place)
-- Read file: run "head -n 100 /path/file.txt" (first 100 lines), run "sed -n '40,55p' /path/file.txt" (specific line range)
+- Read file: run "cat /path/file.txt" or run "head -n 100 /path/file.txt" (first 100 lines), run "sed -n '40,55p' /path/file.txt" (line range)
+- Write to file: run "echo 'content' > /path/file.txt"
+- Edit file: run "sed -i 's/old/new/g' /path/file.txt" (in-place substitution)
 - Count lines: run "wc -l /path/file.txt"
+- Find files: run "find . -name '*.go'"
+- Search content: run "grep -r pattern /dir"
 </tool_guide>
 `
 	ToolSysMsg = `Tools are enabled. While making a tool call avoid writing anything else.
@@ -51,7 +53,7 @@ Your current tools:
 {
 "name":"bash",
 "args": ["command"],
-"when_to_use": "Main tool for file operations, shell commands, memory, git, and todo. Use bash "help" for all commands. Examples: bash "ls -la", bash "help", bash "mkdir -p foo/bar", bash "cat file.txt", bash "write file.txt content", bash "git status", bash "memory store foo bar", bash "todo create task", bash "grep pattern file", bash "grep -r pattern dir", bash "find pattern", bash "cd /path", bash "pwd", bash "find . -name *.txt", bash "file image.png", bash "head file", bash "tail file", bash "wc -l file", bash "sort file", bash "uniq file", bash "sed 's/old/new/' file", bash "echo text", bash "go build ./...", bash "time", bash "stat file", bash "cp src dst", bash "mv src dst", bash "rm file"
+"when_to_use": "Main tool for file operations, shell commands, memory, git, and todo. Use bash "help" for all commands. Examples: bash "ls -la", bash "help", bash "mkdir -p foo/bar", bash "cat file.txt", bash "write file.txt content", bash "git status", bash "memory store foo bar", bash "todo create task", bash "grep pattern file", bash "grep -r pattern dir", bash "find . -name '*.go'", bash "cd /path", bash "pwd", bash "find . -name *.txt", bash "file image.png", bash "head file", bash "tail file", bash "wc -l file", bash "sort file", bash "uniq file", bash "sed 's/old/new/' file", bash "echo text", bash "go build ./...", bash "time", bash "stat file", bash "cp src dst", bash "mv src dst", bash "rm file"
 },
 {
 "name":"browser",
@@ -758,11 +760,13 @@ Use: bash "command" to execute.`
     bash "grep -i warn log.txt"
     bash "grep -r TODO ." (search recursively in current dir)`
 	case "find":
-		return `find <pattern> [directory]
-  Find files by name (recursive search).
+		return `find [path] [options]
+  Full Unix find command supported.
+  Common options: -name <pattern>, -type f|d, -mtime, -size, -exec.
   Example:
-    bash "find .go"
-    bash "find *.md /project"`
+    bash "find . -name '*.go'" (find Go files)
+    bash "find . -type f -name '*.txt'" (find text files)
+    bash "find . -mtime -7" (modified in last 7 days)`
 	case "cd":
 		return `cd <directory>
   Change working directory.
@@ -783,15 +787,18 @@ Use: bash "command" to execute.`
     bash "mkdir /full/path/myfolder"
     bash "mkdir -p /full/path/to/nested/folder"`
 	case "sed":
-		return `sed 's/old/new/[g]' [file]
-  Stream editor for text replacement.
-  Options:
-    -i  in-place editing
-    -g  global replacement (replace all)
+		return `sed [options] [file]
+  Stream editor - substitution, insertion, deletion.
+  Full Unix sed syntax supported:
+    s/old/new/[flags]  substitution (g=global, i=ignore case)
+    -n                suppress output (use with p to print lines)
+    -i                in-place editing
+    -e script         add script command
+    /pattern/cmd      act on matching lines
   Examples:
-    bash "sed 's/foo/bar/' file.txt"
-    bash "sed 's/foo/bar/g' file.txt" (global)
-    bash "sed -i 's/foo/bar/' file.txt" (in-place)
+    bash "sed 's/foo/bar/g' file.txt"
+    bash "sed -i 's/foo/bar/' file.txt"
+    bash "sed -n '40,55p' file.txt" (print lines 40-55)
     bash "cat file.txt | sed 's/foo/bar/'" (pipe from stdin)`
 	case "go":
 		return `go <command>

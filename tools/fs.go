@@ -94,6 +94,7 @@ func IsImageFile(path string) bool {
 	return ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".gif" || ext == ".webp" || ext == ".svg"
 }
 
+// Deprecated: Use system cat via exec.Command for full Unix flag support.
 func FsLs(args []string, stdin string) string {
 	showAll := false
 	longFormat := false
@@ -206,6 +207,7 @@ func FsLs(args []string, stdin string) string {
 	return strings.TrimRight(out.String(), "\n")
 }
 
+// Deprecated: Use system cat via exec.Command for full Unix flag support.
 func FsCat(args []string, stdin string) string {
 	b64 := false
 	var paths []string
@@ -358,6 +360,7 @@ func FsWrite(args []string, stdin string) string {
 	return result
 }
 
+// Deprecated: Use system stat via exec.Command for full Unix flag support.
 func FsStat(args []string, stdin string) string {
 	if len(args) == 0 {
 		return "[error] usage: stat <path>"
@@ -397,6 +400,7 @@ func FsStat(args []string, stdin string) string {
 	return strings.TrimRight(out.String(), "\n")
 }
 
+// Deprecated: Use system rm via exec.Command for full Unix flag support.
 func FsRm(args []string, stdin string) string {
 	if len(args) == 0 {
 		return "[error] usage: rm <path>"
@@ -457,6 +461,7 @@ func FsRm(args []string, stdin string) string {
 	return "Removed " + strings.Join(removed, ", ")
 }
 
+// Deprecated: Use system cp via exec.Command for full Unix flag support.
 func FsCp(args []string, stdin string) string {
 	if len(args) < 2 {
 		return "[error] usage: cp <src> <dst>"
@@ -535,6 +540,7 @@ func FsCp(args []string, stdin string) string {
 	return strings.Join(results, ", ")
 }
 
+// Deprecated: Use system mv via exec.Command for full Unix flag support.
 func FsMv(args []string, stdin string) string {
 	if len(args) < 2 {
 		return "[error] usage: mv <src> <dst>"
@@ -608,6 +614,7 @@ func FsMv(args []string, stdin string) string {
 	return strings.Join(results, ", ")
 }
 
+// Deprecated: Use system mkdir via exec.Command for full Unix flag support.
 func FsMkdir(args []string, stdin string) string {
 	if len(args) == 0 {
 		return "[error] usage: mkdir [-p] <dir>"
@@ -645,6 +652,7 @@ func FsMkdir(args []string, stdin string) string {
 
 // Text processing commands
 
+// Deprecated: Use system echo via exec.Command for full Unix flag support.
 func FsEcho(args []string, stdin string) string {
 	if stdin != "" {
 		return stdin
@@ -656,10 +664,12 @@ func FsEcho(args []string, stdin string) string {
 	return result
 }
 
+// Deprecated: Use system date command via exec.Command instead.
 func FsTime(args []string, stdin string) string {
 	return time.Now().Format("2006-01-02 15:04:05 MST")
 }
 
+// Deprecated: Use system find via exec.Command for full flag support (-name, -type, etc).
 func FsFind(args []string, stdin string) string {
 	if len(args) == 0 {
 		return "[error] usage: find <pattern> [dir]"
@@ -712,6 +722,7 @@ func FsFind(args []string, stdin string) string {
 	return strings.Join(results, "\n")
 }
 
+// Deprecated: Use system grep via exec.Command for full Unix flag support (-i, -r, -E, etc).
 func FsGrep(args []string, stdin string) string {
 	if len(args) == 0 {
 		return "[error] usage: grep [-i] [-v] [-c] [-E] [-r] <pattern> [file|dir]"
@@ -926,6 +937,7 @@ func grepRecursive(pattern, dirOrFile string, ignoreCase, invert, countOnly, use
 	return strings.Join(results, "\n")
 }
 
+// Deprecated: Use system head via exec.Command for full Unix flag support.
 func FsHead(args []string, stdin string) string {
 	n := 10
 	var filePath string
@@ -964,6 +976,7 @@ func FsHead(args []string, stdin string) string {
 	return strings.Join(lines, "\n")
 }
 
+// Deprecated: Use system tail via exec.Command for full Unix flag support.
 func FsTail(args []string, stdin string) string {
 	n := 10
 	var filePath string
@@ -1005,6 +1018,7 @@ func FsTail(args []string, stdin string) string {
 	return strings.Join(lines, "\n")
 }
 
+// Deprecated: Use system wc via exec.Command for full Unix flag support.
 func FsWc(args []string, stdin string) string {
 	var content string
 	var filePath string
@@ -1048,6 +1062,7 @@ func FsWc(args []string, stdin string) string {
 	return fmt.Sprintf("%d lines, %d words, %d chars", lines, words, chars)
 }
 
+// Deprecated: Use system sort via exec.Command for full Unix flag support.
 func FsSort(args []string, stdin string) string {
 	reverse := false
 	numeric := false
@@ -1101,6 +1116,7 @@ func FsSort(args []string, stdin string) string {
 	return strings.Join(lines, "\n")
 }
 
+// Deprecated: Use system uniq via exec.Command for full Unix flag support.
 func FsUniq(args []string, stdin string) string {
 	showCount := false
 	var filePath string
@@ -1182,6 +1198,7 @@ func FsGit(args []string, stdin string) string {
 	return string(output)
 }
 
+// Deprecated: Use system pwd via exec.Command.
 func FsPwd(args []string, stdin string) string {
 	return cfg.FilePickerDir
 }
@@ -1206,6 +1223,7 @@ func FsCd(args []string, stdin string) string {
 	return "Changed directory to: " + cfg.FilePickerDir
 }
 
+// Deprecated: Use system sed via exec.Command for full Unix sed syntax (substitution, -n, -i, etc).
 func FsSed(args []string, stdin string) string {
 	if len(args) == 0 {
 		return "[error] usage: sed 's/old/new/[g]' [file]"

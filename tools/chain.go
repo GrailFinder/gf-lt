@@ -313,48 +313,14 @@ func tokenize(input string) []string {
 	return tokens
 }
 
-// execBuiltin executes a built-in command if it exists.
+// execBuiltin executes built-in commands that need Go-side state management.
+// All other commands (find, sed, grep, cat, ls, etc.) fall through to exec.Command
+// for full Unix flag support and pipe chaining.
 func execBuiltin(name string, args []string, stdin string) (string, error) {
 	var result string
 	switch name {
-	case "echo":
-		result = FsEcho(args, stdin)
-	case "time":
-		result = FsTime(args, stdin)
-	case "cat":
-		result = FsCat(args, stdin)
-	case "pwd":
-		result = FsPwd(args, stdin)
 	case "cd":
 		result = FsCd(args, stdin)
-	case "mkdir":
-		result = FsMkdir(args, stdin)
-	case "ls":
-		result = FsLs(args, stdin)
-	case "cp":
-		result = FsCp(args, stdin)
-	case "mv":
-		result = FsMv(args, stdin)
-	case "rm":
-		result = FsRm(args, stdin)
-	case "grep":
-		result = FsGrep(args, stdin)
-	case "head":
-		result = FsHead(args, stdin)
-	case "tail":
-		result = FsTail(args, stdin)
-	case "wc":
-		result = FsWc(args, stdin)
-	case "sort":
-		result = FsSort(args, stdin)
-	case "uniq":
-		result = FsUniq(args, stdin)
-	case "sed":
-		result = FsSed(args, stdin)
-	case "stat":
-		result = FsStat(args, stdin)
-	case "find":
-		result = FsFind(args, stdin)
 	case "go":
 		if len(args) == 0 {
 			return "[error] usage: go <subcommand> [options]", nil
