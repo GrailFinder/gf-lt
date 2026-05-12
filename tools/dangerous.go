@@ -2,7 +2,6 @@ package tools
 
 import (
 	"strings"
-	"time"
 )
 
 var ConfirmChan = make(chan ConfirmRequest, 1)
@@ -44,16 +43,6 @@ func RequestConfirmation(req ConfirmRequest) bool {
 		ToolArgs: req.ToolArgs,
 		Result:   resultCh,
 	}
-	timeout := 120 * time.Second
-	select {
-	case ConfirmChan <- extendedReq:
-	case <-time.After(timeout):
-		return false
-	}
-	select {
-	case approved := <-resultCh:
-		return approved
-	case <-time.After(timeout):
-		return false
-	}
+	ConfirmChan <- extendedReq
+	return <-resultCh
 }

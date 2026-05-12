@@ -11,7 +11,6 @@ import (
 	"path"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/gdamore/tcell/v2"
@@ -46,8 +45,8 @@ var (
 	pendingConfirmReq struct {
 		label   string
 		command string
-		resultChan chan<- bool
 	}
+	currentConfirmResultCh chan<- bool
 	toastTimer         *time.Timer
 	confirmPageName     = "confirm"
 	fullscreenMode      bool
@@ -255,28 +254,20 @@ func initTUI() {
 	}
 	// Start background goroutine to update model color cache
 	startModelColorUpdater()
-	// Start goroutine to listen for dangerous command confirmations
-	var confirmMu sync.Mutex
-	var confirmActive bool
 	go func() {
 		for req := range tools.ConfirmChan {
-			if app == nil || confirmActive {
-				// App not ready or confirmation already in progress — deny by default
+			if app == nil {
 				req.Result <- false
 				continue
 			}
 			resultCh := make(chan bool, 1)
-			confirmMu.Lock()
-			confirmActive = true
-			confirmMu.Unlock()
+			currentConfirmResultCh = resultCh
 			pendingConfirmReq = struct {
 				label   string
 				command string
-				resultChan chan<- bool
 			}{
 				label:   req.ToolName,
 				command: req.Command,
-				resultChan: resultCh,
 			}
 			confirmModal.SetText(fmt.Sprintf(
 				"⚠️ LLM is requesting a dangerous command:\n\n%s\n\nTool: %s\n\nDo you want to allow this?",
@@ -285,9 +276,6 @@ func initTUI() {
 				pages.AddPage("confirm", confirmModal, true, true)
 			})
 			approved := <-resultCh
-			confirmMu.Lock()
-			confirmActive = false
-			confirmMu.Unlock()
 			req.Result <- approved
 		}
 	}()
@@ -362,18 +350,18 @@ func initTUI() {
 		SetButtonTextColor(tcell.ColorWhite).
 		SetDoneFunc(func(buttonIndex int, buttonLabel string) {
 			approved := buttonLabel == "Yes"
-			pendingConfirmReq.resultChan <- approved
+			currentConfirmResultCh <- approved
 			pages.SwitchToPage("main")
 		})
 	confirmModal.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		if event.Key() == tcell.KeyRune {
 			switch event.Rune() {
 			case 'y', 'Y':
-				pendingConfirmReq.resultChan <- true
+				currentConfirmResultCh <- true
 				pages.SwitchToPage("main")
 				return nil
 			case 'n', 'N', 'x', 'X':
-				pendingConfirmReq.resultChan <- false
+				currentConfirmResultCh <- false
 				pages.SwitchToPage("main")
 				return nil
 			}
@@ -1234,7 +1222,35 @@ func initTUI() {
 				}
 				colorText()
 			} else {
-				pages.AddPage(confirmPageName, confirmModal, true, true)
+				go func() {
+					resultCh := make(chan bool, 1)
+					currentConfirmResultCh = resultCh
+					app.QueueUpdateDraw(func() {
+						pages.AddPage(confirmPageName, confirmModal, true, true)
+					})
+					approved := <-resultCh
+					if !approved {
+						return
+					}
+					app.QueueUpdateDraw(func() {
+						persona := cfg.UserRole
+						nl := "\n\n"
+						prevText := textView.GetText(true)
+						if strings.HasSuffix(prevText, nl) {
+							nl = ""
+						} else if strings.HasSuffix(prevText, "\n") {
+							nl = "\n"
+						}
+						fmt.Fprintf(textView, "%s[-:-:b](%d) <%s>: [-:-:-]\n\n",
+							nl, len(chatBody.Messages), persona)
+						textArea.SetText("", true)
+						if cfg.AutoScrollEnabled {
+							textView.ScrollToEnd()
+						}
+						colorText()
+						chatRoundChan <- &models.ChatRoundReq{Role: persona, UserMsg: ""}
+					})
+				}()
 				return nil
 			}
 			// go chatRound(msgText, persona, textView, false, false)

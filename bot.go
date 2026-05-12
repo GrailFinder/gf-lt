@@ -1430,31 +1430,72 @@ func findCall(msg, toolCall string) bool {
 	// Create tool response message with the proper tool_call_id
 	// Mark shell commands as always visible
 	isShellCommand := fc.Name == "execute_command"
-	// Check if response is multimodal content (image)
+	// Check if response is an image path marker — auto-convert to multimodal via FsViewImg
 	var toolResponseMsg models.RoleMsg
-	if strings.HasPrefix(strings.TrimSpace(toolMsg), `{"type":"multimodal_content"`) {
-		// Parse multimodal content response
+	if strings.HasPrefix(strings.TrimSpace(toolMsg), `{"type":"image_path"`) {
+		var pathResp struct {
+			Type string `json:"type"`
+			Path string `json:"path"`
+		}
+		if err := json.Unmarshal([]byte(toolMsg), &pathResp); err == nil && pathResp.Type == "image_path" && pathResp.Path != "" {
+			viewResp := tools.FsViewImg([]string{pathResp.Path}, "")
+			if strings.HasPrefix(strings.TrimSpace(viewResp), `{"type":"multimodal_content"`) {
+				multimodalResp := models.MultimodalToolResp{}
+				if err := json.Unmarshal([]byte(viewResp), &multimodalResp); err == nil {
+					var contentParts []any
+					var textParts []string
+					for _, part := range multimodalResp.Parts {
+						switch part["type"] {
+						case "text":
+							textParts = append(textParts, part["text"])
+							contentParts = append(contentParts, models.TextContentPart{Type: "text", Text: part["text"]})
+						case "image_url":
+							contentParts = append(contentParts, models.ImageContentPart{
+								Type: "image_url",
+								Path: part["path"],
+								ImageURL: struct {
+									URL string `json:"url"`
+								}{URL: part["url"]},
+							})
+						}
+					}
+					toolResponseMsg = models.RoleMsg{
+						Role:            cfg.ToolRole,
+						ContentParts:    contentParts,
+						HasContentParts: true,
+						ToolCallID:      lastToolCall.ID,
+						IsShellCommand:  isShellCommand,
+						Content:         strings.Join(textParts, "\n"),
+					}
+				}
+			}
+		}
+		if toolResponseMsg.Role == "" {
+			toolResponseMsg = models.RoleMsg{
+				Role:           cfg.ToolRole,
+				Content:        toolMsg,
+				ToolCallID:     lastToolCall.ID,
+				IsShellCommand: isShellCommand,
+			}
+		}
+	} else if strings.HasPrefix(strings.TrimSpace(toolMsg), `{"type":"multimodal_content"`) {
 		multimodalResp := models.MultimodalToolResp{}
 		if err := json.Unmarshal([]byte(toolMsg), &multimodalResp); err == nil && multimodalResp.Type == "multimodal_content" {
-			// Create RoleMsg with ContentParts
 			var contentParts []any
+			var textParts []string
 			for _, part := range multimodalResp.Parts {
-				partType := part["type"]
-				switch partType {
+				switch part["type"] {
 				case "text":
+					textParts = append(textParts, part["text"])
 					contentParts = append(contentParts, models.TextContentPart{Type: "text", Text: part["text"]})
 				case "image_url":
-					imgURL := part["url"]
-					imgPath := part["path"]
 					contentParts = append(contentParts, models.ImageContentPart{
 						Type: "image_url",
-						Path: imgPath,
+						Path: part["path"],
 						ImageURL: struct {
 							URL string `json:"url"`
-						}{URL: imgURL},
+						}{URL: part["url"]},
 					})
-				default:
-					continue
 				}
 			}
 			toolResponseMsg = models.RoleMsg{
@@ -1463,9 +1504,9 @@ func findCall(msg, toolCall string) bool {
 				HasContentParts: true,
 				ToolCallID:      lastToolCall.ID,
 				IsShellCommand:  isShellCommand,
+				Content:         strings.Join(textParts, "\n"),
 			}
 		} else {
-			// Fallback to regular content
 			toolResponseMsg = models.RoleMsg{
 				Role:           cfg.ToolRole,
 				Content:        toolMsg,
