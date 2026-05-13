@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"gf-lt/tools"
 	"image"
@@ -21,6 +22,38 @@ import (
 
 var currentFilePickerUeberzugImg *ueberzug.Image
 
+func getChatSummary(msgsJSON string, maxMsgs int) string {
+	var msgs []models.RoleMsg
+	if err := json.Unmarshal([]byte(msgsJSON), &msgs); err != nil {
+		return "error"
+	}
+	var userMsgs []string
+	for _, m := range msgs {
+		if m.Role == "user" {
+			content := m.Content
+			if len(content) > 40 {
+				content = content[:40] + "..."
+			}
+			userMsgs = append(userMsgs, content)
+			if len(userMsgs) >= maxMsgs {
+				break
+			}
+		}
+	}
+	if len(userMsgs) == 0 {
+		return "(no user msgs)"
+	}
+	return strings.Join(userMsgs, " | ")
+}
+
+func getMsgCount(msgsJSON string) string {
+	var msgs []models.RoleMsg
+	if err := json.Unmarshal([]byte(msgsJSON), &msgs); err != nil {
+		return "0"
+	}
+	return fmt.Sprintf("%d", len(msgs))
+}
+
 func makeChatTable(chatMap map[string]models.Chat) *tview.Table {
 	actions := []string{"load", "rename", "delete", "update card", "move sysprompt onto 1st msg", "new_chat_from_card"}
 	chatList := make([]string, len(chatMap))
@@ -39,7 +72,7 @@ func makeChatTable(chatMap map[string]models.Chat) *tview.Table {
 		}
 	}
 	// Add 1 extra row for header
-	rows, cols := len(chatMap)+1, len(actions)+4 // +2 for name, +2 for timestamps
+	rows, cols := len(chatMap)+1, len(actions)+5 // +2 for name, +2 for timestamps, +1 for msg count
 	chatActTable := tview.NewTable().
 		SetBorders(true)
 	// Add header row (row 0)
@@ -52,11 +85,13 @@ func makeChatTable(chatMap map[string]models.Chat) *tview.Table {
 		case 1:
 			headerText = "Preview"
 		case 2:
-			headerText = "Created At"
+			headerText = "Msg Count"
 		case 3:
+			headerText = "Created At"
+		case 4:
 			headerText = "Updated At"
 		default:
-			headerText = actions[c-4]
+			headerText = actions[c-5]
 		}
 		chatActTable.SetCell(0, c,
 			tview.NewTableCell(headerText).
@@ -65,7 +100,6 @@ func makeChatTable(chatMap map[string]models.Chat) *tview.Table {
 				SetAlign(tview.AlignCenter).
 				SetAttributes(tcell.AttrBold))
 	}
-	previewLen := 100
 	// Add data rows (starting from row 1)
 	for r := 0; r < rows-1; r++ { // rows-1 because we added a header row
 		for c := 0; c < cols; c++ {
@@ -78,22 +112,25 @@ func makeChatTable(chatMap map[string]models.Chat) *tview.Table {
 						SetTextColor(color).
 						SetAlign(tview.AlignCenter))
 			case 1:
-				if len(chatMap[chatList[r]].Msgs) < 100 {
-					previewLen = len(chatMap[chatList[r]].Msgs)
-				}
-				chatActTable.SetCell(r+1, c, // +1 to account for header row
-					tview.NewTableCell(chatMap[chatList[r]].Msgs[len(chatMap[chatList[r]].Msgs)-previewLen:]).
+				chatActTable.SetCell(r+1, c,
+					tview.NewTableCell(getChatSummary(chatMap[chatList[r]].Msgs, 3)).
 						SetSelectable(false).
 						SetTextColor(color).
 						SetAlign(tview.AlignCenter))
 			case 2:
+				chatActTable.SetCell(r+1, c,
+					tview.NewTableCell(getMsgCount(chatMap[chatList[r]].Msgs)).
+						SetSelectable(false).
+						SetTextColor(color).
+						SetAlign(tview.AlignCenter))
+			case 3:
 				// Created At column
 				chatActTable.SetCell(r+1, c, // +1 to account for header row
 					tview.NewTableCell(chatMap[chatList[r]].CreatedAt.Format("2006-01-02 15:04")).
 						SetSelectable(false).
 						SetTextColor(color).
 						SetAlign(tview.AlignCenter))
-			case 3:
+			case 4:
 				// Updated At column
 				chatActTable.SetCell(r+1, c, // +1 to account for header row
 					tview.NewTableCell(chatMap[chatList[r]].UpdatedAt.Format("2006-01-02 15:04")).
@@ -102,7 +139,7 @@ func makeChatTable(chatMap map[string]models.Chat) *tview.Table {
 						SetAlign(tview.AlignCenter))
 			default:
 				chatActTable.SetCell(r+1, c, // +1 to account for header row
-					tview.NewTableCell(actions[c-4]). // Adjusted offset to account for 2 new timestamp columns
+					tview.NewTableCell(actions[c-5]). // Adjusted offset to account for new columns
 										SetTextColor(color).
 										SetAlign(tview.AlignCenter))
 			}
