@@ -1558,6 +1558,7 @@ func chatToTextSlice(messages []models.RoleMsg, showSys bool) []string {
 func chatToText(messages []models.RoleMsg, showSys bool) string {
 	s := chatToTextSlice(messages, showSys)
 	text := strings.Join(s, "\n")
+	text = strings.ReplaceAll(text, "</think>", "</think>\n")
 	// Collapse thinking blocks if enabled
 	if thinkingCollapsed {
 		text = models.ThinkRE.ReplaceAllStringFunc(text, func(match string) string {
