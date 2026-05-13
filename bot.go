@@ -30,30 +30,30 @@ import (
 )
 
 var (
-	httpClient            = &http.Client{}
-	cfg                   *config.Config
-	logger                *slog.Logger
-	logLevel              = new(slog.LevelVar)
-	ctx, cancel           = context.WithCancel(context.Background())
-	activeChatName        string
-	chatRoundChan         = make(chan *models.ChatRoundReq, 1)
-	chunkChan             = make(chan string, 10)
-	openAIToolChan        = make(chan string, 10)
-	streamDone            = make(chan bool, 1)
-	chatBody              *models.ChatBody
-	store                 storage.FullRepo
-	defaultStarter        = []models.RoleMsg{}
-	interruptResp         atomic.Bool
-	ragger                *rag.RAG
-	chunkParser           ChunkParser
-	lastToolCall          *models.FuncCall
-	lastRespStats         *models.ResponseStats
-	outputHandler         OutputHandler
-	cliPrevOutput         string
-	cliRespDone           chan bool
-	taskActive            atomic.Bool
-	consecutiveToolCalls  atomic.Int32
-	taskFailures          int32
+	httpClient           = &http.Client{}
+	cfg                  *config.Config
+	logger               *slog.Logger
+	logLevel             = new(slog.LevelVar)
+	ctx, cancel          = context.WithCancel(context.Background())
+	activeChatName       string
+	chatRoundChan        = make(chan *models.ChatRoundReq, 1)
+	chunkChan            = make(chan string, 10)
+	openAIToolChan       = make(chan string, 10)
+	streamDone           = make(chan bool, 1)
+	chatBody             *models.ChatBody
+	store                storage.FullRepo
+	defaultStarter       = []models.RoleMsg{}
+	interruptResp        atomic.Bool
+	ragger               *rag.RAG
+	chunkParser          ChunkParser
+	lastToolCall         *models.FuncCall
+	lastRespStats        *models.ResponseStats
+	outputHandler        OutputHandler
+	cliPrevOutput        string
+	cliRespDone          chan bool
+	taskActive           atomic.Bool
+	consecutiveToolCalls atomic.Int32
+	taskFailures         int32
 )
 
 type OutputHandler interface {
@@ -1353,29 +1353,6 @@ func findCall(msg, toolCall string) bool {
 		Name: lastToolCall.Name,
 		Args: mapToString(lastToolCall.Args),
 	}
-	// call a func
-	// _, ok := tools.FnMap[fc.Name]
-	// if !ok {
-	// 	m := fc.Name + " is not implemented"
-	// 	// Create tool response message with the proper tool_call_id
-	// 	toolResponseMsg := models.RoleMsg{
-	// 		Role:       cfg.ToolRole,
-	// 		Content:    m,
-	// 		ToolCallID: lastToolCall.ID, // Use the stored tool call ID
-	// 	}
-	// 	chatBody.Messages = append(chatBody.Messages, toolResponseMsg)
-	// 	logger.Debug("findCall: added tool not implemented response", "role", toolResponseMsg.Role, "content_len", len(toolResponseMsg.Content), "tool_call_id", toolResponseMsg.ToolCallID, "message_count_after_add", len(chatBody.Messages))
-	// 	// Clear the stored tool call ID after using it
-	// 	lastToolCall.ID = ""
-	// 	// Trigger the assistant to continue processing with the new tool response
-	// 	// by calling chatRound with empty content to continue the assistant's response
-	// 	crr := &models.ChatRoundReq{
-	// 		Role: cfg.AssistantRole,
-	// 	}
-	// 	// failed to find tool
-	// 	chatRoundChan <- crr
-	// 	return true
-	// }
 	// Check for dangerous commands that require user confirmation
 	if dangerous, label := tools.IsDangerousCommand(fc.Name, fc.Args); dangerous {
 		req := tools.ConfirmRequest{
@@ -1430,55 +1407,8 @@ func findCall(msg, toolCall string) bool {
 	// Create tool response message with the proper tool_call_id
 	// Mark shell commands as always visible
 	isShellCommand := fc.Name == "execute_command"
-	// Check if response is an image path marker — auto-convert to multimodal via FsViewImg
 	var toolResponseMsg models.RoleMsg
-	if strings.HasPrefix(strings.TrimSpace(toolMsg), `{"type":"image_path"`) {
-		var pathResp struct {
-			Type string `json:"type"`
-			Path string `json:"path"`
-		}
-		if err := json.Unmarshal([]byte(toolMsg), &pathResp); err == nil && pathResp.Type == "image_path" && pathResp.Path != "" {
-			viewResp := tools.FsViewImg([]string{pathResp.Path}, "")
-			if strings.HasPrefix(strings.TrimSpace(viewResp), `{"type":"multimodal_content"`) {
-				multimodalResp := models.MultimodalToolResp{}
-				if err := json.Unmarshal([]byte(viewResp), &multimodalResp); err == nil {
-					var contentParts []any
-					var textParts []string
-					for _, part := range multimodalResp.Parts {
-						switch part["type"] {
-						case "text":
-							textParts = append(textParts, part["text"])
-							contentParts = append(contentParts, models.TextContentPart{Type: "text", Text: part["text"]})
-						case "image_url":
-							contentParts = append(contentParts, models.ImageContentPart{
-								Type: "image_url",
-								Path: part["path"],
-								ImageURL: struct {
-									URL string `json:"url"`
-								}{URL: part["url"]},
-							})
-						}
-					}
-					toolResponseMsg = models.RoleMsg{
-						Role:            cfg.ToolRole,
-						ContentParts:    contentParts,
-						HasContentParts: true,
-						ToolCallID:      lastToolCall.ID,
-						IsShellCommand:  isShellCommand,
-						Content:         strings.Join(textParts, "\n"),
-					}
-				}
-			}
-		}
-		if toolResponseMsg.Role == "" {
-			toolResponseMsg = models.RoleMsg{
-				Role:           cfg.ToolRole,
-				Content:        toolMsg,
-				ToolCallID:     lastToolCall.ID,
-				IsShellCommand: isShellCommand,
-			}
-		}
-	} else if strings.HasPrefix(strings.TrimSpace(toolMsg), `{"type":"multimodal_content"`) {
+	if strings.HasPrefix(strings.TrimSpace(toolMsg), `{"type":"multimodal_content"`) {
 		multimodalResp := models.MultimodalToolResp{}
 		if err := json.Unmarshal([]byte(toolMsg), &multimodalResp); err == nil && multimodalResp.Type == "multimodal_content" {
 			var contentParts []any
