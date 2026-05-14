@@ -186,11 +186,12 @@ func FsLs(args []string, stdin string) string {
 		}
 		info, _ := e.Info()
 		if longFormat {
-			if e.IsDir() {
+			switch {
+			case e.IsDir():
 				fmt.Fprintf(&out, "d  %-8s %s/\n", "-", name)
-			} else if info != nil {
+			case info != nil:
 				fmt.Fprintf(&out, "f  %-8s %s\n", humanSize(info.Size()), name)
-			} else {
+			default:
 				fmt.Fprintf(&out, "f  %-8s %s\n", "?", name)
 			}
 		} else {
@@ -694,17 +695,13 @@ func FsFind(args []string, stdin string) string {
 		if err != nil {
 			return err
 		}
-		name := fi.Name()
-		matched := false
-		if strings.Contains(name, pattern) {
-			matched = true
-		}
-		if !matched {
+		fileName := fi.Name()
+		if !strings.Contains(fileName, pattern) {
 			return nil
 		}
 		relPath, _ := filepath.Rel(rootDir, path)
 		if relPath == "" {
-			relPath = name
+			relPath = fileName
 		}
 		if fi.IsDir() {
 			results = append(results, relPath+"/")
@@ -785,7 +782,8 @@ func FsGrep(args []string, stdin string) string {
 	}
 
 	var lines []string
-	if filePath != "" {
+	switch {
+	case filePath != "":
 		abs, err := resolvePath(filePath)
 		if err != nil {
 			return fmt.Sprintf("[error] grep: %v", err)
@@ -795,9 +793,9 @@ func FsGrep(args []string, stdin string) string {
 			return fmt.Sprintf("[error] grep: %v", err)
 		}
 		lines = strings.Split(string(data), "\n")
-	} else if stdin != "" {
+	case stdin != "":
 		lines = strings.Split(stdin, "\n")
-	} else {
+	default:
 		return "[error] grep: no input (use file path or pipe from stdin)"
 	}
 
@@ -955,7 +953,8 @@ func FsHead(args []string, stdin string) string {
 		}
 	}
 	var lines []string
-	if filePath != "" {
+	switch {
+	case filePath != "":
 		abs, err := resolvePath(filePath)
 		if err != nil {
 			return fmt.Sprintf("[error] head: %v", err)
@@ -965,9 +964,9 @@ func FsHead(args []string, stdin string) string {
 			return fmt.Sprintf("[error] head: %v", err)
 		}
 		lines = strings.Split(string(data), "\n")
-	} else if stdin != "" {
+	case stdin != "":
 		lines = strings.Split(stdin, "\n")
-	} else {
+	default:
 		return "[error] head: no input (use file path or pipe from stdin)"
 	}
 	if n > 0 && len(lines) > n {
@@ -994,7 +993,8 @@ func FsTail(args []string, stdin string) string {
 		}
 	}
 	var lines []string
-	if filePath != "" {
+	switch {
+	case filePath != "":
 		abs, err := resolvePath(filePath)
 		if err != nil {
 			return fmt.Sprintf("[error] tail: %v", err)
@@ -1004,9 +1004,9 @@ func FsTail(args []string, stdin string) string {
 			return fmt.Sprintf("[error] tail: %v", err)
 		}
 		lines = strings.Split(string(data), "\n")
-	} else if stdin != "" {
+	case stdin != "":
 		lines = strings.Split(stdin, "\n")
-	} else {
+	default:
 		return "[error] tail: no input (use file path or pipe from stdin)"
 	}
 	for len(lines) > 0 && lines[len(lines)-1] == "" {
@@ -1020,7 +1020,6 @@ func FsTail(args []string, stdin string) string {
 
 // Deprecated: Use system wc via exec.Command for full Unix flag support.
 func FsWc(args []string, stdin string) string {
-	var content string
 	var filePath string
 	for _, a := range args {
 		if strings.HasPrefix(a, "-") {
@@ -1030,7 +1029,9 @@ func FsWc(args []string, stdin string) string {
 			filePath = a
 		}
 	}
-	if filePath != "" {
+	var content string
+	switch {
+	case filePath != "":
 		abs, err := resolvePath(filePath)
 		if err != nil {
 			return fmt.Sprintf("[error] wc: %v", err)
@@ -1040,9 +1041,9 @@ func FsWc(args []string, stdin string) string {
 			return fmt.Sprintf("[error] wc: %v", err)
 		}
 		content = string(data)
-	} else if stdin != "" {
+	case stdin != "":
 		content = stdin
-	} else {
+	default:
 		return "[error] wc: no input (use file path or pipe from stdin)"
 	}
 	content = strings.TrimRight(content, "\n")
@@ -1080,7 +1081,8 @@ func FsSort(args []string, stdin string) string {
 		}
 	}
 	var lines []string
-	if filePath != "" {
+	switch {
+	case filePath != "":
 		abs, err := resolvePath(filePath)
 		if err != nil {
 			return fmt.Sprintf("[error] sort: %v", err)
@@ -1090,9 +1092,9 @@ func FsSort(args []string, stdin string) string {
 			return fmt.Sprintf("[error] sort: %v", err)
 		}
 		lines = strings.Split(string(data), "\n")
-	} else if stdin != "" {
+	case stdin != "":
 		lines = strings.Split(stdin, "\n")
-	} else {
+	default:
 		return "[error] sort: no input (use file path or pipe from stdin)"
 	}
 	for len(lines) > 0 && lines[len(lines)-1] == "" {
@@ -1128,7 +1130,8 @@ func FsUniq(args []string, stdin string) string {
 		}
 	}
 	var lines []string
-	if filePath != "" {
+	switch {
+	case filePath != "":
 		abs, err := resolvePath(filePath)
 		if err != nil {
 			return fmt.Sprintf("[error] uniq: %v", err)
@@ -1138,9 +1141,9 @@ func FsUniq(args []string, stdin string) string {
 			return fmt.Sprintf("[error] uniq: %v", err)
 		}
 		lines = strings.Split(string(data), "\n")
-	} else if stdin != "" {
+	case stdin != "":
 		lines = strings.Split(stdin, "\n")
-	} else {
+	default:
 		return "[error] uniq: no input (use file path or pipe from stdin)"
 	}
 	var result []string

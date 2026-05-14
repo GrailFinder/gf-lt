@@ -106,8 +106,8 @@ func (m *Manager) GetTools() []mcp.Tool {
 func (m *Manager) GetOpenAITools() []any {
 	var tools []any
 	for _, server := range m.servers {
-		for _, tool := range server.tools {
-			openAITool := convertToolToOpenAI(server.name, tool)
+		for i := range server.tools {
+			openAITool := convertToolToOpenAI(server.name, &server.tools[i])
 			tools = append(tools, openAITool)
 		}
 	}
@@ -153,13 +153,13 @@ func (m *Manager) callTool(name string, args map[string]string) []byte {
 	}
 
 	if result.IsError {
-		var errMsg string
+		var errMsg strings.Builder
 		for _, content := range result.Content {
 			if tc, ok := content.(*mcp.TextContent); ok {
-				errMsg += tc.Text
+				errMsg.WriteString(tc.Text)
 			}
 		}
-		return []byte(fmt.Sprintf("MCP tool error: %s", errMsg))
+		return []byte("MCP tool error: " + errMsg.String())
 	}
 
 	var output strings.Builder
@@ -168,13 +168,13 @@ func (m *Manager) callTool(name string, args map[string]string) []byte {
 		case *mcp.TextContent:
 			output.WriteString(c.Text)
 		case *mcp.ImageContent:
-			output.WriteString(fmt.Sprintf("[image: %s]", c.Data))
+			fmt.Fprintf(&output, "[image: %s]", c.Data)
 		case *mcp.EmbeddedResource:
 			if c.Resource != nil {
 				if c.Resource.Text != "" {
-					output.WriteString(fmt.Sprintf("[resource: %s - %s]", c.Resource.URI, c.Resource.Text))
+					fmt.Fprintf(&output, "[resource: %s - %s]", c.Resource.URI, c.Resource.Text)
 				} else if len(c.Resource.Blob) > 0 {
-					output.WriteString(fmt.Sprintf("[resource: %s (binary)]", c.Resource.URI))
+					fmt.Fprintf(&output, "[resource: %s (binary)]", c.Resource.URI)
 				}
 			}
 		}
@@ -183,7 +183,7 @@ func (m *Manager) callTool(name string, args map[string]string) []byte {
 	return []byte(output.String())
 }
 
-func convertToolToOpenAI(serverName string, tool mcp.Tool) map[string]any {
+func convertToolToOpenAI(serverName string, tool *mcp.Tool) map[string]any {
 	inputSchema := convertInputSchema(tool.InputSchema)
 
 	return map[string]any{

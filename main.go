@@ -318,8 +318,11 @@ func handleCLICommand(msg string) bool {
 			fmt.Printf("\nCurrent API: %s\n", cfg.CurrentAPI)
 			return true
 		}
-		idx := 0
-		fmt.Sscanf(args[0], "%d", &idx)
+		idx, err := strconv.Atoi(args[0])
+		if err != nil {
+			fmt.Printf("Invalid index: %s\n", args[0])
+			return true
+		}
 		if idx < 0 || idx >= len(cfg.ApiLinks) {
 			fmt.Printf("Invalid index. Valid range: 0-%d\n", len(cfg.ApiLinks)-1)
 			return true

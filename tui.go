@@ -42,10 +42,6 @@ var (
 	roleEditWindow     *tview.InputField
 	shellInput         *tview.InputField
 	confirmModal       *tview.Modal
-	pendingConfirmReq struct {
-		label   string
-		command string
-	}
 	currentConfirmResultCh chan<- bool
 	toastTimer         *time.Timer
 	confirmPageName     = "confirm"
@@ -156,7 +152,7 @@ func setShellMode(enabled bool) {
 // It auto-hides after 3 seconds.
 func showToast(title, message string) {
 	if cfg.UseNotifySend {
-		notifySend(title, message)
+		_ = notifySend(title, message)
 		return
 	}
 	if cfg.CLIMode {
@@ -262,13 +258,6 @@ func initTUI() {
 			}
 			resultCh := make(chan bool, 1)
 			currentConfirmResultCh = resultCh
-			pendingConfirmReq = struct {
-				label   string
-				command string
-			}{
-				label:   req.ToolName,
-				command: req.Command,
-			}
 			confirmModal.SetText(fmt.Sprintf(
 				"⚠️ LLM is requesting a dangerous command:\n\n%s\n\nTool: %s\n\nDo you want to allow this?",
 				req.Command, req.ToolName))

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"gf-lt/models"
 	"gf-lt/pngmeta"
@@ -1062,7 +1063,7 @@ func getTerminalGeometry() (TermGeometry, error) {
 	}
 	winID := strings.TrimSpace(string(out))
 	if winID == "0" {
-		return TermGeometry{}, fmt.Errorf("no active window")
+		return TermGeometry{}, errors.New("no active window")
 	}
 
 	out, err = exec.Command("xdotool", "getwindowgeometry", winID).Output()
@@ -1073,14 +1074,14 @@ func getTerminalGeometry() (TermGeometry, error) {
 	lines := strings.Split(string(out), "\n")
 	for _, line := range lines {
 		if strings.Contains(line, "Position:") {
-			fmt.Sscanf(line, " Position: %d,%d", &geom.X, &geom.Y)
+			_, _ = fmt.Sscanf(line, " Position: %d,%d", &geom.X, &geom.Y)
 		} else if strings.Contains(line, "Geometry:") {
-			fmt.Sscanf(line, " Geometry: %dx%d", &geom.Width, &geom.Height)
+			_, _ = fmt.Sscanf(line, " Geometry: %dx%d", &geom.Width, &geom.Height)
 		}
 	}
 
 	if geom.Width == 0 || geom.Height == 0 {
-		return TermGeometry{}, fmt.Errorf("invalid window geometry")
+		return TermGeometry{}, errors.New("invalid window geometry")
 	}
 
 	// Use terminal size captured at init time
@@ -1108,13 +1109,13 @@ func getTerminalGeometry() (TermGeometry, error) {
 		if err == nil {
 			trimmed := strings.TrimSpace(string(out))
 			if trimmed != "" {
-				fmt.Sscanf(trimmed, "%d %d", &geom.Rows, &geom.Cols)
+				_, _ = fmt.Sscanf(trimmed, "%d %d", &geom.Rows, &geom.Cols)
 			}
 		}
 	}
 	if geom.Cols == 0 || geom.Rows == 0 {
 		logger.Warn("terminal geometry check", "cols", geom.Cols, "rows", geom.Rows, "termCols", termCols, "termRows", termRows)
-		return TermGeometry{}, fmt.Errorf("invalid terminal size")
+		return TermGeometry{}, errors.New("invalid terminal size")
 	}
 
 	return geom, nil

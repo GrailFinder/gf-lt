@@ -30,7 +30,7 @@ func TestManagerToolDiscovery(t *testing.T) {
 		},
 	}
 
-	openAITool := convertToolToOpenAI("testserver", mcpTool)
+	openAITool := convertToolToOpenAI("testserver", &mcpTool)
 
 	openAIFunc := openAITool["function"].(map[string]any)
 

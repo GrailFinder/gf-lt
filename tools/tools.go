@@ -444,8 +444,8 @@ func runCmd(args map[string]string) []byte {
 
 // browserCmd handles top-level browser tool calls
 func browserCmd(args map[string]string) []byte {
-	action, _ := args["action"]
-	argsStr, _ := args["args"]
+	action := args["action"]
+	argsStr := args["args"]
 	// Parse args string into slice (space-separated, respecting quoted strings)
 	var browserArgs []string
 	if argsStr != "" {

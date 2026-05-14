@@ -192,9 +192,9 @@ func ExecChain(command string) string {
 
 		// Execute remaining commands
 		for _, seg := range segments {
-			lastOutput, lastErr = execSingle(seg.Raw, "")
-			if lastOutput != "" {
-				collected = append(collected, lastOutput)
+			out, _ := execSingle(seg.Raw, "")
+			if out != "" {
+				collected = append(collected, out)
 			}
 		}
 		return strings.Join(collected, "\n")

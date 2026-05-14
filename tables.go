@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"gf-lt/tools"
+	"strconv"
 	"image"
 	"os"
 	"path"
@@ -28,7 +29,8 @@ func getChatSummary(msgsJSON string, maxMsgs int) string {
 		return "error"
 	}
 	var userMsgs []string
-	for _, m := range msgs {
+	for i := range msgs {
+		m := &msgs[i]
 		if m.Role == "user" {
 			content := m.Content
 			if len(content) > 40 {
@@ -51,7 +53,7 @@ func getMsgCount(msgsJSON string) string {
 	if err := json.Unmarshal([]byte(msgsJSON), &msgs); err != nil {
 		return "0"
 	}
-	return fmt.Sprintf("%d", len(msgs))
+	return strconv.Itoa(len(msgs))
 }
 
 func makeChatTable(chatMap map[string]models.Chat) *tview.Table {
@@ -1106,10 +1108,8 @@ geom, err := getTerminalGeometry()
 				if imgPreview != nil {
 					imgPreview.SetImage(nil)
 				}
-			} else {
-				if imgPreview != nil {
-					imgPreview.SetImage(imgData)
-				}
+			} else if imgPreview != nil {
+				imgPreview.SetImage(imgData)
 			}
 		})
 	}
@@ -1457,189 +1457,6 @@ func makeDbTable() *tview.Flex {
 	return flex
 }
 
-func updateColumnsView(tableName string, tbl *tview.Table) {
-	columns, err := store.GetTableColumns(tableName)
-	if err != nil {
-		logger.Error("failed to get table columns", "table", tableName, "error", err)
-		return
-	}
-	tbl.Clear()
-	cols := 5
-	tbl.SetFixed(1, 0)
-	for c := 0; c < cols; c++ {
-		color := tcell.ColorYellow
-		var headerText string
-		switch c {
-		case 0:
-			headerText = "CID"
-		case 1:
-			headerText = "Name"
-		case 2:
-			headerText = "Type"
-		case 3:
-			headerText = "NotNull"
-		case 4:
-			headerText = "PK"
-		}
-		tbl.SetCell(0, c,
-			tview.NewTableCell(headerText).
-				SetTextColor(color).
-				SetAlign(tview.AlignCenter).
-				SetSelectable(false))
-	}
-	for r, col := range columns {
-		for c := 0; c < cols; c++ {
-			color := tcell.ColorWhite
-			if col.PK > 0 {
-				color = tcell.ColorRed
-			}
-			switch c {
-			case 0:
-				tbl.SetCell(r+1, c,
-					tview.NewTableCell(fmt.Sprintf("%d", col.CID)).
-						SetTextColor(color).
-						SetAlign(tview.AlignCenter).
-						SetSelectable(false))
-			case 1:
-				tbl.SetCell(r+1, c,
-					tview.NewTableCell(col.Name).
-						SetTextColor(color).
-						SetAlign(tview.AlignCenter).
-						SetSelectable(false))
-			case 2:
-				tbl.SetCell(r+1, c,
-					tview.NewTableCell(col.Type).
-						SetTextColor(color).
-						SetAlign(tview.AlignCenter).
-						SetSelectable(false))
-			case 3:
-				notNull := "N"
-				if col.NotNull {
-					notNull = "Y"
-				}
-				tbl.SetCell(r+1, c,
-					tview.NewTableCell(notNull).
-						SetTextColor(color).
-						SetAlign(tview.AlignCenter).
-						SetSelectable(false))
-			case 4:
-				pk := ""
-				if col.PK > 0 {
-					pk = fmt.Sprintf("%d", col.PK)
-				}
-				tbl.SetCell(r+1, c,
-					tview.NewTableCell(pk).
-						SetTextColor(color).
-						SetAlign(tview.AlignCenter).
-						SetSelectable(false))
-			}
-		}
-	}
-	tbl.Select(0, 0)
-}
-
-func showDbColumnsView(tableName, parentPage string) {
-	longStatusView := tview.NewTextView()
-	longStatusView.SetText("table: " + tableName + " | press x to exit | press Enter to view content").SetBorder(true).SetTitle("status")
-	longStatusView.SetChangedFunc(func() {
-		app.Draw()
-	})
-	flex := tview.NewFlex().SetDirection(tview.FlexRow).
-		AddItem(longStatusView, 0, 10, false).
-		AddItem(tview.NewTable().SetBorders(true), 0, 60, true)
-	columns, err := store.GetTableColumns(tableName)
-	if err != nil {
-		logger.Error("failed to get table columns", "table", tableName, "error", err)
-		showToast("error", "failed to get columns: "+err.Error())
-		return
-	}
-	tbl := flex.GetItem(1).(*tview.Table)
-	cols := 5 // CID | Name | Type | NotNull | PK
-	tbl.SetFixed(1, 0)
-	for c := 0; c < cols; c++ {
-		color := tcell.ColorYellow
-		var headerText string
-		switch c {
-		case 0:
-			headerText = "CID"
-		case 1:
-			headerText = "Name"
-		case 2:
-			headerText = "Type"
-		case 3:
-			headerText = "NotNull"
-		case 4:
-			headerText = "PK"
-		}
-		tbl.SetCell(0, c,
-			tview.NewTableCell(headerText).
-				SetTextColor(color).
-				SetAlign(tview.AlignCenter).
-				SetSelectable(false))
-	}
-	for r, col := range columns {
-		for c := 0; c < cols; c++ {
-			color := tcell.ColorWhite
-			if col.PK > 0 {
-				color = tcell.ColorRed
-			}
-			switch c {
-			case 0:
-				tbl.SetCell(r+1, c,
-					tview.NewTableCell(fmt.Sprintf("%d", col.CID)).
-						SetTextColor(color).
-						SetAlign(tview.AlignCenter).
-						SetSelectable(false))
-			case 1:
-				tbl.SetCell(r+1, c,
-					tview.NewTableCell(col.Name).
-						SetTextColor(color).
-						SetAlign(tview.AlignCenter).
-						SetSelectable(false))
-			case 2:
-				tbl.SetCell(r+1, c,
-					tview.NewTableCell(col.Type).
-						SetTextColor(color).
-						SetAlign(tview.AlignCenter).
-						SetSelectable(false))
-			case 3:
-				notNull := "N"
-				if col.NotNull {
-					notNull = "Y"
-				}
-				tbl.SetCell(r+1, c,
-					tview.NewTableCell(notNull).
-						SetTextColor(color).
-						SetAlign(tview.AlignCenter).
-						SetSelectable(false))
-			case 4:
-				pk := ""
-				if col.PK > 0 {
-					pk = fmt.Sprintf("%d", col.PK)
-				}
-				tbl.SetCell(r+1, c,
-					tview.NewTableCell(pk).
-						SetTextColor(color).
-						SetAlign(tview.AlignCenter).
-						SetSelectable(false))
-			}
-		}
-	}
-	columnsPageName := "dbColumns"
-	pages.AddPage(columnsPageName, flex, true, true)
-	flex.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		if event.Key() == tcell.KeyRune && event.Rune() == 'x' {
-			pages.RemovePage(columnsPageName)
-			return nil
-		}
-		if event.Key() == tcell.KeyEnter {
-			pages.RemovePage(columnsPageName)
-			showDbContentView(tableName)
-		}
-		return event
-	})
-}
-
 func showDbContentView(tableName string) {
 	batchSize := 80
 	longStatusView := tview.NewTextView()
@@ -1657,7 +1474,7 @@ func showDbContentView(tableName string) {
 	_ = store.DB().Get(&rowCount, "SELECT COUNT(*) FROM "+tableName)
 	var columnNames []string
 	loadRows := func(off int) {
-		rows, err := store.DB().Queryx("SELECT * FROM " + tableName + " LIMIT " + fmt.Sprintf("%d", batchSize) + " OFFSET " + fmt.Sprintf("%d", off))
+		rows, err := store.DB().Queryx("SELECT * FROM " + tableName + " LIMIT " + strconv.Itoa(batchSize) + " OFFSET " + strconv.Itoa(off))
 		if err != nil {
 			logger.Error("failed to query table", "table", tableName, "error", err)
 			return
@@ -1734,7 +1551,8 @@ type chatImageEntry struct {
 
 func extractChatImages(messages []models.RoleMsg) []chatImageEntry {
 	var result []chatImageEntry
-	for i, msg := range messages {
+	for i := range messages {
+		msg := &messages[i]
 		if !msg.HasContentParts {
 			continue
 		}
@@ -1872,10 +1690,8 @@ func makeImagesTable() *tview.Flex {
 			if imgPreview != nil {
 				imgPreview.SetImage(nil)
 			}
-		} else {
-			if imgPreview != nil {
-				imgPreview.SetImage(imgData)
-			}
+		} else if imgPreview != nil {
+			imgPreview.SetImage(imgData)
 		}
 	}
 	for i, img := range images {

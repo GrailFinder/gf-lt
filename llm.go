@@ -25,25 +25,6 @@ func containsToolSysMsg() bool {
 	return false
 }
 
-// containsToolSysMsgChat checks if the tools.ToolSysMsgChat already exists in the chat body
-func containsToolSysMsgChat() bool {
-	for i := range chatBody.Messages {
-		if (chatBody.Messages[i].Role == cfg.ToolRole || chatBody.Messages[i].Role == "system") && chatBody.Messages[i].Content == tools.ToolSysMsgChat {
-			return true
-		}
-	}
-	return false
-}
-
-// hasToolGuide checks if the first system message already has tool guide
-func hasToolGuide(messages []models.RoleMsg) bool {
-	if len(messages) == 0 || messages[0].Role != "system" {
-		return false
-	}
-	matched, _ := regexp.MatchString(`<tool_guide>.*?</tool_guide>`, messages[0].Content)
-	return matched
-}
-
 // removeToolGuide removes tool guide from the first system message
 func removeToolGuide(messages []models.RoleMsg) []models.RoleMsg {
 	if len(messages) == 0 {

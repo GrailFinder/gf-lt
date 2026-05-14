@@ -1123,22 +1123,8 @@ out:
 			taskActive.Store(false)
 			atomic.StoreInt32(&taskFailures, 0)
 			logger.Debug("task enforcement: giving up after max failures", "failures", failures)
-		} else {
-			// Reminder disabled - no longer inject task reminders
-			// // Inject reminder
-			// toolResponseMsg := models.RoleMsg{
-			// 	Role:    cfg.ToolRole,
-			// 	Content: tools.ReminderPrompt,
-			// }
-			// chatBody.Messages = append(chatBody.Messages, toolResponseMsg)
-			// logger.Debug("task enforcement: injected reminder", "taskActive", taskActive.Load(), "failures", failures)
-			// // Trigger next round to get LLM to either call task_done or make a tool call
-			// crr := &models.ChatRoundReq{
-			// 	Role: cfg.AssistantRole,
-			// }
-			// chatRoundChan <- crr
-			// return nil
 		}
+		// Reminder disabled - no longer inject task reminders
 	}
 	// No tool call - signal completion now
 	if cfg.CLIMode && cliRespDone != nil {
@@ -1464,8 +1450,8 @@ func findCall(msg, toolCall string) bool {
 		if toolResponseMsg.Content != "" {
 			toolResponseMsg.Content = taskStatus + "\n" + toolResponseMsg.Content
 		} else if len(toolResponseMsg.ContentParts) > 0 {
-			// For multimodal responses, insert at front of content parts
-			newParts := []any{models.TextContentPart{Type: "text", Text: taskStatus}}
+			newParts := make([]any, 1, 1+len(toolResponseMsg.ContentParts))
+			newParts[0] = models.TextContentPart{Type: "text", Text: taskStatus}
 			toolResponseMsg.ContentParts = append(newParts, toolResponseMsg.ContentParts...)
 		}
 	}

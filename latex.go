@@ -207,7 +207,7 @@ func alignMarkdownTables(md string) string {
 	// alignSingleTable takes a slice of lines representing one table
 	// and returns aligned lines for that table.
 	alignSingleTable := func(tableLines []string) []string {
-		var rows [][]string
+		rows := make([][]string, 0, len(tableLines))
 		for _, line := range tableLines {
 			parts := strings.Split(line, "|")
 			if len(parts) > 0 && parts[0] == "" {
