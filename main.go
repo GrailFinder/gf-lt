@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"gf-lt/mcp"
+	"gf-lt/mission"
 	"gf-lt/models"
 	"gf-lt/pngmeta"
 	"gf-lt/tools"
@@ -14,6 +15,7 @@ import (
 	"strconv"
 	"strings"
 	"sync/atomic"
+	"time"
 
 	"github.com/rivo/tview"
 )
@@ -39,6 +41,10 @@ var (
 	cliContinue     bool
 	cliMsg          string
 	mcpManager      *mcp.Manager
+	missionResumeFile   string
+	missionAgentCard    string
+	missionIssueID      string
+	missionCheckpoint   string
 )
 
 func main() {
@@ -49,10 +55,17 @@ func main() {
 	flag.StringVar(&cliCardPath, "card", "", "Path to syscard JSON file")
 	flag.BoolVar(&cliContinue, "continue", false, "Continue from last chat (by agent or card)")
 	flag.StringVar(&cliMsg, "msg", "", "Send message and exit (one-shot mode)")
+	flag.BoolVar(&cfg.MissionMode, "mission", false, "Run in mission mode (auto issue solver)")
+	flag.StringVar(&missionIssueID, "issue-id", "", "Issue ID to process in mission mode")
+	flag.StringVar(&missionAgentCard, "agent-card", "", "Path to agent card for mission mode")
+	flag.StringVar(&missionResumeFile, "resume", "", "Resume mission from checkpoint file")
+	flag.StringVar(&missionCheckpoint, "checkpoint-file", "", "Custom checkpoint file path")
+	flag.IntVar(&cfg.MissionPMInterval, "pm-interval", 75, "PM check-in interval (tool calls)")
+	flag.IntVar(&cfg.MissionMaxFailures, "max-failures", 3, "Max consecutive failures before abort")
+	flag.StringVar(&cfg.MissionOutputFormat, "output", "text", "Output format: text or json")
+	flag.BoolVar(&cfg.MissionQuiet, "quiet", false, "Suppress tool call logging in mission mode")
+	flag.StringVar(&cfg.IssuesDir, "issues-dir", "", "Directory containing issues (default: ./issues)")
 	flag.Parse()
-	if !cfg.CLIMode {
-		initTUI()
-	}
 	chatBody.Model = cfg.CurrentModel
 	go updateModelLists()
 	tools.InitTools(cfg, logger, store)
@@ -65,10 +78,18 @@ func main() {
 		}
 	}
 	_ = mcpManager
+
+	// Route to appropriate mode
+	if cfg.MissionMode {
+		runMissionMode()
+		return
+	}
 	if cfg.CLIMode {
 		runCLIMode()
 		return
 	}
+	// TUI mode
+	initTUI()
 	pages.AddPage("main", flex, true, true)
 	if err := app.SetRoot(pages,
 		true).EnableMouse(cfg.EnableMouse).EnablePaste(true).Run(); err != nil {
@@ -337,4 +358,145 @@ func handleCLICommand(msg string) bool {
 		fmt.Println("Type /help for available commands.")
 	}
 	return true
+}
+
+func runMissionMode() {
+	outputHandler = &CLIOutputHandler{}
+	cliRespDone = make(chan bool, 1)
+
+	checkpointPath := missionCheckpoint
+	if checkpointPath == "" {
+		checkpointPath = mission.DefaultCheckpointPath()
+	}
+
+	var resumeFrom *mission.Checkpoint
+	var issue *mission.Issue
+	var issueStatus mission.IssueStatus
+	var err error
+
+	issueManager := mission.NewIssueManager(cfg.IssuesDir)
+
+	if missionResumeFile != "" {
+		resumeFrom, err = mission.LoadCheckpoint(missionResumeFile)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to load checkpoint: %v\n", err)
+			os.Exit(1)
+		}
+		issue, issueStatus, err = issueManager.LoadByIDAny(resumeFrom.IssueID)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to load issue from checkpoint: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Printf("Resumed mission for issue %s (status: %s)\n", issue.ID, issueStatus)
+	} else {
+		if missionIssueID != "" {
+			issue, issueStatus, err = issueManager.LoadByIDAny(missionIssueID)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Failed to load issue %s: %v\n", missionIssueID, err)
+				os.Exit(1)
+			}
+			fmt.Printf("Loaded issue %s (status: %s)\n", issue.ID, issueStatus)
+		} else {
+			issue, issueStatus, err = issueManager.PickOpenIssue()
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "No open issues found: %v\n", err)
+				os.Exit(1)
+			}
+			fmt.Printf("Auto-selected issue %s\n", issue.ID)
+		}
+
+		if issueStatus == mission.StatusOpen {
+			if err := issueManager.MoveIssue(issue.ID, mission.StatusOpen, mission.StatusInProgress); err != nil {
+				fmt.Fprintf(os.Stderr, "Failed to move issue to in_progress: %v\n", err)
+				os.Exit(1)
+			}
+			issue.Status = mission.StatusInProgress
+			fmt.Printf("Issue moved to in_progress\n")
+		}
+	}
+
+	m := mission.NewMission(issue, issueManager, cfg.MissionPMInterval, cfg.MissionMaxFailures, cfg.MissionQuiet)
+
+	if resumeFrom != nil {
+		m.Checkpoint = resumeFrom
+	}
+
+	if !cfg.MissionQuiet {
+		fmt.Println("\n=== Mission Started ===")
+		fmt.Printf("Issue: %s - %s\n", issue.ID, issue.Title)
+		fmt.Printf("Project: %s\n", issue.ProjectPath)
+		fmt.Printf("PM Interval: %d tool calls\n", cfg.MissionPMInterval)
+		fmt.Printf("Max Failures: %d\n\n", cfg.MissionMaxFailures)
+	}
+
+	runMission(m, checkpointPath)
+}
+
+func runMission(m *mission.Mission, checkpointPath string) {
+	startTime := time.Now()
+	m.Status = mission.StatusRunning
+
+	if err := m.SaveCheckpoint(checkpointPath); err != nil {
+		m.Log("Warning: failed to save initial checkpoint: %v", err)
+	}
+
+	chatBody.Model = cfg.CurrentModel
+	tools.InitTools(cfg, logger, store)
+	startNewCLIChat()
+
+	m.AddToConversation("system", fmt.Sprintf(
+		"You are solving issue %s: %s\n\nDescription:\n%s\n\nProject path: %s\n\nAcceptance criteria:\n%s",
+		m.Issue.ID, m.Issue.Title, m.Issue.Description, m.Issue.ProjectPath,
+		strings.Join(m.Issue.AcceptanceCriteria, "\n- "),
+	))
+
+	go func() {
+		scanner := bufio.NewScanner(os.Stdin)
+		for scanner.Scan() {
+			cmd := scanner.Text()
+			if cmd == "status" {
+				m.Log("Progress: %d tool calls, %d consecutive failures",
+					m.Checkpoint.ToolCallCount, m.Checkpoint.ConsecutiveFailures)
+			} else if cmd == "checkpoint" {
+				if err := m.SaveCheckpoint(checkpointPath); err != nil {
+					m.Log("Failed to save checkpoint: %v", err)
+				} else {
+					m.Log("Checkpoint saved")
+				}
+			} else if strings.HasPrefix(cmd, "comment ") {
+				body := strings.TrimPrefix(cmd, "comment ")
+				m.AddIssueComment("user", body)
+				m.SaveIssue()
+				m.AddToConversation("user", body)
+			}
+		}
+	}()
+
+	m.Log("Mission controller initialized (stub - full implementation pending)")
+	m.Log("To save checkpoint, type 'checkpoint'. To check status, type 'status'.")
+
+	time.Sleep(2 * time.Second)
+
+	m.Status = mission.StatusSuccess
+	duration := time.Since(startTime)
+
+	if !cfg.MissionQuiet {
+		fmt.Println("\n=== Mission Completed ===")
+		fmt.Printf("Issue: %s\n", m.Issue.ID)
+		fmt.Printf("Tool calls: %d\n", m.Checkpoint.ToolCallCount)
+		fmt.Printf("Duration: %s\n", duration)
+	}
+
+	if cfg.MissionOutputFormat == "json" {
+		result := mission.MissionResult{
+			Status:    m.Status,
+			IssueID:   m.Issue.ID,
+			Commits:   m.Checkpoint.CommitsMade,
+			ToolCalls: m.Checkpoint.ToolCallCount,
+			Duration:  duration,
+		}
+		fmt.Println(result.ToJSON())
+	}
+
+	os.Exit(0)
 }

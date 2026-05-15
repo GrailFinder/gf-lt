@@ -84,6 +84,17 @@ type Config struct {
 	// CLI mode
 	CLIMode       bool
 	UseNotifySend bool
+	// Mission mode (auto issue solver)
+	MissionMode        bool
+	MissionIssueID      string
+	MissionAgentCard    string
+	MissionResumeFile   string
+	MissionPMInterval   int
+	MissionMaxFailures  int
+	MissionCheckpointFile string
+	MissionOutputFormat string // "text" or "json"
+	MissionQuiet        bool
+	IssuesDir          string `toml:"IssuesDir"`
 }
 
 func LoadConfig(fn string) (*Config, error) {
@@ -148,6 +159,23 @@ func LoadConfig(fn string) (*Config, error) {
 	}
 	if config.RAGDir == "" {
 		config.RAGDir = "ragimport"
+	}
+	// Mission mode defaults
+	if config.MissionPMInterval == 0 {
+		config.MissionPMInterval = 75
+	}
+	if config.MissionMaxFailures == 0 {
+		config.MissionMaxFailures = 3
+	}
+	if config.MissionOutputFormat == "" {
+		config.MissionOutputFormat = "text"
+	}
+	if config.IssuesDir == "" {
+		if envDir := os.Getenv("GF_LT_ISSUES_DIR"); envDir != "" {
+			config.IssuesDir = envDir
+		} else {
+			config.IssuesDir = "./issues"
+		}
 	}
 	// if any value is empty fill with default
 	return config, nil
