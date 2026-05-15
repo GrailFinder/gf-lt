@@ -21,6 +21,10 @@ import (
 )
 
 var (
+	missionAgentCardPath string
+)
+
+var (
 	boolColors        = map[bool]string{true: "green", false: "red"}
 	botRespMode       atomic.Bool
 	toolRunningMode   atomic.Bool
@@ -426,6 +430,27 @@ func runMissionMode() {
 		m.Checkpoint = resumeFrom
 	}
 
+	// Load agent card if provided
+	var agentSysprompt string
+	if missionAgentCard != "" {
+		card, err := pngmeta.ReadCardJson(missionAgentCard)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to load agent card: %v\n", err)
+			os.Exit(1)
+		}
+		agentSysprompt = card.SysPrompt
+		cfg.AssistantRole = card.Role
+		fmt.Printf("Loaded agent card: %s\n", card.Role)
+	} else {
+		// Use default auto-solver card
+		defaultCardPath := "sysprompts/auto-solver-default.json"
+		if card, err := pngmeta.ReadCardJson(defaultCardPath); err == nil {
+			agentSysprompt = card.SysPrompt
+			cfg.AssistantRole = card.Role
+			fmt.Printf("Using default agent card: %s\n", card.Role)
+		}
+	}
+
 	if !cfg.MissionQuiet {
 		fmt.Println("\n=== Mission Started ===")
 		fmt.Printf("Issue: %s - %s\n", issue.ID, issue.Title)
@@ -434,68 +459,176 @@ func runMissionMode() {
 		fmt.Printf("Max Failures: %d\n\n", cfg.MissionMaxFailures)
 	}
 
-	runMission(m, checkpointPath)
+	runMission(m, checkpointPath, agentSysprompt)
 }
 
-func runMission(m *mission.Mission, checkpointPath string) {
+func runMission(m *mission.Mission, checkpointPath string, agentSysprompt string) {
 	startTime := time.Now()
 	m.Status = mission.StatusRunning
+	cfg.CLIMode = true // Use CLI mode infrastructure
 
 	if err := m.SaveCheckpoint(checkpointPath); err != nil {
 		m.Log("Warning: failed to save initial checkpoint: %v", err)
 	}
 
+	tools.SetCurrentMission(m)
+
+	outputHandler = &CLIOutputHandler{}
+	cliRespDone = make(chan bool, 1)
 	chatBody.Model = cfg.CurrentModel
 	tools.InitTools(cfg, logger, store)
 	startNewCLIChat()
 
-	m.AddToConversation("system", fmt.Sprintf(
-		"You are solving issue %s: %s\n\nDescription:\n%s\n\nProject path: %s\n\nAcceptance criteria:\n%s",
-		m.Issue.ID, m.Issue.Title, m.Issue.Description, m.Issue.ProjectPath,
+	// Build initial system message with agent prompt + issue context
+	workflowDocs := ""
+	if wf, err := os.ReadFile("docs/issue-workflow.md"); err == nil {
+		workflowDocs = "\n\n## Issue Workflow Guidelines:\n" + string(wf)
+	}
+
+	systemMsg := fmt.Sprintf(
+		"%s\n\n## Current Issue\n\nIssue ID: %s\nTitle: %s\n\nDescription:\n%s\n\nProject path: %s\n\nAcceptance criteria:\n- %s%s",
+		agentSysprompt,
+		m.Issue.ID,
+		m.Issue.Title,
+		m.Issue.Description,
+		m.Issue.ProjectPath,
 		strings.Join(m.Issue.AcceptanceCriteria, "\n- "),
-	))
+		workflowDocs,
+	)
 
-	go func() {
-		scanner := bufio.NewScanner(os.Stdin)
-		for scanner.Scan() {
-			cmd := scanner.Text()
-			if cmd == "status" {
-				m.Log("Progress: %d tool calls, %d consecutive failures",
-					m.Checkpoint.ToolCallCount, m.Checkpoint.ConsecutiveFailures)
-			} else if cmd == "checkpoint" {
-				if err := m.SaveCheckpoint(checkpointPath); err != nil {
-					m.Log("Failed to save checkpoint: %v", err)
-				} else {
-					m.Log("Checkpoint saved")
-				}
-			} else if strings.HasPrefix(cmd, "comment ") {
-				body := strings.TrimPrefix(cmd, "comment ")
-				m.AddIssueComment("user", body)
-				m.SaveIssue()
-				m.AddToConversation("user", body)
+	// Add initial context messages
+	m.AddToConversation("system", systemMsg)
+	chatBody.Messages = append(chatBody.Messages, models.RoleMsg{
+		Role: "system", Content: systemMsg,
+	})
+	// Add assistant "ready" message to trigger LLM
+	m.AddToConversation("assistant", "I'm ready to solve this issue. Let me start by examining the codebase and understanding the current structure before implementing the solution.")
+	chatBody.Messages = append(chatBody.Messages, models.RoleMsg{
+		Role: cfg.AssistantRole, Content: "I'm ready to solve this issue. Let me start by examining the codebase and understanding the current structure before implementing the solution.",
+	})
+
+	// Start the message loop
+	go missionMessageLoop(m, checkpointPath, startTime)
+
+	// Block until context done (interrupt) or mission completes
+	<-ctx.Done()
+}
+
+func missionMessageLoop(m *mission.Mission, checkpointPath string, startTime time.Time) {
+	// Send the first message to start the conversation
+	chatRoundChan <- &models.ChatRoundReq{
+		Role: cfg.AssistantRole,
+	}
+
+	for {
+		select {
+		case <-cliRespDone:
+			// Response complete - check for mission completion signals
+			m.Log("Response complete. Tool calls: %d, Failures: %d",
+				m.Checkpoint.ToolCallCount, m.Checkpoint.ConsecutiveFailures)
+
+			// Check for create_pr tool completion
+			if m.Status == mission.StatusSuccess {
+				missionComplete(m, checkpointPath, mission.StatusSuccess, startTime)
+				return
 			}
+
+			// Check failure threshold
+			if m.ShouldAbort() {
+				m.Log("Maximum failures reached (%d), aborting mission", m.Checkpoint.ConsecutiveFailures)
+				m.Status = mission.StatusFailed
+				missionComplete(m, checkpointPath, mission.StatusFailed, startTime)
+				return
+			}
+
+			// PM check-in at interval
+			if m.ShouldPMCheckIn() {
+				m.Log("PM check-in triggered at tool call %d", m.Checkpoint.ToolCallCount)
+				// PM response will be injected as a message
+				pmResponse := getPMGuidance(m)
+				m.AddToConversation("system", fmt.Sprintf("[PM Check-in]\n%s", pmResponse))
+				chatBody.Messages = append(chatBody.Messages, models.RoleMsg{
+					Role: "system", Content: fmt.Sprintf("[PM Check-in]\n%s", pmResponse),
+				})
+				// Send PM check-in as assistant message to trigger LLM
+				chatRoundChan <- &models.ChatRoundReq{Role: cfg.AssistantRole}
+				continue
+			}
+
+			// Continue conversation - ask for next action
+			m.AddToConversation("user", "Continue working on the issue. What is your next step?")
+			chatBody.Messages = append(chatBody.Messages, models.RoleMsg{
+				Role: cfg.UserRole, Content: "Continue working on the issue. What is your next step?",
+			})
+			chatRoundChan <- &models.ChatRoundReq{Role: cfg.UserRole, UserMsg: "Continue working on the issue. What is your next step?"}
+
+		case <-ctx.Done():
+			m.Log("Mission interrupted")
+			m.Status = mission.StatusAborted
+			m.SaveCheckpoint(checkpointPath)
+			return
 		}
-	}()
+	}
+}
 
-	m.Log("Mission controller initialized (stub - full implementation pending)")
-	m.Log("To save checkpoint, type 'checkpoint'. To check status, type 'status'.")
+func getPMGuidance(m *mission.Mission) string {
+	// Simple PM guidance based on progress
+	toolCalls := m.Checkpoint.ToolCallCount
+	commits := len(m.Checkpoint.CommitsMade)
+	failures := m.Checkpoint.ConsecutiveFailures
 
-	time.Sleep(2 * time.Second)
+	context := fmt.Sprintf(
+		"Issue: %s (%s)\nBranch: %s\nProgress: %d tool calls, %d commits made\nConsecutive failures: %d",
+		m.Issue.Title, m.Issue.ID, m.Issue.BranchName, toolCalls, commits, failures,
+	)
 
-	m.Status = mission.StatusSuccess
+	if failures > 0 {
+		return fmt.Sprintf("%s\n\nWARNING: You have %d consecutive failures. Consider:\n- Reviewing the error messages\n- Asking for clarification with pm_consult\n- Trying a different approach\n- Breaking down the problem into smaller steps", context, failures)
+	}
+
+	if commits == 0 && toolCalls > 20 {
+		return fmt.Sprintf("%s\n\nYou haven't made any commits yet. Consider:\n- Creating a feature branch\n- Starting with a small, focused change\n- Running tests to verify the environment", context)
+	}
+
+	if commits > 0 && commits < 3 {
+		return fmt.Sprintf("%s\n\nGood progress! You've made %d commit(s). Keep implementing incrementally and test each change.", context, commits)
+	}
+
+	if commits >= 3 {
+		return fmt.Sprintf("%s\n\nExcellent progress! %d commits made. Focus on:\n- Ensuring all acceptance criteria are met\n- Writing or updating tests\n- Preparing the PR description", context, commits)
+	}
+
+	return fmt.Sprintf("%s\n\nRegular check-in. Keep working systematically through the issue.", context)
+}
+
+func missionComplete(m *mission.Mission, checkpointPath string, status mission.MissionStatus, startTime time.Time) {
 	duration := time.Since(startTime)
 
+	// Save final checkpoint
+	m.Status = status
+	m.SaveCheckpoint(checkpointPath)
+
+	// Move issue to appropriate status
+	switch status {
+	case mission.StatusSuccess:
+		m.MoveToStatus(mission.StatusReview)
+	case mission.StatusFailed, mission.StatusAborted:
+		m.MoveToStatus(mission.StatusArchive)
+	}
+
 	if !cfg.MissionQuiet {
-		fmt.Println("\n=== Mission Completed ===")
+		fmt.Println("\n=== Mission " + string(status) + " ===")
 		fmt.Printf("Issue: %s\n", m.Issue.ID)
 		fmt.Printf("Tool calls: %d\n", m.Checkpoint.ToolCallCount)
+		fmt.Printf("Commits: %d\n", len(m.Checkpoint.CommitsMade))
 		fmt.Printf("Duration: %s\n", duration)
 	}
 
 	if cfg.MissionOutputFormat == "json" {
 		result := mission.MissionResult{
-			Status:    m.Status,
+			Status:    status,
 			IssueID:   m.Issue.ID,
+			BranchName: m.Issue.BranchName,
 			Commits:   m.Checkpoint.CommitsMade,
 			ToolCalls: m.Checkpoint.ToolCallCount,
 			Duration:  duration,
@@ -503,5 +636,9 @@ func runMission(m *mission.Mission, checkpointPath string) {
 		fmt.Println(result.ToJSON())
 	}
 
-	os.Exit(0)
+	if status == mission.StatusSuccess {
+		os.Exit(0)
+	} else {
+		os.Exit(1)
+	}
 }
