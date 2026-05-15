@@ -64,6 +64,7 @@ func main() {
 	flag.IntVar(&cfg.MissionMaxFailures, "max-failures", 3, "Max consecutive failures before abort")
 	flag.StringVar(&cfg.MissionOutputFormat, "output", "text", "Output format: text or json")
 	flag.BoolVar(&cfg.MissionQuiet, "quiet", false, "Suppress tool call logging in mission mode")
+	flag.BoolVar(&cfg.MissionToolsEnabled, "mission-tools", false, "Enable mission tools (move_issue, create_pr, etc.) in non-mission mode")
 	flag.StringVar(&cfg.IssuesDir, "issues-dir", "", "Directory containing issues (default: ./issues)")
 	flag.Parse()
 	chatBody.Model = cfg.CurrentModel
@@ -81,6 +82,8 @@ func main() {
 
 	// Route to appropriate mode
 	if cfg.MissionMode {
+		tools.RegisterMissionTools()
+		cfg.MissionToolsEnabled = true
 		runMissionMode()
 		return
 	}
@@ -89,7 +92,9 @@ func main() {
 		return
 	}
 	// TUI mode
-	initTUI()
+	if cfg.MissionToolsEnabled {
+		tools.RegisterMissionTools()
+	}
 	pages.AddPage("main", flex, true, true)
 	if err := app.SetRoot(pages,
 		true).EnableMouse(cfg.EnableMouse).EnablePaste(true).Run(); err != nil {

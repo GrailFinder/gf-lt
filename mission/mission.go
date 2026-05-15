@@ -152,6 +152,10 @@ func (m *Mission) MoveToArchive() error {
 	return m.moveToStatus(StatusArchive)
 }
 
+func (m *Mission) MoveToStatus(newStatus IssueStatus) error {
+	return m.moveToStatus(newStatus)
+}
+
 func (m *Mission) moveToStatus(newStatus IssueStatus) error {
 	oldStatus := m.Issue.Status
 	newPath := filepath.Join(m.Manager.IssuesDir, string(newStatus), m.Issue.ID+".json")

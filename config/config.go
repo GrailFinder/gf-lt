@@ -94,6 +94,7 @@ type Config struct {
 	MissionCheckpointFile string
 	MissionOutputFormat string // "text" or "json"
 	MissionQuiet        bool
+	MissionToolsEnabled bool   `toml:"MissionToolsEnabled"`
 	IssuesDir          string `toml:"IssuesDir"`
 }
 

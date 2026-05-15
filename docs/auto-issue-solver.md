@@ -68,37 +68,40 @@ A third operational mode where gf-lt operates as an autonomous coding agent focu
 
 ```bash
 gf-lt --mission                              # Enter mission mode
-gf-lt --mission --issue-id 5                 # Process specific issue (optional)
+gf-lt --mission --issue-id 5                 # Process specific issue (optional, auto-picks if not provided)
 gf-lt --mission --agent-card ./card.json     # Custom agent personality (optional)
 gf-lt --resume ./mission-state.json          # Resume from checkpoint
 gf-lt --pm-interval 75                        # PM check-in every N tool calls (default: 75)
 gf-lt --max-failures 3                        # Consecutive failures before abort (default: 3)
-gf-lt --dry-run                               # Simulate without making changes
 gf-lt --checkpoint-file ./checkpoint.json    # Custom checkpoint path
 gf-lt --output json                           # Structured JSON output
 gf-lt --quiet                                 # Suppress tool call logging
+gf-lt --issues-dir ./issues                   # Directory containing issues (default: ./issues)
+gf-lt --mission-tools                         # Enable mission tools in non-mission mode
 ```
 
 **Config additions:**
 ```yaml
-issues_dir: ./issues  # Relative to project or absolute
+issues_dir: ./issues  # Relative to project or absolute (default: ./issues)
+mission_tools_enabled: false  # Enable mission tools outside mission mode
 ```
 
-## Tool Set (Bundled Only)
+## Mission Tools
 
-| Tool | Description |
-|------|-------------|
-| `bash` | Execute shell commands (git, npm, make, etc.) |
-| `read_file` | Read file contents |
-| `write_file` | Create/write files |
-| `edit_file` | Modify existing files |
-| `search_files` | Grep, find in codebase |
-| `create_issue` | Create new issue file (with LLM-generated branch name) |
-| `move_issue` | Move issue file between status directories |
-| `pm_consult` | Request guidance from PM supervisor |
-| `create_pr` | Mark session as complete, signal success |
+Tools are automatically registered when `--mission` is used, or via `--mission-tools` flag.
 
-**Note:** No MCP tools required. All operations via shell/git CLI.
+| Tool | Args | Description |
+|------|------|-------------|
+| `move_issue` | `status` | Move issue to different status (review, done, archive) |
+| `create_issue` | `id`, `title`, `description`, `branch_name` | Create a new sub-issue file |
+| `create_pr` | `title`, `body`, `base` | Mark session complete, signal success |
+| `pm_consult` | `question` | Request PM guidance (injects into conversation) |
+| `add_issue_comment` | `body`, `author` | Add comment to issue file |
+
+**Bundled tools (always available via `bash`):**
+- `bash` - Execute shell commands (git, npm, make, etc.)
+- `file_edit` - Modify existing files
+- `grep`, `find`, `cat` - File operations
 
 ## Core Components
 
