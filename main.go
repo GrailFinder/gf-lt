@@ -55,7 +55,7 @@ func main() {
 	// parse flags
 	flag.BoolVar(&cfg.CLIMode, "cli", false, "Run in CLI mode without TUI")
 	flag.BoolVar(&cfg.ToolUse, "tools", true, "run with tools")
-	flag.StringVar(&cfg.CurrentModel, "model", "modelname", "name of the model to use")
+	flag.StringVar(&cfg.CurrentModel, "model", "auto", "name of the model to use (default: auto, overridden by GF_LT_MODEL env if set)")
 	flag.StringVar(&cliCardPath, "card", "", "Path to syscard JSON file")
 	flag.BoolVar(&cliContinue, "continue", false, "Continue from last chat (by agent or card)")
 	flag.StringVar(&cliMsg, "msg", "", "Send message and exit (one-shot mode)")
@@ -75,6 +75,13 @@ func main() {
 
 	if cfg.MissionMode {
 		cfg.CLIMode = true
+	}
+
+	// Priority: -model flag > GF_LT_MODEL env > "auto"
+	if cfg.CurrentModel == "auto" {
+		if envModel := os.Getenv("GF_LT_MODEL"); envModel != "" {
+			cfg.CurrentModel = envModel
+		}
 	}
 	chatBody.Model = cfg.CurrentModel
 	go updateModelLists()

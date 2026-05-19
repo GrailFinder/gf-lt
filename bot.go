@@ -1794,7 +1794,7 @@ func init() {
 		lastChat = loadOldChatOrGetNew()
 	}
 	chatBody = &models.ChatBody{
-		Model:    "modelname",
+		Model:    cfg.CurrentModel,
 		Stream:   true,
 		Messages: lastChat,
 	}

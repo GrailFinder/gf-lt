@@ -10,6 +10,7 @@ sysprompts/*
 !sysprompts/coding_assistant.json
 !sysprompts/auto-solver-default.json
 issues/
+!issues/open/1.json
 history_bak/
 .aider*
 tags
