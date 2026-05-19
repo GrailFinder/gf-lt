@@ -70,7 +70,12 @@ func main() {
 	flag.BoolVar(&cfg.MissionQuiet, "quiet", false, "Suppress tool call logging in mission mode")
 	flag.BoolVar(&cfg.MissionToolsEnabled, "mission-tools", false, "Enable mission tools (move_issue, create_pr, etc.) in non-mission mode")
 	flag.StringVar(&cfg.IssuesDir, "issues-dir", "", "Directory containing issues (default: ./issues)")
+	flag.StringVar(&cfg.CurrentAPI, "api", "", "Override API endpoint (default: from config.toml)")
 	flag.Parse()
+
+	if cfg.MissionMode {
+		cfg.CLIMode = true
+	}
 	chatBody.Model = cfg.CurrentModel
 	go updateModelLists()
 	tools.InitTools(cfg, logger, store)
