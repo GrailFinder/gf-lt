@@ -37,18 +37,18 @@ var (
 	shellHistoryPos   int = -1
 	thinkingCollapsed     = false
 
-	toolModeShown   atomic.Bool
-	statusLineTempl = "help (F12) | chat: [orange:-:b]%s[-:-:-] (F1) | [%s:-:b]tool use[-:-:-] (ctrl+k) | model: [%s:-:b]%s[-:-:-] (ctrl+l) | [%s:-:b]skip LLM resp[-:-:-] (F10) | API: [orange:-:b]%s[-:-:-] (ctrl+v)\nwriting as: [orange:-:b]%s[-:-:-] (ctrl+q) | bot will write as [orange:-:b]%s[-:-:-] (ctrl+x)"
-	focusSwitcher   = map[tview.Primitive]tview.Primitive{}
-	app             *tview.Application
-	cliCardPath     string
-	cliContinue     bool
-	cliMsg          string
-	mcpManager      *mcp.Manager
-	missionResumeFile   string
-	missionAgentCard    string
-	missionIssueID      string
-	missionCheckpoint   string
+	toolModeShown     atomic.Bool
+	statusLineTempl   = "help (F12) | chat: [orange:-:b]%s[-:-:-] (F1) | [%s:-:b]tool use[-:-:-] (ctrl+k) | model: [%s:-:b]%s[-:-:-] (ctrl+l) | [%s:-:b]skip LLM resp[-:-:-] (F10) | API: [orange:-:b]%s[-:-:-] (ctrl+v)\nwriting as: [orange:-:b]%s[-:-:-] (ctrl+q) | bot will write as [orange:-:b]%s[-:-:-] (ctrl+x)"
+	focusSwitcher     = map[tview.Primitive]tview.Primitive{}
+	app               *tview.Application
+	cliCardPath       string
+	cliContinue       bool
+	cliMsg            string
+	mcpManager        *mcp.Manager
+	missionResumeFile string
+	missionAgentCard  string
+	missionIssueID    string
+	missionCheckpoint string
 )
 
 func main() {
@@ -83,7 +83,6 @@ func main() {
 		}
 	}
 	_ = mcpManager
-
 	// Route to appropriate mode
 	if cfg.MissionMode {
 		tools.RegisterMissionTools()
@@ -99,6 +98,7 @@ func main() {
 	if cfg.MissionToolsEnabled {
 		tools.RegisterMissionTools()
 	}
+	initTUI()
 	pages.AddPage("main", flex, true, true)
 	if err := app.SetRoot(pages,
 		true).EnableMouse(cfg.EnableMouse).EnablePaste(true).Run(); err != nil {
@@ -626,12 +626,12 @@ func missionComplete(m *mission.Mission, checkpointPath string, status mission.M
 
 	if cfg.MissionOutputFormat == "json" {
 		result := mission.MissionResult{
-			Status:    status,
-			IssueID:   m.Issue.ID,
+			Status:     status,
+			IssueID:    m.Issue.ID,
 			BranchName: m.Issue.BranchName,
-			Commits:   m.Checkpoint.CommitsMade,
-			ToolCalls: m.Checkpoint.ToolCallCount,
-			Duration:  duration,
+			Commits:    m.Checkpoint.CommitsMade,
+			ToolCalls:  m.Checkpoint.ToolCallCount,
+			Duration:   duration,
 		}
 		fmt.Println(result.ToJSON())
 	}

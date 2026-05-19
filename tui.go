@@ -26,28 +26,28 @@ func isFullScreenPageActive() bool {
 }
 
 var (
-	pages              *tview.Pages
-	textArea           *tview.TextArea
-	editArea           *tview.TextArea
-	textView           *tview.TextView
-	statusLineWidget   *tview.TextView
-	helpView           *tview.TextView
-	flex               *tview.Flex
-	bottomFlex         *tview.Flex
-	notificationWidget *tview.TextView
-	imgView            *tview.Image
-	defaultImage       = "sysprompts/llama.png"
-	indexPickWindow    *tview.InputField
-	renameWindow       *tview.InputField
-	roleEditWindow     *tview.InputField
-	shellInput         *tview.InputField
-	confirmModal       *tview.Modal
+	pages                  *tview.Pages
+	textArea               *tview.TextArea
+	editArea               *tview.TextArea
+	textView               *tview.TextView
+	statusLineWidget       *tview.TextView
+	helpView               *tview.TextView
+	flex                   *tview.Flex
+	bottomFlex             *tview.Flex
+	notificationWidget     *tview.TextView
+	imgView                *tview.Image
+	defaultImage           = "sysprompts/llama.png"
+	indexPickWindow        *tview.InputField
+	renameWindow           *tview.InputField
+	roleEditWindow         *tview.InputField
+	shellInput             *tview.InputField
+	confirmModal           *tview.Modal
 	currentConfirmResultCh chan<- bool
-	toastTimer         *time.Timer
-	confirmPageName     = "confirm"
-	fullscreenMode      bool
-	positionVisible     bool = true
-	ueberzugAvailable   bool = false
+	toastTimer             *time.Timer
+	confirmPageName        = "confirm"
+	fullscreenMode         bool
+	positionVisible        bool = true
+	ueberzugAvailable      bool = false
 	// pages
 	historyPage    = "historyPage"
 	agentPage      = "agentPage"
