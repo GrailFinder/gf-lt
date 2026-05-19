@@ -3,7 +3,10 @@ package tools
 import (
 	"encoding/json"
 	"fmt"
+	"gf-lt/agent"
+	"gf-lt/config"
 	"gf-lt/mission"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -12,7 +15,29 @@ import (
 
 var (
 	currentMission *mission.Mission
+	pmAgent        *agent.AgentClient
 )
+
+const pmSystemPrompt = `You are the Project Manager for an autonomous coding agent. The agent is working on a software issue without human intervention. Your role is to:
+
+1. **Keep the agent aligned with the issue goals** - Remind it what it's supposed to accomplish
+2. **Provide guidance when stuck** - Suggest approaches when the agent is blocked
+3. **Review progress** - Assess if the agent is on track or going off-course
+4. **Advocate for quality** - Remind about tests, code review, and acceptance criteria
+5. **Be concise** - The agent doesn't need lengthy explanations; give clear, actionable guidance
+
+You are aware that:
+- The agent has full access to bash, git, file editing, and other tools
+- The agent should create feature branches and commit incrementally
+- The agent must write/run tests and meet acceptance criteria before completion
+- The agent should use pm_consult when uncertain or blocked
+
+When giving guidance, focus on:
+- Whether the agent is progressing toward acceptance criteria
+- Whether it should pivot to a different approach
+- Whether it needs to write tests or run existing ones
+- Whether the current commit structure makes sense
+- Whether it should ask for more clarification or push forward`
 
 func SetCurrentMission(m *mission.Mission) {
 	currentMission = m
@@ -28,6 +53,38 @@ func RegisterMissionTools() {
 	FnMap["create_pr"] = createPRTool
 	FnMap["pm_consult"] = pmConsultTool
 	FnMap["add_issue_comment"] = addIssueCommentTool
+}
+
+func InitPMAgent(cfg *config.Config, log *slog.Logger) {
+	getToken := func() string {
+		if getTokenFunc != nil {
+			return getTokenFunc()
+		}
+		return ""
+	}
+	pmAgent = agent.NewAgentClient(cfg, log, getToken)
+}
+
+func pmAgentChat(userMsg string) string {
+	if pmAgent == nil {
+		return "PM agent not initialized"
+	}
+	body, err := pmAgent.FormFirstMsg(pmSystemPrompt, userMsg)
+	if err != nil {
+		currentMission.Log("PM agent error: failed to form message: %v", err)
+		return fmt.Sprintf("PM agent error: %v", err)
+	}
+	resp, err := pmAgent.LLMRequest(body)
+	if err != nil {
+		currentMission.Log("PM agent error: request failed: %v", err)
+		return fmt.Sprintf("PM agent error: %v", err)
+	}
+	return string(resp)
+}
+
+// PMAgentChat is the exported wrapper for use by main package.
+func PMAgentChat(userMsg string) string {
+	return pmAgentChat(userMsg)
 }
 
 func moveIssueTool(args map[string]string) []byte {
@@ -163,23 +220,27 @@ func pmConsultTool(args map[string]string) []byte {
 		question = "How am I doing? Any guidance?"
 	}
 
-	context := map[string]interface{}{
-		"issue_id":       currentMission.Issue.ID,
-		"issue_title":    currentMission.Issue.Title,
-		"branch_name":    currentMission.Issue.BranchName,
-		"project_path":   currentMission.Issue.ProjectPath,
-		"tool_calls":     currentMission.Checkpoint.ToolCallCount,
-		"commits_made":   currentMission.Checkpoint.CommitsMade,
-		"consecutive_failures": currentMission.Checkpoint.ConsecutiveFailures,
-		"pm_question":    question,
-	}
-
 	currentMission.Log("PM consultation requested: %s", question)
 
+	context := map[string]interface{}{
+		"issue_id":             currentMission.Issue.ID,
+		"issue_title":          currentMission.Issue.Title,
+		"issue_description":    currentMission.Issue.Description,
+		"branch_name":          currentMission.Issue.BranchName,
+		"project_path":         currentMission.Issue.ProjectPath,
+		"acceptance_criteria":  currentMission.Issue.AcceptanceCriteria,
+		"tool_calls":           currentMission.Checkpoint.ToolCallCount,
+		"commits_made":         currentMission.Checkpoint.CommitsMade,
+		"consecutive_failures": currentMission.Checkpoint.ConsecutiveFailures,
+		"pm_question":          question,
+	}
+
+	prompt := mustMarshalJSON(context)
+	response := pmAgentChat("Here is the current mission context and my question:\n\n" + prompt)
+
 	return []byte(mustMarshalJSON(map[string]interface{}{
-		"pm_guidance":    "Please consult the PM system for guidance. The PM agent will analyze the current progress and provide advice.",
-		"context":         context,
-		"note":            "PM response will be injected into the conversation by the mission controller.",
+		"pm_response": response,
+		"issue_id":    currentMission.Issue.ID,
 	}))
 }
 

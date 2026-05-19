@@ -8,6 +8,8 @@ config.toml
 sysprompts/*
 !sysprompts/alice_bob_carl.json
 !sysprompts/coding_assistant.json
+!sysprompts/auto-solver-default.json
+issues/
 history_bak/
 .aider*
 tags

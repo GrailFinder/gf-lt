@@ -473,10 +473,17 @@ func runMission(m *mission.Mission, checkpointPath string, agentSysprompt string
 
 	tools.SetCurrentMission(m)
 
+	// Set token callback for agent-based LLM calls (PM agent, etc.)
+	tools.SetTokenFunc(func() string {
+		choseChunkParser()
+		return chunkParser.GetToken()
+	})
+
 	outputHandler = &CLIOutputHandler{}
 	cliRespDone = make(chan bool, 1)
 	chatBody.Model = cfg.CurrentModel
 	tools.InitTools(cfg, logger, store)
+	tools.InitPMAgent(cfg, logger)
 	startNewCLIChat()
 
 	// Build initial system message with agent prompt + issue context
@@ -572,33 +579,15 @@ func missionMessageLoop(m *mission.Mission, checkpointPath string, startTime tim
 }
 
 func getPMGuidance(m *mission.Mission) string {
-	// Simple PM guidance based on progress
-	toolCalls := m.Checkpoint.ToolCallCount
-	commits := len(m.Checkpoint.CommitsMade)
-	failures := m.Checkpoint.ConsecutiveFailures
-
-	context := fmt.Sprintf(
-		"Issue: %s (%s)\nBranch: %s\nProgress: %d tool calls, %d commits made\nConsecutive failures: %d",
-		m.Issue.Title, m.Issue.ID, m.Issue.BranchName, toolCalls, commits, failures,
+	msg := fmt.Sprintf(
+		"Auto PM check-in. Current progress:\n"+
+			"Issue: %s (%s)\nBranch: %s\nTool calls: %d\nCommits: %v\nConsecutive failures: %d\n\n"+
+			"Provide brief guidance on what I should focus on next.",
+		m.Issue.Title, m.Issue.ID, m.Issue.BranchName,
+		m.Checkpoint.ToolCallCount, m.Checkpoint.CommitsMade,
+		m.Checkpoint.ConsecutiveFailures,
 	)
-
-	if failures > 0 {
-		return fmt.Sprintf("%s\n\nWARNING: You have %d consecutive failures. Consider:\n- Reviewing the error messages\n- Asking for clarification with pm_consult\n- Trying a different approach\n- Breaking down the problem into smaller steps", context, failures)
-	}
-
-	if commits == 0 && toolCalls > 20 {
-		return fmt.Sprintf("%s\n\nYou haven't made any commits yet. Consider:\n- Creating a feature branch\n- Starting with a small, focused change\n- Running tests to verify the environment", context)
-	}
-
-	if commits > 0 && commits < 3 {
-		return fmt.Sprintf("%s\n\nGood progress! You've made %d commit(s). Keep implementing incrementally and test each change.", context, commits)
-	}
-
-	if commits >= 3 {
-		return fmt.Sprintf("%s\n\nExcellent progress! %d commits made. Focus on:\n- Ensuring all acceptance criteria are met\n- Writing or updating tests\n- Preparing the PR description", context, commits)
-	}
-
-	return fmt.Sprintf("%s\n\nRegular check-in. Keep working systematically through the issue.", context)
+	return tools.PMAgentChat(msg)
 }
 
 func missionComplete(m *mission.Mission, checkpointPath string, status mission.MissionStatus, startTime time.Time) {
