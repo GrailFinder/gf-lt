@@ -18,6 +18,10 @@ func SetCurrentMission(m *mission.Mission) {
 	currentMission = m
 }
 
+func IsMissionMode() bool {
+	return currentMission != nil
+}
+
 func RegisterMissionTools() {
 	FnMap["move_issue"] = moveIssueTool
 	FnMap["create_issue"] = createIssueTool
@@ -84,15 +88,16 @@ func createIssueTool(args map[string]string) []byte {
 	}
 
 	issue := &mission.Issue{
-		Version:     mission.IssueVersion,
-		ID:          id,
-		Title:       title,
-		Description: description,
-		Status:      mission.StatusOpen,
-		ProjectPath: projectPath,
-		BranchName:  branchName,
-		CreatedAt:   time.Now(),
-		UpdatedAt:   time.Now(),
+		Version:        mission.IssueVersion,
+		ID:             id,
+		Title:          title,
+		Description:    description,
+		Status:         mission.StatusOpen,
+		ProjectPath:    projectPath,
+		BranchName:     branchName,
+		CreatedAt:      time.Now(),
+		UpdatedAt:      time.Now(),
+		RelatedIssues:  []string{currentMission.Issue.ID},
 	}
 
 	path := filepath.Join(currentMission.Manager.IssuesDir, string(mission.StatusOpen), id+".json")

@@ -4,6 +4,7 @@
 package extra
 
 import (
+	"gf-lt/models"
 	"testing"
 )
 
@@ -22,9 +23,9 @@ func TestCleanText(t *testing.T) {
 		{"[Link text](url)", "Link text(url)"},
 		{"Mixed *markdown* and #headers#!", "Mixed markdown and headers"},
 		{"<html>tags</html>", "tags"},
-		{"|---|", ""}, // Table separator
-		{"|====|", ""}, // Table separator with equals
-		{"| - - - |", ""}, // Table separator with spaced dashes
+		{"|---|", ""},         // Table separator
+		{"|====|", ""},        // Table separator with equals
+		{"| - - - |", ""},     // Table separator with spaced dashes
 		{"| cell1 | cell2 |", "cell1  cell2"}, // Table row with content
 		{"  Trailing spaces  ", "Trailing spaces"},
 		{"", ""},
@@ -32,9 +33,9 @@ func TestCleanText(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		result := cleanText(test.input)
+		result := models.CleanText(test.input)
 		if result != test.expected {
-			t.Errorf("cleanText(%q) = %q; expected %q", test.input, result, test.expected)
+			t.Errorf("CleanText(%q) = %q; expected %q", test.input, result, test.expected)
 		}
 	}
 }

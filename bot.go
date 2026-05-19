@@ -1339,8 +1339,9 @@ func findCall(msg, toolCall string) bool {
 		Name: lastToolCall.Name,
 		Args: mapToString(lastToolCall.Args),
 	}
-	// Check for dangerous commands that require user confirmation
-	if dangerous, label := tools.IsDangerousCommand(fc.Name, fc.Args); dangerous {
+	// Check for dangerous commands that require user confirmation (skip in mission mode)
+	if !tools.IsMissionMode() {
+		if dangerous, label := tools.IsDangerousCommand(fc.Name, fc.Args); dangerous {
 		req := tools.ConfirmRequest{
 			ToolName: fc.Name,
 			Command:  fc.Args["command"],
@@ -1361,6 +1362,7 @@ func findCall(msg, toolCall string) bool {
 			return true
 		}
 		// User approved — continue with normal execution
+	}
 	}
 	// Show tool call progress indicator before execution
 	outputHandler.Writef("\n[yellow::i][tool: %s...][-:-:-]", fc.Name)

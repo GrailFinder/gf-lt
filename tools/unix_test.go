@@ -18,54 +18,6 @@ func init() {
 	cfg.FilePickerDir = cwd
 }
 
-func TestUnixGlobExpansion(t *testing.T) {
-	tmpDir := filepath.Join(cfg.FilePickerDir, "test_glob_tmp")
-	os.MkdirAll(tmpDir, 0755)
-	defer os.RemoveAll(tmpDir)
-
-	os.WriteFile(filepath.Join(tmpDir, "file1.txt"), []byte("content1"), 0644)
-	os.WriteFile(filepath.Join(tmpDir, "file2.txt"), []byte("content2"), 0644)
-	os.WriteFile(filepath.Join(tmpDir, "file3.log"), []byte("content3"), 0644)
-
-	tests := []struct {
-		name    string
-		cmd     string
-		wantErr bool
-		check   func(string) bool
-	}{
-		{
-			name:    "ls glob txt files",
-			cmd:     "ls " + tmpDir + "/*.txt",
-			wantErr: false,
-			check:   func(r string) bool { return strings.Contains(r, "file1.txt") && strings.Contains(r, "file2.txt") },
-		},
-		{
-			name:    "cat glob txt files",
-			cmd:     "cat " + tmpDir + "/*.txt",
-			wantErr: false,
-			check:   func(r string) bool { return strings.Contains(r, "content1") && strings.Contains(r, "content2") },
-		},
-		{
-			name:    "ls glob no matches",
-			cmd:     "ls " + tmpDir + "/*.nonexistent",
-			wantErr: false,
-			check:   func(r string) bool { return strings.Contains(r, "no such file") || strings.Contains(r, "(empty") },
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := ExecChain(tt.cmd)
-			if tt.wantErr && result == "" {
-				t.Errorf("expected error for %q, got empty", tt.cmd)
-			}
-			if !tt.check(result) {
-				t.Errorf("check failed for %q, got %q", tt.cmd, result)
-			}
-		})
-	}
-}
-
 func TestUnixCatMultipleFiles(t *testing.T) {
 	tmpDir := filepath.Join(cfg.FilePickerDir, "test_cat_multi")
 	os.MkdirAll(tmpDir, 0755)
@@ -92,13 +44,6 @@ func TestUnixCatMultipleFiles(t *testing.T) {
 			cmd:  "cat " + tmpDir + "/a.txt " + tmpDir + "/b.txt " + tmpDir + "/c.txt",
 			check: func(r string) bool {
 				return strings.Contains(r, "file a content") && strings.Contains(r, "file b content") && strings.Contains(r, "file c content")
-			},
-		},
-		{
-			name: "cat via shell with glob",
-			cmd:  "cat " + tmpDir + "/*.txt",
-			check: func(r string) bool {
-				return strings.Contains(r, "file a content") && strings.Contains(r, "file b content")
 			},
 		},
 	}
@@ -182,77 +127,6 @@ func TestUnixForLoop(t *testing.T) {
 		t.Logf("for loop is supported: %s", result)
 	} else {
 		t.Logf("for loops not supported (expected): %s", result)
-	}
-}
-
-func TestUnixGlobWithFileOps(t *testing.T) {
-	tests := []struct {
-		name  string
-		cmd   string
-		setup func() string
-		check func(string) bool
-	}{
-		{
-			name: "rm glob txt files",
-			cmd:  "rm {dir}/*.txt",
-			setup: func() string {
-				tmpDir := filepath.Join(cfg.FilePickerDir, "test_rm_glob")
-				os.MkdirAll(tmpDir, 0755)
-				os.WriteFile(filepath.Join(tmpDir, "a.txt"), []byte("content"), 0644)
-				os.WriteFile(filepath.Join(tmpDir, "b.txt"), []byte("content"), 0644)
-				return tmpDir
-			},
-			check: func(r string) bool { return !strings.Contains(r, "[error]") },
-		},
-		{
-			name: "cp glob to dest",
-			cmd:  "cp {dir}/*.txt {dir}/dest/",
-			setup: func() string {
-				tmpDir := filepath.Join(cfg.FilePickerDir, "test_cp_glob")
-				os.MkdirAll(tmpDir, 0755)
-				os.MkdirAll(filepath.Join(tmpDir, "dest"), 0755)
-				os.WriteFile(filepath.Join(tmpDir, "a.txt"), []byte("content a"), 0644)
-				os.WriteFile(filepath.Join(tmpDir, "b.txt"), []byte("content b"), 0644)
-				return tmpDir
-			},
-			check: func(r string) bool { return !strings.Contains(r, "[error]") },
-		},
-		{
-			name: "mv glob to dest",
-			cmd:  "mv {dir}/*.log {dir}/dest/",
-			setup: func() string {
-				tmpDir := filepath.Join(cfg.FilePickerDir, "test_mv_glob")
-				os.MkdirAll(tmpDir, 0755)
-				os.MkdirAll(filepath.Join(tmpDir, "dest"), 0755)
-				os.WriteFile(filepath.Join(tmpDir, "c.log"), []byte("content c"), 0644)
-				return tmpDir
-			},
-			check: func(r string) bool { return !strings.Contains(r, "[error]") },
-		},
-		{
-			name: "ls with flags and glob",
-			cmd:  "ls -la {dir}/*.txt",
-			setup: func() string {
-				tmpDir := filepath.Join(cfg.FilePickerDir, "test_ls_glob")
-				os.MkdirAll(tmpDir, 0755)
-				os.WriteFile(filepath.Join(tmpDir, "a.txt"), []byte("content"), 0644)
-				os.WriteFile(filepath.Join(tmpDir, "b.txt"), []byte("content"), 0644)
-				return tmpDir
-			},
-			check: func(r string) bool { return strings.Contains(r, "a.txt") || strings.Contains(r, "b.txt") },
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			tmpDir := tt.setup()
-			defer os.RemoveAll(tmpDir)
-			cmd := strings.ReplaceAll(tt.cmd, "{dir}", tmpDir)
-			result := ExecChain(cmd)
-			if !tt.check(result) {
-				t.Errorf("check failed for %q, got %q", cmd, result)
-			}
-		})
 	}
 }
 

@@ -1179,19 +1179,50 @@ var allowedGitSubcommands = map[string]bool{
 	"rev-list":  true,
 }
 
+var missionGitSubcommands = map[string]bool{
+	"add":         true,
+	"commit":      true,
+	"checkout":    true,
+	"push":        true,
+	"reset":       true,
+	"stash":       true,
+	"restore":     true,
+	"switch":      true,
+	"merge":       true,
+	"rebase":      true,
+	"cherry-pick": true,
+	"tag":         true,
+	"remote":      true,
+	"fetch":       true,
+	"pull":        true,
+	"status":      true,
+	"log":         true,
+	"diff":        true,
+	"show":        true,
+	"branch":      true,
+	"reflog":      true,
+	"rev-parse":   true,
+	"shortlog":    true,
+	"describe":    true,
+	"rev-list":    true,
+}
+
 func FsGit(args []string, stdin string) string {
 	if len(args) == 0 {
 		return "[error] usage: git <subcommand> [options]"
 	}
 	subcmd := args[0]
-	if !allowedGitSubcommands[subcmd] {
-		return fmt.Sprintf("[error] git: '%s' is not an allowed git command. Allowed: status, log, diff, show, branch, reflog, rev-parse, shortlog, describe, rev-list", subcmd)
+	allowed := allowedGitSubcommands[subcmd]
+	if !allowed && currentMission != nil {
+		allowed = missionGitSubcommands[subcmd]
+	}
+	if !allowed {
+		return fmt.Sprintf("[error] git: '%s' is not an allowed git command", subcmd)
 	}
 	abs, err := resolvePath(".")
 	if err != nil {
 		return fmt.Sprintf("[error] git: %v", err)
 	}
-	// Pass all args to git (first arg is subcommand, rest are options)
 	cmd := exec.Command("git", args...)
 	cmd.Dir = abs
 	output, err := cmd.CombinedOutput()
