@@ -6,6 +6,7 @@ import (
 	"gf-lt/models"
 	"gf-lt/tools"
 	"io"
+	"net/http"
 	"regexp"
 	"strings"
 
@@ -14,6 +15,8 @@ import (
 
 var pendingImageAttachments []string // Global variable to track image attachments for next message
 var lastImg string                   // for ctrl+j
+var mediaMarker string               // llama.cpp media marker, fetched from /props
+var cachedMediaMarkerModel string    // model name for which mediaMarker was fetched
 
 // containsToolSysMsg checks if the tools.ToolSysMsg already exists in the chat body
 func containsToolSysMsg() bool {
@@ -108,12 +111,66 @@ type ChunkParser interface {
 	GetAPIType() models.APIType
 }
 
+// fetchMediaMarker queries the llama.cpp /props endpoint to get the media marker
+// for the current model. Results are cached per model to avoid repeated calls.
+// Runs in a goroutine to avoid blocking the TUI.
+func fetchMediaMarker() {
+	if !isLocalLlamacpp() {
+		return
+	}
+	if cachedMediaMarkerModel == chatBody.Model && mediaMarker != "" {
+		return
+	}
+	// Capture values before launching goroutine to avoid races
+	currentModel := chatBody.Model
+	currentAPI := cfg.CurrentAPI
+	go func() {
+		baseURL := currentAPI
+		if strings.Contains(baseURL, "/completion") {
+			baseURL = strings.TrimSuffix(baseURL, "/completion")
+		} else if strings.Contains(baseURL, "/v1/chat/completions") {
+			baseURL = strings.TrimSuffix(baseURL, "/v1/chat/completions")
+		} else {
+			return
+		}
+		propsURL := baseURL + "/props?model=" + currentModel
+		req, err := http.NewRequest("GET", propsURL, nil)
+		if err != nil {
+			logger.Warn("failed to create props request", "error", err)
+			return
+		}
+		resp, err := httpClient.Do(req)
+		if err != nil {
+			logger.Warn("failed to fetch props", "error", err, "url", propsURL)
+			return
+		}
+		defer resp.Body.Close()
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			logger.Warn("failed to read props response", "error", err)
+			return
+		}
+		var props map[string]any
+		if err := json.Unmarshal(body, &props); err != nil {
+			logger.Warn("failed to parse props response", "error", err)
+			return
+		}
+		if marker, ok := props["media_marker"].(string); ok && marker != "" {
+			mediaMarker = marker
+			cachedMediaMarkerModel = currentModel
+			logger.Info("fetched media_marker", "marker", marker, "model", currentModel)
+		}
+	}()
+}
+
+// choseChunkParser selects the appropriate chunk parser based on the current API
 func choseChunkParser() {
 	chunkParser = LCPCompletion{}
 	switch cfg.CurrentAPI {
 	case "http://localhost:8080/completion", "http://127.0.0.1:8080/completion":
 		chunkParser = LCPCompletion{}
 		logger.Debug("chosen lcpcompletion", "link", cfg.CurrentAPI)
+		fetchMediaMarker()
 		return
 	case "http://localhost:8080/v1/chat/completions", "http://127.0.0.1:8080/v1/chat/completions":
 		chunkParser = LCPChat{}
@@ -142,6 +199,7 @@ func choseChunkParser() {
 			return
 		}
 		chunkParser = LCPCompletion{}
+		fetchMediaMarker()
 	}
 }
 
@@ -225,7 +283,11 @@ func (lcp LCPCompletion) FormMsg(msg, role string, resume bool) (io.Reader, erro
 					parts := strings.SplitN(imgURL, ",", 2)
 					if len(parts) == 2 {
 						multimodalData = append(multimodalData, parts[1])
-						messages[i] += " <__media__>"
+						marker := mediaMarker
+						if marker == "" {
+							marker = "<__media__>"
+						}
+						messages[i] += " " + marker
 					}
 				}
 			}
