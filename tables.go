@@ -908,6 +908,11 @@ func makeFilePicker() *tview.Flex {
 		imgPreview = tview.NewImage()
 		imgPreview.SetBorder(true).SetTitle("Preview").SetTitleAlign(tview.AlignLeft)
 	}
+	// Pending images list
+	pendingImagesView := tview.NewTextView()
+	pendingImagesView.SetBorder(true).SetTitle("Pending Images [d: remove last]").SetTitleAlign(tview.AlignLeft)
+	pendingImagesView.SetTextColor(tcell.ColorOrange)
+	pendingImagesView.SetTextAlign(tview.AlignLeft)
 	// Horizontal flex for list + preview
 	var hFlex *tview.Flex
 	if cfg.ImagePreview && imgPreview != nil {
@@ -918,9 +923,23 @@ func makeFilePicker() *tview.Flex {
 		hFlex = tview.NewFlex().SetDirection(tview.FlexColumn).
 			AddItem(listView, 0, 1, true)
 	}
+	// Helper to update pending images display
+	updatePendingImagesView := func() {
+		if len(pendingImageAttachments) == 0 {
+			pendingImagesView.SetText("(none)")
+		} else {
+			var lines []string
+			for i, p := range pendingImageAttachments {
+				lines = append(lines, fmt.Sprintf("%d. %s", i+1, path.Base(p)))
+			}
+			pendingImagesView.SetText(strings.Join(lines, "\n"))
+		}
+	}
+	updatePendingImagesView()
 	// Main vertical flex
 	flex := tview.NewFlex().SetDirection(tview.FlexRow)
 	flex.AddItem(hFlex, 0, 3, true)
+	flex.AddItem(pendingImagesView, 5, 0, false)
 	flex.AddItem(statusView, 3, 0, false)
 	// Refresh the file list – now accepts a filter string
 	var refreshList func(string, string)
@@ -1182,30 +1201,30 @@ geom, err := getTerminalGeometry()
 						currentStackPos = len(dirStack) - 1
 						statusView.SetText("Current: " + targetDir)
 						return nil
-					} else {
-						// It's a file
-						filePath := path.Join(currentDisplayDir, actualItemName)
-						if info, err := os.Stat(filePath); err == nil && !info.IsDir() {
-							if isImageFile(actualItemName) {
-								if currentFilePickerUeberzugImg != nil {
-									currentFilePickerUeberzugImg.Destroy()
-									currentFilePickerUeberzugImg = nil
-								}
-								SetImageAttachment(filePath)
-								statusView.SetText("Image attached: " + filePath + " (will be sent with next message)")
-								pages.RemovePage(filePickerPage)
-							} else {
-								if currentFilePickerUeberzugImg != nil {
-									currentFilePickerUeberzugImg.Destroy()
-									currentFilePickerUeberzugImg = nil
-								}
-								textArea.SetText(filePath, true)
-								app.SetFocus(textArea)
-								pages.RemovePage(filePickerPage)
+				} else {
+					// It's a file
+					filePath := path.Join(currentDisplayDir, actualItemName)
+					if info, err := os.Stat(filePath); err == nil && !info.IsDir() {
+						if isImageFile(actualItemName) {
+							if currentFilePickerUeberzugImg != nil {
+								currentFilePickerUeberzugImg.Destroy()
+								currentFilePickerUeberzugImg = nil
 							}
+							AddImageAttachment(filePath)
+							updatePendingImagesView()
+							statusView.SetText("Image added: " + path.Base(filePath) + " (total: " + strconv.Itoa(len(pendingImageAttachments)) + ")")
+						} else {
+							if currentFilePickerUeberzugImg != nil {
+								currentFilePickerUeberzugImg.Destroy()
+								currentFilePickerUeberzugImg = nil
+							}
+							textArea.SetText(filePath, true)
+							app.SetFocus(textArea)
+							pages.RemovePage(filePickerPage)
 						}
-						return nil
 					}
+					return nil
+				}
 				}
 				return nil
 			case tcell.KeyRune:
@@ -1213,6 +1232,22 @@ geom, err := getTerminalGeometry()
 				if searchInputMode && r != 0 {
 					searchQuery += string(r)
 					refreshList(currentDisplayDir, searchQuery)
+					return nil
+				}
+				// Handle 'd' to remove last image even while searching
+				if r == 'd' {
+					if len(pendingImageAttachments) > 0 {
+						removed := pendingImageAttachments[len(pendingImageAttachments)-1]
+						RemoveLastImageAttachment()
+						updatePendingImagesView()
+						if len(pendingImageAttachments) == 0 {
+							statusView.SetText("Removed last pending image: " + path.Base(removed))
+						} else {
+							statusView.SetText("Removed: " + path.Base(removed) + " (remaining: " + strconv.Itoa(len(pendingImageAttachments)) + ")")
+						}
+					} else {
+						statusView.SetText("No pending images to remove")
+					}
 					return nil
 				}
 				// If not in search input mode, pass through for navigation
@@ -1269,6 +1304,22 @@ geom, err := getTerminalGeometry()
 				// pages.RemovePage(filePickerPage)
 				return nil
 			}
+			if event.Rune() == 'd' {
+				// Remove last pending image
+				if len(pendingImageAttachments) > 0 {
+					removed := pendingImageAttachments[len(pendingImageAttachments)-1]
+					RemoveLastImageAttachment()
+					updatePendingImagesView()
+					if len(pendingImageAttachments) == 0 {
+						statusView.SetText("Removed last pending image: " + path.Base(removed))
+					} else {
+						statusView.SetText("Removed: " + path.Base(removed) + " (remaining: " + strconv.Itoa(len(pendingImageAttachments)) + ")")
+					}
+				} else {
+					statusView.SetText("No pending images to remove")
+				}
+				return nil
+			}
 		case tcell.KeyEnter:
 			// Get the currently highlighted item in the list
 			itemIndex := listView.GetCurrentItem()
@@ -1316,34 +1367,33 @@ geom, err := getTerminalGeometry()
 					currentStackPos = len(dirStack) - 1
 					statusView.SetText("Current: " + targetDir)
 					return nil
-				} else {
-					// It's a file
-					filePath := path.Join(currentDisplayDir, actualItemName)
-					if info, err := os.Stat(filePath); err == nil && !info.IsDir() {
-						if isImageFile(actualItemName) {
-							if currentFilePickerUeberzugImg != nil {
-								currentFilePickerUeberzugImg.Destroy()
-								currentFilePickerUeberzugImg = nil
-							}
-							logger.Info("setting image", "file", actualItemName)
-							SetImageAttachment(filePath)
-							logger.Info("after setting image", "file", actualItemName)
-							statusView.SetText("Image attached: " + filePath + " (will be sent with next message)")
-							logger.Info("after setting text", "file", actualItemName)
-							pages.RemovePage(filePickerPage)
-							logger.Info("after update drawn", "file", actualItemName)
-						} else {
-							if currentFilePickerUeberzugImg != nil {
-								currentFilePickerUeberzugImg.Destroy()
-								currentFilePickerUeberzugImg = nil
-							}
-							textArea.SetText(filePath, true)
-							app.SetFocus(textArea)
-							pages.RemovePage(filePickerPage)
+			} else {
+				// It's a file
+				filePath := path.Join(currentDisplayDir, actualItemName)
+				if info, err := os.Stat(filePath); err == nil && !info.IsDir() {
+					if isImageFile(actualItemName) {
+						if currentFilePickerUeberzugImg != nil {
+							currentFilePickerUeberzugImg.Destroy()
+							currentFilePickerUeberzugImg = nil
 						}
+						logger.Info("adding image", "file", actualItemName)
+						AddImageAttachment(filePath)
+						updatePendingImagesView()
+						logger.Info("after adding image", "file", actualItemName, "count", len(pendingImageAttachments))
+						statusView.SetText("Image added: " + path.Base(filePath) + " (total: " + strconv.Itoa(len(pendingImageAttachments)) + ")")
+						logger.Info("after setting text", "file", actualItemName)
+					} else {
+						if currentFilePickerUeberzugImg != nil {
+							currentFilePickerUeberzugImg.Destroy()
+							currentFilePickerUeberzugImg = nil
+						}
+						textArea.SetText(filePath, true)
+						app.SetFocus(textArea)
+						pages.RemovePage(filePickerPage)
 					}
-					return nil
 				}
+				return nil
+			}
 			}
 			return nil
 		}

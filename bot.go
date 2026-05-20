@@ -936,7 +936,7 @@ func chatRound(r *models.ChatRoundReq) error {
 	}
 	defer func() {
 		botRespMode.Store(false)
-		ClearImageAttachment()
+		ClearImageAttachments()
 	}()
 	// check that there is a model set to use if is not local
 	choseChunkParser()
