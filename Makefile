@@ -4,9 +4,25 @@ run: setconfig
 	go build -tags extra -o gf-lt && ./gf-lt
 
 mission-test: setconfig
-	go build -tags extra -o gf-lt && GF_LT_MODEL=Qwen3.6-35B-A3B-Q5_K_M \
-		./gf-lt --mission --issue-id 1 \
-		--api http://localhost:8080/v1/chat/completions
+	@set -e; \
+	ID=$$(date +%s); \
+	REPO=/tmp/gf-lt-test-repo-$$ID; \
+	ISSUES=/tmp/gf-lt-test-issues-$$ID; \
+	SRC=$$(pwd); \
+	echo "=== Setting up test environment ==="; \
+	mkdir -p $$REPO $$ISSUES/open; \
+	cp -r test-mission-repo/* $$REPO/; \
+	(cd $$REPO && git -c init.defaultBranch=main init && git add . && git commit -m "initial" >/dev/null 2>&1); \
+	cp $$SRC/issues/open/1.json $$ISSUES/open/1.json; \
+	python3 -c "import json; i=json.load(open('$$ISSUES/open/1.json')); i['project_path']='$$REPO'; json.dump(i, open('$$ISSUES/open/1.json','w'))"; \
+	go build -tags extra -o gf-lt && \
+	GF_LT_MODEL=Qwen3.6-35B-A3B-Q5_K_M \
+	./gf-lt --mission --issue-id 1 \
+		--api http://localhost:8080/v1/chat/completions \
+		--issues-dir $$ISSUES; \
+	rc=$$?; \
+	echo "=== Test artifacts in $$REPO ==="; \
+	exit $$rc
 
 build-debug:
 	go build -gcflags="all=-N -l" -tags extra -o gf-lt

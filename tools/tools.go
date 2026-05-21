@@ -725,7 +725,8 @@ Use: command to execute. Example: ls -la | grep foo`
   Example:
     file_edit llm.go 182 186 "new content here"
     file_edit llm.go 5 4 "inserted at line 5"
-  Note: line numbers are 1-indexed.`
+  Note: line numbers are 1-indexed.
+  For OpenAI-style calls: use file_path, old_lines (JSON: {"start":N,"end":N}), new_content.`
 	case "memory":
 		return `memory <subcommand> [args]
   Manage memory storage.
@@ -1616,7 +1617,7 @@ var BaseTools = []models.Tool{
 					},
 					"old_lines": models.ToolArgProps{
 						Type:        "string",
-						Description: `JSON object with start and end line numbers. Use {start, end} where start <= end to replace lines [start, end]. Use start > end (e.g., {start:5, end:4}) for insert-only at line start without deleting anything. Line numbers are 1-indexed.`,
+						Description: `JSON object with quoted keys: {"start": N, "end": N}. Use start <= end to replace lines [start, end], or start > end (e.g., {"start":5, "end":4}) to insert at line start without deleting anything. Line numbers are 1-indexed.`,
 					},
 					"new_content": models.ToolArgProps{
 						Type:        "string",

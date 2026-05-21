@@ -192,6 +192,9 @@ func updateStatusLine() {
 	if cfg.CLIMode {
 		return // no status line in cli mode
 	}
+	if statusLineWidget == nil {
+		return // TUI not initialized yet
+	}
 	status := makeStatusLine()
 	statusLineWidget.SetText(status)
 }

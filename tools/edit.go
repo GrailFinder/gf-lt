@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"regexp"
 	"strings"
 )
 
@@ -23,8 +24,14 @@ func FsFileEdit(args map[string]string) string {
 
 	var r struct{ Start, End int }
 	if err := json.Unmarshal([]byte(oldLinesJSON), &r); err != nil {
+		if normalized := normalizeOLDJSON(oldLinesJSON); normalized != "" {
+			if err2 := json.Unmarshal([]byte(normalized), &r); err2 == nil {
+				goto parsed
+			}
+		}
 		return "[error] invalid old_lines JSON: " + err.Error()
 	}
+parsed:
 
 	abs, err := resolvePath(filePath)
 	if err != nil {
@@ -40,7 +47,7 @@ func FsFileEdit(args map[string]string) string {
 	if r.Start < 1 {
 		return "[error] start line must be >= 1"
 	}
-	if r.Start > len(lines) {
+	if r.Start > len(lines)+1 {
 		return fmt.Sprintf("[error] start line %d exceeds file length (%d lines)", r.Start, len(lines))
 	}
 
@@ -87,4 +94,29 @@ func FsFileEdit(args map[string]string) string {
 		}
 		return fmt.Sprintf("edited %s: inserted %d lines at line %d", filePath, inserted, r.Start)
 	}
+}
+
+var jsonKeyRE = regexp.MustCompile(`(\w+)\s*:`)
+
+func normalizeOLDJSON(s string) string {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return ""
+	}
+	// Check if it's already valid JSON (with quoted keys)
+	if json.Unmarshal([]byte(s), &struct{}{}) == nil {
+		return s
+	}
+	// Try wrapping unquoted keys in quotes: {start: 5, end: 20} -> {"start": 5, "end": 20}
+	normalized := jsonKeyRE.ReplaceAllString(s, `"$1":`)
+	if json.Unmarshal([]byte(normalized), &struct{}{}) == nil {
+		return normalized
+	}
+	// Try single-quoted keys: {'start': 5} -> {"start": 5}
+	normalized = strings.ReplaceAll(s, "'", `"`)
+	normalized = jsonKeyRE.ReplaceAllString(normalized, `"$1":`)
+	if json.Unmarshal([]byte(normalized), &struct{}{}) == nil {
+		return normalized
+	}
+	return ""
 }

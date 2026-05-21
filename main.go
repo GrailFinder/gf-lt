@@ -69,7 +69,7 @@ func main() {
 	flag.StringVar(&cfg.MissionOutputFormat, "output", "text", "Output format: text or json")
 	flag.BoolVar(&cfg.MissionQuiet, "quiet", false, "Suppress tool call logging in mission mode")
 	flag.BoolVar(&cfg.MissionToolsEnabled, "mission-tools", false, "Enable mission tools (move_issue, create_pr, etc.) in non-mission mode")
-	flag.StringVar(&cfg.IssuesDir, "issues-dir", "", "Directory containing issues (default: ./issues)")
+	flag.StringVar(&cfg.IssuesDir, "issues-dir", "auto", "Directory containing issues (default: ./issues, overridden by GF_LT_ISSUES_DIR env if set)")
 	flag.StringVar(&cfg.CurrentAPI, "api", "", "Override API endpoint (default: from config.toml)")
 	flag.Parse()
 
@@ -81,6 +81,15 @@ func main() {
 	if cfg.CurrentModel == "auto" {
 		if envModel := os.Getenv("GF_LT_MODEL"); envModel != "" {
 			cfg.CurrentModel = envModel
+		}
+	}
+
+	// Priority: --issues-dir flag > GF_LT_ISSUES_DIR env > "./issues"
+	if cfg.IssuesDir == "auto" {
+		if envDir := os.Getenv("GF_LT_ISSUES_DIR"); envDir != "" {
+			cfg.IssuesDir = envDir
+		} else {
+			cfg.IssuesDir = "./issues"
 		}
 	}
 	chatBody.Model = cfg.CurrentModel
