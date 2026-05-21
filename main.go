@@ -73,6 +73,11 @@ func main() {
 	flag.StringVar(&cfg.CurrentAPI, "api", "", "Override API endpoint (default: from config.toml)")
 	flag.Parse()
 
+	// Restore config.toml ChatAPI if --api flag wasn't explicitly set
+	if cfg.CurrentAPI == "" {
+		cfg.CurrentAPI = cfg.ChatAPI
+	}
+
 	if cfg.MissionMode {
 		cfg.CLIMode = true
 	}
