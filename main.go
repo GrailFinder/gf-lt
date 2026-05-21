@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"gf-lt/mcp"
@@ -11,6 +12,7 @@ import (
 	"gf-lt/pngmeta"
 	"gf-lt/tools"
 	"os"
+	"path"
 	"slices"
 	"strconv"
 	"strings"
@@ -557,33 +559,36 @@ func runMission(m *mission.Mission, checkpointPath string, agentSysprompt string
 }
 
 func missionMessageLoop(m *mission.Mission, checkpointPath string, startTime time.Time) {
-	// Send the first message to start the conversation
+	// Send the first user prompt to start the conversation
 	chatRoundChan <- &models.ChatRoundReq{
-		Role: cfg.AssistantRole,
+		Role:    cfg.UserRole,
+		UserMsg: "Proceed with the issue. What is your next step?",
 	}
+
+	var emptyRespRetries int
 
 	for {
 		select {
 		case <-cliRespDone:
+			// Detect empty responses — silently retry up to 3 times
+			if isLastAssistantMsgEmpty() {
+				emptyRespRetries++
+				if emptyRespRetries < 3 {
+					m.Log("Empty response, retrying silently (%d/3)", emptyRespRetries)
+					chatRoundChan <- &models.ChatRoundReq{Role: cfg.AssistantRole}
+					continue
+				}
+				emptyRespRetries = 0
+				m.AddFailure()
+				m.Log("Empty response limit reached (3/3), counting as failure %d/%d",
+					m.Checkpoint.ConsecutiveFailures, m.MaxFailures)
+			} else {
+				emptyRespRetries = 0
+			}
+
 			// Response complete - check for mission completion signals
 			m.Log("Response complete. Tool calls: %d, Failures: %d",
 				m.Checkpoint.ToolCallCount, m.Checkpoint.ConsecutiveFailures)
-
-			// Detect empty responses (no content, no tool calls) and count as failure
-			if isLastAssistantMsgEmpty() {
-				m.AddFailure()
-				m.Log("Empty response: no content, no tool calls. Failure %d/%d",
-					m.Checkpoint.ConsecutiveFailures, m.MaxFailures)
-
-				// Inject PM guidance to help recover
-				pmResponse := getPMGuidance(m)
-				m.AddToConversation("system", fmt.Sprintf("[Empty Response - PM Guidance]\n%s", pmResponse))
-				chatBody.Messages = append(chatBody.Messages, models.RoleMsg{
-					Role: "system", Content: fmt.Sprintf("[Empty Response - PM Guidance]\n%s", pmResponse),
-				})
-				chatRoundChan <- &models.ChatRoundReq{Role: cfg.AssistantRole}
-				continue
-			}
 
 			// Check for create_pr tool completion
 			if m.Status == mission.StatusSuccess {
@@ -659,7 +664,29 @@ func getPMGuidance(m *mission.Mission) string {
 	return tools.PMAgentChat(msg)
 }
 
+func exportMissionChat(issueID string) {
+	data, err := json.MarshalIndent(chatBody.Messages, "", "  ")
+	if err != nil {
+		logger.Error("failed to marshal mission chat", "error", err)
+		return
+	}
+	if err := os.MkdirAll(exportDir, 0755); err != nil {
+		logger.Error("failed to create export dir", "error", err)
+		return
+	}
+	ts := time.Now().Format("20060102-150405")
+	fp := path.Join(exportDir, fmt.Sprintf("mission-%s-%s.json", issueID, ts))
+	if err := os.WriteFile(fp, data, 0666); err != nil {
+		logger.Error("failed to write mission chat export", "error", err)
+		return
+	}
+	fmt.Printf("Chat exported to: %s\n", fp)
+}
+
 func missionComplete(m *mission.Mission, checkpointPath string, status mission.MissionStatus, startTime time.Time) {
+	// Export chat for analysis
+	exportMissionChat(m.Issue.ID)
+
 	duration := time.Since(startTime)
 
 	// Save final checkpoint
