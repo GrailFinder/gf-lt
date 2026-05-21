@@ -1693,6 +1693,7 @@ func startNewCLIChat() []models.RoleMsg {
 	activeChatName = newChat.Name
 	chatMap[newChat.Name] = newChat
 	cliPrevOutput = ""
+	chatBody.Messages = nil
 	return chatBody.Messages
 }
 

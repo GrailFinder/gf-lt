@@ -1,7 +1,12 @@
-.PHONY: setconfig run lint lintall install-linters setup-whisper build-whisper download-whisper-model docker-up docker-down docker-logs noextra-run installdelve checkdelve fetch-onnx install-onnx-deps
+.PHONY: setconfig run mission-test lint lintall install-linters setup-whisper build-whisper download-whisper-model docker-up docker-down docker-logs noextra-run installdelve checkdelve fetch-onnx install-onnx-deps
 
 run: setconfig
 	go build -tags extra -o gf-lt && ./gf-lt
+
+mission-test: setconfig
+	go build -tags extra -o gf-lt && GF_LT_MODEL=Qwen3.6-35B-A3B-Q5_K_M \
+		./gf-lt --mission --issue-id 1 \
+		--api http://localhost:8080/v1/chat/completions
 
 build-debug:
 	go build -gcflags="all=-N -l" -tags extra -o gf-lt
