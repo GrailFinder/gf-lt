@@ -507,6 +507,15 @@ func runMission(m *mission.Mission, checkpointPath string, agentSysprompt string
 	tools.InitPMAgent(cfg, logger)
 	startNewCLIChat()
 
+	// Set working directory to issue's project path
+	if m.Issue.ProjectPath != "" {
+		if err := tools.SetFSCwd(m.Issue.ProjectPath); err != nil {
+			m.Log("Warning: failed to set CWD to %s: %v", m.Issue.ProjectPath, err)
+		} else {
+			m.Log("Working directory set to: %s", m.Issue.ProjectPath)
+		}
+	}
+
 	// Build initial system message with agent prompt + issue context
 	workflowDocs := ""
 	if wf, err := os.ReadFile("docs/issue-workflow.md"); err == nil {
@@ -555,6 +564,22 @@ func missionMessageLoop(m *mission.Mission, checkpointPath string, startTime tim
 			m.Log("Response complete. Tool calls: %d, Failures: %d",
 				m.Checkpoint.ToolCallCount, m.Checkpoint.ConsecutiveFailures)
 
+			// Detect empty responses (no content, no tool calls) and count as failure
+			if isLastAssistantMsgEmpty() {
+				m.AddFailure()
+				m.Log("Empty response: no content, no tool calls. Failure %d/%d",
+					m.Checkpoint.ConsecutiveFailures, m.MaxFailures)
+
+				// Inject PM guidance to help recover
+				pmResponse := getPMGuidance(m)
+				m.AddToConversation("system", fmt.Sprintf("[Empty Response - PM Guidance]\n%s", pmResponse))
+				chatBody.Messages = append(chatBody.Messages, models.RoleMsg{
+					Role: "system", Content: fmt.Sprintf("[Empty Response - PM Guidance]\n%s", pmResponse),
+				})
+				chatRoundChan <- &models.ChatRoundReq{Role: cfg.AssistantRole}
+				continue
+			}
+
 			// Check for create_pr tool completion
 			if m.Status == mission.StatusSuccess {
 				missionComplete(m, checkpointPath, mission.StatusSuccess, startTime)
@@ -597,6 +622,24 @@ func missionMessageLoop(m *mission.Mission, checkpointPath string, startTime tim
 			return
 		}
 	}
+}
+
+func isLastAssistantMsgEmpty() bool {
+	for i := len(chatBody.Messages) - 1; i >= 0; i-- {
+		msg := chatBody.Messages[i]
+		if msg.Role != cfg.AssistantRole && msg.Role != "assistant" {
+			continue
+		}
+		// Found the last assistant message - check if it's empty
+		if msg.ToolCall != nil {
+			return false
+		}
+		if msg.HasContentParts {
+			return len(msg.ContentParts) == 0
+		}
+		return strings.TrimSpace(msg.Content) == ""
+	}
+	return false
 }
 
 func getPMGuidance(m *mission.Mission) string {
