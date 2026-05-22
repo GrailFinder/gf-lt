@@ -265,6 +265,7 @@ func execSingle(command, stdin string) (string, error) {
 	if err.Error() == "not a builtin" {
 		// Execute as system command
 		cmd := exec.Command(name, args...)
+		cmd.Dir = cfg.FilePickerDir
 		if stdin != "" {
 			cmd.Stdin = strings.NewReader(stdin)
 		}

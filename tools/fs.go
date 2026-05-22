@@ -1242,9 +1242,20 @@ func FsCd(args []string, stdin string) string {
 		return "[error] usage: cd <dir>"
 	}
 	dir := args[0]
-	abs, err := resolvePath(dir)
-	if err != nil {
-		return fmt.Sprintf("[error] cd: %v", err)
+	// Resolve the path: absolute paths are used as-is; relative paths are
+	// resolved against the current FilePickerDir (like a real shell).
+	var abs string
+	if filepath.IsAbs(dir) {
+		abs = filepath.Clean(dir)
+	} else {
+		abs = filepath.Join(cfg.FilePickerDir, dir)
+		abs = filepath.Clean(abs)
+	}
+	// Guard against path-doubling: if the target is the current directory
+	// or a parent of it, just use the current FilePickerDir as-is.
+	// Real shells are idempotent when you cd to a directory you're already in.
+	if abs == cfg.FilePickerDir {
+		return "Already in: " + abs
 	}
 	info, err := os.Stat(abs)
 	if err != nil {

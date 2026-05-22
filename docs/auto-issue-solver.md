@@ -318,3 +318,17 @@ Instructions for LLM on:
 
 ### `sysprompts/auto-solver-default.json`
 Default agent card bundled with gf-lt.
+
+## Remaining Work
+
+1. ~~**Working directory not effective**~~ — **FIXED**: `execSingle()` now sets `cmd.Dir = cfg.FilePickerDir`, so all system commands (ls, grep, find, git, etc.) run in the project repo directory. `cd` updates FilePickerDir and all commands respect it.
+
+2. ~~**`cd` path-doubling**~~ — **FIXED**: `FsCd` now resolves absolute paths directly and relative paths against FilePickerDir (like a real shell). Added idempotency guard: if already in target directory, returns early without error.
+
+3. **PM agent empty response** — `PMAgentChat` can return empty string when the LLM returns no content, resulting in `[Empty Response - PM Guidance]` being injected as guidance. Need a fallback message when PM content is empty.
+
+4. **`(task: in progress)` prefix on tool responses** — deprecated task system prints this prefix on every tool result, confusing the LLM. Should be removed.
+
+5. **`findCall` false positives** — `ToolCallRE` regex matches `__tool_call__...__tool_call__` in any LLM text. Should be tightened or validated (check that captured content starts with `{`).
+
+6. **End-to-end testing** — mission mode tests require a running llama.cpp server with a proper tool-capable model. Without it, the LLM either returns empty responses or generates malformed tool calls. A smoke test with mock/stub would allow CI-friendly validation, but a real end-to-end run needs the server.
