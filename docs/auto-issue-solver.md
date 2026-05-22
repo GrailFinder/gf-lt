@@ -11,7 +11,9 @@ A third operational mode where gf-lt operates as an autonomous coding agent focu
 3. **PM Supervisor** - Project manager agent provides periodic guidance
 4. **File-Based Issues** - Issues stored as JSON in configurable directory structure
 5. **Resumable** - Long operations can be checkpointed and resumed
-6. **Graceful Exit** - `create_pr` tool or failure threshold (3 consecutive failures)
+6. **No External PR Dependency** - `create_pr` produces a PR description file in the repo; no GitHub/GitLab integration required
+7. **File = Deliverable** - The PR is a markdown file describing changes; user reviews and merges manually
+8. **Graceful Exit** - `create_pr` tool or failure threshold (3 consecutive failures)
 
 ## Issues Directory Structure
 
@@ -94,7 +96,7 @@ Tools are automatically registered when `--mission` is used, or via `--mission-t
 |------|------|-------------|
 | `move_issue` | `status` | Move issue to different status (review, done, archive) |
 | `create_issue` | `id`, `title`, `description`, `branch_name` | Create a new sub-issue file |
-| `create_pr` | `title`, `body`, `base` | Mark session complete, signal success |
+| `create_pr` | `title`, `body`, `base` | Mark session complete; produces PR description file in repo |
 | `pm_consult` | `question` | Request PM guidance (injects into conversation) |
 | `add_issue_comment` | `body`, `author` | Add comment to issue file |
 
@@ -124,11 +126,27 @@ Orchestrates the session lifecycle:
 
 **Behavior**:
 - Reads issue file (full content in context before replying)
-- Receives: current issue, branch name, recent commits, tool call history (last 10)
-- Responds with text guidance (free-form)
-- Can say "you seem off-track, review the issue" or "good progress, focus on tests"
+- Receives: current issue, branch name, recent commits, tool call count, consecutive failures
+- Evaluates the agent's progress against the structured assessment criteria below
+- Returns structured guidance, not free-form
 
-**Implementation**: Spawned as separate `chatRoundChan` request with PM role.
+**PM Assessment Framework**:
+- **Task alignment**: Is the agent's work matching the acceptance criteria?
+- **Progress velocity**: Is the agent making forward progress or spinning?
+- **Error handling**: Did the agent recover properly from recent failures?
+- **Scope discipline**: Is the agent scope-creeping or staying focused?
+
+**PM Response Format**:
+```
+STATUS: on-track | off-track | stuck
+ASSESSMENT: 1-2 sentences on current state
+ADVICE: 1-3 specific things the agent should do next
+WARNING: (only if off-track) what the agent is doing wrong
+```
+
+**Implementation**: Spawned as separate `agent.AgentClient` with dedicated PM sysprompt. Called via `pmAgentChat()` → `FormFirstMsg()` → `LLMRequest()`.
+
+**Known Issue**: PM can return empty string when the LLM returns no content. Need a fallback message.
 
 ### 3. Issue Solver Agent (Main)
 
@@ -175,37 +193,80 @@ Orchestrates the session lifecycle:
 │ ├─ Read issue JSON                                    │
 │ ├─ Move issue: open/ → in_progress/                  │
 │ ├─ Generate branch_name (if not present)             │
+│ ├─ SetFSCwd to project_path (sets cfg.FilePickerDir)  │
 │ ├─ Create/checkpoint session state                   │
-│ └─ Inject initial context into agent                 │
+│ └─ Inject initial context (sysprompt + issue + issue-workflow.md) │
 └─────────────────────────────────────────────────────────┘
                           ↓
 ┌─────────────────────────────────────────────────────────┐
-│ MAIN LOOP                                              │
-│ ┌─ Agent sends message/tool calls                     │
-│ │                                                    │
-│ │  [tool call] ──→ Execute tool                      │
-│ │       │                                           │
-│ │       ↓                                           │
-│ │  [increment tool call counter]                     │
-│ │       │                                           │
-│ │       ├─ [PM interval reached?] ──→ PM check-in   │
-│ │       │   └─ PM reads issue file first             │
-│ │       │                                           │
-│ │       ├─ [tool == create_pr?] ──→ SUCCESS         │
-│ │       │                                           │
-│ │       └─ [tool == move_issue?] ──→ Update dirs    │
-│ │                                                    │
-│ └─ Agent continues                                     │
+│ MAIN LOOP (missionMessageLoop in main.go)              │
+│ ┌───────────────────────────────────────────────────┐  │
+│ │ 1. Send "Continue working on the issue" prompt    │  │
+│ │ 2. Wait for LLM response via chatRoundChan       │  │
+│ │ 3. Parse response for tool calls (findCall)      │  │
+│ │    ├─ /v1/chat → OpenAI-style tool calls (via    │  │
+│ │    │  chunk.ToolID + stream)                     │  │
+│ │    └─ /completion → __tool_call__ tags (regex)   │  │
+│ │ 4. Execute tool(s) via CallToolWithAgent         │  │
+│ │    - System commands: exec.Command with          │  │
+│ │    │  cmd.Dir = cfg.FilePickerDir                │  │
+│ │    - Go builtins: cd, go (handled by execBuiltin)│  │
+│ │ 5. Tool response added to chatBody.Messages      │  │
+│ │ 6. LLM gets tool response, continues processing │  │
+│ │    (loop back to step 2 for multi-call turns)   │  │
+│ │ 7. After response completes:                     │  │
+│ │    ├─ check isLastAssistantMsgEmpty → retry (×3) │  │
+│ │    ├─ check create_pr → SUCCESS                  │  │
+│ │    ├─ check ShouldAbort (3 consecutive failures) │  │
+│ │    ├─ check ShouldPMCheckIn → PM agent check-in  │  │
+│ │    └─ inject "Continue working..." prompt        │  │
+│ └───────────────────────────────────────────────────┘  │
 └─────────────────────────────────────────────────────────┘
                           ↓
 ┌─────────────────────────────────────────────────────────┐
 │ TERMINATE                                              │
-│ ├─ On SUCCESS: Move to review/, export chat, exit 0   │
-│ ├─ On FAILURE: Move to archive/, export chat, exit 1  │
-│ ├─ On INTERRUPT: Checkpoint, pause                     │
-│ └─ On RESUME: Reload state, continue loop              │
+│ ├─ On SUCCESS: create_pr writes PR file,              │
+│ │   move to review/, export chat, exit 0              │
+│ ├─ On FAILURE: move to archive/, export chat, exit 1  │
+│ ├─ On INTERRUPT: Checkpoint, pause                    │
+│ └─ On RESUME: Reload state from checkpoint, continue  │
 └─────────────────────────────────────────────────────────┘
 ```
+
+## Message Flow Architecture
+
+```
+User/Agent                  chatRoundChan           chatRound()           LLM API
+   │                            │                        │                  │
+   │── "Continue working..." ──→│──→ chatRound(r) ──────→│──→ sendMsgToLLM()│
+   │                            │                        │                  │
+   │                            │←── chunkChan (stream)──│←── chunks from API│
+   │                            │←── openAIToolChan ─────│←── tool calls    │
+   │                            │                        │                  │
+   │                            │──→ findCall(msg) ──────→│                  │
+   │                            │   └──→ CallToolWithAgent ─────────────────→│
+   │                            │                        │                  │
+   │                            │←── cliRespDone ────────│←── tool complete │
+   │                            │                        │                  │
+   │←── "Continue working..." ──│                        │                  │
+```
+
+### Tool Call Handling
+
+- **`/v1/chat` (OpenAI format, default)**: LLM returns structured `tool_calls` in the response JSON. Parsed via streaming chunks (`chunkChan`) and tool ID tracking (`openAIToolChan`). No regex needed.
+- **`/completion` (llama.cpp native)**: LLM outputs text with `__tool_call__{...}__tool_call__` markers. Parsed via `ToolCallRE` regex in `findCall()`.
+
+## Context Window Management
+
+**Status: NOT IMPLEMENTED — P0 priority.**
+
+The conversation grows unbounded. Each round adds 3-5 messages (user prompt → assistant → tool call → tool response). For a 200-tool-call mission, that's 1000+ messages, easily exceeding 8K-32K token context limits.
+
+**When to summarize**: Before the context approaches the model's limit. Estimate: each message is ~50-200 tokens. At 8K context, act at ~40-160 messages.
+
+**How to summarize**: Take the oldest N messages, send them to the LLM with a summarization prompt ("Summarize: what was the task, what was done, what remains, what decisions were made"). Replace the old messages with the summary text in `chatBody.Messages`.
+
+This is critical — without it, missions fail silently when the context window fills and the LLM starts hallucinating.
 
 ## Error Handling
 
@@ -215,11 +276,15 @@ Orchestrates the session lifecycle:
 | 3 consecutive failures | Force exit, checkpoint, export chat |
 | LLM API error | Retry with backoff, checkpoint after 3rd |
 | Network timeout | Retry, then checkpoint and pause |
+| Empty LLM response | Silent retry (×3), then count as failure |
 
 **Consecutive failures** count when:
+- Empty LLM response after 3 retries
 - Tool execution fails (bash returns non-zero)
 - Git conflict resolution fails
 - Test suite fails
+
+**Known Issue**: Failure tracking only counts empty responses, not wrong tool output or failed assertions. A "success" tool response that doesn't match acceptance criteria is not counted as failure.
 
 ## Checkpoint/Resume System
 
@@ -250,8 +315,33 @@ Orchestrates the session lifecycle:
 
 **On Completion**:
 - Exit code 0 (success) or 1 (failure)
-- Console output: summary of commits, PR URL
+- Console output: summary of commits, tool calls, duration
 - Chat export: `mission-{issue_id}-{timestamp}.json`
+- PR file: `create_pr` writes a markdown description file in the project repo
+  (Currently a JSON tool response; should write actual `.gf-lt-pr.md` file)
+
+**Structured JSON Mode** (`--output json`):
+```json
+{
+  "status": "success|failed|aborted",
+  "issue_id": "5",
+  "branch_name": "fix/issue-5-login-timeout",
+  "commits": ["abc123", "def456"],
+  "tool_calls": 203,
+  "session_duration": "5m32s",
+  "chat_export": "./mission-5-20260514.json"
+}
+```
+
+## Known Issues and Known-Good
+
+### Known-Good
+- **Working directory**: `cmd.Dir = cfg.FilePickerDir` set in `execSingle()`. All system commands run in the project directory.
+- **`cd` command**: `FsCd()` resolves paths correctly (absolute → direct; relative → joined to FilePickerDir). Idempotent when already in target dir.
+- **Mission tools**: All 5 tools registered and functional (`move_issue`, `create_pr`, `create_issue`, `pm_consult`, `add_issue_comment`).
+
+### Known Issues
+- **PM agent empty response**: `PMAgentChat` returns empty string when LLM produces no content. Injected as `"[PM Check-in]\n"` with no guidance text.
 
 **Structured JSON Mode** (`--output json`):
 ```json
@@ -319,16 +409,32 @@ Instructions for LLM on:
 ### `sysprompts/auto-solver-default.json`
 Default agent card bundled with gf-lt.
 
-## Remaining Work
+## Remaining Work — Next-to-Do
 
-1. ~~**Working directory not effective**~~ — **FIXED**: `execSingle()` now sets `cmd.Dir = cfg.FilePickerDir`, so all system commands (ls, grep, find, git, etc.) run in the project repo directory. `cd` updates FilePickerDir and all commands respect it.
+### P0: Context Window Management
+**Impact**: Missions will always fail on long runs without this. The conversation grows unbounded, eventually exceeding the model's context window and the LLM starts producing garbage.
+**Approach**: Implement a summarization step that compresses old messages before the context gets too large. Trigger when `len(chatBody.Messages) > threshold`. Replace oldest messages with a condensed summary.
 
-2. ~~**`cd` path-doubling**~~ — **FIXED**: `FsCd` now resolves absolute paths directly and relative paths against FilePickerDir (like a real shell). Added idempotency guard: if already in target directory, returns early without error.
+### P1: Structured PM Agent Sysprompt
+**Impact**: PM agent currently produces free-form "encouragement" instead of actionable guidance. The agent has no way to detect the solver is off-track beyond repeating itself.
+**Approach**: Rewrite the PM sysprompt with structured assessment criteria (task alignment, progress velocity, error handling, scope discipline). Response format: `STATUS: on-track|off-track|stuck` + concise assessment + specific advice. PM should explicitly warn when the agent makes the same error 3+ times.
 
-3. **PM agent empty response** — `PMAgentChat` can return empty string when the LLM returns no content, resulting in `[Empty Response - PM Guidance]` being injected as guidance. Need a fallback message when PM content is empty.
+### P2: `create_pr` Produces a Real PR File
+**Impact**: `create_pr` currently just increments state and returns JSON. The "PR deliverable" is invisible — there's no file for the user to review.
+**Approach**: Write a markdown PR description file in the project repo (e.g., `.gf-lt-pr.md` with issue reference, branch name, summary of changes, acceptance criteria status).
 
-4. **`(task: in progress)` prefix on tool responses** — deprecated task system prints this prefix on every tool result, confusing the LLM. Should be removed.
+### P3: Failure Signal Improvement
+**Impact**: Only empty responses count as failures. Wrong tool output, failed tests, and successful-but-incorrect completions are not tracked.
+**Approach**: Add structured failure detection — e.g., detect bash non-zero exit, detect test failures in output, track tool-specific error patterns.
 
-5. **`findCall` false positives** — `ToolCallRE` regex matches `__tool_call__...__tool_call__` in any LLM text. Should be tightened or validated (check that captured content starts with `{`).
+### P4: PM Agent Empty Response Fallback
+**Impact**: When the LLM returns no content for the PM check-in, the injected message is `"[PM Check-in]\n"` with nothing useful.
+**Approach**: Add a fallback message when PM content is empty, e.g., `"[PM Check-in]\nNo guidance available. Continue with current approach and verify acceptance criteria."`
 
-6. **End-to-end testing** — mission mode tests require a running llama.cpp server with a proper tool-capable model. Without it, the LLM either returns empty responses or generates malformed tool calls. A smoke test with mock/stub would allow CI-friendly validation, but a real end-to-end run needs the server.
+### P5: `(task: in progress)` Prefix on Tool Responses
+**Impact**: Deprecated task system prepends `(task: in progress)` to every tool result, confusing the LLM.
+**Approach**: Remove the prefix injection in `bot.go` (around line 1453) or gate it behind `!IsMissionMode()`.
+
+### P6: End-to-End Testing
+**Impact**: No automated validation that mission mode works end-to-end.
+**Approach**: Create a smoke test against `test-mission-repo` that uses a mock/stub LLM server to return known tool-call responses. This allows CI-friendly validation before requiring a real LLM server.
