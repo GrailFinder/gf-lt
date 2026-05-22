@@ -20,6 +20,7 @@ import (
 	"os"
 	"regexp"
 	"slices"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -38,7 +39,6 @@ var (
 	activeChatName       string
 	chatRoundChan        = make(chan *models.ChatRoundReq, 1)
 	chunkChan            = make(chan string, 10)
-	openAIToolChan       = make(chan string, 10)
 	streamDone           = make(chan bool, 1)
 	chatBody             *models.ChatBody
 	store                storage.FullRepo
@@ -47,6 +47,7 @@ var (
 	ragger               *rag.RAG
 	chunkParser          ChunkParser
 	lastToolCall         *models.FuncCall
+	lastCompletedToolCalls []models.ToolCall
 	lastRespStats        *models.ResponseStats
 	outputHandler        OutputHandler
 	cliPrevOutput        string
@@ -732,6 +733,37 @@ func sendMsgToLLM(body io.Reader) {
 	startTime := time.Now()
 	hasReasoning := false
 	reasoningSent := false
+	// Accumulate streaming tool calls by index for multi-tool-call support
+	type streamingToolCall struct {
+		Index int
+		ID    string
+		Name  string
+		Args  string
+	}
+	toolCallAcc := make(map[int]*streamingToolCall)
+	defer func() {
+		// Compile completed tool calls when streaming finishes
+		if len(toolCallAcc) > 0 {
+			indices := make([]int, 0, len(toolCallAcc))
+			for idx := range toolCallAcc {
+				indices = append(indices, idx)
+			}
+			sort.Ints(indices)
+			calls := make([]models.ToolCall, 0, len(indices))
+			for _, idx := range indices {
+				tc := toolCallAcc[idx]
+				calls = append(calls, models.ToolCall{
+					ID:   tc.ID,
+					Type: "function",
+					FuncCall: models.ToolCallFunction{
+						Name: tc.Name,
+						Args: tc.Args,
+					},
+				})
+			}
+			lastCompletedToolCalls = calls
+		}
+	}()
 	defer func() {
 		finalizeRespStats(tokenCount, startTime)
 	}()
@@ -855,11 +887,20 @@ func sendMsgToLLM(body io.Reader) {
 			chunkChan <- answerText
 			tokenCount++
 		}
-		openAIToolChan <- chunk.ToolChunk
-		if chunk.FuncName != "" {
-			lastToolCall.Name = chunk.FuncName
-			// Store the tool call ID for the response
-			lastToolCall.ID = chunk.ToolID
+		// Accumulate tool call deltas by index for multi-tool-call support
+		for _, tc := range chunk.ToolCalls {
+			acc, ok := toolCallAcc[tc.Index]
+			if !ok {
+				acc = &streamingToolCall{Index: tc.Index}
+				toolCallAcc[tc.Index] = acc
+			}
+			if tc.ID != "" {
+				acc.ID = tc.ID
+			}
+			if tc.Function.Name != "" {
+				acc.Name = tc.Function.Name
+			}
+			acc.Args += tc.Function.Arguments
 		}
 	interrupt:
 		if interruptResp.Load() { // read bytes, so it would not get into beginning of the next req
@@ -977,7 +1018,6 @@ func chatRound(r *models.ChatRoundReq) error {
 		msgIdx = len(chatBody.Messages) - 1
 	}
 	respText := strings.Builder{}
-	toolResp := strings.Builder{}
 	// Variables for handling thinking blocks during streaming
 	inThinkingBlock := false
 	thinkingBuffer := strings.Builder{}
@@ -1041,12 +1081,6 @@ out:
 			if cfg.TTS_ENABLED {
 				TTSTextChan <- chunk
 			}
-		case toolChunk := <-openAIToolChan:
-			outputHandler.Write(toolChunk)
-			toolResp.WriteString(toolChunk)
-			if cfg.AutoScrollEnabled {
-				outputHandler.ScrollToEnd()
-			}
 		case <-streamDone:
 			for len(chunkChan) > 0 {
 				chunk := <-chunkChan
@@ -1105,7 +1139,16 @@ out:
 	if interruptResp.Load() {
 		return nil
 	}
-	if findCall(respTextNoThink, toolResp.String()) {
+	// Check for accumulated streaming tool calls (chat API multi-tool-call support)
+	if len(lastCompletedToolCalls) > 0 {
+		calls := lastCompletedToolCalls
+		lastCompletedToolCalls = nil
+		if handleBatchToolCalls(respTextNoThink, calls) {
+			return nil
+		}
+	}
+	// Fall back to legacy tool call detection (regex on text / completion endpoint)
+	if findCall(respTextNoThink, "") {
 		// Tool was found and executed, subsequent chatRound will signal cliRespDone when complete
 		return nil
 	}
@@ -1237,6 +1280,165 @@ func unmarshalFuncCall(jsonStr string) (*models.FuncCall, error) {
 	return fc, nil
 }
 
+// handleBatchToolCalls processes multiple tool calls from a single assistant response.
+// It executes each tool, collects all results, and adds them to the chat history.
+func handleBatchToolCalls(textContent string, toolCalls []models.ToolCall) bool {
+	if len(toolCalls) == 0 {
+		return false
+	}
+
+	// Update the last assistant message with all tool calls
+	lastMsgIdx := len(chatBody.Messages) - 1
+	chatBody.Messages[lastMsgIdx].Content = textContent
+	chatBody.Messages[lastMsgIdx].ToolCalls = toolCalls
+
+	for _, tc := range toolCalls {
+		// Parse the arguments JSON
+		args, err := convertJSONToMapStringString(tc.FuncCall.Args)
+		if err != nil {
+			logger.Error("failed to parse tool call args", "name", tc.FuncCall.Name, "args", tc.FuncCall.Args, "error", err)
+			continue
+		}
+
+		// Check for dangerous commands (skip in mission mode)
+		if !tools.IsMissionMode() {
+			if dangerous, label := tools.IsDangerousCommand(tc.FuncCall.Name, args); dangerous {
+				req := tools.ConfirmRequest{
+					ToolName: tc.FuncCall.Name,
+					Command:  args["command"],
+					ToolArgs: args,
+				}
+				approved := tools.RequestConfirmation(req)
+				if !approved {
+					logger.Info("dangerous command denied", "tool", tc.FuncCall.Name, "label", label)
+					chatBody.Messages = append(chatBody.Messages, models.RoleMsg{
+						Role:       cfg.ToolRole,
+						Content:    "[denied] This command requires user confirmation: " + label,
+						ToolCallID: tc.ID,
+					})
+					continue
+				}
+			}
+		}
+
+		// Execute the tool
+		outputHandler.Writef("\n[yellow::i][tool: %s...][-:-:-]\nargs: %s", tc.FuncCall.Name, tc.FuncCall.Args)
+		toolRunningMode.Store(true)
+		resp, ok := tools.CallToolWithAgent(tc.FuncCall.Name, args)
+		toolRunningMode.Store(false)
+
+		if !ok {
+			chatBody.Messages = append(chatBody.Messages, models.RoleMsg{
+				Role:       cfg.ToolRole,
+				Content:    string(resp),
+				ToolCallID: tc.ID,
+			})
+			continue
+		}
+
+		// Create tool response message
+		toolMsg := string(resp)
+		logger.Info("llm used a tool call", "tool_name", tc.FuncCall.Name, "args", args, "id", tc.ID, "resp", toolMsg)
+
+		var toolResponseMsg models.RoleMsg
+		if strings.HasPrefix(strings.TrimSpace(toolMsg), `{"type":"multimodal_content"`) {
+			multimodalResp := models.MultimodalToolResp{}
+			if err := json.Unmarshal([]byte(toolMsg), &multimodalResp); err == nil && multimodalResp.Type == "multimodal_content" {
+				var contentParts []any
+				var textParts []string
+				for _, part := range multimodalResp.Parts {
+					switch part["type"] {
+					case "text":
+						textParts = append(textParts, part["text"])
+						contentParts = append(contentParts, models.TextContentPart{Type: "text", Text: part["text"]})
+					case "image_url":
+						contentParts = append(contentParts, models.ImageContentPart{
+							Type: "image_url",
+							Path: part["path"],
+							ImageURL: struct {
+								URL string `json:"url"`
+							}{URL: part["url"]},
+						})
+					}
+				}
+				toolResponseMsg = models.RoleMsg{
+					Role:            cfg.ToolRole,
+					ContentParts:    contentParts,
+					HasContentParts: true,
+					ToolCallID:      tc.ID,
+					Content:         strings.Join(textParts, "\n"),
+				}
+			} else {
+				toolResponseMsg = models.RoleMsg{
+					Role:       cfg.ToolRole,
+					Content:    toolMsg,
+					ToolCallID: tc.ID,
+				}
+			}
+		} else {
+			toolResponseMsg = models.RoleMsg{
+				Role:       cfg.ToolRole,
+				Content:    toolMsg,
+				ToolCallID: tc.ID,
+			}
+		}
+
+		// Add task status to tool response
+		taskStatus := ""
+		if tc.FuncCall.Name == "task_done" {
+			taskStatus = "(task: done)"
+		} else if taskActive.Load() {
+			taskStatus = "(task: in progress)"
+		}
+		if taskStatus != "" {
+			if toolResponseMsg.Content != "" {
+				toolResponseMsg.Content = taskStatus + "\n" + toolResponseMsg.Content
+			} else if len(toolResponseMsg.ContentParts) > 0 {
+				newParts := make([]any, 1, 1+len(toolResponseMsg.ContentParts))
+				newParts[0] = models.TextContentPart{Type: "text", Text: taskStatus}
+				toolResponseMsg.ContentParts = append(newParts, toolResponseMsg.ContentParts...)
+			}
+		}
+
+		// Track consecutive tool calls for task detection
+		consecutiveToolCalls.Add(1)
+		if consecutiveToolCalls.Load() >= 2 {
+			taskActive.Store(true)
+			logger.Debug("task started: consecutive tool calls", "count", consecutiveToolCalls.Load())
+		}
+
+		// Check if task_done was called
+		if tc.FuncCall.Name == "task_done" {
+			taskActive.Store(false)
+			atomic.StoreInt32(&taskFailures, 0)
+			consecutiveToolCalls.Store(0)
+			logger.Debug("task_done executed: cleared task state")
+		}
+
+		// Display and append the tool response
+		outputHandler.Writef("%s[-:-:b](%d) <%s>: [-:-:-]\n%s\n",
+			"\n\n", len(chatBody.Messages), cfg.ToolRole, toolResponseMsg.GetText())
+		chatBody.Messages = append(chatBody.Messages, toolResponseMsg)
+
+		// Reset task failures on successful tool call
+		atomic.StoreInt32(&taskFailures, 0)
+	}
+
+	cleanChatBody()
+	refreshChatDisplay()
+	updateStatusLine()
+	if err := updateStorageChat(activeChatName, chatBody.Messages); err != nil {
+		logger.Warn("failed to update storage", "error", err, "name", activeChatName)
+	}
+
+	// Trigger the assistant to continue with the collected results
+	crr := &models.ChatRoundReq{
+		Role: cfg.AssistantRole,
+	}
+	chatRoundChan <- crr
+	return true
+}
+
 // findCall: adds chatRoundReq into the chatRoundChan and returns true if does
 func findCall(msg, toolCall string) bool {
 	var fc *models.FuncCall
@@ -1336,8 +1538,11 @@ func findCall(msg, toolCall string) bool {
 	// Convert Args map to JSON string for storage
 	chatBody.Messages[lastMsgIdx].ToolCall = &models.ToolCall{
 		ID:   lastToolCall.ID,
-		Name: lastToolCall.Name,
-		Args: mapToString(lastToolCall.Args),
+		Type: "function",
+		FuncCall: models.ToolCallFunction{
+			Name: lastToolCall.Name,
+			Args: mapToString(lastToolCall.Args),
+		},
 	}
 	// Check for dangerous commands that require user confirmation (skip in mission mode)
 	if !tools.IsMissionMode() {
@@ -1365,7 +1570,8 @@ func findCall(msg, toolCall string) bool {
 	}
 	}
 	// Show tool call progress indicator before execution
-	outputHandler.Writef("\n[yellow::i][tool: %s...][-:-:-]", fc.Name)
+	argsJSON, _ := json.Marshal(fc.Args)
+	outputHandler.Writef("\n[yellow::i][tool: %s...][-:-:-]\nargs: %s", fc.Name, string(argsJSON))
 	toolRunningMode.Store(true)
 	resp, okT := tools.CallToolWithAgent(fc.Name, fc.Args)
 	if !okT {
@@ -1497,7 +1703,8 @@ func chatToTextSlice(messages []models.RoleMsg, showSys bool) []string {
 			if !showSys && messages[i].Role == "system" {
 				continue
 			}
-			isToolCall := messages[i].Role == cfg.AssistantRole && messages[i].ToolCall != nil && messages[i].ToolCall.ID != ""
+			hasToolCalls := len(messages[i].ToolCalls) > 0
+			isToolCall := (messages[i].Role == cfg.AssistantRole && messages[i].ToolCall != nil && messages[i].ToolCall.ID != "") || hasToolCalls
 			isToolResp := (messages[i].Role == cfg.ToolRole || messages[i].Role == "tool") && !messages[i].IsShellCommand
 			if isToolCall || isToolResp {
 				toolBlockCount++
@@ -1523,11 +1730,28 @@ func chatToTextSlice(messages []models.RoleMsg, showSys bool) []string {
 	for i := range messages {
 		icon := fmt.Sprintf("[-:-:b](%d) <%s>:[-:-:-]", i, messages[i].Role)
 		if messages[i].Role == cfg.AssistantRole && messages[i].ToolCall != nil && messages[i].ToolCall.ID != "" {
-			toolName := messages[i].ToolCall.Name
+			toolName := messages[i].ToolCall.FuncCall.Name
 			resp[i] = strings.ReplaceAll(
 				fmt.Sprintf(
 					"%s\n%s\n[yellow::i][tool call: %s][-:-:-]\nargs: %s\nid: %s\n",
-					icon, messages[i].GetText(), toolName, messages[i].ToolCall.Args, messages[i].ToolCall.ID),
+					icon, messages[i].GetText(), toolName, messages[i].ToolCall.FuncCall.Args, messages[i].ToolCall.ID),
+				"\n\n", "\n")
+			continue
+		}
+		if len(messages[i].ToolCalls) > 0 {
+			var lines []string
+			for _, tc := range messages[i].ToolCalls {
+				if tc.ID != "" {
+					lines = append(lines, fmt.Sprintf("[yellow::i][tool call: %s][-:-:-]\nargs: %s\nid: %s", tc.FuncCall.Name, tc.FuncCall.Args, tc.ID))
+				} else {
+					lines = append(lines, fmt.Sprintf("[yellow::i][tool call: %s][-:-:-]\nargs: %s", tc.FuncCall.Name, tc.FuncCall.Args))
+				}
+			}
+			allToolInfo := strings.Join(lines, "\n")
+			resp[i] = strings.ReplaceAll(
+				fmt.Sprintf(
+					"%s\n%s\n%s\n",
+					icon, messages[i].GetText(), allToolInfo),
 				"\n\n", "\n")
 			continue
 		}

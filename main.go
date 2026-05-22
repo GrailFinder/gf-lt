@@ -644,6 +644,9 @@ func isLastAssistantMsgEmpty() bool {
 		if msg.ToolCall != nil {
 			return false
 		}
+		if len(msg.ToolCalls) > 0 {
+			return false
+		}
 		if msg.HasContentParts {
 			return len(msg.ContentParts) == 0
 		}

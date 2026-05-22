@@ -269,28 +269,20 @@ func (op LCPChat) ParseChunk(data []byte) (*models.TextChunk, error) {
 		Chunk:     lastChoice.Delta.Content,
 		Reasoning: lastChoice.Delta.ReasoningContent,
 	}
-	// Check for tool calls in all choices, not just the last one
+	// Collect ALL tool call deltas from ALL choices
 	for _, choice := range llmchunk.Choices {
-		if len(choice.Delta.ToolCalls) > 0 {
-			toolCall := choice.Delta.ToolCalls[0]
-			resp.ToolChunk = toolCall.Function.Arguments
-			fname := toolCall.Function.Name
-			if fname != "" {
-				resp.FuncName = fname
-			}
-			// Capture the tool call ID if available
-			resp.ToolID = toolCall.ID
-			break // Process only the first tool call
+		for i := range choice.Delta.ToolCalls {
+			resp.ToolCalls = append(resp.ToolCalls, choice.Delta.ToolCalls[i])
 		}
 	}
-	if lastChoice.FinishReason == "stop" {
+	if len(resp.ToolCalls) > 0 {
+		resp.ToolResp = true
+	}
+	if lastChoice.FinishReason == "stop" || lastChoice.FinishReason == "tool_calls" {
 		if resp.Chunk != "" {
 			logger.Error("text inside of finish llmchunk", "chunk", llmchunk)
 		}
 		resp.Finished = true
-	}
-	if resp.ToolChunk != "" {
-		resp.ToolResp = true
 	}
 	return resp, nil
 }
@@ -358,8 +350,6 @@ func (op LCPChat) FormMsg(msg, role string, resume bool) (io.Reader, error) {
 		default:
 			bodyCopy.Messages[i] = strippedMsg
 		}
-		// Clear ToolCalls - they're stored in chat history for display but not sent to LLM
-		// bodyCopy.Messages[i].ToolCall = nil
 	}
 	// Clean null/empty messages to prevent API issues
 	bodyCopy.Messages = consolidateAssistantMessages(bodyCopy.Messages)
@@ -532,8 +522,6 @@ func (ds DeepSeekerChat) FormMsg(msg, role string, resume bool) (io.Reader, erro
 		default:
 			bodyCopy.Messages[i] = strippedMsg
 		}
-		// Clear ToolCalls - they're stored in chat history for display but not sent to LLM
-		// bodyCopy.Messages[i].ToolCall = nil
 	}
 	// Clean null/empty messages to prevent API issues
 	bodyCopy.Messages = consolidateAssistantMessages(bodyCopy.Messages)
@@ -632,21 +620,12 @@ func (or OpenRouterChat) ParseChunk(data []byte) (*models.TextChunk, error) {
 		Chunk:     lastChoice.Delta.Content,
 		Reasoning: lastChoice.Delta.Reasoning,
 	}
-	// Handle tool calls similar to LCPChat
-	if len(lastChoice.Delta.ToolCalls) > 0 {
-		toolCall := lastChoice.Delta.ToolCalls[0]
-		resp.ToolChunk = toolCall.Function.Arguments
-		fname := toolCall.Function.Name
-		if fname != "" {
-			resp.FuncName = fname
-		}
-		// Capture the tool call ID if available
-		resp.ToolID = toolCall.ID
-	}
-	if resp.ToolChunk != "" {
+	// Collect ALL tool call deltas from the last choice
+	resp.ToolCalls = lastChoice.Delta.ToolCalls
+	if len(resp.ToolCalls) > 0 {
 		resp.ToolResp = true
 	}
-	if lastChoice.FinishReason == "stop" {
+	if lastChoice.FinishReason == "stop" || lastChoice.FinishReason == "tool_calls" {
 		if resp.Chunk != "" {
 			logger.Error("text inside of finish llmchunk", "chunk", llmchunk)
 		}
@@ -719,9 +698,6 @@ func (or OpenRouterChat) FormMsg(msg, role string, resume bool) (io.Reader, erro
 		default:
 			bodyCopy.Messages[i] = strippedMsg
 		}
-		// Clear ToolCalls - they're stored in chat history for display but not sent to LLM
-		// literally deletes data that we need
-		// bodyCopy.Messages[i].ToolCall = nil
 	}
 	// Clean null/empty messages to prevent API issues
 	bodyCopy.Messages = consolidateAssistantMessages(bodyCopy.Messages)

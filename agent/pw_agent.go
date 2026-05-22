@@ -89,8 +89,11 @@ func (a *PWAgent) setToolCallOnLastMessage(resp []byte, toolCallID string) {
 			argsJSON, _ := json.Marshal(args)
 			a.chatBody.Messages[lastIdx].ToolCall = &models.ToolCall{
 				ID:   toolCallID,
-				Name: name,
-				Args: string(argsJSON),
+				Type: "function",
+				FuncCall: models.ToolCallFunction{
+					Name: name,
+					Args: string(argsJSON),
+				},
 			}
 		}
 	}
