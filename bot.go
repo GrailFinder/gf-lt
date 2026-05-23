@@ -1328,6 +1328,10 @@ func handleBatchToolCalls(textContent string, toolCalls []models.ToolCall) bool 
 		toolRunningMode.Store(false)
 
 		if !ok {
+			// Tool execution failed entirely
+			if tools.IsMissionMode() {
+				tools.GetCurrentMission().AddFailure()
+			}
 			chatBody.Messages = append(chatBody.Messages, models.RoleMsg{
 				Role:       cfg.ToolRole,
 				Content:    string(resp),
@@ -1396,6 +1400,14 @@ func handleBatchToolCalls(textContent string, toolCalls []models.ToolCall) bool 
 			atomic.StoreInt32(&taskFailures, 0)
 			consecutiveToolCalls.Store(0)
 			logger.Debug("task_done executed: cleared task state")
+		}
+
+		// Mission mode: detect tool-level errors (bash failures, test failures, JSON errors)
+		if tools.IsMissionMode() && tools.IsToolError(tc.FuncCall.Name, toolResponseMsg.Content) {
+			tools.GetCurrentMission().AddFailure()
+			logger.Info("mission tool error detected", "tool", tc.FuncCall.Name)
+		} else if tools.IsMissionMode() {
+			tools.GetCurrentMission().ResetFailures()
 		}
 
 		// Display and append the tool response

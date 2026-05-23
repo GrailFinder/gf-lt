@@ -47,6 +47,10 @@ func IsMissionMode() bool {
 	return currentMission != nil
 }
 
+func GetCurrentMission() *mission.Mission {
+	return currentMission
+}
+
 func RegisterMissionTools() {
 	FnMap["move_issue"] = moveIssueTool
 	FnMap["create_issue"] = createIssueTool
@@ -276,6 +280,39 @@ func mustMarshalJSON(v interface{}) string {
 		return fmt.Sprintf(`{"error": "Failed to marshal response: %v"}`, err)
 	}
 	return string(data)
+}
+
+// IsToolError returns true if the tool response appears to contain an error.
+// Checks for: bash [error] prefix, JSON error field, go test FAIL, compile errors.
+func IsToolError(toolName, resp string) bool {
+	trimmed := strings.TrimSpace(resp)
+
+	// Bash/system command errors (prefix [error])
+	if strings.HasPrefix(trimmed, "[error]") {
+		return true
+	}
+
+	// JSON error field (mission tools and others)
+	if strings.HasPrefix(trimmed, "{") {
+		if strings.Contains(trimmed, `"error"`) {
+			return true
+		}
+	}
+
+	// Go test failures
+	if strings.HasPrefix(toolName, "bash") || toolName == "run_command" {
+		if strings.Contains(resp, "\nFAIL\n") || strings.Contains(resp, "\nFAIL\t") {
+			return true
+		}
+		// Go compile errors ("cannot use", "undefined", "expected")
+		if strings.Contains(resp, "cannot use") || strings.Contains(resp, "undefined") {
+			if strings.Contains(resp, ".go:") {
+				return true
+			}
+		}
+	}
+
+	return false
 }
 
 func MissionToolDefs() string {

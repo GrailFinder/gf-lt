@@ -419,8 +419,9 @@ Default agent card bundled with gf-lt.
 **Approach**: Write a markdown PR description file in the project repo (e.g., `.gf-lt-pr.md` with issue reference, branch name, summary of changes, acceptance criteria status).
 
 ### P3: Failure Signal Improvement
-**Impact**: Only empty responses count as failures. Wrong tool output, failed tests, and successful-but-incorrect completions are not tracked.
-**Approach**: Add structured failure detection — e.g., detect bash non-zero exit, detect test failures in output, track tool-specific error patterns.
+**Status: DONE**.
+**Impact**: Only empty responses counted as failures. Wrong tool output, failed tests, and successful-but-incorrect completions were not tracked.
+**Implementation**: Added `IsToolError()` in `tools/mission_tools.go` which detects: bash `[error]` prefix, JSON `"error"` field, `go test FAIL` lines, and go compile errors. Integrated into `handleBatchToolCalls()` — on error, `GetCurrentMission().AddFailure()` increments consecutive failures; on success, `ResetFailures()`. Tool execution failures (`ok == false`) also count as failures.
 
 ### P4: PM Agent Empty Response Fallback
 **Impact**: When the LLM returns no content for the PM check-in, the injected message is `"[PM Check-in]\n"` with nothing useful.
