@@ -6,6 +6,7 @@ import (
 	"gf-lt/agent"
 	"gf-lt/config"
 	"gf-lt/mission"
+	"gf-lt/models"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -89,6 +90,62 @@ func pmAgentChat(userMsg string) string {
 // PMAgentChat is the exported wrapper for use by main package.
 func PMAgentChat(userMsg string) string {
 	return pmAgentChat(userMsg)
+}
+
+// SummarizeChat sends a batch of old messages to the LLM for compression
+// and returns a concise summary string. Used by context window management.
+func SummarizeChat(messages []models.RoleMsg) (string, error) {
+	getToken := func() string {
+		if getTokenFunc != nil {
+			return getTokenFunc()
+		}
+		return ""
+	}
+	ag := agent.NewAgentClient(cfg, slog.Default(), getToken)
+
+	var sb strings.Builder
+	for _, msg := range messages {
+		role := msg.Role
+		text := msg.GetText()
+
+		// Include tool call info
+		if msg.ToolCall != nil {
+			text = fmt.Sprintf("[tool call: %s] args: %s", msg.ToolCall.FuncCall.Name, msg.ToolCall.FuncCall.Args)
+		} else if len(msg.ToolCalls) > 0 {
+			for _, tc := range msg.ToolCalls {
+				if text != "" {
+					text += "\n"
+				}
+				text += fmt.Sprintf("[tool call: %s] args: %s", tc.FuncCall.Name, tc.FuncCall.Args)
+			}
+		}
+		if text == "" {
+			continue
+		}
+		sb.WriteString(fmt.Sprintf("--- %s ---\n%s\n\n", role, text))
+	}
+	conversationText := strings.TrimSpace(sb.String())
+
+	sysPrompt := "You are a conversation summarizer for an autonomous coding agent. Produce a concise, structured summary that preserves all actionable context."
+	userPrompt := fmt.Sprintf(
+		"Summarize the following conversation history concisely. Focus on:\n"+
+			"1. What code changes were made (which files, what functions modified)\n"+
+			"2. What tool calls were executed and their key results (test outcomes, errors)\n"+
+			"3. What decisions were made and why\n"+
+			"4. What the current state is (branch, files changed, tests passing)\n"+
+			"5. What remains to be done\n\n"+
+			"Preserve file paths, function names, and error messages. Be specific, not generic.\n\n%s",
+			conversationText)
+
+	body, err := ag.FormFirstMsg(sysPrompt, userPrompt)
+	if err != nil {
+		return "", fmt.Errorf("failed to form summary request: %w", err)
+	}
+	resp, err := ag.LLMRequest(body)
+	if err != nil {
+		return "", fmt.Errorf("summary request failed: %w", err)
+	}
+	return string(resp), nil
 }
 
 func moveIssueTool(args map[string]string) []byte {

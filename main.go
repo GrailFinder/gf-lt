@@ -51,6 +51,7 @@ var (
 	missionAgentCard  string
 	missionIssueID    string
 	missionCheckpoint string
+	missionSummarizeFailures int // track consecutive summarization failures
 )
 
 func main() {
@@ -566,6 +567,7 @@ func missionMessageLoop(m *mission.Mission, checkpointPath string, startTime tim
 	}
 
 	var emptyRespRetries int
+	missionSummarizeFailures = 0 // reset at mission start
 
 	for {
 		select {
@@ -604,6 +606,23 @@ func missionMessageLoop(m *mission.Mission, checkpointPath string, startTime tim
 				return
 			}
 
+			// Context window management — compact if > 90% saturation
+			summarizeAndCompact()
+
+			// If summarization failed repeatedly and context is saturated, abort
+			if missionSummarizeFailures >= 3 {
+				maxCtx := getMaxContextTokens()
+				if maxCtx == 0 {
+					maxCtx = 16384
+				}
+				if float64(getContextTokens())/float64(maxCtx) >= 0.9 {
+					m.Log("Context window saturated and summarization failed 3x, aborting mission")
+					m.Status = mission.StatusFailed
+					missionComplete(m, checkpointPath, mission.StatusFailed, startTime)
+					return
+				}
+			}
+
 			// PM check-in at interval
 			if m.ShouldPMCheckIn() {
 				m.Log("PM check-in triggered at tool call %d", m.Checkpoint.ToolCallCount)
@@ -632,6 +651,47 @@ func missionMessageLoop(m *mission.Mission, checkpointPath string, startTime tim
 			return
 		}
 	}
+}
+
+func summarizeAndCompact() {
+	contextTokens := getContextTokens()
+	maxCtx := getMaxContextTokens()
+	if maxCtx == 0 {
+		maxCtx = 16384
+	}
+	if contextTokens == 0 || float64(contextTokens)/float64(maxCtx) < 0.9 {
+		return
+	}
+
+	messages := chatBody.Messages
+	if len(messages) < 20 {
+		return
+	}
+
+	keep := 15
+	split := len(messages) - keep
+	if split < 3 {
+		return
+	}
+
+	toSummarize := messages[:split]
+	toKeep := messages[split:]
+
+	summary, err := tools.SummarizeChat(toSummarize)
+	if err != nil || strings.TrimSpace(summary) == "" {
+		missionSummarizeFailures++
+		logger.Warn("context summarization failed, continuing without compression", "error", err, "consecutive_failures", missionSummarizeFailures)
+		return
+	}
+	missionSummarizeFailures = 0 // reset on success
+
+	summaryMsg := models.RoleMsg{
+		Role:    "system",
+		Content: fmt.Sprintf("[Context summary of previous conversation]\n%s", summary),
+	}
+
+	chatBody.Messages = append([]models.RoleMsg{summaryMsg}, toKeep...)
+	logger.Info("context compressed", "summarized", split, "messages_kept", keep, "summary_len", len(summary))
 }
 
 func isLastAssistantMsgEmpty() bool {
