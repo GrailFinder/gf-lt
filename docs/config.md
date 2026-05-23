@@ -58,10 +58,10 @@ This document explains how to set up and configure the application using the `co
 ### Content and Performance Settings
 
 #### ChunkLimit (`100000`)
-- Maximum size of text chunks to recieve per request from llm provider. Mainly exists to prevent infinite spam of random or repeated tokens when model starts hallucinating.
+- Maximum size of text chunks to receive per request from llm provider. Mainly exists to prevent infinite spam of random or repeated tokens when model starts hallucinating.
 
 #### AutoScrollEnabled (`true`)
-- Whether to automatically scroll chat window while llm streams its repsonse.
+- Whether to automatically scroll chat window while llm streams its response.
 
 ### RAG (Retrieval Augmented Generation) Settings
 
