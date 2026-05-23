@@ -203,10 +203,13 @@ WARNING: (only if off-track) what the agent is doing wrong
 │ ┌───────────────────────────────────────────────────┐  │
 │ │ 1. Send "Continue working on the issue" prompt    │  │
 │ │ 2. Wait for LLM response via chatRoundChan       │  │
-│ │ 3. Parse response for tool calls (findCall)      │  │
-│ │    ├─ /v1/chat → OpenAI-style tool calls (via    │  │
-│ │    │  chunk.ToolID + stream)                     │  │
-│ │    └─ /completion → __tool_call__ tags (regex)   │  │
+│ │ 3. Parse response for tool calls                │  │
+│ │    ├─ /v1/chat → multi-tool streaming           │  │
+│ │    │  accumulator (toolCallAcc by index)         │  │
+│ │    │  → lastCompletedToolCalls                   │  │
+│ │    │  → handleBatchToolCalls()                   │  │
+│ │    └─ /completion → __tool_call__ regex          │  │
+│ │       → findCall()                               │  │
 │ │ 4. Execute tool(s) via CallToolWithAgent         │  │
 │ │    - System commands: exec.Command with          │  │
 │ │    │  cmd.Dir = cfg.FilePickerDir                │  │
@@ -241,10 +244,12 @@ User/Agent                  chatRoundChan           chatRound()           LLM AP
    │── "Continue working..." ──→│──→ chatRound(r) ──────→│──→ sendMsgToLLM()│
    │                            │                        │                  │
    │                            │←── chunkChan (stream)──│←── chunks from API│
-   │                            │←── openAIToolChan ─────│←── tool calls    │
+   │                            │   tool calls accumulated in toolCallAcc    │
+   │                            │   → lastCompletedToolCalls on stream done │
    │                            │                        │                  │
-   │                            │──→ findCall(msg) ──────→│                  │
-   │                            │   └──→ CallToolWithAgent ─────────────────→│
+   │                            │──→ handleBatchToolCalls() ───────────────→│
+   │                            │   or findCall() for /completion           │
+   │                            │   └──→ CallToolWithAgent                  │
    │                            │                        │                  │
    │                            │←── cliRespDone ────────│←── tool complete │
    │                            │                        │                  │
@@ -253,8 +258,8 @@ User/Agent                  chatRoundChan           chatRound()           LLM AP
 
 ### Tool Call Handling
 
-- **`/v1/chat` (OpenAI format, default)**: LLM returns structured `tool_calls` in the response JSON. Parsed via streaming chunks (`chunkChan`) and tool ID tracking (`openAIToolChan`). No regex needed.
-- **`/completion` (llama.cpp native)**: LLM outputs text with `__tool_call__{...}__tool_call__` markers. Parsed via `ToolCallRE` regex in `findCall()`.
+- **`/v1/chat` (OpenAI format, default)**: LLM returns structured `tool_calls` in the response JSON. Accumulated in `sendMsgToLLM()` via `toolCallAcc` map (keyed by `index`) across streaming chunks. On stream completion, compiled into `lastCompletedToolCalls` which is checked in `chatRound()` before `findCall()`. Executed via `handleBatchToolCalls()` which processes all calls, appends tool responses, and triggers the next `chatRoundChan`.
+- **`/completion` (llama.cpp native)**: LLM outputs text with `__tool_call__{...}__tool_call__` markers. Parsed via `ToolCallRE` regex in `findCall()`. Single-call path (legacy, still functional).
 
 ## Context Window Management
 
@@ -336,25 +341,15 @@ This is critical — without it, missions fail silently when the context window 
 ## Known Issues and Known-Good
 
 ### Known-Good
-- **Working directory**: `cmd.Dir = cfg.FilePickerDir` set in `execSingle()`. All system commands run in the project directory.
+- **Working directory**: `cmd.Dir = cfg.FilePickerDir` set in `execSingle()` (tools/chain.go). All system commands run in the project directory.
 - **`cd` command**: `FsCd()` resolves paths correctly (absolute → direct; relative → joined to FilePickerDir). Idempotent when already in target dir.
 - **Mission tools**: All 5 tools registered and functional (`move_issue`, `create_pr`, `create_issue`, `pm_consult`, `add_issue_comment`).
+- **Multi-tool-call support**: `sendMsgToLLM()` accumulates tool calls by index across streaming chunks via `toolCallAcc` map. On stream completion, `lastCompletedToolCalls` is populated and `handleBatchToolCalls()` executes all calls.
+- **Tool call flow**: For `/v1/chat` endpoints, tool calls come through structured `tool_calls` in streaming chunks (`chunk.ToolCalls`). `respTextNoThink` is empty for pure tool-call responses. Legacy `findCall()` handles `/completion` endpoint with `__tool_call__` regex.
+- **Mission mode loop**: `missionMessageLoop()` sends initial prompt, waits on `cliRespDone`, checks for `create_pr` success, failure threshold, and PM check-in interval before injecting "Continue working..." prompt.
 
 ### Known Issues
 - **PM agent empty response**: `PMAgentChat` returns empty string when LLM produces no content. Injected as `"[PM Check-in]\n"` with no guidance text.
-
-**Structured JSON Mode** (`--output json`):
-```json
-{
-  "status": "success|failed|aborted",
-  "issue_id": "5",
-  "branch_name": "fix/issue-5-login-timeout",
-  "commits": ["abc123", "def456"],
-  "tool_calls": 203,
-  "session_duration": "5m32s",
-  "chat_export": "./mission-5-20260514.json"
-}
-```
 
 ## User Interaction During Mission
 
@@ -432,9 +427,9 @@ Default agent card bundled with gf-lt.
 **Approach**: Add a fallback message when PM content is empty, e.g., `"[PM Check-in]\nNo guidance available. Continue with current approach and verify acceptance criteria."`
 
 ### P5: `(task: in progress)` Prefix on Tool Responses
-**Impact**: Deprecated task system prepends `(task: in progress)` to every tool result, confusing the LLM.
-**Approach**: Remove the prefix injection in `bot.go` (around line 1453) or gate it behind `!IsMissionMode()`.
+**Status: COMPLETED**.
+**What was done**: Removed the `taskStatus` injection block entirely from both `handleBatchToolCalls()` and `findCall()`. The internal state tracking (`consecutiveToolCalls`, `taskActive` atomics) is preserved underneath — only the string prefix prepended to tool response content was removed.
 
 ### P6: End-to-End Testing
 **Impact**: No automated validation that mission mode works end-to-end.
-**Approach**: Create a smoke test against `test-mission-repo` that uses a mock/stub LLM server to return known tool-call responses. This allows CI-friendly validation before requiring a real LLM server.
+**Approach**: The `mission-test` Makefile target exists and works against a real LLM server. For CI-friendly validation, create a smoke test with a mock/stub LLM server that returns known tool-call responses.

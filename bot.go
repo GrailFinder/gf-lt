@@ -1383,23 +1383,6 @@ func handleBatchToolCalls(textContent string, toolCalls []models.ToolCall) bool 
 			}
 		}
 
-		// Add task status to tool response
-		taskStatus := ""
-		if tc.FuncCall.Name == "task_done" {
-			taskStatus = "(task: done)"
-		} else if taskActive.Load() {
-			taskStatus = "(task: in progress)"
-		}
-		if taskStatus != "" {
-			if toolResponseMsg.Content != "" {
-				toolResponseMsg.Content = taskStatus + "\n" + toolResponseMsg.Content
-			} else if len(toolResponseMsg.ContentParts) > 0 {
-				newParts := make([]any, 1, 1+len(toolResponseMsg.ContentParts))
-				newParts[0] = models.TextContentPart{Type: "text", Text: taskStatus}
-				toolResponseMsg.ContentParts = append(newParts, toolResponseMsg.ContentParts...)
-			}
-		}
-
 		// Track consecutive tool calls for task detection
 		consecutiveToolCalls.Add(1)
 		if consecutiveToolCalls.Load() >= 2 {
@@ -1644,23 +1627,6 @@ func findCall(msg, toolCall string) bool {
 			Content:        toolMsg,
 			ToolCallID:     lastToolCall.ID,
 			IsShellCommand: isShellCommand,
-		}
-	}
-	// Add task status to tool response
-	taskStatus := ""
-	if fc.Name == "task_done" {
-		taskStatus = "(task: done)"
-	} else if taskActive.Load() {
-		taskStatus = "(task: in progress)"
-	}
-	if taskStatus != "" {
-		// Prepend task status to the tool response content
-		if toolResponseMsg.Content != "" {
-			toolResponseMsg.Content = taskStatus + "\n" + toolResponseMsg.Content
-		} else if len(toolResponseMsg.ContentParts) > 0 {
-			newParts := make([]any, 1, 1+len(toolResponseMsg.ContentParts))
-			newParts[0] = models.TextContentPart{Type: "text", Text: taskStatus}
-			toolResponseMsg.ContentParts = append(newParts, toolResponseMsg.ContentParts...)
 		}
 	}
 	// Track consecutive tool calls for task detection
