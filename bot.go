@@ -52,9 +52,6 @@ var (
 	outputHandler        OutputHandler
 	cliPrevOutput        string
 	cliRespDone          chan bool
-	taskActive           atomic.Bool
-	consecutiveToolCalls atomic.Int32
-	taskFailures         int32
 )
 
 type OutputHandler interface {
@@ -1152,23 +1149,6 @@ out:
 		// Tool was found and executed, subsequent chatRound will signal cliRespDone when complete
 		return nil
 	}
-	// No tool call - check if task is active and needs enforcement
-	if taskActive.Load() {
-		// Check if the last tool was task_done - if so, clear task state
-		if lastToolCall.Name == "task_done" {
-			taskActive.Store(false)
-			atomic.StoreInt32(&taskFailures, 0)
-			return nil
-		}
-		failures := atomic.AddInt32(&taskFailures, 1)
-		if failures >= 3 {
-			// Too many failures, stop enforcing and accept failure
-			taskActive.Store(false)
-			atomic.StoreInt32(&taskFailures, 0)
-			logger.Debug("task enforcement: giving up after max failures", "failures", failures)
-		}
-		// Reminder disabled - no longer inject task reminders
-	}
 	// No tool call - signal completion now
 	if cfg.CLIMode && cliRespDone != nil {
 		select {
@@ -1387,21 +1367,6 @@ func handleBatchToolCalls(textContent string, toolCalls []models.ToolCall) bool 
 			}
 		}
 
-		// Track consecutive tool calls for task detection
-		consecutiveToolCalls.Add(1)
-		if consecutiveToolCalls.Load() >= 2 {
-			taskActive.Store(true)
-			logger.Debug("task started: consecutive tool calls", "count", consecutiveToolCalls.Load())
-		}
-
-		// Check if task_done was called
-		if tc.FuncCall.Name == "task_done" {
-			taskActive.Store(false)
-			atomic.StoreInt32(&taskFailures, 0)
-			consecutiveToolCalls.Store(0)
-			logger.Debug("task_done executed: cleared task state")
-		}
-
 		// Mission mode: detect tool-level errors (bash failures, test failures, JSON errors)
 		if tools.IsMissionMode() && tools.IsToolError(tc.FuncCall.Name, toolResponseMsg.Content) {
 			tools.GetCurrentMission().AddFailure()
@@ -1415,8 +1380,6 @@ func handleBatchToolCalls(textContent string, toolCalls []models.ToolCall) bool 
 			"\n\n", len(chatBody.Messages), cfg.ToolRole, toolResponseMsg.GetText())
 		chatBody.Messages = append(chatBody.Messages, toolResponseMsg)
 
-		// Reset task failures on successful tool call
-		atomic.StoreInt32(&taskFailures, 0)
 	}
 
 	cleanChatBody()
@@ -1469,8 +1432,6 @@ func findCall(msg, toolCall string) bool {
 	} else {
 		jsStr := models.ToolCallRE.FindString(msg)
 		if jsStr == "" { // no tool call case
-			// Reset consecutive tool call counter when assistant responds with text
-			consecutiveToolCalls.Store(0)
 			return false
 		}
 		// Remove prefix/suffix with flexible whitespace handling
@@ -1641,25 +1602,9 @@ func findCall(msg, toolCall string) bool {
 			IsShellCommand: isShellCommand,
 		}
 	}
-	// Track consecutive tool calls for task detection
-	consecutiveToolCalls.Add(1)
-	if consecutiveToolCalls.Load() >= 2 {
-		taskActive.Store(true)
-		logger.Debug("task started: consecutive tool calls", "count", consecutiveToolCalls.Load())
-	}
-	// Check if task_done was called - clear all task state
-	if fc.Name == "task_done" {
-		taskActive.Store(false)
-		atomic.StoreInt32(&taskFailures, 0)
-		consecutiveToolCalls.Store(0)
-		logger.Debug("task_done executed: cleared task state")
-	}
 	outputHandler.Writef("%s[-:-:b](%d) <%s>: [-:-:-]\n%s\n",
 		"\n\n", len(chatBody.Messages), cfg.ToolRole, toolResponseMsg.GetText())
 	chatBody.Messages = append(chatBody.Messages, toolResponseMsg)
-	// Reset task failures on successful tool call, but keep task active until task_done
-	atomic.StoreInt32(&taskFailures, 0)
-	// Note: taskActive stays true until task_done or max failures reached
 	// Clear the stored tool call ID after using it
 	lastToolCall.ID = ""
 	// Trigger the assistant to continue processing with the new tool response

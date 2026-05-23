@@ -15,7 +15,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"gf-lt/rag"
@@ -29,12 +28,9 @@ For this roleplay immersion is at most importance.
 Every character thinks and acts based on their personality and setting of the roleplay.
 Meta discussions outside of roleplay is allowed if clearly labeled as out of character, for example: (ooc: {msg}) or <ooc>{msg}</ooc>.
 `
-	taskActive     atomic.Bool
 	ToolSysMsgChat = `<tool_guide>
 If you choose to call a function ONLY do a tool call in openai format with NO suffix.
-When a task is in progress you MUST output either a tool call or task_done. Do not output normal text, explanations, or markdown.
 You may put optional reasoning inside <think></think> but it must come BEFORE the tool call. Never put anything after the tool call.
-If you finished with task or you got stuck and user's input required call task_done.
 Examples of common operations:
 - Read file: run "cat /path/file.txt" or run "head -n 100 /path/file.txt" (first 100 lines), run "sed -n '40,55p' /path/file.txt" (line range)
 - Edit file: use file_edit to replace a line range (preferred over sed for targeted changes). Example: file_edit llm.go 182 186 "new content"
@@ -45,7 +41,6 @@ Examples of common operations:
 `
 	ToolSysMsg = `Tools are enabled. While making a tool call avoid writing anything else.
 You may put optional reasoning inside <think></think> but it must come BEFORE the tool call. Never put anything after the closing </tool_call>.
-If you finished with task or you got stuck and user's input required call task_done.
 Your current tools:
 <tools>
 [
@@ -116,8 +111,6 @@ After that you are free to respond to the user.
 	ragSearchSysPrompt = `Synthesize the document search results, extracting key information and presenting a concise answer. Provide sources and document IDs where relevant.`
 	readURLSysPrompt   = `Extract and summarize the content from the webpage. Provide key information, main points, and any relevant details.`
 	summarySysPrompt   = `Please provide a concise summary of the following conversation. Focus on key points, decisions, and actions. Provide only the summary, no additional commentary.`
-	// reminderPrompt     = `Received a message without a tool call while task is in progress. Either call task_done to complete the task or proceed with the intended tool call.`
-	// ReminderPrompt = `Reminder: task is active. If the task is complete, call task_done. Otherwise continue with the next tool call.`
 )
 
 var WebSearcher searcher.WebSurfer
@@ -1114,20 +1107,6 @@ func todoDelete(args map[string]string) []byte {
 	return jsonResult
 }
 
-func taskDone(args map[string]string) []byte {
-	taskActive.Store(false)
-	result := map[string]string{
-		"message": "task marked as done",
-	}
-	jsonResult, err := json.Marshal(result)
-	if err != nil {
-		msg := "failed to marshal result; error: " + err.Error()
-		logger.Error(msg)
-		return []byte(msg)
-	}
-	return jsonResult
-}
-
 func viewImgTool(args map[string]string) []byte {
 	file, ok := args["file"]
 	if !ok || file == "" {
@@ -1355,7 +1334,6 @@ var FnMap = map[string]FnHandler{
 	// Browser tool - routes to runBrowserCommand
 	"browser":        browserCmd,
 	"summarize_chat": summarizeChat,
-	"task_done":      taskDone,
 }
 
 func removeWindowToolsFromBaseTools() {
@@ -1538,24 +1516,6 @@ var BaseTools = []models.Tool{
 					"command": models.ToolArgProps{
 						Type:        "string",
 						Description: "optional: get help for specific command (e.g., 'help memory')",
-					},
-				},
-			},
-		},
-	},
-	// task_done
-	models.Tool{
-		Type: "function",
-		Function: models.ToolFunc{
-			Name:        "task_done",
-			Description: "Mark the current task as complete. Call this when you have finished the intended task and no more tool calls are needed.",
-			Parameters: models.ToolFuncParams{
-				Type:     "object",
-				Required: []string{},
-				Properties: map[string]models.ToolArgProps{
-					"done": models.ToolArgProps{
-						Type:        "string",
-						Description: "set to 'true' to confirm task completion",
 					},
 				},
 			},
