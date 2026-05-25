@@ -362,6 +362,11 @@ func (op LCPChat) FormMsg(msg, role string, resume bool) (io.Reader, error) {
 		for _, t := range tools.BaseTools {
 			allTools = append(allTools, t)
 		}
+		if cfg.MissionToolsEnabled && len(tools.MissionBaseTools) > 0 {
+			for _, t := range tools.MissionBaseTools {
+				allTools = append(allTools, t)
+			}
+		}
 		if mcpManager != nil && mcpManager.HasTools() {
 			allTools = append(allTools, mcpManager.GetOpenAITools()...)
 		}
@@ -706,6 +711,11 @@ func (or OpenRouterChat) FormMsg(msg, role string, resume bool) (io.Reader, erro
 		var allTools []any
 		for _, t := range tools.BaseTools {
 			allTools = append(allTools, t)
+		}
+		if cfg.MissionToolsEnabled && len(tools.MissionBaseTools) > 0 {
+			for _, t := range tools.MissionBaseTools {
+				allTools = append(allTools, t)
+			}
 		}
 		if mcpManager != nil && mcpManager.HasTools() {
 			allTools = append(allTools, mcpManager.GetOpenAITools()...)

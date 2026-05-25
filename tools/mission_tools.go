@@ -15,8 +15,9 @@ import (
 )
 
 var (
-	currentMission *mission.Mission
-	pmAgent        *agent.AgentClient
+	currentMission    *mission.Mission
+	pmAgent           *agent.AgentClient
+	MissionBaseTools []models.Tool
 )
 
 const pmSystemPrompt = `You are the Project Manager for an autonomous coding agent solving a software issue. The agent has full access to bash, git, file editing, and other tools. It should create feature branches, commit incrementally, and write/run tests.
@@ -48,6 +49,85 @@ func RegisterMissionTools() {
 	FnMap["create_pr"] = createPRTool
 	FnMap["pm_consult"] = pmConsultTool
 	FnMap["add_issue_comment"] = addIssueCommentTool
+
+	MissionBaseTools = []models.Tool{
+		{
+			Type: "function",
+			Function: models.ToolFunc{
+				Name:        "move_issue",
+				Description: "Move the current issue to a different status (review, done, archive). Example: move_issue status=review",
+				Parameters: models.ToolFuncParams{
+					Type:     "object",
+					Required: []string{"status"},
+					Properties: map[string]models.ToolArgProps{
+						"status": {Type: "string", Description: "Target status: review, done, or archive"},
+					},
+				},
+			},
+		},
+		{
+			Type: "function",
+			Function: models.ToolFunc{
+				Name:        "create_issue",
+				Description: "Create a new sub-issue for related work. Example: create_issue id=99 title='Fix login timeout' description='The login page times out after 30s'",
+				Parameters: models.ToolFuncParams{
+					Type:     "object",
+					Required: []string{"id", "title", "description"},
+					Properties: map[string]models.ToolArgProps{
+						"id":          {Type: "string", Description: "Issue ID (numeric string)"},
+						"title":       {Type: "string", Description: "Issue title"},
+						"description": {Type: "string", Description: "Issue description"},
+						"branch_name": {Type: "string", Description: "Branch name for this sub-issue (optional)"},
+					},
+				},
+			},
+		},
+		{
+			Type: "function",
+			Function: models.ToolFunc{
+				Name:        "create_pr",
+				Description: "Mark the current issue as complete by creating a pull/merge request. This signals mission completion. Writes a .gf-lt-pr.md file to the project repo.",
+				Parameters: models.ToolFuncParams{
+					Type:     "object",
+					Required: []string{"title"},
+					Properties: map[string]models.ToolArgProps{
+						"title": {Type: "string", Description: "PR title"},
+						"body":  {Type: "string", Description: "PR body/description (markdown)"},
+						"base":  {Type: "string", Description: "Base branch (default: main)"},
+					},
+				},
+			},
+		},
+		{
+			Type: "function",
+			Function: models.ToolFunc{
+				Name:        "pm_consult",
+				Description: "Request guidance from the project manager. Use when stuck, need direction, or want feedback on approach. Example: pm_consult question='Should I focus on tests or documentation?'",
+				Parameters: models.ToolFuncParams{
+					Type:     "object",
+					Required: []string{},
+					Properties: map[string]models.ToolArgProps{
+						"question": {Type: "string", Description: "Your question or what you need guidance on"},
+					},
+				},
+			},
+		},
+		{
+			Type: "function",
+			Function: models.ToolFunc{
+				Name:        "add_issue_comment",
+				Description: "Add a comment to the issue file for tracking progress. Example: add_issue_comment body='Completed user login implementation'",
+				Parameters: models.ToolFuncParams{
+					Type:     "object",
+					Required: []string{"body"},
+					Properties: map[string]models.ToolArgProps{
+						"body":   {Type: "string", Description: "Comment text"},
+						"author": {Type: "string", Description: "Comment author (default: solver)"},
+					},
+				},
+			},
+		},
+	}
 }
 
 func InitPMAgent(cfg *config.Config, log *slog.Logger) {
@@ -417,34 +497,4 @@ func IsToolError(toolName, resp string) bool {
 	}
 
 	return false
-}
-
-func MissionToolDefs() string {
-	return `[
-  {
-    "name": "move_issue",
-    "args": ["status"],
-    "when_to_use": "Move the current issue to a different status. Status values: review (PR created), done (merged), archive (abandoned). Example: move_issue status=review"
-  },
-  {
-    "name": "create_issue",
-    "args": ["id", "title", "description", "branch_name"],
-    "when_to_use": "Create a new sub-issue for related work. Use when an issue needs to be split into smaller parts. Example: create_issue id=99 title='Fix login timeout' description='The login page times out after 30s'"
-  },
-  {
-    "name": "create_pr",
-    "args": ["title", "body", "base"],
-    "when_to_use": "Mark the current issue as complete by creating a pull/merge request. This signals mission completion. Example: create_pr title='Fix: login timeout' body='## Summary\nFixes #42'"
-  },
-  {
-    "name": "pm_consult",
-    "args": ["question"],
-    "when_to_use": "Request guidance from the project manager. Use when stuck, need direction, or want feedback. Example: pm_consult question='Should I focus on tests or documentation?'"
-  },
-  {
-    "name": "add_issue_comment",
-    "args": ["body", "author"],
-    "when_to_use": "Add a comment to the issue file for tracking progress. Example: add_issue_comment body='Completed user login implementation'"
-  }
-]`
 }

@@ -96,7 +96,7 @@ Tools are automatically registered when `--mission` is used, or via `--mission-t
 |------|------|-------------|
 | `move_issue` | `status` | Move issue to different status (review, done, archive) |
 | `create_issue` | `id`, `title`, `description`, `branch_name` | Create a new sub-issue file |
-| `create_pr` | `title`, `body`, `base` | Mark session complete; produces PR description file in repo |
+| `create_pr` | `title`, `body`, `base` | Mark session complete; writes `.gf-lt-pr.md` to project repo |
 | `pm_consult` | `question` | Request PM guidance (injects into conversation) |
 | `add_issue_comment` | `body`, `author` | Add comment to issue file |
 
@@ -329,6 +329,7 @@ The conversation grows unbounded. Each round adds 3-5 messages (user prompt → 
 - **Tool call flow**: For `/v1/chat` endpoints, tool calls come through structured `tool_calls` in streaming chunks (`chunk.ToolCalls`). `respTextNoThink` is empty for pure tool-call responses. Legacy `findCall()` handles `/completion` endpoint with `__tool_call__` regex.
 - **Mission mode loop**: `missionMessageLoop()` sends initial prompt, waits on `cliRespDone`, checks for `create_pr` success, failure threshold, and PM check-in interval before injecting "Continue working..." prompt.
 - **Context window management**: `summarizeAndCompact()` compresses oldest messages when context exceeds 90% saturation. On 3 consecutive compression failures, aborts mission.
+- **Mission tools advertised to LLM**: `MissionBaseTools` in `tools/mission_tools.go` defines proper typed tools for `move_issue`, `create_issue`, `create_pr`, `pm_consult`, and `add_issue_comment`. These are appended to the API request's `tools` array in `llm.go` whenever `MissionToolsEnabled` is true.
 
 ### Known Issues
 - *(None currently)*
@@ -416,3 +417,7 @@ Default agent card bundled with gf-lt.
 **Status: COMPLETED**.
 **What was done**: Removed the `taskStatus` injection block entirely from both `handleBatchToolCalls()` and `findCall()`. The internal state tracking (`consecutiveToolCalls`, `taskActive` atomics) is preserved underneath — only the string prefix prepended to tool response content was removed.
 
+### P6: Mission Tool Definitions Sent to LLM
+**Status: DONE**.
+**Impact**: The LLM could read about `create_pr` in workflow docs but never saw it as an available tool in the API request — so it never called it, causing an infinite "I'm done" loop.
+**Implementation**: Added `MissionBaseTools []models.Tool` in `tools/mission_tools.go`, populated with proper typed OpenAI function definitions for all 5 mission tools. In `llm.go`, both `LCPChat.FormMsg` and `OpenRouterChat.FormMsg` now append `MissionBaseTools` to the `tools` array when `cfg.MissionToolsEnabled` is true. Removed the now-unused `MissionToolDefs()` JSON string function.
