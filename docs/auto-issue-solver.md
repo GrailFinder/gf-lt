@@ -332,7 +332,9 @@ The conversation grows unbounded. Each round adds 3-5 messages (user prompt → 
 - **Mission tools advertised to LLM**: `MissionBaseTools` in `tools/mission_tools.go` defines proper typed tools for `move_issue`, `create_issue`, `create_pr`, `pm_consult`, and `add_issue_comment`. These are appended to the API request's `tools` array in `llm.go` whenever `MissionToolsEnabled` is true.
 
 ### Known Issues
-- *(None currently)*
+- **Double move deletes issue file**: `createPRTool()` moves the issue to `review/` status during PR creation. Then `missionComplete()` also calls `MoveToStatus(review)`, causing the file to be deleted (move reads then removes oldPath, which is the same as newPath). Fix: `createPRTool` should not move the issue itself; let `missionComplete` handle it.
+- **Branch name shows `unknown` in PR file**: `createPRTool` reads `currentMission.Issue.BranchName` which is empty because the LLM creates a git branch but never updates the issue JSON. Fix: auto-detect the current git branch when `BranchName` is empty.
+- **Duplicate acceptance criteria in PR file**: The LLM includes acceptance criteria in the PR body it passes to `create_pr`, and `createPRTool` also appends them from the issue JSON. Fix: only include AC from the issue when the LLM's body doesn't already contain them.
 
 ## User Interaction During Mission
 
