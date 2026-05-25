@@ -72,7 +72,7 @@ A third operational mode where gf-lt operates as an autonomous coding agent focu
 gf-lt --mission                              # Enter mission mode
 gf-lt --mission --issue-id 5                 # Process specific issue (optional, auto-picks if not provided)
 gf-lt --mission --agent-card ./card.json     # Custom agent personality (optional)
-gf-lt --resume ./mission-state.json          # Resume from checkpoint
+gf-lt --resume ./mission-checkpoint.json     # Resume from checkpoint (default: mission-checkpoint.json)
 gf-lt --pm-interval 75                        # PM check-in every N tool calls (default: 75)
 gf-lt --max-failures 3                        # Consecutive failures before abort (default: 3)
 gf-lt --checkpoint-file ./checkpoint.json    # Custom checkpoint path
@@ -263,15 +263,11 @@ User/Agent                  chatRoundChan           chatRound()           LLM AP
 
 ## Context Window Management
 
-**Status: NOT IMPLEMENTED — P0 priority.**
+**Status: IMPLEMENTED.**
 
-The conversation grows unbounded. Each round adds 3-5 messages (user prompt → assistant → tool call → tool response). For a 200-tool-call mission, that's 1000+ messages, easily exceeding 8K-32K token context limits.
+The conversation grows unbounded. Each round adds 3-5 messages (user prompt → assistant → tool call → tool response). For a 200-tool-call mission, that's 1000+ messages, easily exceeding context limits.
 
-**When to summarize**: Before the context approaches the model's limit. Estimate: each message is ~50-200 tokens. At 8K context, act at ~40-160 messages.
-
-**How to summarize**: Take the oldest N messages, send them to the LLM with a summarization prompt ("Summarize: what was the task, what was done, what remains, what decisions were made"). Replace the old messages with the summary text in `chatBody.Messages`.
-
-This is critical — without it, missions fail silently when the context window fills and the LLM starts hallucinating.
+**Implementation**: `summarizeAndCompact()` at `main.go:656` is called after each response in the mission loop (line 610). When context usage exceeds 90% saturation (estimated via `getContextTokens`), it calls `SummarizeChat()` in `tools/mission_tools.go` which compresses the oldest messages using the LLM. If summarization fails 3 consecutive times with >90% saturation, the mission aborts.
 
 ## Error Handling
 
@@ -286,14 +282,15 @@ This is critical — without it, missions fail silently when the context window 
 **Consecutive failures** count when:
 - Empty LLM response after 3 retries
 - Tool execution fails (bash returns non-zero)
+- `IsToolError()` detects: bash `[error]` prefix, JSON `"error"` field, `go test FAIL` lines, go compile errors
 - Git conflict resolution fails
 - Test suite fails
 
-**Known Issue**: Failure tracking only counts empty responses, not wrong tool output or failed assertions. A "success" tool response that doesn't match acceptance criteria is not counted as failure.
+**Known Issue**: A "success" tool response that doesn't match acceptance criteria is not counted as failure.
 
 ## Checkpoint/Resume System
 
-**Checkpoint File Format** (`mission-state.json`):
+**Checkpoint File Format** (`mission-checkpoint.json`):
 ```json
 {
   "version": 1,
@@ -347,6 +344,7 @@ This is critical — without it, missions fail silently when the context window 
 - **Multi-tool-call support**: `sendMsgToLLM()` accumulates tool calls by index across streaming chunks via `toolCallAcc` map. On stream completion, `lastCompletedToolCalls` is populated and `handleBatchToolCalls()` executes all calls.
 - **Tool call flow**: For `/v1/chat` endpoints, tool calls come through structured `tool_calls` in streaming chunks (`chunk.ToolCalls`). `respTextNoThink` is empty for pure tool-call responses. Legacy `findCall()` handles `/completion` endpoint with `__tool_call__` regex.
 - **Mission mode loop**: `missionMessageLoop()` sends initial prompt, waits on `cliRespDone`, checks for `create_pr` success, failure threshold, and PM check-in interval before injecting "Continue working..." prompt.
+- **Context window management**: `summarizeAndCompact()` compresses oldest messages when context exceeds 90% saturation. On 3 consecutive compression failures, aborts mission.
 
 ### Known Issues
 - **PM agent empty response**: `PMAgentChat` returns empty string when LLM produces no content. Injected as `"[PM Check-in]\n"` with no guidance text.
@@ -380,15 +378,15 @@ Each iteration is a fresh session with isolated context.
 
 ## Implementation Order
 
-1. Core mode structure and flag parsing
-2. Issue directory/file handling
-3. Mission controller skeleton
-4. Bundled tool definitions (`create_issue`, `move_issue`, `create_pr`)
-5. Checkpoint/resume system
-6. PM supervisor integration
-7. Error handling and failure tracking
-8. Output formatting
-9. Documentation (`docs/issue-workflow.md`)
+1. Core mode structure and flag parsing — **DONE**
+2. Issue directory/file handling — **DONE**
+3. Mission controller skeleton — **DONE**
+4. Bundled tool definitions (`create_issue`, `move_issue`, `create_pr`) — **DONE**
+5. Checkpoint/resume system — **DONE**
+6. PM supervisor integration — **DONE**
+7. Error handling and failure tracking — **DONE**
+8. Output formatting — **DONE**
+9. Documentation (`docs/issue-workflow.md`) — **DONE**
 
 ## Documentation Requirements
 
@@ -407,8 +405,9 @@ Default agent card bundled with gf-lt.
 ## Remaining Work — Next-to-Do
 
 ### P0: Context Window Management
-**Impact**: Missions will always fail on long runs without this. The conversation grows unbounded, eventually exceeding the model's context window and the LLM starts producing garbage.
-**Approach**: Implement a summarization step that compresses old messages before the context gets too large. Trigger when `len(chatBody.Messages) > threshold`. Replace oldest messages with a condensed summary.
+**Status: DONE**.
+**Impact**: Missions would fail silently on long runs without this.
+**Implementation**: `summarizeAndCompact()` in `main.go` compresses oldest messages via LLM when context exceeds 90% saturation. Called after each response in the mission loop. Aborts on 3 consecutive compression failures with >90% saturation.
 
 ### P1: Structured PM Agent Sysprompt
 **Impact**: PM agent currently produces free-form "encouragement" instead of actionable guidance. The agent has no way to detect the solver is off-track beyond repeating itself.
