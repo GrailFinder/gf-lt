@@ -216,7 +216,7 @@ Orchestrates the session lifecycle:
 │ ├─ On SUCCESS: create_pr writes PR file,              │
 │ │   move to review/, export chat, exit 0              │
 │ ├─ On FAILURE: move to archive/, export chat, exit 1  │
-│ ├─ On INTERRUPT: Checkpoint, pause                    │
+│ ├─ On INTERRUPT: Checkpoint, export chat, exit            │
 │ └─ On RESUME: Reload state from checkpoint, continue  │
 └─────────────────────────────────────────────────────────┘
 ```
@@ -304,8 +304,7 @@ The conversation grows unbounded. Each round adds 3-5 messages (user prompt → 
 - Exit code 0 (success) or 1 (failure)
 - Console output: summary of commits, tool calls, duration
 - Chat export: `mission-{issue_id}-{timestamp}.json`
-- PR file: `create_pr` writes a markdown description file in the project repo
-  (Currently a JSON tool response; should write actual `.gf-lt-pr.md` file)
+- PR file: `create_pr` writes a `.gf-lt-pr.md` markdown description file in the project repo
 
 **Structured JSON Mode** (`--output json`):
 ```json
@@ -340,10 +339,9 @@ The conversation grows unbounded. Each round adds 3-5 messages (user prompt → 
 - Real-time tool call logging (muted with `--quiet`)
 - Progress: "Tool 147 | Commits: 5 | Failures: 0"
 
-**Manual Override**:
-- `SIGINT` (Ctrl+C): Checkpoint and pause
-- `SIGTERM`: Checkpoint and abort
-- Interactive prompt: "Resume, Abort, or Inspect?"
+**Manual Override** (CLI and mission mode only; not available in TUI):
+- `SIGINT` (Ctrl+C): Export chat, save checkpoint (mission mode), then exit with code 130
+- `SIGTERM`: Export chat, save checkpoint (mission mode), then exit with code 143
 
 **Chat Input** (optional):
 - User can type while mission running
@@ -387,7 +385,7 @@ Instructions for LLM on:
 ### `sysprompts/auto-solver-default.json`
 Default agent card bundled with gf-lt.
 
-## Remaining Work — Next-to-Do
+## Implementation History
 
 ### P0: Context Window Management
 **Status: DONE**.

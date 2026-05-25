@@ -12,11 +12,13 @@ import (
 	"gf-lt/pngmeta"
 	"gf-lt/tools"
 	"os"
+	"os/signal"
 	"path"
 	"slices"
 	"strconv"
 	"strings"
 	"sync/atomic"
+	"syscall"
 	"time"
 
 	"github.com/rivo/tview"
@@ -136,7 +138,32 @@ func main() {
 	}
 }
 
+func setupSignalHandler() {
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+	go func() {
+		sig := <-sigCh
+		fmt.Fprintf(os.Stderr, "\n[signal] %v received, exporting chat...\n", sig)
+
+		issueID := "interrupted"
+		if m := tools.GetCurrentMission(); m != nil {
+			issueID = m.Issue.ID
+			m.Status = mission.StatusAborted
+			m.SaveCheckpoint(mission.DefaultCheckpointPath())
+		}
+
+		exportMissionChat(issueID)
+
+		code := 130 // 128 + SIGINT(2)
+		if sig == syscall.SIGTERM {
+			code = 143 // 128 + SIGTERM(15)
+		}
+		os.Exit(code)
+	}()
+}
+
 func runCLIMode() {
+	setupSignalHandler()
 	outputHandler = &CLIOutputHandler{}
 	cliRespDone = make(chan bool, 1)
 	if cliCardPath != "" {
@@ -399,6 +426,7 @@ func handleCLICommand(msg string) bool {
 }
 
 func runMissionMode() {
+	setupSignalHandler()
 	outputHandler = &CLIOutputHandler{}
 	cliRespDone = make(chan bool, 1)
 
