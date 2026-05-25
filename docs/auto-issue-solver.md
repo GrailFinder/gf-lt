@@ -400,8 +400,9 @@ Default agent card bundled with gf-lt.
 **Implementation**: Rewrote PM system prompt with four focused assessment axes (task alignment, progress velocity, error handling, scope discipline). Enriched context passed to PM includes issue description, acceptance criteria, branch name, tool call count, commits, and consecutive failures. Prompt is natural language, not rigid format — concise, actionable guidance that's easier for the solver LLM to consume.
 
 ### P2: `create_pr` Produces a Real PR File
-**Impact**: `create_pr` currently just increments state and returns JSON. The "PR deliverable" is invisible — there's no file for the user to review.
-**Approach**: Write a markdown PR description file in the project repo (e.g., `.gf-lt-pr.md` with issue reference, branch name, summary of changes, acceptance criteria status).
+**Status: DONE**.
+**Impact**: `create_pr` previously only returned JSON with no deliverable file for the user to review.
+**Implementation**: Added file writing to `createPRTool()` in `tools/mission_tools.go`. Writes `.gf-lt-pr.md` to the project root with PR title, issue reference, branch name, base branch, description body, acceptance criteria, and a generation notice. File path returned as `pr_file` in the JSON result. Non-fatal on write failure — logs a warning but does not block mission success.
 
 ### P3: Failure Signal Improvement
 **Status: DONE**.
@@ -417,6 +418,3 @@ Default agent card bundled with gf-lt.
 **Status: COMPLETED**.
 **What was done**: Removed the `taskStatus` injection block entirely from both `handleBatchToolCalls()` and `findCall()`. The internal state tracking (`consecutiveToolCalls`, `taskActive` atomics) is preserved underneath — only the string prefix prepended to tool response content was removed.
 
-### P6: End-to-End Testing
-**Impact**: No automated validation that mission mode works end-to-end.
-**Approach**: The `mission-test` Makefile target exists and works against a real LLM server. For CI-friendly validation, create a smoke test with a mock/stub LLM server that returns known tool-call responses.
