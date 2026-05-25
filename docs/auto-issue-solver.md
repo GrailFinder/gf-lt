@@ -73,7 +73,7 @@ gf-lt --mission                              # Enter mission mode
 gf-lt --mission --issue-id 5                 # Process specific issue (optional, auto-picks if not provided)
 gf-lt --mission --agent-card ./card.json     # Custom agent personality (optional)
 gf-lt --resume ./mission-checkpoint.json     # Resume from checkpoint (default: mission-checkpoint.json)
-gf-lt --pm-interval 75                        # PM check-in every N tool calls (default: 75)
+gf-lt --pm-interval 75                        # PM check-in every N tool calls (all tools: bash, file_edit, etc.) (default: 75)
 gf-lt --max-failures 3                        # Consecutive failures before abort (default: 3)
 gf-lt --checkpoint-file ./checkpoint.json    # Custom checkpoint path
 gf-lt --output json                           # Structured JSON output
@@ -202,12 +202,12 @@ Orchestrates the session lifecycle:
 │ │ 5. Tool response added to chatBody.Messages      │  │
 │ │ 6. LLM gets tool response, continues processing │  │
 │ │    (loop back to step 2 for multi-call turns)   │  │
-│ │ 7. After response completes:                     │  │
-│ │    ├─ check isLastAssistantMsgEmpty → retry (×3) │  │
-│ │    ├─ check create_pr → SUCCESS                  │  │
-│ │    ├─ check ShouldAbort (3 consecutive failures) │  │
-│ │    ├─ check ShouldPMCheckIn → PM agent check-in  │  │
-│ │    └─ inject "Continue working..." prompt        │  │
+ │ │ 7. After response completes:                     │  │
+ │ │    ├─ check isLastAssistantMsgEmpty → retry (×3) │  │
+ │ │    ├─ check PMGuidanceNeeded → PM agent check-in │  │
+ │ │    ├─ check create_pr → SUCCESS                  │  │
+ │ │    ├─ check ShouldAbort (3 consecutive failures) │  │
+ │ │    └─ inject "Continue working..." prompt        │  │
 │ └───────────────────────────────────────────────────┘  │
 └─────────────────────────────────────────────────────────┘
                           ↓
@@ -327,7 +327,7 @@ The conversation grows unbounded. Each round adds 3-5 messages (user prompt → 
 - **Mission tools**: All 5 tools registered and functional (`move_issue`, `create_pr`, `create_issue`, `pm_consult`, `add_issue_comment`).
 - **Multi-tool-call support**: `sendMsgToLLM()` accumulates tool calls by index across streaming chunks via `toolCallAcc` map. On stream completion, `lastCompletedToolCalls` is populated and `handleBatchToolCalls()` executes all calls.
 - **Tool call flow**: For `/v1/chat` endpoints, tool calls come through structured `tool_calls` in streaming chunks (`chunk.ToolCalls`). `respTextNoThink` is empty for pure tool-call responses. Legacy `findCall()` handles `/completion` endpoint with `__tool_call__` regex.
-- **Mission mode loop**: `missionMessageLoop()` sends initial prompt, waits on `cliRespDone`, checks for `create_pr` success, failure threshold, and PM check-in interval before injecting "Continue working..." prompt.
+- **Mission mode loop**: `missionMessageLoop()` sends initial prompt, waits on `cliRespDone`, checks `PMGuidanceNeeded` flag (set during tool execution when tool call count hits interval), then checks `create_pr` success, failure threshold, and context window before injecting "Continue working..." prompt. PM check placed before success check so guidance fires before mission exits.
 - **Context window management**: `summarizeAndCompact()` compresses oldest messages when context exceeds 90% saturation. On 3 consecutive compression failures, aborts mission.
 - **Mission tools advertised to LLM**: `MissionBaseTools` in `tools/mission_tools.go` defines proper typed tools for `move_issue`, `create_issue`, `create_pr`, `pm_consult`, and `add_issue_comment`. These are appended to the API request's `tools` array in `llm.go` whenever `MissionToolsEnabled` is true.
 
@@ -422,6 +422,17 @@ Default agent card bundled with gf-lt.
 ### P6: Mission Tool Definitions Sent to LLM
 **Status: DONE**.
 **Impact**: The LLM could read about `create_pr` in workflow docs but never saw it as an available tool in the API request — so it never called it, causing an infinite "I'm done" loop.
+
+### P7: PM Counter Granularity and Message Quality
+**Status: DONE**.
+**Impact**: Previously the PM interval only counted mission-specific tool calls (`create_pr`, `add_issue_comment`, etc.), so in short missions the PM never fired. Also, PM messages were injected as `system` role with generic third-person prompts.
+**Implementation**: 
+- Moved `IncrementToolCalls()` from individual mission tool handlers to `handleBatchToolCalls()` in `bot.go` so EVERY tool call (bash, file_edit, etc.) increments the counter.
+- Changed PM message role from `"system"` to `cfg.UserRole` so the guidance appears as a direct user message.
+- Rewrote `getPMGuidance()` prompt to address the coder as "you" with imperative tone ("Run the tests now", "Check that main.go handles the error").
+- Added `PMGuidanceNeeded` flag on the Mission struct, set by `IncrementToolCalls()` when `ShouldPMCheckIn()` returns true. Checked in `missionMessageLoop()` before the StatusSuccess check so guidance fires even if `create_pr` was already called.
+- Same imperative/second-person rewrite for `pmConsultTool` prompt.
+- Updated `docs/auto-issue-solver.md` flowchart and descriptions.
 **Implementation**: Added `MissionBaseTools []models.Tool` in `tools/mission_tools.go`, populated with proper typed OpenAI function definitions for all 5 mission tools. In `llm.go`, both `LCPChat.FormMsg` and `OpenRouterChat.FormMsg` now append `MissionBaseTools` to the `tools` array when `cfg.MissionToolsEnabled` is true. Removed the now-unused `MissionToolDefs()` JSON string function.
 
 ### P7: Edge Case Fixes from End-to-End Testing

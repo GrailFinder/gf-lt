@@ -20,6 +20,7 @@ mission-test: setconfig
 	go build -tags extra -o gf-lt && \
 	GF_LT_MODEL="unsloth-qwen3.6-27b-q4km-novision" \
 	./gf-lt --mission --issue-id 1 \
+		--pm-interval 20 \
 		--api http://localhost:8080/v1/chat/completions \
 		--issues-dir $$ISSUES; \
 	rc=$$?; \

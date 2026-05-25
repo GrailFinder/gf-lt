@@ -1375,6 +1375,11 @@ func handleBatchToolCalls(textContent string, toolCalls []models.ToolCall) bool 
 			tools.GetCurrentMission().ResetFailures()
 		}
 
+		// Mission mode: increment tool call counter for PM interval
+		if tools.IsMissionMode() {
+			tools.GetCurrentMission().IncrementToolCalls()
+		}
+
 		// Display and append the tool response
 		outputHandler.Writef("%s[-:-:b](%d) <%s>: [-:-:-]\n%s\n",
 			"\n\n", len(chatBody.Messages), cfg.ToolRole, toolResponseMsg.GetText())

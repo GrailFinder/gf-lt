@@ -19,13 +19,14 @@ const (
 )
 
 type Mission struct {
-	Status       MissionStatus
-	Issue       *Issue
-	Checkpoint  *Checkpoint
-	Manager     *IssueManager
-	PMInterval  int
-	MaxFailures int
-	Quiet       bool
+	Status            MissionStatus
+	Issue             *Issue
+	Checkpoint        *Checkpoint
+	Manager           *IssueManager
+	PMInterval        int
+	MaxFailures       int
+	Quiet             bool
+	PMGuidanceNeeded  bool
 }
 
 func NewMission(issue *Issue, issueManager *IssueManager, pmInterval, maxFailures int, quiet bool) *Mission {
@@ -66,6 +67,9 @@ func (m *Mission) LogTool(name string, args ...interface{}) {
 
 func (m *Mission) IncrementToolCalls() {
 	m.Checkpoint.IncrementToolCalls()
+	if m.ShouldPMCheckIn() {
+		m.PMGuidanceNeeded = true
+	}
 }
 
 func (m *Mission) ShouldPMCheckIn() bool {

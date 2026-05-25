@@ -620,6 +620,19 @@ func missionMessageLoop(m *mission.Mission, checkpointPath string, startTime tim
 			m.Log("Response complete. Tool calls: %d, Failures: %d",
 				m.Checkpoint.ToolCallCount, m.Checkpoint.ConsecutiveFailures)
 
+			// PM check-in — checked before success/abort so guidance can fire mid-mission
+			if m.PMGuidanceNeeded {
+				m.PMGuidanceNeeded = false
+				m.Log("PM check-in triggered at tool call %d", m.Checkpoint.ToolCallCount)
+				pmResponse := getPMGuidance(m)
+				m.AddToConversation(cfg.UserRole, fmt.Sprintf("[PM Check-in]\n%s", pmResponse))
+				chatBody.Messages = append(chatBody.Messages, models.RoleMsg{
+					Role: cfg.UserRole, Content: fmt.Sprintf("[PM Check-in]\n%s", pmResponse),
+				})
+				chatRoundChan <- &models.ChatRoundReq{Role: cfg.AssistantRole}
+				continue
+			}
+
 			// Check for create_pr tool completion
 			if m.Status == mission.StatusSuccess {
 				missionComplete(m, checkpointPath, mission.StatusSuccess, startTime)
@@ -649,20 +662,6 @@ func missionMessageLoop(m *mission.Mission, checkpointPath string, startTime tim
 					missionComplete(m, checkpointPath, mission.StatusFailed, startTime)
 					return
 				}
-			}
-
-			// PM check-in at interval
-			if m.ShouldPMCheckIn() {
-				m.Log("PM check-in triggered at tool call %d", m.Checkpoint.ToolCallCount)
-				// PM response will be injected as a message
-				pmResponse := getPMGuidance(m)
-				m.AddToConversation("system", fmt.Sprintf("[PM Check-in]\n%s", pmResponse))
-				chatBody.Messages = append(chatBody.Messages, models.RoleMsg{
-					Role: "system", Content: fmt.Sprintf("[PM Check-in]\n%s", pmResponse),
-				})
-				// Send PM check-in as assistant message to trigger LLM
-				chatRoundChan <- &models.ChatRoundReq{Role: cfg.AssistantRole}
-				continue
 			}
 
 			// Continue conversation - ask for next action
@@ -749,12 +748,14 @@ func getPMGuidance(m *mission.Mission) string {
 		ac = "- " + strings.Join(m.Issue.AcceptanceCriteria, "\n- ")
 	}
 	msg := fmt.Sprintf(
-		"PM check-in point. Assess the agent's progress.\n\n"+
+		"You are the project manager. Address the coding agent directly as \"you\".\n"+
+			"Give clear, imperative instructions: tell it exactly what to check, fix, or do next.\n\n"+
 			"Issue: %s (%s)\n"+
 			"Description: %s\n"+
 			"Acceptance criteria:\n%s\n"+
-			"Branch: %s\nTool calls: %d\nCommits: %v\nConsecutive failures: %d\n\n"+
-			"Is the agent on track? What should it focus on next?",
+			"Branch: %s\nTool calls so far: %d\nCommits: %v\nConsecutive failures: %d\n\n"+
+			"Review what the agent has done. What should it do now?\n"+
+			"Be direct. For example: \"Run the tests now\", \"Check that main.go handles the error\", \"Commit your changes\", \"You missed the empty input case — add it.\"",
 		m.Issue.Title, m.Issue.ID, m.Issue.Description,
 		ac,
 		m.Issue.BranchName,

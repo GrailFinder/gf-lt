@@ -250,7 +250,6 @@ func moveIssueTool(args map[string]string) []byte {
 		return []byte(fmt.Sprintf(`{"error": "%v"}`, err))
 	}
 
-	currentMission.Checkpoint.IncrementToolCalls()
 	if err := currentMission.SaveCheckpoint("mission-checkpoint.json"); err != nil {
 		currentMission.Log("Warning: failed to save checkpoint after move_issue: %v", err)
 	}
@@ -303,7 +302,6 @@ func createIssueTool(args map[string]string) []byte {
 		return []byte(fmt.Sprintf(`{"error": "Failed to save issue: %v"}`, err))
 	}
 
-	currentMission.Checkpoint.IncrementToolCalls()
 	if err := currentMission.SaveCheckpoint("mission-checkpoint.json"); err != nil {
 		currentMission.Log("Warning: failed to save checkpoint after create_issue: %v", err)
 	}
@@ -405,7 +403,6 @@ func createPRTool(args map[string]string) []byte {
 	// Don't move to review here — missionComplete() handles that after signaling success.
 	// Otherwise the issue file gets double-moved and deleted.
 
-	currentMission.Checkpoint.IncrementToolCalls()
 	currentMission.Status = mission.StatusSuccess
 
 	return []byte(mustMarshalJSON(result))
@@ -439,13 +436,15 @@ func pmConsultTool(args map[string]string) []byte {
 	}
 
 	prompt := fmt.Sprintf(
-		"The agent requests guidance.\n\n"+
+		"You are the project manager. The coding agent is asking for your guidance.\n"+
+			"Address the agent directly as \"you\" and give clear, imperative instructions.\n\n"+
 			"Issue: %s (%s)\n"+
 			"Description: %s\n"+
 			"Acceptance criteria:\n%s\n"+
-			"Branch: %s\nTool calls: %d\nCommits: %v\nConsecutive failures: %d\n"+
+			"Branch: %s\nTool calls so far: %d\nCommits: %v\nConsecutive failures: %d\n"+
 			"Project path: %s\n\n"+
-			"Agent's question: %s",
+			"Agent's question: %s\n\n"+
+			"Tell the agent exactly what to do next. Be short and direct.",
 		currentMission.Issue.Title, currentMission.Issue.ID,
 		currentMission.Issue.Description,
 		ac,
@@ -485,8 +484,6 @@ func addIssueCommentTool(args map[string]string) []byte {
 	if err := currentMission.SaveIssue(); err != nil {
 		return []byte(fmt.Sprintf(`{"error": "Failed to save issue comment: %v"}`, err))
 	}
-
-	currentMission.Checkpoint.IncrementToolCalls()
 
 	return []byte(fmt.Sprintf(`{"success": true, "comment_by": "%s", "issue_id": "%s"}`, author, currentMission.Issue.ID))
 }
