@@ -716,11 +716,20 @@ func isLastAssistantMsgEmpty() bool {
 }
 
 func getPMGuidance(m *mission.Mission) string {
+	ac := "N/A"
+	if len(m.Issue.AcceptanceCriteria) > 0 {
+		ac = "- " + strings.Join(m.Issue.AcceptanceCriteria, "\n- ")
+	}
 	msg := fmt.Sprintf(
-		"Auto PM check-in. Current progress:\n"+
-			"Issue: %s (%s)\nBranch: %s\nTool calls: %d\nCommits: %v\nConsecutive failures: %d\n\n"+
-			"Provide brief guidance on what I should focus on next.",
-		m.Issue.Title, m.Issue.ID, m.Issue.BranchName,
+		"PM check-in point. Assess the agent's progress.\n\n"+
+			"Issue: %s (%s)\n"+
+			"Description: %s\n"+
+			"Acceptance criteria:\n%s\n"+
+			"Branch: %s\nTool calls: %d\nCommits: %v\nConsecutive failures: %d\n\n"+
+			"Is the agent on track? What should it focus on next?",
+		m.Issue.Title, m.Issue.ID, m.Issue.Description,
+		ac,
+		m.Issue.BranchName,
 		m.Checkpoint.ToolCallCount, m.Checkpoint.CommitsMade,
 		m.Checkpoint.ConsecutiveFailures,
 	)

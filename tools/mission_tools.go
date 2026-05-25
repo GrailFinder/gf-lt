@@ -19,26 +19,16 @@ var (
 	pmAgent        *agent.AgentClient
 )
 
-const pmSystemPrompt = `You are the Project Manager for an autonomous coding agent. The agent is working on a software issue without human intervention. Your role is to:
+const pmSystemPrompt = `You are the Project Manager for an autonomous coding agent solving a software issue. The agent has full access to bash, git, file editing, and other tools. It should create feature branches, commit incrementally, and write/run tests.
 
-1. **Keep the agent aligned with the issue goals** - Remind it what it's supposed to accomplish
-2. **Provide guidance when stuck** - Suggest approaches when the agent is blocked
-3. **Review progress** - Assess if the agent is on track or going off-course
-4. **Advocate for quality** - Remind about tests, code review, and acceptance criteria
-5. **Be concise** - The agent doesn't need lengthy explanations; give clear, actionable guidance
+Your job is to give concise, actionable guidance. Focus on these areas:
 
-You are aware that:
-- The agent has full access to bash, git, file editing, and other tools
-- The agent should create feature branches and commit incrementally
-- The agent must write/run tests and meet acceptance criteria before completion
-- The agent should use pm_consult when uncertain or blocked
+- **Task alignment**: Is the agent working toward the acceptance criteria or going off-track?
+- **Progress**: Is it making forward progress or spinning on the same problem?
+- **Error handling**: Has it recovered from failures? If the same mistake keeps repeating, flag it.
+- **Scope**: Is it staying focused or adding unrelated changes?
 
-When giving guidance, focus on:
-- Whether the agent is progressing toward acceptance criteria
-- Whether it should pivot to a different approach
-- Whether it needs to write tests or run existing ones
-- Whether the current commit structure makes sense
-- Whether it should ask for more clarification or push forward`
+Keep responses brief — a few sentences, not paragraphs. The agent needs clear direction, not encouragement. If things look fine, just say so and let it continue.`
 
 func SetCurrentMission(m *mission.Mission) {
 	currentMission = m
@@ -84,7 +74,12 @@ func pmAgentChat(userMsg string) string {
 		currentMission.Log("PM agent error: request failed: %v", err)
 		return fmt.Sprintf("PM agent error: %v", err)
 	}
-	return string(resp)
+	text := strings.TrimSpace(string(resp))
+	if text == "" {
+		currentMission.Log("PM agent returned empty response, using fallback")
+		return "No guidance available from PM check-in. Continue with the current approach, review acceptance criteria, and verify tests pass."
+	}
+	return text
 }
 
 // PMAgentChat is the exported wrapper for use by main package.
@@ -320,26 +315,36 @@ func pmConsultTool(args map[string]string) []byte {
 
 	question := args["question"]
 	if question == "" {
-		question = "How am I doing? Any guidance?"
+		question = "Any concerns or should I keep going?"
 	}
 
 	currentMission.Log("PM consultation requested: %s", question)
 
-	context := map[string]interface{}{
-		"issue_id":             currentMission.Issue.ID,
-		"issue_title":          currentMission.Issue.Title,
-		"issue_description":    currentMission.Issue.Description,
-		"branch_name":          currentMission.Issue.BranchName,
-		"project_path":         currentMission.Issue.ProjectPath,
-		"acceptance_criteria":  currentMission.Issue.AcceptanceCriteria,
-		"tool_calls":           currentMission.Checkpoint.ToolCallCount,
-		"commits_made":         currentMission.Checkpoint.CommitsMade,
-		"consecutive_failures": currentMission.Checkpoint.ConsecutiveFailures,
-		"pm_question":          question,
+	ac := "N/A"
+	if len(currentMission.Issue.AcceptanceCriteria) > 0 {
+		ac = "- " + strings.Join(currentMission.Issue.AcceptanceCriteria, "\n- ")
 	}
 
-	prompt := mustMarshalJSON(context)
-	response := pmAgentChat("Here is the current mission context and my question:\n\n" + prompt)
+	prompt := fmt.Sprintf(
+		"The agent requests guidance.\n\n"+
+			"Issue: %s (%s)\n"+
+			"Description: %s\n"+
+			"Acceptance criteria:\n%s\n"+
+			"Branch: %s\nTool calls: %d\nCommits: %v\nConsecutive failures: %d\n"+
+			"Project path: %s\n\n"+
+			"Agent's question: %s",
+		currentMission.Issue.Title, currentMission.Issue.ID,
+		currentMission.Issue.Description,
+		ac,
+		currentMission.Issue.BranchName,
+		currentMission.Checkpoint.ToolCallCount,
+		currentMission.Checkpoint.CommitsMade,
+		currentMission.Checkpoint.ConsecutiveFailures,
+		currentMission.Issue.ProjectPath,
+		question,
+	)
+
+	response := pmAgentChat(prompt)
 
 	return []byte(mustMarshalJSON(map[string]interface{}{
 		"pm_response": response,

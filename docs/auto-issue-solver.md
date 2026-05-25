@@ -125,28 +125,13 @@ Orchestrates the session lifecycle:
 - On consecutive failures (2nd and 3rd before abort)
 
 **Behavior**:
-- Reads issue file (full content in context before replying)
-- Receives: current issue, branch name, recent commits, tool call count, consecutive failures
-- Evaluates the agent's progress against the structured assessment criteria below
-- Returns structured guidance, not free-form
+- Receives: issue title, description, acceptance criteria, branch name, tool call count, commits, consecutive failures
+- Evaluates the agent's progress across four axes: task alignment, progress velocity, error handling, scope discipline
+- Returns concise natural-language guidance — a few sentences, not paragraphs
 
-**PM Assessment Framework**:
-- **Task alignment**: Is the agent's work matching the acceptance criteria?
-- **Progress velocity**: Is the agent making forward progress or spinning?
-- **Error handling**: Did the agent recover properly from recent failures?
-- **Scope discipline**: Is the agent scope-creeping or staying focused?
+**PM System Prompt**: Focused on four assessment axes (task alignment, progress velocity, error handling, scope discipline). Instructed to give concise, actionable guidance. Uses natural language rather than a rigid format.
 
-**PM Response Format**:
-```
-STATUS: on-track | off-track | stuck
-ASSESSMENT: 1-2 sentences on current state
-ADVICE: 1-3 specific things the agent should do next
-WARNING: (only if off-track) what the agent is doing wrong
-```
-
-**Implementation**: Spawned as separate `agent.AgentClient` with dedicated PM sysprompt. Called via `pmAgentChat()` → `FormFirstMsg()` → `LLMRequest()`.
-
-**Known Issue**: PM can return empty string when the LLM returns no content. Need a fallback message.
+**Implementation**: Spawned as separate `agent.AgentClient` with dedicated PM sysprompt. Called via `pmAgentChat()` → `FormFirstMsg()` → `LLMRequest()`. Empty responses fall back to a generic "continue with current approach" message.
 
 ### 3. Issue Solver Agent (Main)
 
@@ -347,7 +332,7 @@ The conversation grows unbounded. Each round adds 3-5 messages (user prompt → 
 - **Context window management**: `summarizeAndCompact()` compresses oldest messages when context exceeds 90% saturation. On 3 consecutive compression failures, aborts mission.
 
 ### Known Issues
-- **PM agent empty response**: `PMAgentChat` returns empty string when LLM produces no content. Injected as `"[PM Check-in]\n"` with no guidance text.
+- *(None currently)*
 
 ## User Interaction During Mission
 
@@ -410,8 +395,9 @@ Default agent card bundled with gf-lt.
 **Implementation**: `summarizeAndCompact()` in `main.go` compresses oldest messages via LLM when context exceeds 90% saturation. Called after each response in the mission loop. Aborts on 3 consecutive compression failures with >90% saturation.
 
 ### P1: Structured PM Agent Sysprompt
-**Impact**: PM agent currently produces free-form "encouragement" instead of actionable guidance. The agent has no way to detect the solver is off-track beyond repeating itself.
-**Approach**: Rewrite the PM sysprompt with structured assessment criteria (task alignment, progress velocity, error handling, scope discipline). Response format: `STATUS: on-track|off-track|stuck` + concise assessment + specific advice. PM should explicitly warn when the agent makes the same error 3+ times.
+**Status: DONE**.
+**Impact**: PM agent produced free-form "encouragement" instead of actionable guidance.
+**Implementation**: Rewrote PM system prompt with four focused assessment axes (task alignment, progress velocity, error handling, scope discipline). Enriched context passed to PM includes issue description, acceptance criteria, branch name, tool call count, commits, and consecutive failures. Prompt is natural language, not rigid format — concise, actionable guidance that's easier for the solver LLM to consume.
 
 ### P2: `create_pr` Produces a Real PR File
 **Impact**: `create_pr` currently just increments state and returns JSON. The "PR deliverable" is invisible — there's no file for the user to review.
@@ -423,8 +409,9 @@ Default agent card bundled with gf-lt.
 **Implementation**: Added `IsToolError()` in `tools/mission_tools.go` which detects: bash `[error]` prefix, JSON `"error"` field, `go test FAIL` lines, and go compile errors. Integrated into `handleBatchToolCalls()` — on error, `GetCurrentMission().AddFailure()` increments consecutive failures; on success, `ResetFailures()`. Tool execution failures (`ok == false`) also count as failures.
 
 ### P4: PM Agent Empty Response Fallback
-**Impact**: When the LLM returns no content for the PM check-in, the injected message is `"[PM Check-in]\n"` with nothing useful.
-**Approach**: Add a fallback message when PM content is empty, e.g., `"[PM Check-in]\nNo guidance available. Continue with current approach and verify acceptance criteria."`
+**Status: DONE**.
+**Impact**: When the LLM returned no content for the PM check-in, the injected message was `"[PM Check-in]\n"` with nothing useful.
+**Implementation**: Added fallback in `pmAgentChat()` when the trimmed response is empty: returns `"No guidance available from PM check-in. Continue with the current approach, review acceptance criteria, and verify tests pass."`
 
 ### P5: `(task: in progress)` Prefix on Tool Responses
 **Status: COMPLETED**.
