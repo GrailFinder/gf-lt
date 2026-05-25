@@ -96,7 +96,7 @@ Tools are automatically registered when `--mission` is used, or via `--mission-t
 |------|------|-------------|
 | `move_issue` | `status` | Move issue to different status (review, done, archive) |
 | `create_issue` | `id`, `title`, `description`, `branch_name` | Create a new sub-issue file |
-| `create_pr` | `title`, `body`, `base` | Mark session complete; writes `.gf-lt-pr.md` to project repo |
+| `create_pr` | `title`, `body`, `base` | Mark session complete; writes `issue-{id}-pr.md` to `issues/review/` |
 | `pm_consult` | `question` | Request PM guidance (injects into conversation) |
 | `add_issue_comment` | `body`, `author` | Add comment to issue file |
 
@@ -304,7 +304,7 @@ The conversation grows unbounded. Each round adds 3-5 messages (user prompt → 
 - Exit code 0 (success) or 1 (failure)
 - Console output: summary of commits, tool calls, duration
 - Chat export: `mission-{issue_id}-{timestamp}.json`
-- PR file: `create_pr` writes a `.gf-lt-pr.md` markdown description file in the project repo
+- PR file: `create_pr` writes `issue-{id}-pr.md` to `issues/review/`
 
 **Structured JSON Mode** (`--output json`):
 ```json
@@ -332,9 +332,9 @@ The conversation grows unbounded. Each round adds 3-5 messages (user prompt → 
 - **Mission tools advertised to LLM**: `MissionBaseTools` in `tools/mission_tools.go` defines proper typed tools for `move_issue`, `create_issue`, `create_pr`, `pm_consult`, and `add_issue_comment`. These are appended to the API request's `tools` array in `llm.go` whenever `MissionToolsEnabled` is true.
 
 ### Known Issues
-- **Double move deletes issue file**: `createPRTool()` moves the issue to `review/` status during PR creation. Then `missionComplete()` also calls `MoveToStatus(review)`, causing the file to be deleted (move reads then removes oldPath, which is the same as newPath). Fix: `createPRTool` should not move the issue itself; let `missionComplete` handle it.
-- **Branch name shows `unknown` in PR file**: `createPRTool` reads `currentMission.Issue.BranchName` which is empty because the LLM creates a git branch but never updates the issue JSON. Fix: auto-detect the current git branch when `BranchName` is empty.
-- **Duplicate acceptance criteria in PR file**: The LLM includes acceptance criteria in the PR body it passes to `create_pr`, and `createPRTool` also appends them from the issue JSON. Fix: only include AC from the issue when the LLM's body doesn't already contain them.
+- **Branch name may show `unknown`**: If the issue JSON has no `branch_name` set and git detection fails (e.g., not a git repo), the PR file will show `unknown`. Fixed for most cases by auto-detecting from git and persisting back to the issue struct.
+- **Duplicate acceptance criteria in PR file**: The LLM sometimes includes acceptance criteria in the PR body it passes to `create_pr`, and the tool also appends them from the issue JSON. The tool skips appending if the body already contains "acceptance criteria" text, but the LLM may phrase it differently.
+- **LLM may call `move_issue status=review` after `create_pr`**: `missionComplete()` also moves to review, which previously caused a double-move and file deletion. Fixed by guarding `os.Remove` in `moveToStatus` to skip when `oldPath == newPath`.
 
 ## User Interaction During Mission
 
@@ -403,7 +403,7 @@ Default agent card bundled with gf-lt.
 ### P2: `create_pr` Produces a Real PR File
 **Status: DONE**.
 **Impact**: `create_pr` previously only returned JSON with no deliverable file for the user to review.
-**Implementation**: Added file writing to `createPRTool()` in `tools/mission_tools.go`. Writes `.gf-lt-pr.md` to the project root with PR title, issue reference, branch name, base branch, description body, acceptance criteria, and a generation notice. File path returned as `pr_file` in the JSON result. Non-fatal on write failure — logs a warning but does not block mission success.
+**Implementation**: Added file writing to `createPRTool()` in `tools/mission_tools.go`. Writes `issue-{id}-pr.md` to the `issues/review/` directory with PR title, issue reference, branch name, base branch, description body, and acceptance criteria. File path returned as `pr_file` in the JSON result. Non-fatal on write failure — logs a warning but does not block mission success.
 
 ### P3: Failure Signal Improvement
 **Status: DONE**.
@@ -423,3 +423,11 @@ Default agent card bundled with gf-lt.
 **Status: DONE**.
 **Impact**: The LLM could read about `create_pr` in workflow docs but never saw it as an available tool in the API request — so it never called it, causing an infinite "I'm done" loop.
 **Implementation**: Added `MissionBaseTools []models.Tool` in `tools/mission_tools.go`, populated with proper typed OpenAI function definitions for all 5 mission tools. In `llm.go`, both `LCPChat.FormMsg` and `OpenRouterChat.FormMsg` now append `MissionBaseTools` to the `tools` array when `cfg.MissionToolsEnabled` is true. Removed the now-unused `MissionToolDefs()` JSON string function.
+
+### P7: Edge Case Fixes from End-to-End Testing
+**Status: DONE**.
+**Impact**: Three issues found during mission-test runs: (1) issue file deleted by double `MoveToStatus` call, (2) branch name showing "unknown" in PR file, (3) duplicate acceptance criteria in PR file.
+**Implementation**: 
+- Fixed `moveToStatus()` in `mission/mission.go` — only removes `oldPath` when it differs from `newPath`, preventing self-delete.
+- Added `getCurrentBranch()` helper in `tools/mission_tools.go` — auto-detects git branch name via `git rev-parse --abbrev-ref HEAD` when `BranchName` is empty.
+- `createPRTool()` now checks if the PR body already contains "acceptance criteria" before appending the issue's acceptance criteria list.

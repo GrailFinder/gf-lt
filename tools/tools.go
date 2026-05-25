@@ -867,6 +867,9 @@ func handleTodoSubcommand(args []string, originalArgs map[string]string) []byte 
 		if len(args) < 2 {
 			return []byte("usage: todo update <id> <status>")
 		}
+		if len(args) < 3 {
+			return []byte("usage: todo update <id> <status>")
+		}
 		return todoUpdate(map[string]string{"id": args[1], "status": args[2]})
 	case "delete":
 		if len(args) < 2 {

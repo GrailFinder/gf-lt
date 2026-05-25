@@ -177,7 +177,9 @@ func (m *Mission) moveToStatus(newStatus IssueStatus) error {
 	}
 	
 	oldPath := filepath.Join(m.Manager.IssuesDir, string(oldStatus), m.Issue.ID+".json")
-	os.Remove(oldPath)
+	if oldPath != newPath {
+		os.Remove(oldPath)
+	}
 	
 	m.Log("Issue moved to %s", newStatus)
 	return nil
