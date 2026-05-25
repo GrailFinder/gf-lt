@@ -41,18 +41,18 @@ var (
 	shellHistoryPos   int = -1
 	thinkingCollapsed     = false
 
-	toolModeShown     atomic.Bool
-	statusLineTempl   = "help (F12) | chat: [orange:-:b]%s[-:-:-] (F1) | [%s:-:b]tool use[-:-:-] (ctrl+k) | model: [%s:-:b]%s[-:-:-] (ctrl+l) | [%s:-:b]skip LLM resp[-:-:-] (F10) | API: [orange:-:b]%s[-:-:-] (ctrl+v)\nwriting as: [orange:-:b]%s[-:-:-] (ctrl+q) | bot will write as [orange:-:b]%s[-:-:-] (ctrl+x)"
-	focusSwitcher     = map[tview.Primitive]tview.Primitive{}
-	app               *tview.Application
-	cliCardPath       string
-	cliContinue       bool
-	cliMsg            string
-	mcpManager        *mcp.Manager
-	missionResumeFile string
-	missionAgentCard  string
-	missionIssueID    string
-	missionCheckpoint string
+	toolModeShown            atomic.Bool
+	statusLineTempl          = "help (F12) | chat: [orange:-:b]%s[-:-:-] (F1) | [%s:-:b]tool use[-:-:-] (ctrl+k) | model: [%s:-:b]%s[-:-:-] (ctrl+l) | [%s:-:b]skip LLM resp[-:-:-] (F10) | API: [orange:-:b]%s[-:-:-] (ctrl+v)\nwriting as: [orange:-:b]%s[-:-:-] (ctrl+q) | bot will write as [orange:-:b]%s[-:-:-] (ctrl+x)"
+	focusSwitcher            = map[tview.Primitive]tview.Primitive{}
+	app                      *tview.Application
+	cliCardPath              string
+	cliContinue              bool
+	cliMsg                   string
+	mcpManager               *mcp.Manager
+	missionResumeFile        string
+	missionAgentCard         string
+	missionIssueID           string
+	missionCheckpoint        string
 	missionSummarizeFailures int // track consecutive summarization failures
 )
 
@@ -103,7 +103,6 @@ func main() {
 		}
 	}
 	chatBody.Model = cfg.CurrentModel
-	go updateModelLists()
 	tools.InitTools(cfg, logger, store)
 	if cfg.ToolUse && len(cfg.MCPServers) > 0 {
 		mcpManager = mcp.NewManager(cfg, logger)
@@ -130,6 +129,7 @@ func main() {
 		tools.RegisterMissionTools()
 	}
 	initTUI()
+	go updateModelLists()
 	pages.AddPage("main", flex, true, true)
 	if err := app.SetRoot(pages,
 		true).EnableMouse(cfg.EnableMouse).EnablePaste(true).Run(); err != nil {
