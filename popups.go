@@ -63,6 +63,7 @@ func showModelSelectionPopup() {
 		modelName := strings.TrimPrefix(mainText, models.LoadedMark)
 		chatBody.Model = modelName
 		cfg.CurrentModel = chatBody.Model
+		fetchMediaMarker()
 		pages.RemovePage("modelSelectionPopup")
 		app.SetFocus(textArea)
 		updateCachedModelColor()

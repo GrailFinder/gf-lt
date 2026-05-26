@@ -365,10 +365,23 @@ func makeStatusLine() string {
 	}
 	// Add image attachment info to status line
 	var imageInfo string
-	if imageAttachmentPath != "" {
-		// Get just the filename from the path
-		imageName := path.Base(imageAttachmentPath)
-		imageInfo = fmt.Sprintf(" | attached img: [orange:-:b]%s[-:-:-]", imageName)
+	if len(pendingImageAttachments) > 0 {
+		if len(pendingImageAttachments) == 1 {
+			imageName := path.Base(pendingImageAttachments[0])
+			imageInfo = fmt.Sprintf(" | attached img: [orange:-:b]%s[-:-:-]", imageName)
+		} else {
+			names := make([]string, len(pendingImageAttachments))
+			for i, p := range pendingImageAttachments {
+				names[i] = path.Base(p)
+			}
+			last := names[len(names)-1]
+			count := len(names) - 1
+			if count == 1 {
+				imageInfo = fmt.Sprintf(" | attached imgs: [orange:-:b]%s[-:-:-] +1 more", last)
+			} else {
+				imageInfo = fmt.Sprintf(" | attached imgs: [orange:-:b]%s[-:-:-] +%d more", last, count)
+			}
+		}
 	} else {
 		imageInfo = ""
 	}

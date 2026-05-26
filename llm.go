@@ -6,14 +6,17 @@ import (
 	"gf-lt/models"
 	"gf-lt/tools"
 	"io"
+	"net/http"
 	"regexp"
 	"strings"
 
 	_ "gf-lt/mcp"
 )
 
-var imageAttachmentPath string // Global variable to track image attachment for next message
-var lastImg string             // for ctrl+j
+var pendingImageAttachments []string // Global variable to track image attachments for next message
+var lastImg string                   // for ctrl+j
+var mediaMarker string               // llama.cpp media marker, fetched from /props
+var cachedMediaMarkerModel string    // model name for which mediaMarker was fetched
 
 // containsToolSysMsg checks if the tools.ToolSysMsg already exists in the chat body
 func containsToolSysMsg() bool {
@@ -52,15 +55,33 @@ func prependToolGuide(messages []models.RoleMsg, toolGuide string) []models.Role
 	return messages
 }
 
-// SetImageAttachment sets an image to be attached to the next message sent to the LLM
-func SetImageAttachment(imagePath string) {
-	imageAttachmentPath = imagePath
+// AddImageAttachment appends an image to be attached to the next message sent to the LLM
+func AddImageAttachment(imagePath string) {
+	pendingImageAttachments = append(pendingImageAttachments, imagePath)
 	lastImg = imagePath
 }
 
-// ClearImageAttachment clears any pending image attachment and updates UI
-func ClearImageAttachment() {
-	imageAttachmentPath = ""
+// RemoveLastImageAttachment removes the last added image from pending attachments
+func RemoveLastImageAttachment() {
+	if len(pendingImageAttachments) > 0 {
+		pendingImageAttachments = pendingImageAttachments[:len(pendingImageAttachments)-1]
+		if len(pendingImageAttachments) > 0 {
+			lastImg = pendingImageAttachments[len(pendingImageAttachments)-1]
+		} else {
+			lastImg = ""
+		}
+	}
+}
+
+// ClearImageAttachments clears all pending image attachments and updates UI
+func ClearImageAttachments() {
+	pendingImageAttachments = []string{}
+	lastImg = ""
+}
+
+// SetImageAttachment (deprecated, kept for backward compat) appends an image
+func SetImageAttachment(imagePath string) {
+	AddImageAttachment(imagePath)
 }
 
 // filterMessagesForCurrentCharacter filters messages based on char-specific context.
@@ -90,12 +111,66 @@ type ChunkParser interface {
 	GetAPIType() models.APIType
 }
 
+// fetchMediaMarker queries the llama.cpp /props endpoint to get the media marker
+// for the current model. Results are cached per model to avoid repeated calls.
+// Runs in a goroutine to avoid blocking the TUI.
+func fetchMediaMarker() {
+	if !isLocalLlamacpp() {
+		return
+	}
+	if cachedMediaMarkerModel == chatBody.Model && mediaMarker != "" {
+		return
+	}
+	// Capture values before launching goroutine to avoid races
+	currentModel := chatBody.Model
+	currentAPI := cfg.CurrentAPI
+	go func() {
+		baseURL := currentAPI
+		if strings.Contains(baseURL, "/completion") {
+			baseURL = strings.TrimSuffix(baseURL, "/completion")
+		} else if strings.Contains(baseURL, "/v1/chat/completions") {
+			baseURL = strings.TrimSuffix(baseURL, "/v1/chat/completions")
+		} else {
+			return
+		}
+		propsURL := baseURL + "/props?model=" + currentModel
+		req, err := http.NewRequest("GET", propsURL, nil)
+		if err != nil {
+			logger.Warn("failed to create props request", "error", err)
+			return
+		}
+		resp, err := httpClient.Do(req)
+		if err != nil {
+			logger.Warn("failed to fetch props", "error", err, "url", propsURL)
+			return
+		}
+		defer resp.Body.Close()
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			logger.Warn("failed to read props response", "error", err)
+			return
+		}
+		var props map[string]any
+		if err := json.Unmarshal(body, &props); err != nil {
+			logger.Warn("failed to parse props response", "error", err)
+			return
+		}
+		if marker, ok := props["media_marker"].(string); ok && marker != "" {
+			mediaMarker = marker
+			cachedMediaMarkerModel = currentModel
+			logger.Info("fetched media_marker", "marker", marker, "model", currentModel)
+		}
+	}()
+}
+
+// choseChunkParser selects the appropriate chunk parser based on the current API
 func choseChunkParser() {
 	chunkParser = LCPCompletion{}
 	switch cfg.CurrentAPI {
 	case "http://localhost:8080/completion", "http://127.0.0.1:8080/completion":
 		chunkParser = LCPCompletion{}
 		logger.Debug("chosen lcpcompletion", "link", cfg.CurrentAPI)
+		fetchMediaMarker()
 		return
 	case "http://localhost:8080/v1/chat/completions", "http://127.0.0.1:8080/v1/chat/completions":
 		chunkParser = LCPChat{}
@@ -124,6 +199,7 @@ func choseChunkParser() {
 			return
 		}
 		chunkParser = LCPCompletion{}
+		fetchMediaMarker()
 	}
 }
 
@@ -152,21 +228,23 @@ func (lcp LCPCompletion) GetToken() string {
 
 func (lcp LCPCompletion) FormMsg(msg, role string, resume bool) (io.Reader, error) {
 	logger.Debug("formmsg lcpcompletion", "link", cfg.CurrentAPI)
-	localImageAttachmentPath := imageAttachmentPath
+	localImageAttachments := pendingImageAttachments
 	var multimodalData []string
-	if msg != "" { // otherwise let the bot to continue
+	if msg != "" { // otherwise Let the bot to continue
 		var newMsg models.RoleMsg
-		if localImageAttachmentPath != "" {
+		if len(localImageAttachments) > 0 {
 			newMsg = models.NewMultimodalMsg(role, []any{})
 			newMsg.AddTextPart(msg)
-			imageURL, err := models.CreateImageURLFromPath(localImageAttachmentPath)
-			if err != nil {
-				logger.Error("failed to create image URL from path for completion",
-					"error", err, "path", localImageAttachmentPath)
-				return nil, err
+			for _, imgPath := range localImageAttachments {
+				imageURL, err := models.CreateImageURLFromPath(imgPath)
+				if err != nil {
+					logger.Error("failed to create image URL from path for completion",
+						"error", err, "path", imgPath)
+					continue
+				}
+				newMsg.AddImagePart(imageURL, imgPath)
 			}
-			newMsg.AddImagePart(imageURL, localImageAttachmentPath)
-			imageAttachmentPath = "" // Clear the attachment after use
+			pendingImageAttachments = []string{} // Clear after use
 		} else { // not a multimodal msg or image passed in tool call
 			newMsg = models.RoleMsg{Role: role, Content: msg}
 		}
@@ -205,7 +283,11 @@ func (lcp LCPCompletion) FormMsg(msg, role string, resume bool) (io.Reader, erro
 					parts := strings.SplitN(imgURL, ",", 2)
 					if len(parts) == 2 {
 						multimodalData = append(multimodalData, parts[1])
-						messages[i] += " <__media__>"
+						marker := mediaMarker
+						if marker == "" {
+							marker = "<__media__>"
+						}
+						messages[i] += " " + marker
 					}
 				}
 			}
@@ -289,33 +371,33 @@ func (op LCPChat) ParseChunk(data []byte) (*models.TextChunk, error) {
 
 func (op LCPChat) FormMsg(msg, role string, resume bool) (io.Reader, error) {
 	logger.Debug("formmsg lcpchat", "link", cfg.CurrentAPI)
-	// Capture the image attachment path at the beginning to avoid race conditions
+	// Capture the image attachment paths at the beginning to avoid race conditions
 	// with API rotation that might clear the global variable
-	localImageAttachmentPath := imageAttachmentPath
+	localImageAttachments := pendingImageAttachments
 	if msg != "" { // otherwise let the bot continue
 		// Create the message with support for multimodal content
 		var newMsg models.RoleMsg
-		// Check if we have an image to add to this message
-		if localImageAttachmentPath != "" {
-			// Create a multimodal message with both text and image
+		// Check if we have images to add to this message
+		if len(localImageAttachments) > 0 {
+			// Create a multimodal message with text and all images
 			newMsg = models.NewMultimodalMsg(role, []interface{}{})
 			// Add the text content
 			newMsg.AddTextPart(msg)
-			// Add the image content
-			imageURL, err := models.CreateImageURLFromPath(localImageAttachmentPath)
-			if err != nil {
-				logger.Error("failed to create image URL from path", "error", err, "path", localImageAttachmentPath)
-				// If image processing fails, fall back to simple text message
-				newMsg = models.NewRoleMsg(role, msg)
-			} else {
-				newMsg.AddImagePart(imageURL, localImageAttachmentPath)
+			// Add all image contents
+			for _, imgPath := range localImageAttachments {
+				imageURL, err := models.CreateImageURLFromPath(imgPath)
+				if err != nil {
+					logger.Error("failed to create image URL from path", "error", err, "path", imgPath)
+					continue
+				}
+				newMsg.AddImagePart(imageURL, imgPath)
 			}
-			// Only clear the global image attachment after successfully processing it in this API call
-			imageAttachmentPath = "" // Clear the attachment after use
 		} else {
 			// Create a simple text message
 			newMsg = models.NewRoleMsg(role, msg)
 		}
+		// Clear the global image attachments after processing in this API call
+		pendingImageAttachments = []string{}
 		newMsg = *processMessageTag(&newMsg)
 		chatBody.Messages = append(chatBody.Messages, newMsg)
 		logger.Debug("LCPChat FormMsg: added message to chatBody", "role", newMsg.Role,
@@ -645,32 +727,32 @@ func (or OpenRouterChat) GetToken() string {
 
 func (or OpenRouterChat) FormMsg(msg, role string, resume bool) (io.Reader, error) {
 	logger.Debug("formmsg open router completion", "link", cfg.CurrentAPI)
-	// Capture the image attachment path at the beginning to avoid race conditions
+	// Capture the image attachment paths at the beginning to avoid race conditions
 	// with API rotation that might clear the global variable
-	localImageAttachmentPath := imageAttachmentPath
+	localImageAttachments := pendingImageAttachments
 	if msg != "" { // otherwise let the bot continue
 		var newMsg models.RoleMsg
-		// Check if we have an image to add to this message
-		if localImageAttachmentPath != "" {
-			// Create a multimodal message with both text and image
+		// Check if we have images to add to this message
+		if len(localImageAttachments) > 0 {
+			// Create a multimodal message with text and all images
 			newMsg = models.NewMultimodalMsg(role, []interface{}{})
 			// Add the text content
 			newMsg.AddTextPart(msg)
-			// Add the image content
-			imageURL, err := models.CreateImageURLFromPath(localImageAttachmentPath)
-			if err != nil {
-				logger.Error("failed to create image URL from path", "error", err, "path", localImageAttachmentPath)
-				// If image processing fails, fall back to simple text message
-				newMsg = models.NewRoleMsg(role, msg)
-			} else {
-				newMsg.AddImagePart(imageURL, localImageAttachmentPath)
+			// Add all image contents
+			for _, imgPath := range localImageAttachments {
+				imageURL, err := models.CreateImageURLFromPath(imgPath)
+				if err != nil {
+					logger.Error("failed to create image URL from path", "error", err, "path", imgPath)
+					continue
+				}
+				newMsg.AddImagePart(imageURL, imgPath)
 			}
-			// Only clear the global image attachment after successfully processing it in this API call
-			imageAttachmentPath = "" // Clear the attachment after use
 		} else {
 			// Create a simple text message
 			newMsg = models.NewRoleMsg(role, msg)
 		}
+		// Clear the global image attachments after processing in this API call
+		pendingImageAttachments = []string{}
 		newMsg = *processMessageTag(&newMsg)
 		chatBody.Messages = append(chatBody.Messages, newMsg)
 	}

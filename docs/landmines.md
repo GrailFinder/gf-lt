@@ -68,3 +68,20 @@ gf-lt supports two types of LLM endpoints, each handling images differently:
 - Depends on llama.cpp's chat endpoint to handle multimodal properly
 
 When debugging image-related issues, check which endpoint is being used (see `cfg.CurrentAPI` and `choseChunkParser()` in llm.go).
+
+---
+
+## 4. Dynamic `media_marker` in llama.cpp `/completion` Endpoint
+
+Recent llama.cpp versions no longer accept the hardcoded `<__media__>` tag for image insertion in the `/completion` endpoint. Instead, they use a per-session dynamic marker like `<__media_etbZzUkViDanZOMlIbcqBmQdPSKcm1vT__>`.
+
+**Problem:** Using `<__media__>` with a newer llama.cpp produces:
+```
+tokenize: error: number of bitmaps (1) does not match number of markers (0)
+```
+
+**Fix:** Query `/props?model=MODELNAME` and read the `media_marker` field from the JSON response. Use this value instead of `<__media__>` when building the prompt.
+
+**Implementation:** `fetchMediaMarker()` in `llm.go` — called asynchronously (goroutine) on API switch or model change, caches result per model. Falls back to `<__media__>` if props endpoint is unavailable or the field is missing (older llama.cpp).
+
+**Critical:** The number of `media_marker` tags in the prompt text must exactly match the length of the `multimodal_data` array. Duplicates cause mismatches.
