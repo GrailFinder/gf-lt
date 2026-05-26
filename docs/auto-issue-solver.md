@@ -78,24 +78,31 @@ gf-lt --max-failures 3                        # Consecutive failures before abor
 gf-lt --checkpoint-file ./checkpoint.json    # Custom checkpoint path
 gf-lt --output json                           # Structured JSON output
 gf-lt --quiet                                 # Suppress tool call logging
-gf-lt --issues-dir ./issues                   # Directory containing issues (default: ./issues)
-gf-lt --mission-tools                         # Enable mission tools in non-mission mode
+gf-lt --issues-dir ./issues                   # Directory containing issues (default: ./issues, overridden by GF_LT_ISSUES_DIR env)
+gf-lt --mission-tools                         # Enable mission-only tools (move_issue, create_pr, pm_consult, add_issue_comment) in non-mission modes
 ```
 
 **Config additions:**
 ```yaml
-issues_dir: ./issues  # Relative to project or absolute (default: ./issues)
-mission_tools_enabled: false  # Enable mission tools outside mission mode
+issues_dir: ./issues             # Relative to project or absolute (default: ./issues, env: GF_LT_ISSUES_DIR)
+mission_tools_enabled: false     # Enable mission-only tools outside mission mode (create_issue is always available)
 ```
 
 ## Mission Tools
 
-Tools are automatically registered when `--mission` is used, or via `--mission-tools` flag.
+`create_issue` is a **base tool** (always available in all modes). The remaining mission-only tools are registered when `--mission` is used, or via `--mission-tools` flag.
+
+### Base Tool (always available)
+
+| Tool | Args | Description |
+|------|------|-------------|
+| `create_issue` | `title` (required), `description`, `id` (auto-generated), `project_path`, `acceptance_criteria` (JSON array), `context_files` (JSON array), `labels` (comma-separated), `priority`, `branch_name` | Create a new issue file in `issues/open/`. `id` auto-generated from timestamp if omitted. |
+
+### Mission-Only Tools
 
 | Tool | Args | Description |
 |------|------|-------------|
 | `move_issue` | `status` | Move issue to different status (review, done, archive) |
-| `create_issue` | `id`, `title`, `description`, `branch_name` | Create a new sub-issue file |
 | `create_pr` | `title`, `body`, `base` | Mark session complete; writes `issue-{id}-pr.md` to `issues/review/` |
 | `pm_consult` | `question` | Request PM guidance (injects into conversation) |
 | `add_issue_comment` | `body`, `author` | Add comment to issue file |
@@ -324,17 +331,24 @@ The conversation grows unbounded. Each round adds 3-5 messages (user prompt → 
 ### Known-Good
 - **Working directory**: `cmd.Dir = cfg.FilePickerDir` set in `execSingle()` (tools/chain.go). All system commands run in the project directory.
 - **`cd` command**: `FsCd()` resolves paths correctly (absolute → direct; relative → joined to FilePickerDir). Idempotent when already in target dir.
-- **Mission tools**: All 5 tools registered and functional (`move_issue`, `create_pr`, `create_issue`, `pm_consult`, `add_issue_comment`).
+- **Mission tools**: 4 mission-only tools registered (`move_issue`, `create_pr`, `pm_consult`, `add_issue_comment`). `create_issue` is a base tool always available in all modes.
 - **Multi-tool-call support**: `sendMsgToLLM()` accumulates tool calls by index across streaming chunks via `toolCallAcc` map. On stream completion, `lastCompletedToolCalls` is populated and `handleBatchToolCalls()` executes all calls.
 - **Tool call flow**: For `/v1/chat` endpoints, tool calls come through structured `tool_calls` in streaming chunks (`chunk.ToolCalls`). `respTextNoThink` is empty for pure tool-call responses. Legacy `findCall()` handles `/completion` endpoint with `__tool_call__` regex.
 - **Mission mode loop**: `missionMessageLoop()` sends initial prompt, waits on `cliRespDone`, checks `PMGuidanceNeeded` flag (set during tool execution when tool call count hits interval), then checks `create_pr` success, failure threshold, and context window before injecting "Continue working..." prompt. PM check placed before success check so guidance fires before mission exits.
 - **Context window management**: `summarizeAndCompact()` compresses oldest messages when context exceeds 90% saturation. On 3 consecutive compression failures, aborts mission.
-- **Mission tools advertised to LLM**: `MissionBaseTools` in `tools/mission_tools.go` defines proper typed tools for `move_issue`, `create_issue`, `create_pr`, `pm_consult`, and `add_issue_comment`. These are appended to the API request's `tools` array in `llm.go` whenever `MissionToolsEnabled` is true.
+- **Mission tools advertised to LLM**: `MissionBaseTools` in `tools/mission_tools.go` defines proper typed tools for `move_issue`, `create_pr`, `pm_consult`, and `add_issue_comment`. These are appended to the API request's `tools` array in `llm.go` whenever `MissionToolsEnabled` is true. `create_issue` is always included via `BaseTools`.
+- **Branch auto-detection**: `getCurrentBranch()` in `createPRTool` runs `git rev-parse --abbrev-ref HEAD` against the project path and persists the branch name to the issue struct.
+- **Quoted argument parsing**: `runCmd` uses `tokenize()` (quote-aware) instead of `strings.Fields`, so git commands with quoted messages like `git commit -m "fix: msg"` parse correctly.
+- **Loop detection**: Consecutive identical tool call + args detected. PM guidance fires every 3 repeats (3, 6, 9...). Resets on tool/args change.
+- **Inline PM check-in**: PM guidance injected directly during tool execution (not just between rounds), firing at the exact tool call interval boundary.
+- **`moveIssueTool` guard**: Rejects status changes when `StatusSuccess`, preventing LLM from overwriting `create_pr`'s completion flag.
+- **Logging**: Every tool call logged with `cwd` (FilePickerDir). `FsGit`, `FsFileEdit`, `getCurrentBranch`, and `createPRTool` all log resolved paths and results.
 
 ### Known Issues
-- **Branch name may show `unknown`**: If the issue JSON has no `branch_name` set and git detection fails (e.g., not a git repo), the PR file will show `unknown`. Fixed for most cases by auto-detecting from git and persisting back to the issue struct.
 - **Duplicate acceptance criteria in PR file**: The LLM sometimes includes acceptance criteria in the PR body it passes to `create_pr`, and the tool also appends them from the issue JSON. The tool skips appending if the body already contains "acceptance criteria" text, but the LLM may phrase it differently.
-- **LLM may call `move_issue status=review` after `create_pr`**: `missionComplete()` also moves to review, which previously caused a double-move and file deletion. Fixed by guarding `os.Remove` in `moveToStatus` to skip when `oldPath == newPath`.
+- **LLM may call `move_issue status=review` after `create_pr`**: `missionComplete()` also moves to review, which previously caused a double-move and file deletion. Fixed by guarding `os.Remove` in `moveToStatus` to skip when `oldPath == newPath` and `moveIssueTool` rejecting moves when `StatusSuccess`.
+- **No remote configured**: In test environments with no git remote, `git push` fails but the mission continues. Not a bug — push is advisory in test mode.
+- **Model-dependent tool call format**: The LLM must use structured `tool_calls` (OpenAI format). Some models fall back to a text-based `__tool_call__` format or produce malformed calls, causing silent failures.
 
 ## User Interaction During Mission
 
@@ -423,7 +437,7 @@ Default agent card bundled with gf-lt.
 **Status: DONE**.
 **Impact**: The LLM could read about `create_pr` in workflow docs but never saw it as an available tool in the API request — so it never called it, causing an infinite "I'm done" loop.
 
-### P7: PM Counter Granularity and Message Quality
+### P7a: PM Counter Granularity and Message Quality
 **Status: DONE**.
 **Impact**: Previously the PM interval only counted mission-specific tool calls (`create_pr`, `add_issue_comment`, etc.), so in short missions the PM never fired. Also, PM messages were injected as `system` role with generic third-person prompts.
 **Implementation**: 
@@ -432,13 +446,23 @@ Default agent card bundled with gf-lt.
 - Rewrote `getPMGuidance()` prompt to address the coder as "you" with imperative tone ("Run the tests now", "Check that main.go handles the error").
 - Added `PMGuidanceNeeded` flag on the Mission struct, set by `IncrementToolCalls()` when `ShouldPMCheckIn()` returns true. Checked in `missionMessageLoop()` before the StatusSuccess check so guidance fires even if `create_pr` was already called.
 - Same imperative/second-person rewrite for `pmConsultTool` prompt.
-- Updated `docs/auto-issue-solver.md` flowchart and descriptions.
-**Implementation**: Added `MissionBaseTools []models.Tool` in `tools/mission_tools.go`, populated with proper typed OpenAI function definitions for all 5 mission tools. In `llm.go`, both `LCPChat.FormMsg` and `OpenRouterChat.FormMsg` now append `MissionBaseTools` to the `tools` array when `cfg.MissionToolsEnabled` is true. Removed the now-unused `MissionToolDefs()` JSON string function.
+- Added `MissionBaseTools []models.Tool` in `tools/mission_tools.go`, populated with proper typed OpenAI function definitions for all 5 mission tools. In `llm.go`, both `LCPChat.FormMsg` and `OpenRouterChat.FormMsg` now append `MissionBaseTools` to the `tools` array when `cfg.MissionToolsEnabled` is true. Removed the now-unused `MissionToolDefs()` JSON string function.
 
-### P7: Edge Case Fixes from End-to-End Testing
+### P7b: Edge Case Fixes from End-to-End Testing
 **Status: DONE**.
 **Impact**: Three issues found during mission-test runs: (1) issue file deleted by double `MoveToStatus` call, (2) branch name showing "unknown" in PR file, (3) duplicate acceptance criteria in PR file.
 **Implementation**: 
 - Fixed `moveToStatus()` in `mission/mission.go` — only removes `oldPath` when it differs from `newPath`, preventing self-delete.
 - Added `getCurrentBranch()` helper in `tools/mission_tools.go` — auto-detects git branch name via `git rev-parse --abbrev-ref HEAD` when `BranchName` is empty.
 - `createPRTool()` now checks if the PR body already contains "acceptance criteria" before appending the issue's acceptance criteria list.
+
+### P8: Loop Detection, Inline PM, Quoting Fix, and Issue Creation Everywhere
+**Status: DONE**.
+**Impact**: (1) LLM could get stuck repeating the same broken tool call forever without detection. (2) PM guidance only fired between chat rounds, not during rapid tool-call sequences. (3) `git commit -m "message with spaces"` broke because `strings.Fields` doesn't handle quoted arguments. (4) `create_issue` tool was locked to mission mode.
+**Implementation**:
+- **Loop detection**: `LastToolCall`/`SameToolCount` fields on `Mission`. In `handleBatchToolCalls()`, when the same `toolName:argsJSON` repeats 3× consecutively, `PMGuidanceNeeded` flagged (re-triggers every 3 repeats, resets on change).
+- **Inline PM check**: PM guidance injected directly after each tool call in `handleBatchToolCalls()`, not just between chat rounds.
+- **`moveIssueTool` guard**: Rejects status changes when `currentMission.Status == mission.StatusSuccess`.
+- **Quoting fix**: Replaced `strings.Fields(commandStr)` with `tokenize(commandStr)` in `runCmd` — properly handles quoted arguments like `-m "fix: message"`.
+- **Logging**: Added `cwd` to every tool call log line. `FsGit`, `FsFileEdit`, `getCurrentBranch`, `createPRTool` all log resolved paths and results for debugging.
+- **`create_issue` now a base tool**: Removed `currentMission` dependency. Auto-generates ID. Accepts `acceptance_criteria`, `context_files`, `labels`, `priority`, `project_path`. Uses `cfg.IssuesDir` for output directory. Registered in `BaseTools` and `FnMap` unconditionally — available in TUI, CLI, and mission modes. Removed from `MissionBaseTools`.
