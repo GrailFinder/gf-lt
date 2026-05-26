@@ -650,7 +650,11 @@ func dumpRequestToFile(api string, body []byte, token string, statusCode int, re
 
 	var authPart string
 	if token != "" {
-		authPart = fmt.Sprintf(`-H "Authorization: Bearer %s"`, token)
+		redacted := token
+		if len(token) > 16 {
+			redacted = token[:8] + "..." + token[len(token)-4:]
+		}
+		authPart = fmt.Sprintf(`-H "Authorization: Bearer %s"`, redacted)
 	}
 
 	curlCmd := fmt.Sprintf(`curl -X POST "%s" \

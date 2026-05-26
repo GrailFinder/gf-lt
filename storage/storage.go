@@ -2,8 +2,10 @@ package storage
 
 import (
 	"database/sql"
+	"fmt"
 	"gf-lt/models"
 	"log/slog"
+	"time"
 
 	_ "github.com/glebarez/go-sqlite"
 	"github.com/jmoiron/sqlx"
@@ -125,6 +127,14 @@ func NewProviderSQL(dbPath string, logger *slog.Logger) FullRepo {
 	if err := db.QueryRow("PRAGMA journal_mode;").Scan(&journalMode); err == nil {
 		logger.Debug("SQLite journal mode", "mode", journalMode)
 	}
+	// Configure connection pool
+	db.SetMaxOpenConns(10)
+	db.SetMaxIdleConns(5)
+	db.SetConnMaxLifetime(5 * time.Minute)
+	if err := db.Ping(); err != nil {
+		logger.Error("failed to ping db", "error", err)
+		return nil
+	}
 	p := ProviderSQL{db: db, logger: logger}
 	if err := p.Migrate(); err != nil {
 		logger.Error("migration failed, app cannot start", "error", err)
@@ -154,7 +164,21 @@ func (p ProviderSQL) ListTables() ([]string, error) {
 }
 
 func (p ProviderSQL) GetTableColumns(table string) ([]TableColumn, error) {
+	tables, err := p.ListTables()
+	if err != nil {
+		return nil, err
+	}
+	valid := false
+	for _, t := range tables {
+		if t == table {
+			valid = true
+			break
+		}
+	}
+	if !valid {
+		return nil, fmt.Errorf("invalid table name: %s", table)
+	}
 	resp := []TableColumn{}
-	err := p.db.Select(&resp, "PRAGMA table_info("+table+");")
+	err = p.db.Select(&resp, "PRAGMA table_info("+table+");")
 	return resp, err
 }
