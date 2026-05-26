@@ -27,6 +27,8 @@ type Mission struct {
 	MaxFailures       int
 	Quiet             bool
 	PMGuidanceNeeded  bool
+	LastToolCall      string
+	SameToolCount     int
 }
 
 func NewMission(issue *Issue, issueManager *IssueManager, pmInterval, maxFailures int, quiet bool) *Mission {

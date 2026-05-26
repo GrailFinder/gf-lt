@@ -1380,6 +1380,36 @@ func handleBatchToolCalls(textContent string, toolCalls []models.ToolCall) bool 
 			tools.GetCurrentMission().IncrementToolCalls()
 		}
 
+		// Mission mode: detect repeated tool calls (same tool + args 3× in a row)
+		if tools.IsMissionMode() {
+			m := tools.GetCurrentMission()
+			key := tc.FuncCall.Name + ":" + tc.FuncCall.Args
+			if key == m.LastToolCall {
+				m.SameToolCount++
+			} else {
+				m.LastToolCall = key
+				m.SameToolCount = 1
+			}
+			if m.SameToolCount > 0 && m.SameToolCount%3 == 0 {
+				m.PMGuidanceNeeded = true
+				m.Log("Loop detected: %s repeated %d times", tc.FuncCall.Name, m.SameToolCount)
+			}
+		}
+
+		// Mission mode: inline PM check — fires even when LLM keeps making tool calls
+		if tools.IsMissionMode() {
+			m := tools.GetCurrentMission()
+			if m.PMGuidanceNeeded {
+				m.PMGuidanceNeeded = false
+				guidance := getPMGuidance(m)
+				m.Log("PM check-in triggered at tool call %d", m.Checkpoint.ToolCallCount)
+				chatBody.Messages = append(chatBody.Messages, models.RoleMsg{
+					Role:    cfg.UserRole,
+					Content: fmt.Sprintf("[PM Check-in]\n%s", guidance),
+				})
+			}
+		}
+
 		// Display and append the tool response
 		outputHandler.Writef("%s[-:-:b](%d) <%s>: [-:-:-]\n%s\n",
 			"\n\n", len(chatBody.Messages), cfg.ToolRole, toolResponseMsg.GetText())

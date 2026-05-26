@@ -234,6 +234,11 @@ func moveIssueTool(args map[string]string) []byte {
 		return []byte(`{"error": "status is required (review, done, archive)"}`)
 	}
 
+	// Don't allow overwriting a completed mission
+	if currentMission.Status == mission.StatusSuccess {
+		return []byte(fmt.Sprintf(`{"error": "Mission is already completed (StatusSuccess), cannot move", "current_status": "%s"}`, currentMission.Status))
+	}
+
 	var targetStatus mission.IssueStatus
 	switch strings.ToLower(status) {
 	case "review":

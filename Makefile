@@ -4,6 +4,7 @@ run: setconfig
 	go build -tags extra -o gf-lt && ./gf-lt
 
 	# GF_LT_MODEL=Qwen3.6-35B-A3B-Q5_K_M \
+	# GF_LT_MODEL="unsloth-qwen3.6-27b-q4km-novision" \
 
 mission-test: setconfig
 	@set -e; \
@@ -18,7 +19,7 @@ mission-test: setconfig
 	cp $$SRC/issues/open/1.json $$ISSUES/open/1.json; \
 	python3 -c "import json; i=json.load(open('$$ISSUES/open/1.json')); i['project_path']='$$REPO'; json.dump(i, open('$$ISSUES/open/1.json','w'))"; \
 	go build -tags extra -o gf-lt && \
-	GF_LT_MODEL="unsloth-qwen3.6-27b-q4km-novision" \
+	GF_LT_MODEL="unsloth-gemma-4-31b-novision" \
 	./gf-lt --mission --issue-id 1 \
 		--pm-interval 20 \
 		--api http://localhost:8080/v1/chat/completions \
