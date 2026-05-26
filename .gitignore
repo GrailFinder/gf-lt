@@ -24,3 +24,4 @@ onnx/
 log.txt
 dumps/
 batteries/whisper.cpp
+greeter
