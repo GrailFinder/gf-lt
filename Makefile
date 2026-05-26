@@ -3,9 +3,6 @@
 run: setconfig
 	go build -tags extra -o gf-lt && ./gf-lt
 
-	# GF_LT_MODEL=Qwen3.6-35B-A3B-Q5_K_M \
-	# GF_LT_MODEL="unsloth-qwen3.6-27b-q4km-novision" \
-
 mission-test: setconfig
 	@set -e; \
 	ID=$$(date +%s); \
