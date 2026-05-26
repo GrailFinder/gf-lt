@@ -46,7 +46,6 @@ func GetCurrentMission() *mission.Mission {
 
 func RegisterMissionTools() {
 	FnMap["move_issue"] = moveIssueTool
-	FnMap["create_issue"] = createIssueTool
 	FnMap["create_pr"] = createPRTool
 	FnMap["pm_consult"] = pmConsultTool
 	FnMap["add_issue_comment"] = addIssueCommentTool
@@ -62,23 +61,6 @@ func RegisterMissionTools() {
 					Required: []string{"status"},
 					Properties: map[string]models.ToolArgProps{
 						"status": {Type: "string", Description: "Target status: review, done, or archive"},
-					},
-				},
-			},
-		},
-		{
-			Type: "function",
-			Function: models.ToolFunc{
-				Name:        "create_issue",
-				Description: "Create a new sub-issue for related work. Example: create_issue id=99 title='Fix login timeout' description='The login page times out after 30s'",
-				Parameters: models.ToolFuncParams{
-					Type:     "object",
-					Required: []string{"id", "title", "description"},
-					Properties: map[string]models.ToolArgProps{
-						"id":          {Type: "string", Description: "Issue ID (numeric string)"},
-						"title":       {Type: "string", Description: "Issue title"},
-						"description": {Type: "string", Description: "Issue description"},
-						"branch_name": {Type: "string", Description: "Branch name for this sub-issue (optional)"},
 					},
 				},
 			},
@@ -263,52 +245,96 @@ func moveIssueTool(args map[string]string) []byte {
 }
 
 func createIssueTool(args map[string]string) []byte {
-	if currentMission == nil {
-		return []byte(`{"error": "No active mission"}`)
-	}
-
 	id := args["id"]
 	title := args["title"]
 	description := args["description"]
 	branchName := args["branch_name"]
 
-	if id == "" || title == "" {
-		return []byte(`{"error": "id and title are required"}`)
+	if title == "" {
+		return []byte(`{"error": "title is required"}`)
+	}
+
+	if id == "" {
+		id = fmt.Sprintf("%d", time.Now().UnixMilli())
 	}
 
 	if description == "" {
 		description = "No description provided"
 	}
 
-	projectPath := currentMission.Issue.ProjectPath
+	// Project path: explicit > mission > FilePickerDir
+	projectPath := cfg.FilePickerDir
+	if currentMission != nil && currentMission.Issue.ProjectPath != "" {
+		projectPath = currentMission.Issue.ProjectPath
+	}
 	if args["project_path"] != "" {
 		projectPath = args["project_path"]
 	}
 
-	issue := &mission.Issue{
-		Version:        mission.IssueVersion,
-		ID:             id,
-		Title:          title,
-		Description:    description,
-		Status:         mission.StatusOpen,
-		ProjectPath:    projectPath,
-		BranchName:     branchName,
-		CreatedAt:      time.Now(),
-		UpdatedAt:      time.Now(),
-		RelatedIssues:  []string{currentMission.Issue.ID},
+	// Parse acceptance_criteria from JSON array string
+	var acceptanceCriteria []string
+	if acJSON := args["acceptance_criteria"]; acJSON != "" {
+		json.Unmarshal([]byte(acJSON), &acceptanceCriteria)
 	}
 
-	path := filepath.Join(currentMission.Manager.IssuesDir, string(mission.StatusOpen), id+".json")
-	if err := os.MkdirAll(filepath.Join(currentMission.Manager.IssuesDir, string(mission.StatusOpen)), 0755); err != nil {
+	// Parse context_files from JSON array string
+	var contextFiles []string
+	if cfJSON := args["context_files"]; cfJSON != "" {
+		json.Unmarshal([]byte(cfJSON), &contextFiles)
+	}
+
+	// Parse labels from comma-separated string
+	var labels []string
+	if labelsStr := args["labels"]; labelsStr != "" {
+		for _, l := range strings.Split(labelsStr, ",") {
+			if trimmed := strings.TrimSpace(l); trimmed != "" {
+				labels = append(labels, trimmed)
+			}
+		}
+	}
+
+	issue := &mission.Issue{
+		Version:            mission.IssueVersion,
+		ID:                 id,
+		Title:              title,
+		Description:        description,
+		Status:             mission.StatusOpen,
+		ProjectPath:        projectPath,
+		BranchName:         branchName,
+		Labels:             labels,
+		Priority:           args["priority"],
+		CreatedAt:          time.Now(),
+		UpdatedAt:          time.Now(),
+		AcceptanceCriteria: acceptanceCriteria,
+		ContextFiles:       contextFiles,
+	}
+	if currentMission != nil {
+		issue.RelatedIssues = []string{currentMission.Issue.ID}
+	}
+
+	// Issues directory: mission > config > default
+	issuesDir := cfg.IssuesDir
+	if currentMission != nil {
+		issuesDir = currentMission.Manager.IssuesDir
+	}
+	if issuesDir == "" {
+		issuesDir = "./issues"
+	}
+
+	openDir := filepath.Join(issuesDir, string(mission.StatusOpen))
+	if err := os.MkdirAll(openDir, 0755); err != nil {
 		return []byte(fmt.Sprintf(`{"error": "Failed to create directory: %v"}`, err))
 	}
 
+	path := filepath.Join(openDir, id+".json")
 	if err := mission.SaveIssue(issue, path); err != nil {
 		return []byte(fmt.Sprintf(`{"error": "Failed to save issue: %v"}`, err))
 	}
 
-	if err := currentMission.SaveCheckpoint("mission-checkpoint.json"); err != nil {
-		currentMission.Log("Warning: failed to save checkpoint after create_issue: %v", err)
+	if currentMission != nil {
+		if err := currentMission.SaveCheckpoint("mission-checkpoint.json"); err != nil {
+			currentMission.Log("Warning: failed to save checkpoint after create_issue: %v", err)
+		}
 	}
 
 	return []byte(fmt.Sprintf(`{"success": true, "issue_id": "%s", "path": "%s"}`, id, path))

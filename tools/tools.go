@@ -1337,6 +1337,8 @@ var FnMap = map[string]FnHandler{
 	// Browser tool - routes to runBrowserCommand
 	"browser":        browserCmd,
 	"summarize_chat": summarizeChat,
+	// Issue management - always available
+	"create_issue": createIssueTool,
 }
 
 func removeWindowToolsFromBaseTools() {
@@ -1586,6 +1588,29 @@ var BaseTools = []models.Tool{
 						Type:        "string",
 						Description: "new content to insert (use \\n for newlines). Empty string deletes the range without inserting.",
 					},
+				},
+			},
+		},
+	},
+	// create_issue - issue management (always available)
+	models.Tool{
+		Type: "function",
+		Function: models.ToolFunc{
+			Name:        "create_issue",
+			Description: "Create a new issue and save it to the issues directory. The issue is saved with status 'open' and can be solved later with --mission. Example: create_issue title='Fix login timeout' description='The login page times out after 30s' acceptance_criteria='[\"Timeout should be 60s\", \"Tests pass\"]' context_files='[\"auth/login.go\"]'",
+			Parameters: models.ToolFuncParams{
+				Type:     "object",
+				Required: []string{"title"},
+				Properties: map[string]models.ToolArgProps{
+					"title":              {Type: "string", Description: "Issue title (required)"},
+					"description":        {Type: "string", Description: "Issue description (optional, defaults to 'No description provided')"},
+					"id":                 {Type: "string", Description: "Issue ID (optional, auto-generated if not provided)"},
+					"project_path":       {Type: "string", Description: "Path to the project repository (optional, defaults to current working directory)"},
+					"acceptance_criteria": {Type: "string", Description: "JSON array of acceptance criteria strings, e.g. '[\"criteria 1\", \"criteria 2\"]' (optional)"},
+					"context_files":      {Type: "string", Description: "JSON array of file paths relevant to this issue, e.g. '[\"main.go\", \"main_test.go\"]' (optional)"},
+					"labels":             {Type: "string", Description: "Comma-separated labels, e.g. 'bug,validation' (optional)"},
+					"priority":           {Type: "string", Description: "Priority level: low, medium, high, critical (optional)"},
+					"branch_name":        {Type: "string", Description: "Suggested branch name for this issue (optional)"},
 				},
 			},
 		},
