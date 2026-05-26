@@ -37,6 +37,9 @@ parsed:
 	if err != nil {
 		return fmt.Sprintf("[error] %v", err)
 	}
+	if currentMission != nil {
+		currentMission.Log("FsFileEdit: file=%s -> abs=%s", filePath, abs)
+	}
 
 	data, err := os.ReadFile(abs)
 	if err != nil {

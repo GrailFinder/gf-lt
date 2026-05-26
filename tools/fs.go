@@ -1223,9 +1223,15 @@ func FsGit(args []string, stdin string) string {
 	if err != nil {
 		return fmt.Sprintf("[error] git: %v", err)
 	}
+	if currentMission != nil {
+		currentMission.Log("FsGit: dir=%s, args=%v", abs, args)
+	}
 	cmd := exec.Command("git", args...)
 	cmd.Dir = abs
 	output, err := cmd.CombinedOutput()
+	if currentMission != nil {
+		currentMission.Log("FsGit: output (err=%v): %s", err, strings.TrimSpace(string(output)))
+	}
 	if err != nil {
 		return fmt.Sprintf("[error] git %s: %v\n%s", subcmd, err, string(output))
 	}

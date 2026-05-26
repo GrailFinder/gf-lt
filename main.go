@@ -548,7 +548,7 @@ func runMission(m *mission.Mission, checkpointPath string, agentSysprompt string
 		if err := tools.SetFSCwd(m.Issue.ProjectPath); err != nil {
 			m.Log("Warning: failed to set CWD to %s: %v", m.Issue.ProjectPath, err)
 		} else {
-			m.Log("Working directory set to: %s", m.Issue.ProjectPath)
+			m.Log("Working directory set to: %s (FilePickerDir=%s)", m.Issue.ProjectPath, tools.GetFSRoot())
 		}
 	}
 

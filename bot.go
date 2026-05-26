@@ -1322,7 +1322,7 @@ func handleBatchToolCalls(textContent string, toolCalls []models.ToolCall) bool 
 
 		// Create tool response message
 		toolMsg := string(resp)
-		logger.Info("llm used a tool call", "tool_name", tc.FuncCall.Name, "args", args, "id", tc.ID, "resp", toolMsg)
+		logger.Info("llm used a tool call", "tool_name", tc.FuncCall.Name, "args", args, "id", tc.ID, "cwd", tools.GetFSRoot(), "resp", toolMsg)
 
 		var toolResponseMsg models.RoleMsg
 		if strings.HasPrefix(strings.TrimSpace(toolMsg), `{"type":"multimodal_content"`) {

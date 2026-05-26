@@ -391,7 +391,7 @@ func runCmd(args map[string]string) []byte {
 		commandStr = strings.TrimPrefix(commandStr, "bash ")
 		commandStr = strings.Trim(commandStr, "\"")
 	}
-	parts := strings.Fields(commandStr)
+	parts := tokenize(commandStr)
 	if len(parts) == 0 {
 		return []byte("[error] empty command")
 	}

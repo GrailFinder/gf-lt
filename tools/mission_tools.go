@@ -333,10 +333,14 @@ func createPRTool(args map[string]string) []byte {
 
 	// Auto-detect branch name from git if not set on the issue
 	branchName := currentMission.Issue.BranchName
+	currentMission.Log("createPRTool: issue.BranchName=%q", branchName)
 	if branchName == "" {
 		if projectPath := currentMission.Issue.ProjectPath; projectPath != "" {
 			if b, err := getCurrentBranch(projectPath); err == nil {
 				branchName = b
+				currentMission.Log("createPRTool: getCurrentBranch returned %q", branchName)
+			} else {
+				currentMission.Log("createPRTool: getCurrentBranch error=%v", err)
 			}
 		}
 	}
@@ -344,6 +348,7 @@ func createPRTool(args map[string]string) []byte {
 		branchName = "unknown"
 	}
 	currentMission.Issue.BranchName = branchName
+	currentMission.Log("createPRTool: final branchName=%q", branchName)
 
 	// Only append acceptance criteria from the issue if the LLM didn't already include them
 	acBullets := ""
@@ -414,13 +419,17 @@ func createPRTool(args map[string]string) []byte {
 }
 
 func getCurrentBranch(projectPath string) (string, error) {
+	currentMission.Log("getCurrentBranch: projectPath=%s", projectPath)
 	cmd := exec.Command("git", "rev-parse", "--abbrev-ref", "HEAD")
 	cmd.Dir = projectPath
 	out, err := cmd.Output()
 	if err != nil {
+		currentMission.Log("getCurrentBranch: error=%v", err)
 		return "", err
 	}
-	return strings.TrimSpace(string(out)), nil
+	branch := strings.TrimSpace(string(out))
+	currentMission.Log("getCurrentBranch: result=%q", branch)
+	return branch, nil
 }
 
 func pmConsultTool(args map[string]string) []byte {
