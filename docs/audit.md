@@ -1,6 +1,7 @@
 # gf-lt Code Audit Report
 
 **Date:** 2026-05-14
+**Last Updated:** 2026-05-27 — Phase 1 Quick Wins implemented (see resolved items below)
 **Auditor:** Code Review
 **Version:** ~9.5K LOC Go TUI Application
 
@@ -12,20 +13,20 @@ gf-lt is a feature-rich terminal-based LLM chat application. The codebase is fun
 
 | Category | Issues | Critical | High | Medium | Low |
 |----------|--------|----------|------|--------|-----|
-| Security | 3 | 1 | 1 | 1 | 0 |
-| Performance | 3 | 0 | 2 | 1 | 0 |
+| Security | 0 | 0 | 0 | 0 | 0 |
+| Performance | 2 | 0 | 2 | 0 | 0 |
 | Architecture | 5 | 1 | 1 | 3 | 0 |
-| Error Handling | 3 | 0 | 1 | 2 | 0 |
+| Error Handling | 2 | 0 | 1 | 1 | 0 |
 | Testing | 2 | 0 | 0 | 0 | 2 |
-| **Total** | **16** | **2** | **5** | **7** | **2** |
+| **Total** | **11** | **1** | **4** | **4** | **2** |
 
 ---
 
 ## 1. Security Issues
 
-### 1.1 SQL Injection in GetTableColumns (HIGH)
+### 1.1 SQL Injection in GetTableColumns (HIGH) ✅ RESOLVED
 
-**File:** `storage/storage.go:158`
+**File:** `storage/storage.go:156`
 
 ```go
 func (p ProviderSQL) GetTableColumns(table string) ([]TableColumn, error) {
@@ -39,24 +40,11 @@ func (p ProviderSQL) GetTableColumns(table string) ([]TableColumn, error) {
 
 **Impact:** If exposed via API, could allow SQL injection.
 
-**Recommendation:**
-```go
-func (p ProviderSQL) GetTableColumns(table string) ([]TableColumn, error) {
-    validTables := map[string]bool{
-        "chats": true, "memories": true, "embeddings_768": true,
-    }
-    if !validTables[table] {
-        return nil, fmt.Errorf("invalid table name")
-    }
-    resp := []TableColumn{}
-    err := p.db.Select(&resp, "PRAGMA table_info("+table+");")
-    return resp, err
-}
-```
+**Resolution:** `GetTableColumns` now validates the table name against `ListTables()` before querying, returning an error for invalid names.
 
 ---
 
-### 1.2 Dangerous Command Detection Limited (MEDIUM)
+### 1.2 Dangerous Command Detection Limited (MEDIUM) ✅ RESOLVED
 
 **File:** `tools/dangerous.go:16-36`
 
@@ -88,17 +76,11 @@ func IsDangerousCommand(name string, args map[string]string) (bool, string) {
 
 **Impact:** Users could execute destructive commands like `dd`, `mkfs`, `shutdown`, etc.
 
-**Recommendation:** Extend with a comprehensive blocklist:
-- File destruction: `dd`, `shred`, `>`, `>|`
-- System modification: `chmod -R 777`, `chown -R`, `mkfs`
-- Network: `iptables -F`, `ip link del`
-- Process: `kill -9 -1`, `pkill`
-
-Or use an allowlist approach for shell commands.
+**Resolution:** Extended blocklist with `dd`, `shred`, `mkfs`, `fdisk`, `shutdown`, `poweroff`, `reboot`, `iptables`, `ufw`, `chmod -R`, `chown -R`.
 
 ---
 
-### 1.3 API Token Logging (LOW)
+### 1.3 API Token Logging (LOW) ✅ RESOLVED
 
 **File:** `bot.go:637`
 
@@ -110,7 +92,7 @@ func dumpRequestToFile(api string, body []byte, token string, statusCode int, re
 
 **Problem:** API tokens may be logged in request dumps.
 
-**Recommendation:** Ensure tokens are redacted before any logging.
+**Resolution:** Tokens are now redacted to `first8...last4` before writing to the curl dump file.
 
 ---
 
@@ -157,7 +139,7 @@ func (h resultHeap) Less(i, j int) bool { return h[i].distance < h[j].distance }
 
 ---
 
-### 2.2 No Connection Pool Configuration (MEDIUM)
+### 2.2 No Connection Pool Configuration (MEDIUM) ✅ RESOLVED
 
 **File:** `storage/storage.go:106-134`
 
@@ -176,16 +158,7 @@ func NewProviderSQL(dbPath string, logger *slog.Logger) FullRepo {
 
 **Problem:** No connection pool tuning.
 
-**Recommendation:**
-```go
-db.SetMaxOpenConns(10)
-db.SetMaxIdleConns(5)
-db.SetConnMaxLifetime(5 * time.Minute)
-if err := db.Ping(); err != nil {
-    logger.Error("failed to ping db", "error", err)
-    return nil
-}
-```
+**Resolution:** Added `SetMaxOpenConns(10)`, `SetMaxIdleConns(5)`, `SetConnMaxLifetime(5m)`, and `db.Ping()` on startup.
 
 ---
 
@@ -390,11 +363,12 @@ func baz() {
 
 ## 4. Error Handling Issues
 
-### 4.1 Silent Error Suppression in Row Scanning (LOW)
+### 4.1 Silent Error Suppression in Row Scanning (LOW) ⚠️ PARTIALLY RESOLVED
 
 **Files:**
-- `storage/vector.go:91`
-- `rag/storage.go:231,339`
+- `storage/vector.go:91` — **not yet fixed**
+- `rag/storage.go:231,339` — **not yet fixed**
+- `rag/storage.go:367,374` — **resolved** (`ListFiles` now logs table query and scan errors)
 
 ```go
 if err := rows.Scan(&embeddingsBlob, &slug, &rawText, &fileName); err != nil {
@@ -402,20 +376,15 @@ if err := rows.Scan(&embeddingsBlob, &slug, &rawText, &fileName); err != nil {
 }
 ```
 
-**Recommendation:**
-```go
-if err := rows.Scan(&embeddingsBlob, &slug, &rawText, &fileName); err != nil {
-    scanErrors = append(scanErrors, err)
-    continue
-}
-if len(scanErrors) > 0 {
-    logger.Warn("some rows failed to scan", "count", len(scanErrors))
-}
-```
+**Remaining locations:**
+- `storage/vector.go:91` — `SearchClosest` scan errors are logged but not accumulated/propagated
+- `rag/storage.go:231` — `SearchClosest` scan errors (same pattern)
+- `rag/storage.go:339` — `scanRows` scan errors (logged but not propagated)
+- `rag/storage.go:277` — `GetVectorBySlug` treats all scan errors as "not found" silently
 
 ---
 
-### 4.2 Transaction Rollback Logic Bug (LOW)
+### 4.2 Transaction Rollback Logic Bug (LOW) ✅ RESOLVED
 
 **File:** `rag/storage.go:72-76,138-142`
 
@@ -429,14 +398,7 @@ defer func() {
 
 **Problem:** Outer `err` may be overwritten after deferred function is set up.
 
-**Recommendation:**
-```go
-defer func() {
-    if rbErr := tx.Rollback(); rbErr != sql.ErrTxDone {
-        // handle error
-    }
-}()
-```
+**Resolution:** Rollback errors are now checked against `sql.ErrTxDone` and logged on failure instead of being silently discarded.
 
 ---
 
@@ -499,17 +461,18 @@ func TestUnixGlobExpansion(t *testing.T) {
 
 ## 6. Refactoring Priorities
 
-### Phase 1: Quick Wins
-1. Fix SQL injection in `GetTableColumns`
-2. Add connection pool configuration
-3. Add proper error logging for silent failures
-4. Fix transaction rollback logic
+### Phase 1: Quick Wins ✅ COMPLETED (2026-05-27)
+1. ✅ Fix SQL injection in `GetTableColumns`
+2. ✅ Add connection pool configuration
+3. ✅ Add proper error logging for silent failures (partial — `ListFiles` only)
+4. ✅ Fix transaction rollback logic
+5. ✅ Extend dangerous command detection
+6. ✅ Redact API tokens in request dumps
 
 ### Phase 2: Medium Effort
 1. Extract giant functions (initTUI, chatRound)
 2. Implement heap-based top-k for vector search
 3. Add graceful shutdown for goroutines
-4. Extend dangerous command detection
 
 ### Phase 3: Long-term
 1. Implement HNSW or use vector database

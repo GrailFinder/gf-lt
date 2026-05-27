@@ -71,7 +71,9 @@ func (vs *VectorStorage) WriteVector(row *models.VectorRow) error {
 	}
 	defer func() {
 		if err != nil {
-			_ = tx.Rollback()
+			if rbErr := tx.Rollback(); rbErr != nil && rbErr != sql.ErrTxDone {
+				vs.logger.Warn("rollback failed", "error", rbErr)
+			}
 		}
 	}()
 
@@ -137,7 +139,9 @@ func (vs *VectorStorage) WriteVectors(rows []*models.VectorRow) error {
 	}
 	defer func() {
 		if err != nil {
-			_ = tx.Rollback()
+			if rbErr := tx.Rollback(); rbErr != nil && rbErr != sql.ErrTxDone {
+				vs.logger.Warn("rollback failed", "error", rbErr)
+			}
 		}
 	}()
 
@@ -363,7 +367,7 @@ func (vs *VectorStorage) ListFiles() ([]string, error) {
 		query := "SELECT DISTINCT filename FROM " + table
 		rows, err := vs.sqlxDB.Query(query)
 		if err != nil {
-			// Continue if one table doesn't exist
+			vs.logger.Warn("failed to query embeddings table", "table", table, "error", err)
 			continue
 		}
 
@@ -371,6 +375,7 @@ func (vs *VectorStorage) ListFiles() ([]string, error) {
 		for rows.Next() {
 			var filename string
 			if err := rows.Scan(&filename); err != nil {
+				vs.logger.Warn("failed to scan filename row", "table", table, "error", err)
 				continue
 			}
 			files = append(files, filename)
