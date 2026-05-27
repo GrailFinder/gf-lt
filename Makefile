@@ -11,7 +11,7 @@ mission-test: setconfig
 	SRC=$$(pwd); \
 	echo "=== Setting up test environment ==="; \
 	mkdir -p $$REPO $$ISSUES/open; \
-	cp -r test-mission-repo/* $$REPO/; \
+	cp -r cli-tests/test-mission-repo/* $$REPO/; \
 	(cd $$REPO && git -c init.defaultBranch=main init && git add . && git commit -m "initial" >/dev/null 2>&1); \
 	cp $$SRC/issues/open/1.json $$ISSUES/open/1.json; \
 	python3 -c "import json; i=json.load(open('$$ISSUES/open/1.json')); i['project_path']='$$REPO'; json.dump(i, open('$$ISSUES/open/1.json','w'))"; \
