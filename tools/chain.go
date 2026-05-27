@@ -333,6 +333,8 @@ func execBuiltin(name string, args []string, stdin string) (string, error) {
 			return fmt.Sprintf("[error] go %s: %v\n%s", args[0], err, string(output)), nil
 		}
 		return string(output), nil
+	case "git":
+		result = FsGit(args, stdin)
 	default:
 		return "", errors.New("not a builtin")
 	}

@@ -423,12 +423,9 @@ func runCmd(args map[string]string) []byte {
 	case "browser":
 		// browser <action> [args...] - Playwright browser automation
 		return runBrowserCommand(rest, args)
-	case "mkdir", "ls", "cat", "write", "stat", "pwd", "cd", "cp", "mv", "rm", "sed", "grep", "head", "tail", "wc", "sort", "uniq", "echo", "time", "go", "find", "file":
-		// File operations and shell commands - use ExecChain which has whitelist
+	case "mkdir", "ls", "cat", "write", "stat", "pwd", "cd", "cp", "mv", "rm", "sed", "grep", "head", "tail", "wc", "sort", "uniq", "echo", "time", "go", "find", "file", "git":
+		// File operations, git, and shell commands - use ExecChain which has pipe/chaining support
 		return executeCommand(args)
-	case "git":
-		// git has its own whitelist in FsGit
-		return []byte(FsGit(rest, ""))
 	default:
 		// Unknown subcommand - tell user to run help tool
 		return []byte("[error] command not allowed. Run 'help' tool to see available commands.")
