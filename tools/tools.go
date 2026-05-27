@@ -166,8 +166,6 @@ func InitTools(initCfg *config.Config, log *slog.Logger, store storage.FullRepo)
 	}
 	// Initialize fs root directory
 	SetFSRoot(cfg.FilePickerDir)
-	// Initialize memory store
-	SetMemoryStore(&memoryAdapter{store: store, cfg: cfg}, cfg.AssistantRole)
 	sa, err := searcher.NewWebSurfer(searcher.SearcherTypeScraper, "")
 	if err != nil {
 		if logger != nil {
@@ -187,6 +185,11 @@ func InitTools(initCfg *config.Config, log *slog.Logger, store storage.FullRepo)
 	}
 	t.checkWindowTools()
 	t.initAgentsB()
+	if initCfg.MemoryEnabled {
+		SetMemoryStore(&memoryAdapter{store: store, cfg: cfg}, cfg.AssistantRole)
+		FnMap["memory"] = memoryTool
+		BaseTools = append(BaseTools, memoryToolDef)
+	}
 	return t
 }
 
@@ -403,9 +406,6 @@ func runCmd(args map[string]string) []byte {
 		// help - show all commands
 		// help <cmd> - show help for specific command
 		return []byte(getHelp(rest))
-	case "memory":
-		// memory store <topic> <data> | memory get <topic> | memory list | memory forget <topic>
-		return []byte(FsMemory(append([]string{"store"}, rest...), ""))
 	case "todo":
 		return handleTodoSubcommand(rest, args)
 	case "window", "windows":
@@ -656,12 +656,6 @@ func getHelp(args []string) string {
   # Go
   go <cmd>        - go commands (run, build, test, mod, etc.)
   
-  # Memory
-  memory store <topic> <data>  - save to memory
-  memory get <topic>           - retrieve from memory
-  memory list                   - list all topics
-  memory forget <topic>         - delete from memory
-  
   # Todo
   todo create <task>   - create a todo
   todo read            - list all todos
@@ -717,18 +711,6 @@ Use: command to execute. Example: ls -la | grep foo`
     file_edit llm.go 5 4 "inserted at line 5"
   Note: line numbers are 1-indexed.
   For OpenAI-style calls: use file_path, old_lines (JSON: {"start":N,"end":N}), new_content.`
-	case "memory":
-		return `memory <subcommand> [args]
-  Manage memory storage.
-  Subcommands:
-    store <topic> <data>  - save data to a topic
-    get <topic>           - retrieve data from a topic
-    list                  - list all topics
-    forget <topic>        - delete a topic
-  Examples:
-    bash "memory store foo bar"
-    bash "memory get foo"
-    bash "memory list"`
 	case "todo":
 		return `todo <subcommand> [args]
   Manage todo list.
@@ -1281,8 +1263,39 @@ func argsToSlice(args map[string]string) []string {
 	return result
 }
 
-func cmdMemory(args map[string]string) []byte {
-	return []byte(FsMemory(argsToSlice(args), ""))
+func memoryTool(args map[string]string) []byte {
+	action := args["action"]
+	topic := args["topic"]
+	data := args["data"]
+	switch action {
+	case "store":
+		return []byte(FsMemory([]string{"store", topic, data}, ""))
+	case "get":
+		return []byte(FsMemory([]string{"get", topic}, ""))
+	case "list", "topics":
+		return []byte(FsMemory([]string{action}, ""))
+	case "forget", "delete":
+		return []byte(FsMemory([]string{action, topic}, ""))
+	default:
+		return []byte("[error] unknown memory action: " + action)
+	}
+}
+
+var memoryToolDef = models.Tool{
+	Type: "function",
+	Function: models.ToolFunc{
+		Name:        "memory",
+		Description: "Persistent memory storage. Store and retrieve information by topic.",
+		Parameters: models.ToolFuncParams{
+			Type:     "object",
+			Required: []string{"action"},
+			Properties: map[string]models.ToolArgProps{
+				"action": {Type: "string", Description: "store, get, list, topics, forget, delete"},
+				"topic":  {Type: "string", Description: "topic name (required for store/get/forget)"},
+				"data":   {Type: "string", Description: "data content (required for store)"},
+			},
+		},
+	},
 }
 
 type memoryAdapter struct {
@@ -1318,7 +1331,6 @@ func (m *memoryAdapter) Forget(agent, topic string) error {
 }
 
 var FnMap = map[string]FnHandler{
-	"memory":        cmdMemory,
 	"rag_search":    ragsearch,
 	"websearch":     websearch,
 	"websearch_raw": websearchRaw,

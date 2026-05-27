@@ -80,6 +80,7 @@ type Config struct {
 	AutoTurn                   bool   `toml:"AutoTurn"`
 	// playwright browser
 	PlaywrightEnabled bool `toml:"PlaywrightEnabled"`
+	MemoryEnabled     bool `toml:"MemoryEnabled"`
 	PlaywrightDebug   bool `toml:"PlaywrightDebug"` // !headless
 	// CLI mode
 	CLIMode       bool
