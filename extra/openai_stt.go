@@ -12,17 +12,21 @@ import (
 	"mime/multipart"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"gf-lt/config"
 )
 
 type openaiSTT struct {
-	logger   *slog.Logger
-	recorder *Recorder
-	baseURL  string
-	model    string
-	client   *http.Client
+	logger      *slog.Logger
+	recorder    *Recorder
+	baseURL     string
+	model       string
+	client      *http.Client
+	utteranceCh chan string
+	txWg        sync.WaitGroup
+	doneCh      chan struct{}
 }
 
 func newOpenAICompatSTT(logger *slog.Logger, cfg *config.Config) *openaiSTT {
@@ -34,24 +38,69 @@ func newOpenAICompatSTT(logger *slog.Logger, cfg *config.Config) *openaiSTT {
 	if model == "" {
 		model = "whisper-1"
 	}
-	return &openaiSTT{
-		logger:   logger,
-		recorder: NewRecorder(logger, sr),
-		baseURL:  strings.TrimRight(cfg.STT_URL, "/"),
-		model:    model,
-		client:   &http.Client{Timeout: 30 * time.Second},
+	o := &openaiSTT{
+		logger:  logger,
+		baseURL: strings.TrimRight(cfg.STT_URL, "/"),
+		model:   model,
+		client:  &http.Client{Timeout: 30 * time.Second},
 	}
+	o.recorder = NewRecorder(logger, sr)
+	o.recorder.SetOnUtterance(o.onUtterance)
+	silenceMs := cfg.STT_SILENCE_MS
+	if silenceMs > 0 {
+		o.recorder.SetSilencePeriod(time.Duration(silenceMs) * time.Millisecond)
+	}
+	return o
+}
+
+func (s *openaiSTT) onUtterance(wav []byte) {
+	s.txWg.Add(1)
+	go func() {
+		defer s.txWg.Done()
+		text, err := s.transcribe(wav)
+		if err != nil {
+			s.logger.Error("utterance transcription failed", "error", err)
+			return
+		}
+		if text == "" {
+			return
+		}
+		select {
+		case s.utteranceCh <- text:
+		case <-s.doneCh:
+		}
+	}()
 }
 
 func (s *openaiSTT) StartRecording() error {
+	s.utteranceCh = make(chan string, 20)
+	s.doneCh = make(chan struct{})
 	return s.recorder.Start()
 }
 
 func (s *openaiSTT) StopRecording() (string, error) {
-	wav, err := s.recorder.Stop()
-	if err != nil {
-		return "", err
+	remainingWav, err := s.recorder.Stop()
+	close(s.doneCh)
+	s.txWg.Wait()
+	if err == nil && len(remainingWav) > 44 {
+		text, txErr := s.transcribe(remainingWav)
+		if txErr == nil && text != "" {
+			s.utteranceCh <- text
+		}
 	}
+	close(s.utteranceCh)
+	return "", err
+}
+
+func (s *openaiSTT) IsRecording() bool {
+	return s.recorder.IsRecording()
+}
+
+func (s *openaiSTT) Utterances() <-chan string {
+	return s.utteranceCh
+}
+
+func (s *openaiSTT) transcribe(wav []byte) (string, error) {
 	url := s.baseURL + "/v1/audio/transcriptions"
 	body := &bytes.Buffer{}
 	writer := multipart.NewWriter(body)
@@ -88,8 +137,4 @@ func (s *openaiSTT) StopRecording() (string, error) {
 	text := strings.TrimRight(transcription.Text, "\n")
 	text = specialRE.ReplaceAllString(text, "")
 	return strings.TrimSpace(strings.ReplaceAll(text, "\n ", "\n")), nil
-}
-
-func (s *openaiSTT) IsRecording() bool {
-	return s.recorder.IsRecording()
 }

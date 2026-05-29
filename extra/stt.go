@@ -15,6 +15,7 @@ type STT interface {
 	StartRecording() error
 	StopRecording() (string, error)
 	IsRecording() bool
+	Utterances() <-chan string
 }
 
 type StreamCloser interface {

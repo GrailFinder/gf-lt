@@ -10,8 +10,10 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"math"
 	"os/exec"
 	"sync"
+	"time"
 )
 
 type Recorder struct {
@@ -24,14 +26,30 @@ type Recorder struct {
 	stopCh     chan struct{}
 	cmdMu      sync.Mutex
 	wg         sync.WaitGroup
+	// VAD
+	onUtterance   func(wav []byte)
+	silencePeriod time.Duration
+	speaking      bool
+	silenceSince  time.Time
+	noiseFloor    float64
+	nfCount       int
 }
 
 func NewRecorder(logger *slog.Logger, sampleRate int) *Recorder {
 	return &Recorder{
-		logger:     logger,
-		sampleRate: sampleRate,
-		buffer:     new(bytes.Buffer),
+		logger:        logger,
+		sampleRate:    sampleRate,
+		buffer:        new(bytes.Buffer),
+		silencePeriod: 1000 * time.Millisecond,
 	}
+}
+
+func (r *Recorder) SetOnUtterance(fn func(wav []byte)) {
+	r.onUtterance = fn
+}
+
+func (r *Recorder) SetSilencePeriod(d time.Duration) {
+	r.silencePeriod = d
 }
 
 func (r *Recorder) Start() error {
@@ -63,6 +81,10 @@ func (r *Recorder) Start() error {
 	}
 	r.recording = true
 	r.buffer.Reset()
+	r.speaking = false
+	r.silenceSince = time.Time{}
+	r.noiseFloor = 0
+	r.nfCount = 0
 	r.wg.Add(1)
 	go func() {
 		defer r.wg.Done()
@@ -74,9 +96,12 @@ func (r *Recorder) Start() error {
 			default:
 				n, err := stdout.Read(buf)
 				if n > 0 {
+					chunk := make([]byte, n)
+					copy(chunk, buf[:n])
 					r.mu.Lock()
-					r.buffer.Write(buf[:n])
+					r.buffer.Write(chunk)
 					r.mu.Unlock()
+					r.feedVAD(chunk)
 				}
 				if err != nil {
 					if err != io.EOF {
@@ -103,10 +128,8 @@ func (r *Recorder) Stop() ([]byte, error) {
 	}
 	close(r.stopCh)
 	r.cmdMu.Unlock()
-	// Release mu so the reader goroutine can flush its last chunk
 	r.mu.Unlock()
 	r.wg.Wait()
-	// Re-acquire to read buffer safely
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -128,6 +151,66 @@ func (r *Recorder) IsRecording() bool {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return r.recording
+}
+
+func (r *Recorder) feedVAD(pcm []byte) {
+	rms := computeRMS(pcm)
+	if r.nfCount < 10 {
+		if r.nfCount == 0 {
+			r.noiseFloor = rms
+		} else {
+			r.noiseFloor = r.noiseFloor*0.75 + rms*0.25
+		}
+		r.nfCount++
+		return
+	}
+	threshold := r.noiseFloor * 2.5
+	if threshold < 300 {
+		threshold = 300
+	}
+	now := time.Now()
+	if rms > threshold {
+		if !r.speaking {
+			r.speaking = true
+		}
+		r.silenceSince = time.Time{}
+	} else {
+		if r.speaking {
+			if r.silenceSince.IsZero() {
+				r.silenceSince = now
+			} else if now.Sub(r.silenceSince) >= r.silencePeriod {
+				r.speaking = false
+				r.silenceSince = time.Time{}
+				r.emitUtterance()
+			}
+		}
+	}
+}
+
+func (r *Recorder) emitUtterance() {
+	r.mu.Lock()
+	dataSize := r.buffer.Len()
+	if dataSize == 0 {
+		r.mu.Unlock()
+		return
+	}
+	wav := make([]byte, 44+dataSize)
+	writeWavHeader(wav[:44], r.sampleRate, dataSize)
+	copy(wav[44:], r.buffer.Bytes())
+	r.buffer.Reset()
+	r.mu.Unlock()
+	if r.onUtterance != nil {
+		r.onUtterance(wav)
+	}
+}
+
+func computeRMS(pcm []byte) float64 {
+	var sum int64
+	for i := 0; i < len(pcm)-1; i += 2 {
+		sample := int64(int16(binary.LittleEndian.Uint16(pcm[i:])))
+		sum += sample * sample
+	}
+	return math.Sqrt(float64(sum) / float64(len(pcm)/2))
 }
 
 func writeWavHeader(header []byte, sampleRate, dataSize int) {

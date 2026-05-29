@@ -1044,34 +1044,39 @@ func initTUI() {
 					return nil
 				}
 				sttTranscribing = true
-				go func() {
-					userSpeech, err := asr.StopRecording()
-					app.QueueUpdateDraw(func() {
-						sttTranscribing = false
-						defer updateStatusLine()
-						if err != nil {
-							msg := "failed to inference user speech; error:" + err.Error()
-							logger.Error(msg)
-							showToast("stt error", msg)
-							return
-						}
-						if userSpeech != "" {
-							prevText := textArea.GetText()
-							textArea.SetText(prevText+userSpeech, true)
-						} else {
-							logger.Warn("empty user speech")
-						}
-					})
+				defer func() {
+					sttTranscribing = false
+					updateStatusLine()
 				}()
+				_, err := asr.StopRecording()
+				if err != nil {
+					msg := "failed to inference user speech; error:" + err.Error()
+					logger.Error(msg)
+					showToast("stt error", msg)
+				}
 				return nil
 			}
 			if sttTranscribing {
 				return nil
 			}
-			defer updateStatusLine()
 			if err := asr.StartRecording(); err != nil {
 				logger.Error("failed to start recording user speech", "error", err)
 				return nil
+			}
+			updateStatusLine()
+			ch := asr.Utterances()
+			if ch != nil {
+				go func() {
+					for text := range ch {
+						app.QueueUpdateDraw(func() {
+							prevText := textArea.GetText()
+							if prevText != "" && !strings.HasSuffix(prevText, "\n") {
+								text = "\n" + text
+							}
+							textArea.SetText(prevText+text, true)
+						})
+					}
+				}()
 			}
 		}
 		// I need keybind for tts to shut up

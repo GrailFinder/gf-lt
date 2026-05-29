@@ -46,6 +46,7 @@ WhisperBinaryPath = "./batteries/whisper.cpp/build/bin/whisper-cli"  # Path to w
 WhisperModelPath = "./batteries/whisper.cpp/models/ggml-large-v3-turbo-q5_0.bin"  # Path to whisper model (WHISPER_BINARY mode)
 STT_LANG = "en"  # Language for WHISPER_BINARY mode
 STT_SR = 16000  # Sample rate for audio recording
+STT_SILENCE_MS = 1000  # Silence duration (ms) before auto-transcribing a segment (0 = no auto-segmentation)
 #
 DBPATH = "gflt.db"
 FilePickerDir = "." # Directory for file picker start and coding assistant file operations (relative paths resolved against this)

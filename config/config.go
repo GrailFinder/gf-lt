@@ -75,6 +75,7 @@ type Config struct {
 	WhisperModelPath  string `toml:"WhisperModelPath"`
 	STT_LANG          string `toml:"STT_LANG"`
 	ASR_MODEL         string `toml:"ASR_MODEL"`
+	STT_SILENCE_MS    int    `toml:"STT_SILENCE_MS"`
 	// character spefic contetx
 	CharSpecificContextEnabled bool   `toml:"CharSpecificContextEnabled"`
 	CharSpecificContextTag     string `toml:"CharSpecificContextTag"`
