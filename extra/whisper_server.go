@@ -23,8 +23,8 @@ type whisperServer struct {
 	serverURL   string
 	client      *http.Client
 	utteranceCh chan string
+	errCh       chan error
 	txWg        sync.WaitGroup
-	doneCh      chan struct{}
 }
 
 func newWhisperServer(logger *slog.Logger, cfg *config.Config) *whisperServer {
@@ -48,41 +48,54 @@ func newWhisperServer(logger *slog.Logger, cfg *config.Config) *whisperServer {
 
 func (s *whisperServer) onUtterance(wav []byte) {
 	s.txWg.Add(1)
+	ch := s.utteranceCh
+	errCh := s.errCh
 	go func() {
 		defer s.txWg.Done()
 		text, err := s.transcribe(wav)
 		if err != nil {
-			s.logger.Error("utterance transcription failed", "error", err)
+			errCh <- fmt.Errorf("utterance: %w", err)
 			return
 		}
 		if text == "" {
+			s.logger.Warn("utterance transcription returned empty text")
 			return
 		}
-		select {
-		case s.utteranceCh <- text:
-		case <-s.doneCh:
-		}
+		ch <- text
 	}()
 }
 
 func (s *whisperServer) StartRecording() error {
 	s.utteranceCh = make(chan string, 20)
-	s.doneCh = make(chan struct{})
+	s.errCh = make(chan error, 20)
 	return s.recorder.Start()
 }
 
 func (s *whisperServer) StopRecording() (string, error) {
 	remainingWav, err := s.recorder.Stop()
-	close(s.doneCh)
-	s.txWg.Wait()
-	if err == nil && len(remainingWav) > 44 {
-		text, txErr := s.transcribe(remainingWav)
-		if txErr == nil && text != "" {
-			s.utteranceCh <- text
-		}
+	ch := s.utteranceCh
+	errCh := s.errCh
+	if err != nil {
+		close(ch)
+		close(errCh)
+		return "", err
 	}
-	close(s.utteranceCh)
-	return "", err
+	go func() {
+		s.txWg.Wait()
+		if len(remainingWav) > 44 {
+			text, txErr := s.transcribe(remainingWav)
+			if txErr != nil {
+				errCh <- fmt.Errorf("final flush: %w", txErr)
+			} else if text == "" {
+				s.logger.Warn("final flush returned empty text")
+			} else {
+				ch <- text
+			}
+		}
+		close(ch)
+		close(errCh)
+	}()
+	return "", nil
 }
 
 func (s *whisperServer) IsRecording() bool {
@@ -91,6 +104,10 @@ func (s *whisperServer) IsRecording() bool {
 
 func (s *whisperServer) Utterances() <-chan string {
 	return s.utteranceCh
+}
+
+func (s *whisperServer) Errors() <-chan error {
+	return s.errCh
 }
 
 func (s *whisperServer) transcribe(wav []byte) (string, error) {

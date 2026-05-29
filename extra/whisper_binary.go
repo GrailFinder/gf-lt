@@ -166,6 +166,10 @@ func (w *WhisperBinary) Utterances() <-chan string {
 	return nil
 }
 
+func (w *WhisperBinary) Errors() <-chan error {
+	return nil
+}
+
 func NewWhisperBinary(logger *slog.Logger, cfg *config.Config) *WhisperBinary {
 	ctx, cancel := context.WithCancel(context.Background())
 	// Set ALSA error handler first

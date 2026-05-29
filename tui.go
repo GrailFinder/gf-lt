@@ -1044,15 +1044,23 @@ func initTUI() {
 					return nil
 				}
 				sttTranscribing = true
-				defer func() {
+				updateStatusLine()
+				finalText, err := asr.StopRecording()
+				if err != nil {
+					logger.Error("stt error", "error", err)
+					showToast("stt error", err.Error())
+				}
+				if asr.Utterances() == nil {
+					// Non-utterance backend (WhisperBinary) — sync path
+					if finalText != "" {
+						prevText := textArea.GetText()
+						if prevText != "" && !strings.HasSuffix(prevText, "\n") {
+							finalText = "\n" + finalText
+						}
+						textArea.SetText(prevText+finalText, true)
+					}
 					sttTranscribing = false
 					updateStatusLine()
-				}()
-				_, err := asr.StopRecording()
-				if err != nil {
-					msg := "failed to inference user speech; error:" + err.Error()
-					logger.Error(msg)
-					showToast("stt error", msg)
 				}
 				return nil
 			}
@@ -1065,17 +1073,38 @@ func initTUI() {
 			}
 			updateStatusLine()
 			ch := asr.Utterances()
-			if ch != nil {
+			errCh := asr.Errors()
+			if ch != nil || errCh != nil {
 				go func() {
-					for text := range ch {
-						app.QueueUpdateDraw(func() {
-							prevText := textArea.GetText()
-							if prevText != "" && !strings.HasSuffix(prevText, "\n") {
-								text = "\n" + text
+					for ch != nil || errCh != nil {
+						select {
+						case text, ok := <-ch:
+							if !ok {
+								ch = nil
+								continue
 							}
-							textArea.SetText(prevText+text, true)
-						})
+							app.QueueUpdateDraw(func() {
+								prevText := textArea.GetText()
+								if prevText != "" && !strings.HasSuffix(prevText, "\n") {
+									text = "\n" + text
+								}
+								textArea.SetText(prevText+text, true)
+							})
+						case err, ok := <-errCh:
+							if !ok {
+								errCh = nil
+								continue
+							}
+							app.QueueUpdateDraw(func() {
+								logger.Error("stt error", "error", err)
+								showToast("stt error", err.Error())
+							})
+						}
 					}
+					app.QueueUpdateDraw(func() {
+						sttTranscribing = false
+						updateStatusLine()
+					})
 				}()
 			}
 		}

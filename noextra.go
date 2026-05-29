@@ -20,6 +20,7 @@ type STT interface {
 	StopRecording() (string, error)
 	IsRecording() bool
 	Utterances() <-chan string
+	Errors() <-chan error
 }
 
 // DefaultOrator is a no-op implementation when TTS is not available
@@ -68,6 +69,10 @@ func (d *DefaultSTT) IsRecording() bool {
 }
 
 func (d *DefaultSTT) Utterances() <-chan string {
+	return nil
+}
+
+func (d *DefaultSTT) Errors() <-chan error {
 	return nil
 }
 

@@ -25,8 +25,8 @@ type openaiSTT struct {
 	model       string
 	client      *http.Client
 	utteranceCh chan string
+	errCh       chan error
 	txWg        sync.WaitGroup
-	doneCh      chan struct{}
 }
 
 func newOpenAICompatSTT(logger *slog.Logger, cfg *config.Config) *openaiSTT {
@@ -55,41 +55,54 @@ func newOpenAICompatSTT(logger *slog.Logger, cfg *config.Config) *openaiSTT {
 
 func (s *openaiSTT) onUtterance(wav []byte) {
 	s.txWg.Add(1)
+	ch := s.utteranceCh
+	errCh := s.errCh
 	go func() {
 		defer s.txWg.Done()
 		text, err := s.transcribe(wav)
 		if err != nil {
-			s.logger.Error("utterance transcription failed", "error", err)
+			errCh <- fmt.Errorf("utterance: %w", err)
 			return
 		}
 		if text == "" {
+			s.logger.Warn("utterance transcription returned empty text")
 			return
 		}
-		select {
-		case s.utteranceCh <- text:
-		case <-s.doneCh:
-		}
+		ch <- text
 	}()
 }
 
 func (s *openaiSTT) StartRecording() error {
 	s.utteranceCh = make(chan string, 20)
-	s.doneCh = make(chan struct{})
+	s.errCh = make(chan error, 20)
 	return s.recorder.Start()
 }
 
 func (s *openaiSTT) StopRecording() (string, error) {
 	remainingWav, err := s.recorder.Stop()
-	close(s.doneCh)
-	s.txWg.Wait()
-	if err == nil && len(remainingWav) > 44 {
-		text, txErr := s.transcribe(remainingWav)
-		if txErr == nil && text != "" {
-			s.utteranceCh <- text
-		}
+	ch := s.utteranceCh
+	errCh := s.errCh
+	if err != nil {
+		close(ch)
+		close(errCh)
+		return "", err
 	}
-	close(s.utteranceCh)
-	return "", err
+	go func() {
+		s.txWg.Wait()
+		if len(remainingWav) > 44 {
+			text, txErr := s.transcribe(remainingWav)
+			if txErr != nil {
+				errCh <- fmt.Errorf("final flush: %w", txErr)
+			} else if text == "" {
+				s.logger.Warn("final flush returned empty text")
+			} else {
+				ch <- text
+			}
+		}
+		close(ch)
+		close(errCh)
+	}()
+	return "", nil
 }
 
 func (s *openaiSTT) IsRecording() bool {
@@ -98,6 +111,10 @@ func (s *openaiSTT) IsRecording() bool {
 
 func (s *openaiSTT) Utterances() <-chan string {
 	return s.utteranceCh
+}
+
+func (s *openaiSTT) Errors() <-chan error {
+	return s.errCh
 }
 
 func (s *openaiSTT) transcribe(wav []byte) (string, error) {
