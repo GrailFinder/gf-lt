@@ -18,7 +18,10 @@ import (
 	"gitlab.com/diamondburned/ueberzug-go"
 )
 
-var termCols, termRows int
+var (
+	termCols, termRows int
+	sttTranscribing   bool
+)
 
 func isFullScreenPageActive() bool {
 	name, _ := pages.GetFrontPage()
@@ -1036,24 +1039,36 @@ func initTUI() {
 			return nil
 		}
 		if event.Key() == tcell.KeyCtrlR && cfg.STT_ENABLED {
-			defer updateStatusLine()
 			if asr.IsRecording() {
-				userSpeech, err := asr.StopRecording()
-				if err != nil {
-					msg := "failed to inference user speech; error:" + err.Error()
-					logger.Error(msg)
-					showToast("stt error", msg)
+				if sttTranscribing {
 					return nil
 				}
-				if userSpeech != "" {
-					// append indtead of replacing
-					prevText := textArea.GetText()
-					textArea.SetText(prevText+userSpeech, true)
-				} else {
-					logger.Warn("empty user speech")
-				}
+				sttTranscribing = true
+				go func() {
+					userSpeech, err := asr.StopRecording()
+					app.QueueUpdateDraw(func() {
+						sttTranscribing = false
+						defer updateStatusLine()
+						if err != nil {
+							msg := "failed to inference user speech; error:" + err.Error()
+							logger.Error(msg)
+							showToast("stt error", msg)
+							return
+						}
+						if userSpeech != "" {
+							prevText := textArea.GetText()
+							textArea.SetText(prevText+userSpeech, true)
+						} else {
+							logger.Warn("empty user speech")
+						}
+					})
+				}()
 				return nil
 			}
+			if sttTranscribing {
+				return nil
+			}
+			defer updateStatusLine()
 			if err := asr.StartRecording(); err != nil {
 				logger.Error("failed to start recording user speech", "error", err)
 				return nil

@@ -67,13 +67,14 @@ type Config struct {
 	TTS_PROVIDER string  `toml:"TTS_PROVIDER"`
 	TTS_LANGUAGE string  `toml:"TTS_LANGUAGE"`
 	// STT
-	STT_TYPE          string `toml:"STT_TYPE"` // WHISPER_SERVER, WHISPER_BINARY
+	STT_TYPE          string `toml:"STT_TYPE"` // WHISPER_SERVER, WHISPER_BINARY, OPENAI_COMPAT, crips_asr
 	STT_URL           string `toml:"STT_URL"`
 	STT_SR            int    `toml:"STT_SR"`
 	STT_ENABLED       bool   `toml:"STT_ENABLED"`
 	WhisperBinaryPath string `toml:"WhisperBinaryPath"`
 	WhisperModelPath  string `toml:"WhisperModelPath"`
 	STT_LANG          string `toml:"STT_LANG"`
+	ASR_MODEL         string `toml:"ASR_MODEL"`
 	// character spefic contetx
 	CharSpecificContextEnabled bool   `toml:"CharSpecificContextEnabled"`
 	CharSpecificContextTag     string `toml:"CharSpecificContextTag"`
