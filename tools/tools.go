@@ -424,6 +424,10 @@ func runCmd(args map[string]string) []byte {
 	case "browser":
 		// browser <action> [args...] - Playwright browser automation
 		return runBrowserCommand(rest, args)
+	case "file_edit":
+		return []byte(FsFileEdit(args))
+	case "insert_at":
+		return []byte(FsInsertAt(args))
 	case "mkdir", "ls", "cat", "write", "stat", "pwd", "cd", "cp", "mv", "rm", "sed", "grep", "head", "tail", "wc", "sort", "uniq", "echo", "time", "go", "find", "file", "git":
 		// File operations, git, and shell commands - use ExecChain which has pipe/chaining support
 		return executeCommand(args)
@@ -628,7 +632,8 @@ func getHelp(args []string) string {
   # File operations
   ls [path]       - list files in directory
   cat <file>      - read file content
-  file_edit <file> <start> <end> <content> - edit file (replace line range)
+  file_edit <file> <start> [end] <content> - replace line range
+  insert_at <file> <line> <content> - insert before line
   view_img <file> - view image file
   write <file>    - write content to file
   stat <file>     - get file info
@@ -704,14 +709,13 @@ Use: command to execute. Example: ls -la | grep foo`
     bash "write data.json" (with stdin)
   Note: use file_edit for targeted line-range edits (more reliable than sed).`
 	case "file_edit":
-		return `file_edit <file> <start> <end> <content>
-  Edit file by replacing line range [start, end] with new content.
-  Use start <= end to replace lines, start > end to insert-only at line start.
-  Example:
-    file_edit llm.go 182 186 "new content here"
-    file_edit llm.go 5 4 "inserted at line 5"
-  Note: line numbers are 1-indexed.
-  For OpenAI-style calls: use file_path, old_lines (JSON: {"start":N,"end":N}), new_content.`
+		return `file_edit <file> <start> [end] <content>
+  Replace a range of lines with new content.
+  Arguments: file_path start_line [end_line] new_content
+  Line numbers are 1-indexed. end_line defaults to start_line if omitted.
+  Examples:
+    file_edit main.go 42 42 "return nil"
+    file_edit main.go 10 15 "func foo() {\n  return bar\n}"`
 	case "memory":
 		return `memory <subcommand> [args]
   Manage memory storage.
@@ -724,6 +728,12 @@ Use: command to execute. Example: ls -la | grep foo`
     bash "memory store foo bar"
     bash "memory get foo"
     bash "memory list"`
+	case "insert_at":
+		return `insert_at <file> <line> <content>
+  Insert new content before a specific line number (1-indexed).
+  If line exceeds file length, content is appended to the end.
+  Example:
+    insert_at main.go 3 "import \"fmt\""`
 	case "git":
 		return `git <subcommand>
   Read-only git commands.
@@ -1130,6 +1140,9 @@ var FnMap = map[string]FnHandler{
 	"file_edit": func(args map[string]string) []byte {
 		return []byte(FsFileEdit(args))
 	},
+	"insert_at": func(args map[string]string) []byte {
+		return []byte(FsInsertAt(args))
+	},
 	// Unified run command
 	"bash": runCmd,
 	// Browser tool - routes to runBrowserCommand
@@ -1364,27 +1377,57 @@ var BaseTools = []models.Tool{
 			},
 		},
 	},
-	// file_edit - targeted line range editing
+	// file_edit - replace a line range
 	models.Tool{
 		Type: "function",
 		Function: models.ToolFunc{
 			Name:        "file_edit",
-			Description: "Edit an existing file by replacing a line range with new content. For insert-only (no deletion): use start > end (e.g., start=5, end=4 inserts at line 5).",
+			Description: "Replace a range of lines in an existing file with new content.",
 			Parameters: models.ToolFuncParams{
 				Type:     "object",
-				Required: []string{"file_path", "old_lines", "new_content"},
+				Required: []string{"file_path", "start_line", "new_content"},
 				Properties: map[string]models.ToolArgProps{
 					"file_path": models.ToolArgProps{
 						Type:        "string",
 						Description: "path to the file to edit",
 					},
-					"old_lines": models.ToolArgProps{
+				"start_line": models.ToolArgProps{
+					Type:        "integer",
+					Description: "1-indexed line number where replacement starts. To delete lines without replacing, pass new_content as an empty string.",
+				},
+				"end_line": models.ToolArgProps{
+					Type:        "integer",
+					Description: "1-indexed line number where replacement ends (inclusive). Defaults to start_line. Must be >= start_line.",
+				},
+			"new_content": models.ToolArgProps{
+				Type:        "string",
+				Description: "replacement content (use \\n for newlines). Pass empty string to delete the line range.",
+			},
+				},
+			},
+		},
+	},
+	// insert_at - insert content at a specific line
+	models.Tool{
+		Type: "function",
+		Function: models.ToolFunc{
+			Name:        "insert_at",
+			Description: "Insert new content at a specific line number in an existing file. Does not delete any existing lines.",
+			Parameters: models.ToolFuncParams{
+				Type:     "object",
+				Required: []string{"file_path", "line", "new_content"},
+				Properties: map[string]models.ToolArgProps{
+					"file_path": models.ToolArgProps{
 						Type:        "string",
-						Description: `JSON object with quoted keys: {"start": N, "end": N}. Use start <= end to replace lines [start, end], or start > end (e.g., {"start":5, "end":4}) to insert at line start without deleting anything. Line numbers are 1-indexed.`,
+						Description: "path to the file to edit",
+					},
+					"line": models.ToolArgProps{
+						Type:        "integer",
+						Description: "1-indexed line number to insert before. If line exceeds file length, content is appended to the end of the file.",
 					},
 					"new_content": models.ToolArgProps{
 						Type:        "string",
-						Description: "new content to insert (use \\n for newlines). Empty string deletes the range without inserting.",
+						Description: "content to insert (use \\n for newlines)",
 					},
 				},
 			},
