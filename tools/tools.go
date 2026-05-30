@@ -428,7 +428,7 @@ func runCmd(args map[string]string) []byte {
 		return []byte(FsFileEdit(args))
 	case "insert_at":
 		return []byte(FsInsertAt(args))
-	case "mkdir", "ls", "cat", "write", "stat", "pwd", "cd", "cp", "mv", "rm", "sed", "grep", "head", "tail", "wc", "sort", "uniq", "echo", "time", "go", "find", "file", "git":
+	case "mkdir", "ls", "cat", "stat", "pwd", "cd", "cp", "mv", "rm", "sed", "grep", "head", "tail", "wc", "sort", "uniq", "echo", "printf", "time", "go", "find", "file", "git":
 		// File operations, git, and shell commands - use ExecChain which has pipe/chaining support
 		return executeCommand(args)
 	default:
@@ -635,7 +635,6 @@ func getHelp(args []string) string {
   file_edit <file> <start> [end] <content> - replace line range
   insert_at <file> <line> <content> - insert before line
   view_img <file> - view image file
-  write <file>    - write content to file
   stat <file>     - get file info
   rm <file>       - delete file
   cp <src> <dst> - copy file
@@ -701,18 +700,12 @@ Use: command to execute. Example: ls -la | grep foo`
   Supports: png, jpg, jpeg, gif, webp, svg
   Example:
     bash "view_img screenshot.png"`
-	case "write":
-		return `write <file> [content]
-  Write content to a file.
-  Examples:
-    bash "write notes.txt hello world"
-    bash "write data.json" (with stdin)
-  Note: use file_edit for targeted line-range edits (more reliable than sed).`
 	case "file_edit":
 		return `file_edit <file> <start> [end] <content>
   Replace a range of lines with new content.
   Arguments: file_path start_line [end_line] new_content
   Line numbers are 1-indexed. end_line defaults to start_line if omitted.
+  Use file_edit 1 N 'content' (N = line count) to overwrite the entire file.
   Examples:
     file_edit main.go 42 42 "return nil"
     file_edit main.go 10 15 "func foo() {\n  return bar\n}"`
