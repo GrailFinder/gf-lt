@@ -1119,11 +1119,8 @@ func initTUI() {
 				lastMsg := chatBody.Messages[len(chatBody.Messages)-1]
 				cleanedText := models.CleanText(lastMsg.GetText())
 				if cleanedText != "" {
-					go func() {
-						if err := orator.Speak(cleanedText); err != nil {
-							logger.Error("tts failed", "text", cleanedText, "error", err)
-						}
-					}()
+					TTSTextChan <- cleanedText
+					TTSFlushChan <- true
 				}
 			}
 			return nil

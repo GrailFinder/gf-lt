@@ -40,14 +40,23 @@ func (o *KokoroOrator) GetLogger() *slog.Logger {
 	return o.logger
 }
 
-func (o *KokoroOrator) Speak(text string) error {
-	o.logger.Debug("fn: Speak is called", "text-len", len(text))
+func (o *KokoroOrator) fetchAudio(text string) ([]byte, error) {
 	body, err := o.requestSound(text)
 	if err != nil {
-		return fmt.Errorf("request failed: %w", err)
+		return nil, fmt.Errorf("request failed: %w", err)
 	}
 	defer body.Close()
+	data, err := io.ReadAll(body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read audio: %w", err)
+	}
+	return data, nil
+}
+
+func (o *KokoroOrator) playAudio(data []byte) error {
+	var stderrBuf bytes.Buffer
 	cmd := exec.Command("ffplay", "-nodisp", "-autoexit", "-i", "pipe:0")
+	cmd.Stderr = &stderrBuf
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		return fmt.Errorf("failed to get stdin pipe: %w", err)
@@ -59,41 +68,95 @@ func (o *KokoroOrator) Speak(text string) error {
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("failed to start ffplay: %w", err)
 	}
-	// Copy audio in background
 	copyErr := make(chan error, 1)
 	go func() {
-		_, err := io.Copy(stdin, body)
+		_, err := io.Copy(stdin, bytes.NewReader(data))
 		stdin.Close()
 		copyErr <- err
 	}()
-	// Wait for player in background
 	done := make(chan error, 1)
 	go func() {
 		done <- cmd.Wait()
 	}()
-	// Wait for BOTH copy and player, but ensure we block until done
 	select {
 	case <-o.stopCh:
-		// Stop requested: kill player and wait for it to exit
 		if o.cmd != nil && o.cmd.Process != nil {
 			o.cmd.Process.Kill()
 		}
-		<-done // Wait for process to actually exit
+		<-done
 		return nil
 	case copyErrVal := <-copyErr:
 		if copyErrVal != nil {
-			// Copy failed: kill player and wait
-			if o.cmd != nil && o.cmd.Process != nil {
-				o.cmd.Process.Kill()
+			if !strings.Contains(copyErrVal.Error(), "broken pipe") {
+				o.logger.Error("stdin copy failed", "stderr", stderrBuf.String(), "error", copyErrVal)
+				if o.cmd != nil && o.cmd.Process != nil {
+					o.cmd.Process.Kill()
+				}
+				<-done
+				return copyErrVal
 			}
-			<-done
-			return copyErrVal
 		}
-		// Copy succeeded, now wait for playback to complete
 		return <-done
 	case err := <-done:
-		// Playback finished normally (copy must have succeeded or player would have exited early)
+		if err != nil {
+			o.logger.Error("ffplay exited with error", "stderr", stderrBuf.String(), "exit", err)
+		}
 		return err
+	}
+}
+
+func (o *KokoroOrator) Speak(text string) error {
+	o.logger.Debug("fn: Speak is called", "text-len", len(text))
+	data, err := o.fetchAudio(text)
+	if err != nil {
+		return err
+	}
+	return o.playAudio(data)
+}
+
+type audioResult struct {
+	data []byte
+	err  error
+}
+
+func (o *KokoroOrator) speakSentences(sentences []string) {
+	if len(sentences) == 0 {
+		return
+	}
+	data, err := o.fetchAudio(sentences[0])
+	if err != nil {
+		o.logger.Error("fetch failed", "sentence", sentences[0], "error", err)
+		return
+	}
+	for i := 0; i < len(sentences); i++ {
+		o.mu.Lock()
+		interrupted := o.interrupt
+		o.mu.Unlock()
+		if interrupted {
+			return
+		}
+		var nextCh chan audioResult
+		if i+1 < len(sentences) {
+			nextCh = make(chan audioResult, 1)
+			idx := i + 1
+			go func() {
+				d, err := o.fetchAudio(sentences[idx])
+				nextCh <- audioResult{d, err}
+			}()
+		}
+		o.logger.Debug("playing sentence", "sentence", sentences[i])
+		if err := o.playAudio(data); err != nil {
+			o.logger.Error("playback failed", "sentence", sentences[i], "error", err)
+			return
+		}
+		if nextCh != nil {
+			result := <-nextCh
+			if result.err != nil {
+				o.logger.Error("fetch failed", "sentence", sentences[i+1], "error", result.err)
+				return
+			}
+			data = result.data
+		}
 	}
 }
 func (o *KokoroOrator) requestSound(text string) (io.ReadCloser, error) {
@@ -104,8 +167,9 @@ func (o *KokoroOrator) requestSound(text string) (io.ReadCloser, error) {
 		"model":           "tts-1",
 		"input":           text,
 		"voice":           o.Voice,
-		"response_format": o.Format,
+		"response_format": "mp3",
 		"speed":           o.Speed,
+		"stream_format":   "audio",
 	}
 	payloadBytes, err := json.Marshal(payload)
 	if err != nil {
@@ -197,26 +261,24 @@ func (o *KokoroOrator) readroutine() {
 			o.textBuffer.Reset()
 			o.textBuffer.WriteString(remaining)
 			o.mu.Unlock()
+			var texts []string
 			for _, sentence := range completeSentences {
+				cleanedText := models.CleanText(sentence.Text)
+				if cleanedText != "" {
+					texts = append(texts, cleanedText)
+				}
+			}
+			if len(texts) > 0 {
 				o.mu.Lock()
 				interrupted := o.interrupt
 				o.mu.Unlock()
-				if interrupted {
-					return
-				}
-				cleanedText := models.CleanText(sentence.Text)
-				if cleanedText == "" {
-					continue
-				}
-				o.logger.Debug("calling Speak with sentence", "sent", cleanedText)
-				if err := o.Speak(cleanedText); err != nil {
-					o.logger.Error("tts failed", "sentence", cleanedText, "error", err)
+				if !interrupted {
+					o.speakSentences(texts)
 				}
 			}
 		case <-TTSFlushChan:
 			o.logger.Debug("got flushchan signal start")
-			// lln is done get the whole message out
-			if len(TTSTextChan) > 0 { // otherwise might get stuck
+			if len(TTSTextChan) > 0 {
 				for chunk := range TTSTextChan {
 					o.mu.Lock()
 					_, err := o.textBuffer.WriteString(chunk)
@@ -230,7 +292,6 @@ func (o *KokoroOrator) readroutine() {
 					}
 				}
 			}
-			// flush remaining text
 			o.mu.Lock()
 			remaining := o.textBuffer.String()
 			remaining = models.CleanText(remaining)
@@ -239,18 +300,19 @@ func (o *KokoroOrator) readroutine() {
 			if remaining == "" {
 				continue
 			}
-			o.logger.Debug("calling Speak with remainder", "rem", remaining)
-			sentencesRem := tokenizer.Tokenize(remaining)
-			for _, rs := range sentencesRem { // to avoid dumping large volume of text
+			o.logger.Debug("calling speakSentences with remainder", "rem", remaining)
+			var texts []string
+			for _, rs := range tokenizer.Tokenize(remaining) {
 				o.mu.Lock()
 				interrupt := o.interrupt
 				o.mu.Unlock()
 				if interrupt {
 					break
 				}
-				if err := o.Speak(rs.Text); err != nil {
-					o.logger.Error("tts failed", "sentence", rs, "error", err)
-				}
+				texts = append(texts, rs.Text)
+			}
+			if len(texts) > 0 {
+				o.speakSentences(texts)
 			}
 		}
 	}

@@ -10,6 +10,7 @@ type AudioFormat string
 const (
 	AFWav AudioFormat = "wav"
 	AFMP3 AudioFormat = "mp3"
+	AFPCM AudioFormat = "pcm"
 )
 
 var threeOrMoreDashesRE = regexp.MustCompile(`-{3,}`)
