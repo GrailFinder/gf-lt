@@ -366,6 +366,147 @@ func warmUpModel() {
 	}()
 }
 
+// unloadModelForVRAM unloads the currently loaded model from the llama.cpp server
+// via POST /models/unload to free VRAM for external GPU-intensive tools.
+// Returns the unloaded model ID (or "" on failure), so the caller can reload it later.
+func unloadModelForVRAM() string {
+	if !isLocalLlamacpp() || cfg.ModelManagement == nil || len(cfg.ModelManagement.VRAMFreeServers) == 0 {
+		return ""
+	}
+
+	models, err := fetchLCPModelsWithStatus()
+	if err != nil {
+		logger.Warn("unloadModelForVRAM: failed to fetch model status", "error", err)
+		return ""
+	}
+
+	var loadedModel string
+	for _, m := range models.Data {
+		if m.Status.Value == "loaded" {
+			loadedModel = m.ID
+			break
+		}
+	}
+	if loadedModel == "" {
+		logger.Debug("unloadModelForVRAM: no model currently loaded")
+		return ""
+	}
+
+	logger.Info("unloading model to free VRAM", "model", loadedModel)
+	showToast("freeing VRAM", "Unloading "+loadedModel)
+
+	body, _ := json.Marshal(map[string]string{"model": loadedModel})
+	resp, err := httpClient.Post(unloadModelURL(), "application/json", bytes.NewReader(body))
+	if err != nil {
+		logger.Error("unloadModelForVRAM: request failed", "error", err)
+		return ""
+	}
+	resp.Body.Close()
+
+	if err := pollUntilModelStatus(loadedModel, false); err != nil {
+		logger.Error("unloadModelForVRAM: timeout", "model", loadedModel, "error", err)
+		return ""
+	}
+
+	return loadedModel
+}
+
+// reloadModel loads the given model by sending a dummy request and blocks until it's ready.
+func reloadModel(modelID string) {
+	if modelID == "" || !isLocalLlamacpp() {
+		return
+	}
+
+	logger.Info("reloading model", "model", modelID)
+	showToast("reloading model", "Loading "+modelID)
+
+	if err := loadModel(modelID); err != nil {
+		logger.Error("reloadModel: failed", "model", modelID, "error", err)
+		showToast("model reload failed", "Failed to load "+modelID)
+		return
+	}
+	refreshChatDisplay()
+	showToast("model reloaded", "Model "+modelID+" is ready")
+}
+
+// loadModel sends a dummy request to trigger model loading and blocks until ready.
+func loadModel(modelID string) error {
+	var data []byte
+	var err error
+	switch {
+	case strings.HasSuffix(cfg.CurrentAPI, "/completion"):
+		req := models.NewLCPReq(".", modelID, nil, map[string]float32{
+			"temperature":    0.8,
+			"dry_multiplier": 0.0,
+			"min_p":          0.05,
+			"n_predict":      0,
+		}, []string{})
+		req.Stream = false
+		data, err = json.Marshal(req)
+	case strings.Contains(cfg.CurrentAPI, "/v1/chat/completions"):
+		req := models.OpenAIReq{
+			ChatBody: &models.ChatBody{
+				Model: modelID,
+				Messages: []models.RoleMsg{
+					{Role: "system", Content: "."},
+				},
+				Stream: false,
+			},
+			Tools: nil,
+		}
+		data, err = json.Marshal(req)
+	default:
+		return fmt.Errorf("loadModel: unknown API endpoint: %s", cfg.CurrentAPI)
+	}
+	if err != nil {
+		return fmt.Errorf("loadModel: failed to marshal request: %w", err)
+	}
+
+	resp, err := httpClient.Post(cfg.CurrentAPI, "application/json", bytes.NewReader(data))
+	if err != nil {
+		return fmt.Errorf("loadModel: request failed: %w", err)
+	}
+	resp.Body.Close()
+
+	return pollUntilModelStatus(modelID, true)
+}
+
+// unloadModelURL derives the /models/unload endpoint URL from the configured FetchModelNameAPI.
+func unloadModelURL() string {
+	u := strings.TrimSuffix(cfg.FetchModelNameAPI, "/")
+	u = strings.TrimSuffix(u, "/v1/models")
+	u = strings.TrimSuffix(u, "/models")
+	return u + "/models/unload"
+}
+
+// pollUntilModelStatus polls isModelLoaded until the model reaches the desired state,
+// with a 2-minute timeout and 500ms interval.
+func pollUntilModelStatus(modelID string, wantLoaded bool) error {
+	timeout := time.After(2 * time.Minute)
+	ticker := time.NewTicker(500 * time.Millisecond)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-timeout:
+			state := "loaded"
+			if !wantLoaded {
+				state = "unloaded"
+			}
+			return fmt.Errorf("timed out waiting for model %q to be %s", modelID, state)
+		case <-ticker.C:
+			loaded, err := isModelLoaded(modelID)
+			if err != nil {
+				logger.Debug("pollUntilModelStatus: check error", "model", modelID, "error", err)
+				continue
+			}
+			if loaded == wantLoaded {
+				return nil
+			}
+		}
+	}
+}
+
 // nolint
 func fetchDSBalance() *models.DSBalance {
 	url := "https://api.deepseek.com/user/balance"
@@ -1276,6 +1417,17 @@ func handleBatchToolCalls(textContent string, toolCalls []models.ToolCall) bool 
 	chatBody.Messages[lastMsgIdx].Content = textContent
 	chatBody.Messages[lastMsgIdx].ToolCalls = toolCalls
 
+	// Check if any tool call requires VRAM management (unload LLM, let MCP use VRAM, reload)
+	var origModel string
+	if mcpManager != nil {
+		for _, tc := range toolCalls {
+			if mcpManager.IsVRAMFreeTool(tc.FuncCall.Name) {
+				origModel = unloadModelForVRAM()
+				break
+			}
+		}
+	}
+
 	for _, tc := range toolCalls {
 		// Parse the arguments JSON
 		args, err := convertJSONToMapStringString(tc.FuncCall.Args)
@@ -1419,6 +1571,11 @@ func handleBatchToolCalls(textContent string, toolCalls []models.ToolCall) bool 
 			"\n\n", len(chatBody.Messages), cfg.ToolRole, toolResponseMsg.GetText())
 		chatBody.Messages = append(chatBody.Messages, toolResponseMsg)
 
+	}
+
+	// Reload the original model if it was unloaded for VRAM management
+	if origModel != "" {
+		reloadModel(origModel)
 	}
 
 	cleanChatBody()

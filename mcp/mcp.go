@@ -118,6 +118,24 @@ func (m *Manager) HasTools() bool {
 	return len(m.servers) > 0
 }
 
+// IsVRAMFreeTool checks whether the given tool name belongs to an MCP server
+// that is configured for VRAM management (model unload/reload around tool calls).
+func (m *Manager) IsVRAMFreeTool(name string) bool {
+	if m.cfg.ModelManagement == nil || len(m.cfg.ModelManagement.VRAMFreeServers) == 0 {
+		return false
+	}
+	server, ok := m.toolMap[name]
+	if !ok {
+		return false
+	}
+	for _, s := range m.cfg.ModelManagement.VRAMFreeServers {
+		if server.name == s {
+			return true
+		}
+	}
+	return false
+}
+
 func (m *Manager) RegisterToolHandlers(fnMap map[string]tools.FnHandler) {
 	for _, server := range m.servers {
 		for _, tool := range server.tools {

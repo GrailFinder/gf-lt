@@ -68,3 +68,9 @@ FSAllowOutOfRoot = true
 # mcp
 # [MCPServers.myserver]
 # url = "http://localhost:8099/mcp"
+
+# VRAM management: unloads the LLM model (POST /models/unload) before calling tools
+# from listed MCP servers, then reloads after they complete.
+# Useful when both the LLM and MCP tools need the same GPU VRAM.
+# [ModelManagement]
+#   VRAMFreeServers = ["imgen"]  # MCP servers whose tools trigger unload/reload

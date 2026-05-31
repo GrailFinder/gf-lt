@@ -10,6 +10,10 @@ type MCPServerConfig struct {
 	URL string `toml:"url"`
 }
 
+type ModelManagementConfig struct {
+	VRAMFreeServers []string `toml:"VRAMFreeServers"`
+}
+
 type Config struct {
 	ChatAPI                       string `toml:"ChatAPI"`
 	CompletionAPI                 string `toml:"CompletionAPI"`
@@ -99,6 +103,7 @@ type Config struct {
 	MissionQuiet        bool
 	MissionToolsEnabled bool   `toml:"MissionToolsEnabled"`
 	IssuesDir          string `toml:"IssuesDir"`
+	ModelManagement    *ModelManagementConfig `toml:"ModelManagement"`
 }
 
 func LoadConfig(fn string) (*Config, error) {
