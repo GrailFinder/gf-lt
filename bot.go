@@ -1467,7 +1467,6 @@ func findCall(msg, toolCall string) bool {
 		fc = lastToolCall
 		// NOTE: We do NOT override lastToolCall.ID from arguments.
 		// The ID should come from the streaming response (chunk.ToolID) set earlier.
-		// Some tools like todo_create have "id" in their arguments which is NOT the tool call ID.
 	} else {
 		jsStr := models.ToolCallRE.FindString(msg)
 		if jsStr == "" { // no tool call case

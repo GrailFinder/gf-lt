@@ -47,7 +47,7 @@ Your current tools:
 {
 "name":"bash",
 "args": ["command"],
-"when_to_use": "Main tool for file operations, shell commands, memory, git, and todo. Use help for all commands. Examples: ls -la, help, mkdir -p foo/bar, cat file.txt, git status, memory store foo bar, todo create task, grep pattern file, grep -r pattern dir, find . -name '*.go', cd /path, pwd, head -n 100 file, tail -n 10 file, wc -l file, sort file, uniq file, sed 's/old/new/g' file, file_edit llm.go 182 186 \"new content\", echo text, go build ./..., stat file, cp src dst, mv src dst, rm file"
+"when_to_use": "Main tool for file operations, shell commands, memory, and git. Use help for all commands. Examples: ls -la, help, mkdir -p foo/bar, cat file.txt, git status, memory store foo bar, grep pattern file, grep -r pattern dir, find . -name '*.go', cd /path, pwd, head -n 100 file, tail -n 10 file, wc -l file, sort file, uniq file, sed 's/old/new/g' file, file_edit llm.go 182 186 \"new content\", echo text, go build ./..., stat file, cp src dst, mv src dst, rm file"
 },
 {
 "name":"browser",
@@ -382,7 +382,7 @@ func readURLRaw(args map[string]string) []byte {
 	return []byte(fmt.Sprintf("%+v", resp))
 }
 
-// Unified run command - single entry point for shell, memory, and todo
+// Unified run command - single entry point for shell, memory, and other built-in commands
 func runCmd(args map[string]string) []byte {
 	commandStr := args["command"]
 	if commandStr == "" {
@@ -406,8 +406,9 @@ func runCmd(args map[string]string) []byte {
 		// help - show all commands
 		// help <cmd> - show help for specific command
 		return []byte(getHelp(rest))
-	case "todo":
-		return handleTodoSubcommand(rest, args)
+	case "memory":
+		// memory store <topic> <data> | memory get <topic> | memory list | memory forget <topic>
+		return []byte(FsMemory(append([]string{"store"}, rest...), ""))
 	case "window", "windows":
 		// window list - list all windows
 		return listWindows(args)
@@ -656,11 +657,11 @@ func getHelp(args []string) string {
   # Go
   go <cmd>        - go commands (run, build, test, mod, etc.)
   
-  # Todo
-  todo create <task>   - create a todo
-  todo read            - list all todos
-  todo update <id> <status> - update todo (pending/in_progress/completed)
-  todo delete <id>     - delete a todo
+  # Memory
+  memory store <topic> <data>  - save to memory
+  memory get <topic>           - retrieve from memory
+  memory list                   - list all topics
+  memory forget <topic>         - delete from memory
   
   # Window (requires xdotool + maim)
   window              - list available windows
@@ -711,18 +712,18 @@ Use: command to execute. Example: ls -la | grep foo`
     file_edit llm.go 5 4 "inserted at line 5"
   Note: line numbers are 1-indexed.
   For OpenAI-style calls: use file_path, old_lines (JSON: {"start":N,"end":N}), new_content.`
-	case "todo":
-		return `todo <subcommand> [args]
-  Manage todo list.
+	case "memory":
+		return `memory <subcommand> [args]
+  Manage memory storage.
   Subcommands:
-    create <task>      - create a new todo
-    read [id]          - list all todos or read specific one
-    update <id> <status> - update status (pending/in_progress/completed)
-    delete <id>        - delete a todo
+    store <topic> <data>  - save data to a topic
+    get <topic>           - retrieve data from a topic
+    list                  - list all topics
+    forget <topic>        - delete a topic
   Examples:
-    bash "todo create fix bug"
-    bash "todo read"
-    bash "todo update 1 completed"`
+    bash "memory store foo bar"
+    bash "memory get foo"
+    bash "memory list"`
 	case "git":
 		return `git <subcommand>
   Read-only git commands.
@@ -820,46 +821,6 @@ Use: command to execute. Example: ls -la | grep foo`
 	}
 }
 
-// handleTodoSubcommand routes todo subcommands to existing handlers
-func handleTodoSubcommand(args []string, originalArgs map[string]string) []byte {
-	if len(args) == 0 {
-		return []byte("usage: todo create|read|update|delete")
-	}
-	subcmd := args[0]
-	switch subcmd {
-	case "create":
-		task := strings.Join(args[1:], " ")
-		if task == "" {
-			task = originalArgs["task"]
-		}
-		if task == "" {
-			return []byte("usage: todo create <task>")
-		}
-		return todoCreate(map[string]string{"task": task})
-	case "read":
-		id := ""
-		if len(args) > 1 {
-			id = args[1]
-		}
-		return todoRead(map[string]string{"id": id})
-	case "update":
-		if len(args) < 2 {
-			return []byte("usage: todo update <id> <status>")
-		}
-		if len(args) < 3 {
-			return []byte("usage: todo update <id> <status>")
-		}
-		return todoUpdate(map[string]string{"id": args[1], "status": args[2]})
-	case "delete":
-		if len(args) < 2 {
-			return []byte("usage: todo delete <id>")
-		}
-		return todoDelete(map[string]string{"id": args[1]})
-	default:
-		return []byte("unknown todo subcommand: " + subcmd)
-	}
-}
-
 // Command Execution Tool with pipe/chaining support
 func executeCommand(args map[string]string) []byte {
 	commandStr := args["command"]
@@ -917,178 +878,6 @@ func executeCommand(args map[string]string) []byte {
 // }
 
 // Helper functions for command execution
-// Todo structure
-type TodoItem struct {
-	ID     string `json:"id"`
-	Task   string `json:"task"`
-	Status string `json:"status"` // "pending", "in_progress", "completed"
-}
-type TodoList struct {
-	Items []TodoItem `json:"items"`
-}
-
-func (t TodoList) ToString() string {
-	sb := strings.Builder{}
-	for i := range t.Items {
-		fmt.Fprintf(&sb, "\n[%s] %s. %s\n", t.Items[i].Status, t.Items[i].ID, t.Items[i].Task)
-	}
-	return sb.String()
-}
-
-// Global todo list storage
-var globalTodoList = TodoList{
-	Items: []TodoItem{},
-}
-
-// Todo Management Tools
-func todoCreate(args map[string]string) []byte {
-	task, ok := args["task"]
-	if !ok || task == "" {
-		msg := "task not provided to todo_create tool"
-		logger.Error(msg)
-		return []byte(msg)
-	}
-	// Generate simple ID
-	id := fmt.Sprintf("todo_%d", len(globalTodoList.Items)+1)
-	newItem := TodoItem{
-		ID:     id,
-		Task:   task,
-		Status: "pending",
-	}
-	globalTodoList.Items = append(globalTodoList.Items, newItem)
-	result := map[string]string{
-		"message": "todo created successfully",
-		"id":      id,
-		"task":    task,
-		"status":  "pending",
-		"todos":   globalTodoList.ToString(),
-	}
-	jsonResult, err := json.Marshal(result)
-	if err != nil {
-		msg := "failed to marshal result; error: " + err.Error()
-		logger.Error(msg)
-		return []byte(msg)
-	}
-	return jsonResult
-}
-
-func todoRead(args map[string]string) []byte {
-	// Return all todos if no ID specified
-	result := map[string]interface{}{
-		"todos": globalTodoList.ToString(),
-	}
-	jsonResult, err := json.Marshal(result)
-	if err != nil {
-		msg := "failed to marshal result; error: " + err.Error()
-		logger.Error(msg)
-		return []byte(msg)
-	}
-	return jsonResult
-}
-
-func todoUpdate(args map[string]string) []byte {
-	id, ok := args["id"]
-	if !ok || id == "" {
-		msg := "id not provided to todo_update tool"
-		logger.Error(msg)
-		return []byte(msg)
-	}
-	task, taskOk := args["task"]
-	status, statusOk := args["status"]
-	if !taskOk && !statusOk {
-		msg := "neither task nor status provided to todo_update tool"
-		logger.Error(msg)
-		return []byte(msg)
-	}
-	// Find and update the todo
-	for i, item := range globalTodoList.Items {
-		if item.ID == id {
-			if taskOk {
-				globalTodoList.Items[i].Task = task
-			}
-			if statusOk {
-				// Validate status
-				if status == "pending" || status == "in_progress" || status == "completed" {
-					globalTodoList.Items[i].Status = status
-				} else {
-					result := map[string]string{
-						"error": "status must be one of: pending, in_progress, completed",
-					}
-					jsonResult, err := json.Marshal(result)
-					if err != nil {
-						msg := "failed to marshal result; error: " + err.Error()
-						logger.Error(msg)
-						return []byte(msg)
-					}
-					return jsonResult
-				}
-			}
-			result := map[string]string{
-				"message": "todo updated successfully",
-				"id":      id,
-				"todos":   globalTodoList.ToString(),
-			}
-			jsonResult, err := json.Marshal(result)
-			if err != nil {
-				msg := "failed to marshal result; error: " + err.Error()
-				logger.Error(msg)
-				return []byte(msg)
-			}
-			return jsonResult
-		}
-	}
-	// ID not found
-	result := map[string]string{
-		"error": fmt.Sprintf("todo with id %s not found", id),
-	}
-	jsonResult, err := json.Marshal(result)
-	if err != nil {
-		msg := "failed to marshal result; error: " + err.Error()
-		logger.Error(msg)
-		return []byte(msg)
-	}
-	return jsonResult
-}
-
-func todoDelete(args map[string]string) []byte {
-	id, ok := args["id"]
-	if !ok || id == "" {
-		msg := "id not provided to todo_delete tool"
-		logger.Error(msg)
-		return []byte(msg)
-	}
-	// Find and remove the todo
-	for i, item := range globalTodoList.Items {
-		if item.ID == id {
-			// Remove item from slice
-			globalTodoList.Items = append(globalTodoList.Items[:i], globalTodoList.Items[i+1:]...)
-			result := map[string]string{
-				"message": "todo deleted successfully",
-				"id":      id,
-				"todos":   globalTodoList.ToString(),
-			}
-			jsonResult, err := json.Marshal(result)
-			if err != nil {
-				msg := "failed to marshal result; error: " + err.Error()
-				logger.Error(msg)
-				return []byte(msg)
-			}
-			return jsonResult
-		}
-	}
-	// ID not found
-	result := map[string]string{
-		"error": fmt.Sprintf("todo with id %s not found", id),
-	}
-	jsonResult, err := json.Marshal(result)
-	if err != nil {
-		msg := "failed to marshal result; error: " + err.Error()
-		logger.Error(msg)
-		return []byte(msg)
-	}
-	return jsonResult
-}
-
 func viewImgTool(args map[string]string) []byte {
 	file, ok := args["file"]
 	if !ok || file == "" {
@@ -1540,14 +1329,14 @@ var BaseTools = []models.Tool{
 		Type: "function",
 		Function: models.ToolFunc{
 			Name:        "bash",
-			Description: "Execute commands: shell, git, memory, todo. Examples: ls -la, git status, memory store foo bar, todo create task, help, help memory, find . -name '*.go'",
+			Description: "Execute commands: shell, git, memory. Examples: ls -la, git status, memory store foo bar, help, help memory, find . -name '*.go'",
 			Parameters: models.ToolFuncParams{
 				Type:     "object",
 				Required: []string{"command"},
 				Properties: map[string]models.ToolArgProps{
 					"command": models.ToolArgProps{
 						Type:        "string",
-						Description: "command to execute. Examples: ls, cat file.txt, grep pattern, git status, memory store, todo create, help",
+						Description: "command to execute. Examples: ls, cat file.txt, grep pattern, git status, memory store, help",
 					},
 				},
 			},
@@ -1611,15 +1400,15 @@ var BaseTools = []models.Tool{
 				Type:     "object",
 				Required: []string{"title"},
 				Properties: map[string]models.ToolArgProps{
-					"title":              {Type: "string", Description: "Issue title (required)"},
-					"description":        {Type: "string", Description: "Issue description (optional, defaults to 'No description provided')"},
-					"id":                 {Type: "string", Description: "Issue ID (optional, auto-generated if not provided)"},
-					"project_path":       {Type: "string", Description: "Path to the project repository (optional, defaults to current working directory)"},
+					"title":               {Type: "string", Description: "Issue title (required)"},
+					"description":         {Type: "string", Description: "Issue description (optional, defaults to 'No description provided')"},
+					"id":                  {Type: "string", Description: "Issue ID (optional, auto-generated if not provided)"},
+					"project_path":        {Type: "string", Description: "Path to the project repository (optional, defaults to current working directory)"},
 					"acceptance_criteria": {Type: "string", Description: "JSON array of acceptance criteria strings, e.g. '[\"criteria 1\", \"criteria 2\"]' (optional)"},
-					"context_files":      {Type: "string", Description: "JSON array of file paths relevant to this issue, e.g. '[\"main.go\", \"main_test.go\"]' (optional)"},
-					"labels":             {Type: "string", Description: "Comma-separated labels, e.g. 'bug,validation' (optional)"},
-					"priority":           {Type: "string", Description: "Priority level: low, medium, high, critical (optional)"},
-					"branch_name":        {Type: "string", Description: "Suggested branch name for this issue (optional)"},
+					"context_files":       {Type: "string", Description: "JSON array of file paths relevant to this issue, e.g. '[\"main.go\", \"main_test.go\"]' (optional)"},
+					"labels":              {Type: "string", Description: "Comma-separated labels, e.g. 'bug,validation' (optional)"},
+					"priority":            {Type: "string", Description: "Priority level: low, medium, high, critical (optional)"},
+					"branch_name":         {Type: "string", Description: "Suggested branch name for this issue (optional)"},
 				},
 			},
 		},
