@@ -101,14 +101,11 @@ func (o *KokoroOrator) requestSound(text string) (io.ReadCloser, error) {
 		return nil, fmt.Errorf("TTS URL is empty")
 	}
 	payload := map[string]interface{}{
+		"model":           "tts-1",
 		"input":           text,
 		"voice":           o.Voice,
 		"response_format": o.Format,
-		"download_format": o.Format,
-		"stream":          o.Stream,
 		"speed":           o.Speed,
-		// "return_download_link": true,
-		"lang_code": o.Language,
 	}
 	payloadBytes, err := json.Marshal(payload)
 	if err != nil {
@@ -125,8 +122,9 @@ func (o *KokoroOrator) requestSound(text string) (io.ReadCloser, error) {
 		return nil, fmt.Errorf("request failed: %w", err)
 	}
 	if resp.StatusCode != http.StatusOK {
-		defer resp.Body.Close()
-		return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		return nil, fmt.Errorf("status %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
 	}
 	return resp.Body, nil
 }

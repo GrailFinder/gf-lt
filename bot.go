@@ -1986,12 +1986,8 @@ func init() {
 	}
 	choseChunkParser()
 	httpClient = createClient(time.Second * 90)
-	if cfg.TTS_ENABLED {
-		orator = NewOrator(logger, cfg)
-	}
-	if cfg.STT_ENABLED {
-		asr = NewSTT(logger, cfg)
-	}
+	orator = NewOrator(logger, cfg)
+	asr = NewSTT(logger, cfg)
 	if cfg.PlaywrightEnabled {
 		go func() {
 			if err := tools.CheckPlaywright(); err != nil {
