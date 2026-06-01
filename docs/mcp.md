@@ -38,6 +38,37 @@ Tools from each server are prefixed with their server name to avoid conflicts. F
 |---------|-------------|
 | `url` | HTTP endpoint of the MCP server |
 
+## VRAM Management
+
+Some MCP servers run GPU-intensive tools (e.g. image generation, audio processing) that
+need the same VRAM your LLM model occupies in llama.cpp. Since both can't fit
+simultaneously, gf-lt can **unload the LLM model** before calling such tools and
+**reload it** after they complete.
+
+On the imgen server side, each request spawns a fresh `sd`/`sd-cli` subprocess
+with `--offload-to-cpu`, so VRAM is only used during active inference and freed
+immediately after the subprocess exits.
+
+### Configuration
+
+```toml
+[ModelManagement]
+VRAMFreeServers = ["imgen"]
+```
+
+- **`VRAMFreeServers`** — list of MCP server names (matching the `[MCPServers.*]` key)
+  whose tool calls should trigger the unload/reload cycle.
+
+### Behavior
+
+When the LLM calls any tool from a listed server (e.g. `mcp_imgen_image.generate`):
+
+1. The currently loaded model is unloaded via `POST /models/unload`
+2. The MCP tool executes with full VRAM available
+3. The original model is reloaded before the next inference
+
+If no model is currently loaded, or the config section is absent, the cycle is skipped.
+
 ## Requirements
 
 - `ToolUse` must be set to `true`

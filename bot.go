@@ -370,6 +370,8 @@ func warmUpModel() {
 // via POST /models/unload to free VRAM for external GPU-intensive tools.
 // Returns the unloaded model ID (or "" on failure), so the caller can reload it later.
 func unloadModelForVRAM() string {
+	logger.Debug("unloadModelForVRAM: called", "isLocal", isLocalLlamacpp(), "modelManagement", cfg.ModelManagement != nil)
+
 	if !isLocalLlamacpp() || cfg.ModelManagement == nil || len(cfg.ModelManagement.VRAMFreeServers) == 0 {
 		return ""
 	}
@@ -1421,11 +1423,16 @@ func handleBatchToolCalls(textContent string, toolCalls []models.ToolCall) bool 
 	var origModel string
 	if mcpManager != nil {
 		for _, tc := range toolCalls {
+			logger.Debug("handleBatchToolCalls: checking VRAM-free tool", "name", tc.FuncCall.Name, "mcpManager", mcpManager != nil)
 			if mcpManager.IsVRAMFreeTool(tc.FuncCall.Name) {
+				logger.Info("handleBatchToolCalls: freeing VRAM for MCP tool", "name", tc.FuncCall.Name)
 				origModel = unloadModelForVRAM()
 				break
 			}
 		}
+	}
+	if origModel == "" {
+		logger.Debug("handleBatchToolCalls: no VRAM-free tool found, skipping unload")
 	}
 
 	for _, tc := range toolCalls {

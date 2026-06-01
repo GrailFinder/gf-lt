@@ -122,17 +122,21 @@ func (m *Manager) HasTools() bool {
 // that is configured for VRAM management (model unload/reload around tool calls).
 func (m *Manager) IsVRAMFreeTool(name string) bool {
 	if m.cfg.ModelManagement == nil || len(m.cfg.ModelManagement.VRAMFreeServers) == 0 {
+		m.logger.Debug("IsVRAMFreeTool: ModelManagement not configured, skipping", "tool", name)
 		return false
 	}
 	server, ok := m.toolMap[name]
 	if !ok {
+		m.logger.Debug("IsVRAMFreeTool: tool not found in any MCP server", "tool", name)
 		return false
 	}
 	for _, s := range m.cfg.ModelManagement.VRAMFreeServers {
 		if server.name == s {
+			m.logger.Debug("IsVRAMFreeTool: match", "tool", name, "server", server.name)
 			return true
 		}
 	}
+	m.logger.Debug("IsVRAMFreeTool: server not in VRAMFreeServers", "tool", name, "server", server.name, "vramFreeServers", m.cfg.ModelManagement.VRAMFreeServers)
 	return false
 }
 
