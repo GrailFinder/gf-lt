@@ -951,6 +951,9 @@ func sendMsgToLLM(body io.Reader) {
 			continue // skip \n
 		}
 		// starts with -> data:
+		if len(line) < 6 {
+			continue
+		}
 		line = line[6:]
 		logger.Debug("debugging resp", "line", string(line))
 		if bytes.Equal(line, []byte("[DONE]\n")) {
