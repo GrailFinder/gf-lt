@@ -99,7 +99,8 @@ type Config struct {
 	MissionPMInterval   int
 	MissionMaxFailures  int
 	MissionCheckpointFile string
-	MissionOutputFormat string // "text" or "json"
+	OutputFormat        string // "text" or "json" — applies to CLI and mission modes
+	MissionOutputFormat string // deprecated, use OutputFormat
 	MissionQuiet        bool
 	MissionToolsEnabled bool   `toml:"MissionToolsEnabled"`
 	IssuesDir          string `toml:"IssuesDir"`
@@ -176,9 +177,13 @@ func LoadConfig(fn string) (*Config, error) {
 	if config.MissionMaxFailures == 0 {
 		config.MissionMaxFailures = 3
 	}
-	if config.MissionOutputFormat == "" {
-		config.MissionOutputFormat = "text"
+	if config.OutputFormat == "" {
+		config.OutputFormat = config.MissionOutputFormat
 	}
+	if config.OutputFormat == "" {
+		config.OutputFormat = "text"
+	}
+	config.MissionOutputFormat = config.OutputFormat // sync deprecated field
 	if config.IssuesDir == "" {
 		if envDir := os.Getenv("GF_LT_ISSUES_DIR"); envDir != "" {
 			config.IssuesDir = envDir

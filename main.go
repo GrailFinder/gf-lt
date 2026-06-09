@@ -54,6 +54,7 @@ var (
 	missionIssueID           string
 	missionCheckpoint        string
 	missionSummarizeFailures int // track consecutive summarization failures
+	cliExitCode              int
 )
 
 func main() {
@@ -71,7 +72,7 @@ func main() {
 	flag.StringVar(&missionCheckpoint, "checkpoint-file", "", "Custom checkpoint file path")
 	flag.IntVar(&cfg.MissionPMInterval, "pm-interval", 75, "PM check-in interval (tool calls)")
 	flag.IntVar(&cfg.MissionMaxFailures, "max-failures", 3, "Max consecutive failures before abort")
-	flag.StringVar(&cfg.MissionOutputFormat, "output", "text", "Output format: text or json")
+	flag.StringVar(&cfg.OutputFormat, "output", "text", "Output format: text (streaming) or json (non-streaming, complete response)")
 	flag.BoolVar(&cfg.MissionQuiet, "quiet", false, "Suppress tool call logging in mission mode")
 	flag.BoolVar(&cfg.MissionToolsEnabled, "mission-tools", false, "Enable mission tools (move_issue, create_pr, etc.) in non-mission mode")
 	flag.StringVar(&cfg.IssuesDir, "issues-dir", "auto", "Directory containing issues (default: ./issues, overridden by GF_LT_ISSUES_DIR env if set)")
@@ -122,7 +123,7 @@ func main() {
 	}
 	if cfg.CLIMode {
 		runCLIMode()
-		return
+		os.Exit(cliExitCode)
 	}
 	// TUI mode
 	if cfg.MissionToolsEnabled {
@@ -198,16 +199,27 @@ func runCLIMode() {
 	printCLIWelcome()
 	go func() {
 		<-ctx.Done()
-		os.Exit(0)
+		os.Exit(cliExitCode)
 	}()
 	if cliMsg != "" {
 		persona := cfg.UserRole
 		if cfg.WriteNextMsgAs != "" {
 			persona = cfg.WriteNextMsgAs
 		}
+		if cfg.OutputFormat == "json" {
+			outputHandler = &SilentOutputHandler{}
+		}
 		chatRoundChan <- &models.ChatRoundReq{Role: persona, UserMsg: cliMsg}
 		<-cliRespDone
-		fmt.Println()
+		if cfg.OutputFormat == "json" {
+			outputCLIJSON()
+		} else {
+			fmt.Println()
+		}
+		// Detect error: if the last assistant message is empty (no response), exit with 1
+		if len(chatBody.Messages) == 0 {
+			cliExitCode = 1
+		}
 		return
 	}
 	scanner := bufio.NewScanner(os.Stdin)
@@ -810,7 +822,7 @@ func missionComplete(m *mission.Mission, checkpointPath string, status mission.M
 		fmt.Printf("Duration: %s\n", duration)
 	}
 
-	if cfg.MissionOutputFormat == "json" {
+	if cfg.OutputFormat == "json" {
 		result := mission.MissionResult{
 			Status:     status,
 			IssueID:    m.Issue.ID,

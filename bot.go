@@ -89,6 +89,86 @@ func (h *CLIOutputHandler) Writef(format string, args ...interface{}) {
 func (h *CLIOutputHandler) ScrollToEnd() {
 }
 
+type SilentOutputHandler struct{}
+
+func (h *SilentOutputHandler) Write(p string) {}
+func (h *SilentOutputHandler) Writef(format string, args ...interface{}) {}
+func (h *SilentOutputHandler) ScrollToEnd() {}
+
+// outputCLIJSON prints the last exchange as JSON to stdout.
+// Must be called after cliRespDone is signaled (end of one-shot round).
+func outputCLIJSON() {
+	if !cfg.CLIMode || cfg.OutputFormat != "json" {
+		return
+	}
+
+	// Collect tool calls and their results from the full conversation
+	var toolCalls []map[string]any
+	for i := 0; i < len(chatBody.Messages); i++ {
+		msg := chatBody.Messages[i]
+		if msg.Role == cfg.AssistantRole || msg.Role == "assistant" {
+			if msg.ToolCall != nil {
+				tc := msg.ToolCall
+				entry := map[string]any{
+					"name": tc.FuncCall.Name,
+					"args": tc.FuncCall.Args,
+				}
+				for j := i + 1; j < len(chatBody.Messages); j++ {
+					if chatBody.Messages[j].ToolCallID == tc.ID {
+						entry["result"] = chatBody.Messages[j].GetText()
+						break
+					}
+				}
+				toolCalls = append(toolCalls, entry)
+			}
+			for _, tc := range msg.ToolCalls {
+				entry := map[string]any{
+					"name": tc.FuncCall.Name,
+					"args": tc.FuncCall.Args,
+				}
+				for j := i + 1; j < len(chatBody.Messages); j++ {
+					if chatBody.Messages[j].ToolCallID == tc.ID {
+						entry["result"] = chatBody.Messages[j].GetText()
+						break
+					}
+				}
+				toolCalls = append(toolCalls, entry)
+			}
+		}
+	}
+
+	// Find the last assistant message for the final content
+	var content string
+	var stats *models.ResponseStats
+	for i := len(chatBody.Messages) - 1; i >= 0; i-- {
+		msg := chatBody.Messages[i]
+		if msg.Role == cfg.AssistantRole || msg.Role == "assistant" {
+			content = msg.GetText()
+			stats = msg.Stats
+			break
+		}
+	}
+
+	result := map[string]any{
+		"content": content,
+		"model":   chatBody.Model,
+	}
+
+	if len(toolCalls) > 0 {
+		result["tool_calls"] = toolCalls
+	}
+	if stats != nil {
+		result["tokens"] = map[string]int{
+			"prompt":     stats.Tokens,
+			"completion": stats.Tokens, // approximate — same as total for now
+		}
+	}
+
+	data, _ := json.MarshalIndent(result, "", "  ")
+	os.Stdout.Write(data)
+	os.Stdout.Write([]byte("\n"))
+}
+
 var (
 	basicCard = &models.CharCard{
 		ID:        models.ComputeCardID("assistant", "basic_sys"),
