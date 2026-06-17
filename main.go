@@ -181,7 +181,7 @@ func runCLIMode() {
 	}
 	if cliContinue {
 		if cliCardPath != "" {
-			history, err := loadAgentsLastChat(cfg.AssistantRole)
+			history, err := loadChatByCardID(currentCardID, cfg.AssistantRole)
 			if err != nil {
 				fmt.Printf("No previous chat found for %s, starting new chat\n", cfg.AssistantRole)
 				startNewCLIChat()
@@ -339,7 +339,7 @@ func handleCLICommand(msg string) bool {
 		}
 		chatBody.Messages = history
 		activeChatName = name
-		cfg.AssistantRole = chat.Agent
+		cfg.AssistantRole = roleFromAgent(chat.Agent)
 		fmt.Printf("Loaded chat: %s\n", name)
 	case "/hs":
 		if len(chatBody.Messages) == 0 {

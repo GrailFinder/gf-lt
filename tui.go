@@ -770,11 +770,17 @@ func initTUI() {
 			return nil
 		}
 		if event.Key() == tcell.KeyF1 {
-			// chatList, err := loadHistoryChats()
+			// Query by role name (legacy chats) and card ID (new chats)
 			chatList, err := store.GetChatByChar(cfg.AssistantRole)
 			if err != nil {
 				logger.Error("failed to load chat history", "error", err)
 				return nil
+			}
+			if currentCardID != "" && currentCardID != cfg.AssistantRole {
+				cardChats, err := store.GetChatByChar(currentCardID)
+				if err == nil {
+					chatList = append(chatList, cardChats...)
+				}
 			}
 			// Check if there are no chats for this agent
 			if len(chatList) == 0 {
@@ -985,14 +991,13 @@ func initTUI() {
 		}
 		if event.Key() == tcell.KeyCtrlS {
 			// switch sys prompt
-			labels, err := initSysCards()
+			cards, err := initSysCards()
 			if err != nil {
 				logger.Error("failed to read sys dir", "error", err)
 				showToast("error", "failed to read: "+cfg.SysDir)
 				return nil
 			}
-			at := makeAgentTable(labels)
-			// sysModal.AddButtons(labels)
+			at := makeAgentTable(cards)
 			// load all chars
 			pages.AddPage(agentPage, at, true, true)
 			updateStatusLine()

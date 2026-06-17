@@ -179,6 +179,7 @@ var (
 	}
 	sysMap               = map[string]*models.CharCard{}
 	roleToID             = map[string]string{}
+	currentCardID        string
 	modelHasVision       bool
 	windowToolsAvailable bool
 	// tooler               *tools.Tools
@@ -2013,11 +2014,15 @@ func addNewChat(chatName string) {
 		logger.Error("failed to get max chat id from db;", "id:", id)
 		// INFO: will rewrite first chat
 	}
+	cardID := currentCardID
+	if cardID == "" {
+		cardID = cfg.AssistantRole
+	}
 	chat := &models.Chat{
 		ID:        id + 1,
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
-		Agent:     cfg.AssistantRole,
+		Agent:     cardID,
 	}
 	if chatName == "" {
 		chatName = fmt.Sprintf("%d_%s", chat.ID, cfg.AssistantRole)
@@ -2027,9 +2032,17 @@ func addNewChat(chatName string) {
 	activeChatName = chat.Name
 }
 
+func roleFromAgent(agent string) string {
+	if cc, ok := sysMap[agent]; ok {
+		return cc.Role
+	}
+	return agent
+}
+
 func applyCharCard(cc *models.CharCard, loadHistory bool) {
 	cfg.AssistantRole = cc.Role
-	history, err := loadAgentsLastChat(cfg.AssistantRole)
+	currentCardID = cc.ID
+	history, err := loadChatByCardID(cc.ID, cc.Role)
 	if err != nil || !loadHistory {
 		// too much action for err != nil; loadAgentsLastChat needs to be split up
 		history = []models.RoleMsg{
@@ -2114,13 +2127,17 @@ func startNewCLIChat() []models.RoleMsg {
 	}
 	id++
 	charToStart(cfg.AssistantRole, false)
+	cardID := currentCardID
+	if cardID == "" {
+		cardID = cfg.AssistantRole
+	}
 	newChat := &models.Chat{
 		ID:        id,
 		Name:      fmt.Sprintf("%d_%s", id, cfg.AssistantRole),
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
 		Msgs:      "",
-		Agent:     cfg.AssistantRole,
+		Agent:     cardID,
 	}
 	activeChatName = newChat.Name
 	chatMap[newChat.Name] = newChat

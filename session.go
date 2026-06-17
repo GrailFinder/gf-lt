@@ -89,7 +89,7 @@ func loadHistoryChats() ([]string, error) {
 	resp := make([]string, len(chats))
 	for i, chat := range chats {
 		if chat.Name == "" {
-			chat.Name = fmt.Sprintf("%d_%v", chat.ID, chat.Agent)
+			chat.Name = fmt.Sprintf("%d_%v", chat.ID, roleFromAgent(chat.Agent))
 		}
 		resp[i] = chat.Name
 		chatMap[chat.Name] = &chat
@@ -105,7 +105,7 @@ func loadHistoryChat(chatName string) ([]models.RoleMsg, error) {
 		return nil, err
 	}
 	activeChatName = chatName
-	cfg.AssistantRole = chat.Agent
+	cfg.AssistantRole = roleFromAgent(chat.Agent)
 	return chat.ToHistory()
 }
 
@@ -127,6 +127,27 @@ func loadAgentsLastChat(agent string) ([]models.RoleMsg, error) {
 	return history, nil
 }
 
+func loadChatByCardID(cardID, role string) ([]models.RoleMsg, error) {
+	chat, err := store.GetLastChatByAgent(cardID)
+	if err != nil {
+		chat, err = store.GetLastChatByAgent(role)
+		if err != nil {
+			return nil, err
+		}
+	}
+	history, err := chat.ToHistory()
+	if err != nil {
+		return nil, err
+	}
+	if chat.Name == "" {
+		logger.Warn("empty chat name", "id", chat.ID)
+		chat.Name = fmt.Sprintf("%s_%d", role, chat.ID)
+	}
+	chatMap[chat.Name] = chat
+	activeChatName = chat.Name
+	return history, nil
+}
+
 func loadOldChatOrGetNew() []models.RoleMsg {
 	// find last chat
 	chat, err := store.GetLastChat()
@@ -137,13 +158,17 @@ func loadOldChatOrGetNew() []models.RoleMsg {
 			logger.Error("failed to fetch max chat id", "error", err)
 		}
 		maxID++
+		cardID := currentCardID
+		if cardID == "" {
+			cardID = cfg.AssistantRole
+		}
 		chat := &models.Chat{
 			ID:        maxID,
 			CreatedAt: time.Now(),
 			UpdatedAt: time.Now(),
-			Agent:     cfg.AssistantRole,
+			Agent:     cardID,
 		}
-		chat.Name = fmt.Sprintf("%s_%v", chat.Agent, chat.ID)
+		chat.Name = fmt.Sprintf("%s_%v", roleFromAgent(cardID), chat.ID)
 		activeChatName = chat.Name
 		chatMap[chat.Name] = chat
 		return defaultStarter
@@ -157,7 +182,7 @@ func loadOldChatOrGetNew() []models.RoleMsg {
 	}
 	chatMap[chat.Name] = chat
 	activeChatName = chat.Name
-	cfg.AssistantRole = chat.Agent
+	cfg.AssistantRole = roleFromAgent(chat.Agent)
 	return history
 }
 

@@ -199,15 +199,23 @@ func updateStatusLine() {
 	statusLineWidget.SetText(status)
 }
 
-func initSysCards() ([]string, error) {
-	labels := []string{}
-	labels = append(labels, models.SysLabels...)
-	cards, err := pngmeta.ReadDirCards(cfg.SysDir, cfg.UserRole, logger)
+func initSysCards() ([]*models.CharCard, error) {
+	cards := []*models.CharCard{}
+	// Always include the basic (default) assistant card
+	assistantCard := &models.CharCard{
+		ID:        basicCard.ID,
+		SysPrompt: basicCard.SysPrompt,
+		FirstMsg:  basicCard.FirstMsg,
+		Role:      basicCard.Role,
+		FilePath:  basicCard.FilePath,
+	}
+	cards = append(cards, assistantCard)
+	fileCards, err := pngmeta.ReadDirCards(cfg.SysDir, cfg.UserRole, logger)
 	if err != nil {
 		logger.Error("failed to read sys dir", "error", err)
 		return nil, err
 	}
-	for _, cc := range cards {
+	for _, cc := range fileCards {
 		if cc.Role == "" {
 			logger.Warn("empty role", "file", cc.FilePath)
 			continue
@@ -217,9 +225,9 @@ func initSysCards() ([]string, error) {
 		}
 		sysMap[cc.ID] = cc
 		roleToID[cc.Role] = cc.ID
-		labels = append(labels, cc.Role)
+		cards = append(cards, cc)
 	}
-	return labels, nil
+	return cards, nil
 }
 
 func startNewChat(keepSysP bool) {
@@ -233,6 +241,10 @@ func startNewChat(keepSysP bool) {
 	// set chat body
 	chatBody.Messages = chatBody.Messages[:2]
 	textView.SetText(chatToText(chatBody.Messages, cfg.ShowSys))
+	cardID := currentCardID
+	if cardID == "" {
+		cardID = cfg.AssistantRole
+	}
 	newChat := &models.Chat{
 		ID:        id + 1,
 		Name:      fmt.Sprintf("%d_%s", id+1, cfg.AssistantRole),
@@ -241,7 +253,7 @@ func startNewChat(keepSysP bool) {
 		// chat is written to db when we get first llm response (or any)
 		// actual chat history (messages) would be parsed then
 		Msgs:  "",
-		Agent: cfg.AssistantRole,
+		Agent: cardID,
 	}
 	activeChatName = newChat.Name
 	chatMap[newChat.Name] = newChat
@@ -498,7 +510,7 @@ func listChatRoles() []string {
 	if !ok {
 		return cbc
 	}
-	currentCard := GetCardByRole(currentChat.Agent)
+	currentCard := getCardByAgent(currentChat.Agent)
 	if currentCard == nil {
 		logger.Warn("failed to find current card", "agent", currentChat.Agent)
 		return cbc
@@ -1047,6 +1059,13 @@ func GetCardByRole(role string) *models.CharCard {
 		return nil
 	}
 	return sysMap[cardID]
+}
+
+func getCardByAgent(agent string) *models.CharCard {
+	if cc, ok := sysMap[agent]; ok {
+		return cc
+	}
+	return GetCardByRole(agent)
 }
 
 func notifySend(topic, message string) error {

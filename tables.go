@@ -555,9 +555,9 @@ func makeRAGTable(fileList []string, loadedFiles []string) *tview.Flex {
 	return ragflex
 }
 
-func makeAgentTable(agentList []string) *tview.Table {
+func makeAgentTable(cards []*models.CharCard) *tview.Table {
 	actions := []string{"filepath", "load"}
-	rows, cols := len(agentList), len(actions)+1
+	rows, cols := len(cards), len(actions)+1
 	chatActTable := tview.NewTable().
 		SetBorders(true)
 	for r := 0; r < rows; r++ {
@@ -566,18 +566,14 @@ func makeAgentTable(agentList []string) *tview.Table {
 			switch c {
 			case 0:
 				chatActTable.SetCell(r, c,
-					tview.NewTableCell(agentList[r]).
+					tview.NewTableCell(cards[r].Role).
 						SetTextColor(color).
 						SetAlign(tview.AlignCenter).
 						SetSelectable(false))
 			case 1:
 				if actions[c-1] == "filepath" {
-					cc := GetCardByRole(agentList[r])
-					if cc == nil {
-						continue
-					}
 					chatActTable.SetCell(r, c,
-						tview.NewTableCell(cc.FilePath).
+						tview.NewTableCell(cards[r].FilePath).
 							SetTextColor(color).
 							SetAlign(tview.AlignCenter).
 							SetSelectable(false))
@@ -615,39 +611,16 @@ func makeAgentTable(agentList []string) *tview.Table {
 		tc := chatActTable.GetCell(row, column)
 		tc.SetTextColor(tcell.ColorRed)
 		chatActTable.SetSelectable(false, false)
-		selected := agentList[row]
 		// notification := fmt.Sprintf("chat: %s; action: %s", selectedChat, tc.Text)
 		switch tc.Text {
 		case "load":
-			if ok := charToStart(selected, true); !ok {
-				logger.Warn("no such sys msg", "name", selected)
-				pages.RemovePage(agentPage)
-				return
-			}
+			applyCharCard(cards[row], true)
 			// replace textview
 			textView.SetText(chatToText(chatBody.Messages, cfg.ShowSys))
 			colorText()
 			updateStatusLine()
-			// sysModal.ClearButtons()
 			pages.RemovePage(agentPage)
 			app.SetFocus(textArea)
-			return
-		case "rename":
-			pages.RemovePage(agentPage)
-			pages.AddPage(renamePage, renameWindow, true, true)
-			return
-		case "delete":
-			sc, ok := chatMap[selected]
-			if !ok {
-				// no chat found
-				pages.RemovePage(agentPage)
-				return
-			}
-			if err := store.RemoveChat(sc.ID); err != nil {
-				logger.Error("failed to remove chat from db", "chat_id", sc.ID, "chat_name", sc.Name)
-			}
-			showToast("chat deleted", selected+" was deleted")
-			pages.RemovePage(agentPage)
 			return
 		default:
 			pages.RemovePage(agentPage)
