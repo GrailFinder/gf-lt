@@ -21,6 +21,7 @@ import (
 var (
 	termCols, termRows int
 	sttTranscribing   bool
+	exportDir         string // initialized after config load, see init() in bot.go
 )
 
 func isFullScreenPageActive() bool {
@@ -39,7 +40,7 @@ var (
 	bottomFlex             *tview.Flex
 	notificationWidget     *tview.TextView
 	imgView                *tview.Image
-	defaultImage           = "sysprompts/llama.png"
+	defaultImage           string // initialized after config load, see init() in bot.go
 	indexPickWindow        *tview.InputField
 	renameWindow           *tview.InputField
 	roleEditWindow         *tview.InputField
@@ -65,7 +66,6 @@ var (
 	imgPage        = "imgPage"
 	filePickerPage = "filePicker"
 	imagesPage     = "imagesPage"
-	exportDir      = "chat_exports"
 	// For overlay search functionality
 	searchField    *tview.InputField
 	searchPageName = "searchOverlay"

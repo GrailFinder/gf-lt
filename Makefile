@@ -1,4 +1,4 @@
-.PHONY: setconfig run mission-test lint lintall install-linters setup-whisper build-whisper download-whisper-model docker-up docker-down docker-logs noextra-run installdelve checkdelve fetch-onnx install-onnx-deps
+.PHONY: setconfig run mission-test build build-noextra build-debug debug install install-data uninstall lint lintall install-linters setup-whisper build-whisper download-whisper-model docker-up docker-down docker-logs noextra-run installdelve checkdelve fetch-onnx install-onnx-deps
 
 run: setconfig
 	go build -tags extra -o gf-lt && ./gf-lt
@@ -25,11 +25,48 @@ mission-test: setconfig
 	echo "=== Test artifacts in $$REPO ==="; \
 	exit $$rc
 
+build:
+	go build -tags extra -o gf-lt
+
+build-noextra:
+	go build -tags '!extra' -o gf-lt
+
 build-debug:
 	go build -gcflags="all=-N -l" -tags extra -o gf-lt
 
 debug: build-debug
 	dlv exec --headless --accept-multiclient --listen=:2345 ./gf-lt
+
+BINDIR ?= $(HOME)/.local/bin
+CONFIGDIR ?= $(HOME)/.config/gf-lt
+
+install: build install-data
+	install -d $(DESTDIR)$(BINDIR)
+	install -m 755 gf-lt $(DESTDIR)$(BINDIR)/gf-lt
+	@echo "Installed gf-lt to $(DESTDIR)$(BINDIR)/gf-lt"
+	@echo "Make sure $(DESTDIR)$(BINDIR) is in your PATH"
+
+install-data:
+	install -d $(CONFIGDIR)/sysprompts
+	install -m 644 config.example.toml $(CONFIGDIR)/config.toml
+	cp sysprompts/*.json $(CONFIGDIR)/sysprompts/ 2>/dev/null || true
+	cp sysprompts/*.png $(CONFIGDIR)/sysprompts/ 2>/dev/null || true
+	@echo ""
+	@echo "Config installed to: $(CONFIGDIR)/config.toml"
+	@echo "Edit it to set your API keys and model."
+	@echo ""
+
+uninstall:
+	@echo "Removing gf-lt binary..."
+	rm -f $(DESTDIR)$(BINDIR)/gf-lt
+	@echo "Remove $(CONFIGDIR) and its contents? [y/N]"; \
+	read -r ans; \
+	if [ "$$ans" = "y" ] || [ "$$ans" = "Y" ]; then \
+		rm -rf $(CONFIGDIR); \
+		echo "Removed $(CONFIGDIR)"; \
+	else \
+		echo "Skipped, leave $(CONFIGDIR) as-is"; \
+	fi
 
 noextra-run: setconfig
 	go build -tags '!extra' -o gf-lt && ./gf-lt

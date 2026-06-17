@@ -512,7 +512,7 @@ func runMissionMode() {
 		fmt.Printf("Loaded agent card: %s\n", card.Role)
 	} else {
 		// Use default auto-solver card
-		defaultCardPath := "sysprompts/auto-solver-default.json"
+		defaultCardPath := path.Join(cfg.SysDir, "auto-solver-default.json")
 		if card, err := pngmeta.ReadCardJson(defaultCardPath); err == nil {
 			agentSysprompt = card.SysPrompt
 			cfg.AssistantRole = card.Role

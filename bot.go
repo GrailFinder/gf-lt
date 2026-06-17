@@ -14,6 +14,7 @@ import (
 	"gf-lt/tools"
 	"html"
 	"io"
+	"path"
 	"log/slog"
 	"net"
 	"net/http"
@@ -2173,13 +2174,22 @@ func summarizeAndStartNewChat() {
 func init() {
 	// ctx, cancel := context.WithCancel(context.Background())
 	var err error
-	cfg, err = config.LoadConfig("config.toml")
-	if err != nil {
-		fmt.Println("failed to load config.toml", err)
+	cfgPath := config.ResolveConfigPath()
+	if cfgPath == "" {
+		fmt.Println("config.toml not found (checked: ./config.toml and ~/.config/gf-lt/config.toml)")
 		cancel()
 		os.Exit(1)
 		return
 	}
+	cfg, err = config.LoadConfig(cfgPath)
+	if err != nil {
+		fmt.Println("failed to load config:", err)
+		cancel()
+		os.Exit(1)
+		return
+	}
+	exportDir = cfg.ExportDir
+	defaultImage = path.Join(cfg.SysDir, "llama.png")
 	defaultStarter = []models.RoleMsg{
 		{Role: "system", Content: models.BasicSysMsg},
 		{Role: cfg.AssistantRole, Content: models.DefaultFirstMsg},

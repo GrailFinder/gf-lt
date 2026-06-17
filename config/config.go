@@ -2,9 +2,51 @@ package config
 
 import (
 	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/BurntSushi/toml"
 )
+
+// ResolveConfigPath searches for config.toml in CWD, then ~/.config/gf-lt/.
+// Returns empty string if not found.
+func ResolveConfigPath() string {
+	if _, err := os.Stat("config.toml"); err == nil {
+		abs, err := filepath.Abs("config.toml")
+		if err == nil {
+			return abs
+		}
+		return "config.toml"
+	}
+	home, err := os.UserHomeDir()
+	if err == nil {
+		path := filepath.Join(home, ".config", "gf-lt", "config.toml")
+		if _, err := os.Stat(path); err == nil {
+			return path
+		}
+	}
+	return ""
+}
+
+// resolvePath expands ~, resolves relative paths against configDir, passes through absolutes.
+func resolvePath(p, configDir string) string {
+	if p == "" {
+		return p
+	}
+	if strings.HasPrefix(p, "~/") {
+		home, err := os.UserHomeDir()
+		if err == nil {
+			p = filepath.Join(home, p[2:])
+		}
+	}
+	if filepath.IsAbs(p) {
+		return p
+	}
+	if configDir != "" {
+		return filepath.Join(configDir, p)
+	}
+	return p
+}
 
 type MCPServerConfig struct {
 	URL string `toml:"url"`
@@ -96,6 +138,8 @@ type Config struct {
 	MissionIssueID      string
 	MissionAgentCard    string
 	MissionResumeFile   string
+	ConfigDir           string // directory of the loaded config file (set during LoadConfig)
+	ExportDir           string // chat export directory (default: "chat_exports")
 	MissionPMInterval   int
 	MissionMaxFailures  int
 	MissionCheckpointFile string
@@ -116,6 +160,24 @@ func LoadConfig(fn string) (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	// Store config directory for resolving relative paths
+	absFn, err := filepath.Abs(fn)
+	if err == nil {
+		config.ConfigDir = filepath.Dir(absFn)
+	}
+
+	// Resolve relative paths against config directory
+	config.SysDir = resolvePath(config.SysDir, config.ConfigDir)
+	config.DBPATH = resolvePath(config.DBPATH, config.ConfigDir)
+	config.LogFile = resolvePath(config.LogFile, config.ConfigDir)
+	config.RAGDir = resolvePath(config.RAGDir, config.ConfigDir)
+	config.EmbedModelPath = resolvePath(config.EmbedModelPath, config.ConfigDir)
+	config.EmbedTokenizerPath = resolvePath(config.EmbedTokenizerPath, config.ConfigDir)
+	config.ExportDir = resolvePath(config.ExportDir, config.ConfigDir)
+	config.WhisperBinaryPath = resolvePath(config.WhisperBinaryPath, config.ConfigDir)
+	config.WhisperModelPath = resolvePath(config.WhisperModelPath, config.ConfigDir)
+
 	// Default FilePickerDir to current working directory if not set
 	if config.FilePickerDir == "" {
 		cwd, err := os.Getwd()
@@ -168,7 +230,10 @@ func LoadConfig(fn string) (*Config, error) {
 		config.ApiLinks = append(config.ApiLinks, config.CompletionAPI)
 	}
 	if config.RAGDir == "" {
-		config.RAGDir = "ragimport"
+		config.RAGDir = resolvePath("ragimport", config.ConfigDir)
+	}
+	if config.ExportDir == "" {
+		config.ExportDir = resolvePath("chat_exports", config.ConfigDir)
 	}
 	// Mission mode defaults
 	if config.MissionPMInterval == 0 {
@@ -188,7 +253,7 @@ func LoadConfig(fn string) (*Config, error) {
 		if envDir := os.Getenv("GF_LT_ISSUES_DIR"); envDir != "" {
 			config.IssuesDir = envDir
 		} else {
-			config.IssuesDir = "./issues"
+			config.IssuesDir = resolvePath("./issues", config.ConfigDir)
 		}
 	}
 	// if any value is empty fill with default
