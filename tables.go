@@ -208,7 +208,9 @@ func makeChatTable(chatMap map[string]models.Chat) *tview.Table {
 				showToast("error", "no such card: "+agentName)
 				return
 			}
-			cc.SysPrompt = chatBody.Messages[0].Content
+			// strip <tool_guide> before saving so it doesn't get embedded in the card file
+			cleaned := removeToolGuide([]models.RoleMsg{{Role: "system", Content: chatBody.Messages[0].Content}})
+			cc.SysPrompt = cleaned[0].Content
 			cc.FirstMsg = chatBody.Messages[1].Content
 			if err := pngmeta.WriteToPng(cc.ToSpec(cfg.UserRole), cc.FilePath, cc.FilePath); err != nil {
 				logger.Error("failed to write charcard", "error", err)
