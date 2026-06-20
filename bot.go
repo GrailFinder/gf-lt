@@ -2236,6 +2236,10 @@ func init() {
 		os.Exit(1)
 		return
 	}
+	// load file cards into sysMap/roleToID before resolving chat agent hashes
+	if _, err := initSysCards(); err != nil {
+		logger.Error("failed to init sys cards", "error", err)
+	}
 	lastToolCall = &models.FuncCall{}
 	var lastChat []models.RoleMsg
 	if cfg.CLIMode {

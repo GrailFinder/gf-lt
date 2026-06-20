@@ -699,11 +699,6 @@ func initTUI() {
 	if cfg.AutoScrollEnabled {
 		textView.ScrollToEnd()
 	}
-	// init sysmap
-	_, err := initSysCards()
-	if err != nil {
-		logger.Error("failed to init sys cards", "error", err)
-	}
 	app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		if event.Key() == tcell.KeyRune && event.Rune() == '5' && event.Modifiers()&tcell.ModAlt != 0 {
 			// switch cfg.ShowSys
