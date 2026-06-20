@@ -510,8 +510,8 @@ func listChatRoles() []string {
 	if !ok {
 		return cbc
 	}
-	currentCard := getCardByAgent(currentChat.Agent)
-	if currentCard == nil {
+	currentCard, ok := sysMap[currentChat.Agent]
+	if !ok {
 		logger.Warn("failed to find current card", "agent", currentChat.Agent)
 		return cbc
 	}
@@ -1059,13 +1059,6 @@ func GetCardByRole(role string) *models.CharCard {
 		return nil
 	}
 	return sysMap[cardID]
-}
-
-func getCardByAgent(agent string) *models.CharCard {
-	if cc, ok := sysMap[agent]; ok {
-		return cc
-	}
-	return GetCardByRole(agent)
 }
 
 func notifySend(topic, message string) error {

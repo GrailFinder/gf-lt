@@ -231,11 +231,6 @@ func makeChatTable(chatMap map[string]models.Chat) *tview.Table {
 			}
 			cc, ok := sysMap[ch.Agent]
 			if !ok {
-				if id, ok := roleToID[ch.Agent]; ok {
-					cc = sysMap[id]
-				}
-			}
-			if cc == nil {
 				logger.Warn("no such card", "agent", ch.Agent)
 				showToast("error", "no such card: "+ch.Agent)
 				return

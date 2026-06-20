@@ -339,7 +339,11 @@ func handleCLICommand(msg string) bool {
 		}
 		chatBody.Messages = history
 		activeChatName = name
-		cfg.AssistantRole = roleFromAgent(chat.Agent)
+		if c, ok := sysMap[chat.Agent]; ok {
+			cfg.AssistantRole = c.Role
+		} else {
+			fmt.Printf("Warning: card not found for agent: %s\n", chat.Agent)
+		}
 		fmt.Printf("Loaded chat: %s\n", name)
 	case "/hs":
 		if len(chatBody.Messages) == 0 {

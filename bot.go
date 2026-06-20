@@ -2032,13 +2032,6 @@ func addNewChat(chatName string) {
 	activeChatName = chat.Name
 }
 
-func roleFromAgent(agent string) string {
-	if cc, ok := sysMap[agent]; ok {
-		return cc.Role
-	}
-	return agent
-}
-
 func applyCharCard(cc *models.CharCard, loadHistory bool) {
 	cfg.AssistantRole = cc.Role
 	currentCardID = cc.ID

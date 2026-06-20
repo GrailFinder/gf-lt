@@ -765,22 +765,17 @@ func initTUI() {
 			return nil
 		}
 		if event.Key() == tcell.KeyF1 {
-			// Query by role name (legacy chats) and card ID (new chats)
-			chatList, err := store.GetChatByChar(cfg.AssistantRole)
+			agent := currentCardID
+			if agent == "" {
+				agent = cfg.AssistantRole
+			}
+			chatList, err := store.GetChatByChar(agent)
 			if err != nil {
 				logger.Error("failed to load chat history", "error", err)
 				return nil
 			}
-			if currentCardID != "" && currentCardID != cfg.AssistantRole {
-				cardChats, err := store.GetChatByChar(currentCardID)
-				if err == nil {
-					chatList = append(chatList, cardChats...)
-				}
-			}
-			// Check if there are no chats for this agent
 			if len(chatList) == 0 {
-				notification := "no chats found for agent: " + cfg.AssistantRole
-				showToast("info", notification)
+				showToast("info", "no chats found for agent: "+cfg.AssistantRole)
 				return nil
 			}
 			chatMap := make(map[string]models.Chat)

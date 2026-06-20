@@ -89,7 +89,11 @@ func loadHistoryChats() ([]string, error) {
 	resp := make([]string, len(chats))
 	for i, chat := range chats {
 		if chat.Name == "" {
-			chat.Name = fmt.Sprintf("%d_%v", chat.ID, roleFromAgent(chat.Agent))
+			if c, ok := sysMap[chat.Agent]; ok {
+				chat.Name = fmt.Sprintf("%d_%v", chat.ID, c.Role)
+			} else {
+				chat.Name = fmt.Sprintf("%d_%v", chat.ID, chat.Agent)
+			}
 		}
 		resp[i] = chat.Name
 		chatMap[chat.Name] = &chat
@@ -105,7 +109,11 @@ func loadHistoryChat(chatName string) ([]models.RoleMsg, error) {
 		return nil, err
 	}
 	activeChatName = chatName
-	cfg.AssistantRole = roleFromAgent(chat.Agent)
+	if c, ok := sysMap[chat.Agent]; ok {
+		cfg.AssistantRole = c.Role
+	} else {
+		return nil, fmt.Errorf("card not found for agent: %s", chat.Agent)
+	}
 	return chat.ToHistory()
 }
 
@@ -130,10 +138,7 @@ func loadAgentsLastChat(agent string) ([]models.RoleMsg, error) {
 func loadChatByCardID(cardID, role string) ([]models.RoleMsg, error) {
 	chat, err := store.GetLastChatByAgent(cardID)
 	if err != nil {
-		chat, err = store.GetLastChatByAgent(role)
-		if err != nil {
-			return nil, err
-		}
+		return nil, err
 	}
 	history, err := chat.ToHistory()
 	if err != nil {
@@ -168,7 +173,11 @@ func loadOldChatOrGetNew() []models.RoleMsg {
 			UpdatedAt: time.Now(),
 			Agent:     cardID,
 		}
-		chat.Name = fmt.Sprintf("%s_%v", roleFromAgent(cardID), chat.ID)
+		if c, ok := sysMap[cardID]; ok {
+				chat.Name = fmt.Sprintf("%s_%v", c.Role, chat.ID)
+			} else {
+				chat.Name = fmt.Sprintf("%s_%v", cardID, chat.ID)
+			}
 		activeChatName = chat.Name
 		chatMap[chat.Name] = chat
 		return defaultStarter
@@ -182,7 +191,12 @@ func loadOldChatOrGetNew() []models.RoleMsg {
 	}
 	chatMap[chat.Name] = chat
 	activeChatName = chat.Name
-	cfg.AssistantRole = roleFromAgent(chat.Agent)
+	if c, ok := sysMap[chat.Agent]; ok {
+		cfg.AssistantRole = c.Role
+	} else {
+		logger.Warn("failed to load history chat", "error", "card not found for agent: "+chat.Agent)
+		return defaultStarter
+	}
 	return history
 }
 
