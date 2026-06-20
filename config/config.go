@@ -84,6 +84,7 @@ type Config struct {
 	CharSpecificContextEnabled bool   `toml:"CharSpecificContextEnabled"`
 	CharSpecificContextTag     string `toml:"CharSpecificContextTag"`
 	AutoTurn                   bool   `toml:"AutoTurn"`
+	DisableToolGuide           bool   `toml:"DisableToolGuide"`
 	// playwright browser
 	PlaywrightEnabled bool `toml:"PlaywrightEnabled"`
 	MemoryEnabled     bool `toml:"MemoryEnabled"`

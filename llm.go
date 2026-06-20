@@ -406,7 +406,7 @@ func (op LCPChat) FormMsg(msg, role string, resume bool) (io.Reader, error) {
 	// sending tool instructions for chat endpoints
 	// Update chatBody.Messages with tool guide (persist to stored messages)
 	chatBody.Messages = removeToolGuide(chatBody.Messages)
-	if cfg.ToolUse && !resume && role == cfg.UserRole {
+	if cfg.ToolUse && !cfg.DisableToolGuide && !resume && role == cfg.UserRole {
 		chatBody.Messages = prependToolGuide(chatBody.Messages, tools.ToolSysMsgChat)
 	}
 	filteredMessages, _ := filterMessagesForCurrentCharacter(chatBody.Messages)
@@ -579,7 +579,7 @@ func (ds DeepSeekerChat) FormMsg(msg, role string, resume bool) (io.Reader, erro
 	// sending tool instructions for chat endpoints
 	// Update chatBody.Messages with tool guide (persist to stored messages)
 	chatBody.Messages = removeToolGuide(chatBody.Messages)
-	if cfg.ToolUse && !resume && role == cfg.UserRole {
+	if cfg.ToolUse && !cfg.DisableToolGuide && !resume && role == cfg.UserRole {
 		chatBody.Messages = prependToolGuide(chatBody.Messages, tools.ToolSysMsgChat)
 	}
 	filteredMessages, _ := filterMessagesForCurrentCharacter(chatBody.Messages)
@@ -759,7 +759,7 @@ func (or OpenRouterChat) FormMsg(msg, role string, resume bool) (io.Reader, erro
 	// sending tool instructions for chat endpoints
 	// Update chatBody.Messages with tool guide (persist to stored messages)
 	chatBody.Messages = removeToolGuide(chatBody.Messages)
-	if cfg.ToolUse && !resume && role == cfg.UserRole {
+	if cfg.ToolUse && !cfg.DisableToolGuide && !resume && role == cfg.UserRole {
 		chatBody.Messages = prependToolGuide(chatBody.Messages, tools.ToolSysMsgChat)
 	}
 	filteredMessages, _ := filterMessagesForCurrentCharacter(chatBody.Messages)
