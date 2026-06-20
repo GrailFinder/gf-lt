@@ -168,7 +168,7 @@ func runCLIMode() {
 	outputHandler = &CLIOutputHandler{}
 	cliRespDone = make(chan bool, 1)
 	if cliCardPath != "" {
-		card, err := pngmeta.ReadCardJson(cliCardPath)
+		card, err := pngmeta.ReadCardJson(cliCardPath, cfg.UserRole)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Failed to load syscard: %v\n", err)
 			os.Exit(1)
@@ -292,7 +292,7 @@ func handleCLICommand(msg string) bool {
 			fmt.Println("Usage: /card <path>")
 			return true
 		}
-		card, err := pngmeta.ReadCardJson(args[0])
+		card, err := pngmeta.ReadCardJson(args[0], cfg.UserRole)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Failed to load syscard: %v\n", err)
 			return true
@@ -502,7 +502,7 @@ func runMissionMode() {
 	// Load agent card if provided
 	var agentSysprompt string
 	if missionAgentCard != "" {
-		card, err := pngmeta.ReadCardJson(missionAgentCard)
+		card, err := pngmeta.ReadCardJson(missionAgentCard, cfg.UserRole)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Failed to load agent card: %v\n", err)
 			os.Exit(1)
@@ -513,7 +513,7 @@ func runMissionMode() {
 	} else {
 		// Use default auto-solver card
 		defaultCardPath := "sysprompts/auto-solver-default.json"
-		if card, err := pngmeta.ReadCardJson(defaultCardPath); err == nil {
+		if card, err := pngmeta.ReadCardJson(defaultCardPath, cfg.UserRole); err == nil {
 			agentSysprompt = card.SysPrompt
 			cfg.AssistantRole = card.Role
 			fmt.Printf("Using default agent card: %s\n", card.Role)

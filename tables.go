@@ -222,18 +222,26 @@ func makeChatTable(chatMap map[string]models.Chat) *tview.Table {
 			pages.RemovePage(historyPage)
 			return
 		case "new_chat_from_card":
-			fi := strings.Index(selectedChat, "_")
-			agentName := selectedChat[fi+1:]
-			cc := GetCardByRole(agentName)
+			ch, ok := chatMap[selectedChat]
+			if !ok {
+				showToast("error", "chat not found")
+				return
+			}
+			cc, ok := sysMap[ch.Agent]
+			if !ok {
+				if id, ok := roleToID[ch.Agent]; ok {
+					cc = sysMap[id]
+				}
+			}
 			if cc == nil {
-				logger.Warn("no such card", "agent", agentName)
-				showToast("error", "no such card: "+agentName)
+				logger.Warn("no such card", "agent", ch.Agent)
+				showToast("error", "no such card: "+ch.Agent)
 				return
 			}
 			newCard, err := pngmeta.ReadCard(cc.FilePath, cfg.UserRole)
 			if err != nil {
 				logger.Error("failed to reload charcard", "path", cc.FilePath, "error", err)
-				newCard, err = pngmeta.ReadCardJson(cc.FilePath)
+				newCard, err = pngmeta.ReadCardJson(cc.FilePath, cfg.UserRole)
 				if err != nil {
 					logger.Error("failed to reload charcard", "path", cc.FilePath, "error", err)
 					showToast("error", "failed to reload card: "+cc.FilePath)

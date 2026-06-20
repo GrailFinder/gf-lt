@@ -100,7 +100,7 @@ func ReadCard(fname, uname string) (*models.CharCard, error) {
 	return charSpec.Simplify(uname, fname), nil
 }
 
-func ReadCardJson(fname string) (*models.CharCard, error) {
+func ReadCardJson(fname, uname string) (*models.CharCard, error) {
 	data, err := os.ReadFile(fname)
 	if err != nil {
 		return nil, err
@@ -115,6 +115,8 @@ func ReadCardJson(fname string) (*models.CharCard, error) {
 	if card.ID == "" {
 		card.ID = models.ComputeCardID(card.Role, card.FilePath)
 	}
+	card.FirstMsg = strings.ReplaceAll(strings.ReplaceAll(card.FirstMsg, "{{char}}", card.Role), "{{user}}", uname)
+	card.SysPrompt = strings.ReplaceAll(strings.ReplaceAll(card.SysPrompt, "{{char}}", card.Role), "{{user}}", uname)
 	return &card, nil
 }
 
@@ -139,13 +141,11 @@ func ReadDirCards(dirname, uname string, log *slog.Logger) ([]*models.CharCard, 
 		}
 		if strings.HasSuffix(f.Name(), ".json") {
 			fpath := path.Join(dirname, f.Name())
-			cc, err := ReadCardJson(fpath)
+			cc, err := ReadCardJson(fpath, uname)
 			if err != nil {
 				log.Warn("failed to load card", "error", err, "card", fpath)
 				continue
 			}
-			cc.FirstMsg = strings.ReplaceAll(strings.ReplaceAll(cc.FirstMsg, "{{char}}", cc.Role), "{{user}}", uname)
-			cc.SysPrompt = strings.ReplaceAll(strings.ReplaceAll(cc.SysPrompt, "{{char}}", cc.Role), "{{user}}", uname)
 			resp = append(resp, cc)
 		}
 	}
