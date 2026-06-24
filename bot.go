@@ -31,27 +31,27 @@ import (
 )
 
 var (
-	httpClient           = &http.Client{}
-	cfg                  *config.Config
-	logger               *slog.Logger
-	logLevel             = new(slog.LevelVar)
-	ctx, cancel          = context.WithCancel(context.Background())
-	activeChatName       string
-	chatRoundChan        = make(chan *models.ChatRoundReq, 1)
-	chunkChan            = make(chan string, 10)
-	streamDone           = make(chan bool, 1)
-	chatBody             *models.ChatBody
-	store                storage.FullRepo
-	defaultStarter       = []models.RoleMsg{}
-	interruptResp        atomic.Bool
-	ragger               *rag.RAG
-	chunkParser          ChunkParser
-	lastToolCall         *models.FuncCall
+	httpClient             = &http.Client{}
+	cfg                    *config.Config
+	logger                 *slog.Logger
+	logLevel               = new(slog.LevelVar)
+	ctx, cancel            = context.WithCancel(context.Background())
+	activeChatName         string
+	chatRoundChan          = make(chan *models.ChatRoundReq, 1)
+	chunkChan              = make(chan string, 10)
+	streamDone             = make(chan bool, 1)
+	chatBody               *models.ChatBody
+	store                  storage.FullRepo
+	defaultStarter         = []models.RoleMsg{}
+	interruptResp          atomic.Bool
+	ragger                 *rag.RAG
+	chunkParser            ChunkParser
+	lastToolCall           *models.FuncCall
 	lastCompletedToolCalls []models.ToolCall
-	lastRespStats        *models.ResponseStats
-	outputHandler        OutputHandler
-	cliPrevOutput        string
-	cliRespDone          chan bool
+	lastRespStats          *models.ResponseStats
+	outputHandler          OutputHandler
+	cliPrevOutput          string
+	cliRespDone            chan bool
 )
 
 type OutputHandler interface {
@@ -91,9 +91,9 @@ func (h *CLIOutputHandler) ScrollToEnd() {
 
 type SilentOutputHandler struct{}
 
-func (h *SilentOutputHandler) Write(p string) {}
+func (h *SilentOutputHandler) Write(p string)                            {}
 func (h *SilentOutputHandler) Writef(format string, args ...interface{}) {}
-func (h *SilentOutputHandler) ScrollToEnd() {}
+func (h *SilentOutputHandler) ScrollToEnd()                              {}
 
 // outputCLIJSON prints the last exchange as JSON to stdout.
 // Must be called after cliRespDone is signaled (end of one-shot round).
@@ -1336,7 +1336,6 @@ out:
 		}
 		lastRespStats = nil
 	}
-	botRespMode.Store(false)
 	if r.Resume {
 		chatBody.Messages[len(chatBody.Messages)-1].Content += respText.String()
 		updatedMsg := chatBody.Messages[len(chatBody.Messages)-1]
@@ -1354,6 +1353,7 @@ out:
 		}
 		stopTTSIfNotForUser(&chatBody.Messages[msgIdx])
 	}
+	botRespMode.Store(false)
 	cleanChatBody()
 	refreshChatDisplay()
 	updateStatusLine()
@@ -1789,27 +1789,27 @@ func findCall(msg, toolCall string) bool {
 	// Check for dangerous commands that require user confirmation (skip in mission mode)
 	if !tools.IsMissionMode() {
 		if dangerous, label := tools.IsDangerousCommand(fc.Name, fc.Args); dangerous {
-		req := tools.ConfirmRequest{
-			ToolName: fc.Name,
-			Command:  fc.Args["command"],
-			ToolArgs: fc.Args,
-		}
-		approved := tools.RequestConfirmation(req)
-		if !approved {
-			// User denied or timed out — stop the flow, user takes over
-			toolResponseMsg := models.RoleMsg{
-				Role:       cfg.ToolRole,
-				Content:    "[denied] This command requires user confirmation: " + label,
-				ToolCallID: lastToolCall.ID,
+			req := tools.ConfirmRequest{
+				ToolName: fc.Name,
+				Command:  fc.Args["command"],
+				ToolArgs: fc.Args,
 			}
-			chatBody.Messages = append(chatBody.Messages, toolResponseMsg)
-			lastToolCall.ID = ""
-			logger.Info("dangerous command denied by user", "tool", fc.Name, "label", label)
-			// Don't trigger chatRound — stop here, user takes over
-			return true
+			approved := tools.RequestConfirmation(req)
+			if !approved {
+				// User denied or timed out — stop the flow, user takes over
+				toolResponseMsg := models.RoleMsg{
+					Role:       cfg.ToolRole,
+					Content:    "[denied] This command requires user confirmation: " + label,
+					ToolCallID: lastToolCall.ID,
+				}
+				chatBody.Messages = append(chatBody.Messages, toolResponseMsg)
+				lastToolCall.ID = ""
+				logger.Info("dangerous command denied by user", "tool", fc.Name, "label", label)
+				// Don't trigger chatRound — stop here, user takes over
+				return true
+			}
+			// User approved — continue with normal execution
 		}
-		// User approved — continue with normal execution
-	}
 	}
 	// Show tool call progress indicator before execution
 	argsJSON, _ := json.Marshal(fc.Args)
