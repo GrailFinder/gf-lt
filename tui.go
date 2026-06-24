@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"gf-lt/models"
 	"gf-lt/tools"
@@ -32,6 +33,7 @@ var (
 	pages                  *tview.Pages
 	textArea               *tview.TextArea
 	editArea               *tview.TextArea
+	toolCallEditArea       *tview.TextArea
 	textView               *tview.TextView
 	statusLineWidget       *tview.TextView
 	helpView               *tview.TextView
@@ -489,21 +491,51 @@ func initTUI() {
 	editArea = tview.NewTextArea().
 		SetPlaceholder("Replace msg...")
 	editArea.SetBorder(true).SetTitle("input")
-	editArea.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		// if event.Key() == tcell.KeyEscape && editMode {
-		if event.Key() == tcell.KeyEscape {
-			defer colorText()
-			editedMsg := editArea.GetText()
-			if editedMsg == "" {
-				showToast("edit", "no edit provided")
-				pages.RemovePage(editMsgPage)
-				return nil
-			}
-			chatBody.Messages[selectedIndex].SetText(editedMsg)
-			// change textarea
-			textView.SetText(chatToText(chatBody.Messages, cfg.ShowSys))
+	toolCallEditArea = tview.NewTextArea().
+		SetPlaceholder(`{"id": "...", "type": "function", "function": {"name": "...", "arguments": "..."}}`)
+	toolCallEditArea.SetBorder(true).SetTitle("tool call JSON")
+	saveEditMsg := func() {
+		defer colorText()
+		editedMsg := editArea.GetText()
+		if editedMsg == "" {
+			showToast("edit", "no edit provided")
 			pages.RemovePage(editMsgPage)
 			editMode = false
+			return
+		}
+		chatBody.Messages[selectedIndex].SetText(editedMsg)
+
+		tcText := toolCallEditArea.GetText()
+		if tcText != "" && tcText != "[multiple tool calls — not editable]" {
+			var tc models.ToolCall
+			if err := json.Unmarshal([]byte(tcText), &tc); err == nil && tc.FuncCall.Name != "" {
+				if tc.ID == "" {
+					tc.ID = fmt.Sprintf("call_edit_%d", time.Now().UnixMilli())
+				}
+				chatBody.Messages[selectedIndex].ToolCalls = []models.ToolCall{tc}
+			} else if err != nil {
+				showToast("edit", "invalid tool call JSON")
+			}
+		} else if tcText == "[multiple tool calls — not editable]" {
+			// leave existing ToolCalls unchanged
+		} else {
+			chatBody.Messages[selectedIndex].ToolCalls = nil
+		}
+
+		textView.SetText(chatToText(chatBody.Messages, cfg.ShowSys))
+		pages.RemovePage(editMsgPage)
+		editMode = false
+	}
+	editArea.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		if event.Key() == tcell.KeyEscape {
+			saveEditMsg()
+			return nil
+		}
+		return event
+	})
+	toolCallEditArea.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		if event.Key() == tcell.KeyEscape {
+			saveEditMsg()
 			return nil
 		}
 		return event
@@ -580,8 +612,22 @@ func initTUI() {
 				roleEditMode = false // Reset the flag
 			case editMode:
 				hideIndexBar() // Hide overlay first
-				pages.AddPage(editMsgPage, editArea, true, true)
+				editFlex := tview.NewFlex().SetDirection(tview.FlexRow).
+					AddItem(editArea, 0, 1, true).
+					AddItem(toolCallEditArea, 0, 1, false)
+				pages.AddPage(editMsgPage, editFlex, true, true)
 				editArea.SetText(m.GetText(), true)
+				if len(m.ToolCalls) == 1 {
+					tcJSON, _ := json.MarshalIndent(m.ToolCalls[0], "", "  ")
+					toolCallEditArea.SetText(string(tcJSON), true)
+					toolCallEditArea.SetDisabled(false)
+				} else if len(m.ToolCalls) > 1 {
+					toolCallEditArea.SetText("[multiple tool calls — not editable]", false)
+					toolCallEditArea.SetDisabled(true)
+				} else {
+					toolCallEditArea.SetText("", true)
+					toolCallEditArea.SetDisabled(false)
+				}
 			default:
 				msgText := m.GetText()
 				if err := copyToClipboard(msgText); err != nil {
@@ -1313,7 +1359,59 @@ func initTUI() {
 			}
 			return nil
 		}
+		if event.Key() == tcell.KeyCtrlE {
+			if botRespMode.Load() {
+				return nil
+			}
+			var idx int
+			if editMode {
+				idx = selectedIndex
+			} else {
+				found := false
+				for i := len(chatBody.Messages) - 1; i >= 0; i-- {
+					if len(chatBody.Messages[i].ToolCalls) > 0 {
+						idx = i
+						found = true
+						break
+					}
+				}
+				if !found {
+					showToast("info", "no tool calls to execute")
+					return nil
+				}
+			}
+			if editMode {
+				editedMsg := editArea.GetText()
+				if editedMsg != "" {
+					chatBody.Messages[selectedIndex].SetText(editedMsg)
+				}
+				tcText := toolCallEditArea.GetText()
+				if tcText != "" && tcText != "[multiple tool calls — not editable]" {
+					var tc models.ToolCall
+					if err := json.Unmarshal([]byte(tcText), &tc); err == nil && tc.FuncCall.Name != "" {
+						if tc.ID == "" {
+							tc.ID = fmt.Sprintf("call_edit_%d", time.Now().UnixMilli())
+						}
+						chatBody.Messages[selectedIndex].ToolCalls = []models.ToolCall{tc}
+					}
+				}
+				textView.SetText(chatToText(chatBody.Messages, cfg.ShowSys))
+				pages.RemovePage(editMsgPage)
+				editMode = false
+			}
+			go executeSingleToolCall(idx)
+			return nil
+		}
 		if event.Key() == tcell.KeyPgUp || event.Key() == tcell.KeyPgDn {
+			if editMode {
+				currentF := app.GetFocus()
+				if currentF == editArea {
+					app.SetFocus(toolCallEditArea)
+				} else if currentF == toolCallEditArea {
+					app.SetFocus(editArea)
+				}
+				return nil
+			}
 			currentF := app.GetFocus()
 			app.SetFocus(focusSwitcher[currentF])
 			return nil

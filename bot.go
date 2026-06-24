@@ -1520,148 +1520,7 @@ func handleBatchToolCalls(textContent string, toolCalls []models.ToolCall) bool 
 	}
 
 	for _, tc := range toolCalls {
-		// Parse the arguments JSON
-		args, err := convertJSONToMapStringString(tc.FuncCall.Args)
-		if err != nil {
-			logger.Error("failed to parse tool call args", "name", tc.FuncCall.Name, "args", tc.FuncCall.Args, "error", err)
-			continue
-		}
-
-		// Check for dangerous commands (skip in mission mode)
-		if !tools.IsMissionMode() {
-			if dangerous, label := tools.IsDangerousCommand(tc.FuncCall.Name, args); dangerous {
-				req := tools.ConfirmRequest{
-					ToolName: tc.FuncCall.Name,
-					Command:  args["command"],
-					ToolArgs: args,
-				}
-				approved := tools.RequestConfirmation(req)
-				if !approved {
-					logger.Info("dangerous command denied", "tool", tc.FuncCall.Name, "label", label)
-					chatBody.Messages = append(chatBody.Messages, models.RoleMsg{
-						Role:       cfg.ToolRole,
-						Content:    "[denied] This command requires user confirmation: " + label,
-						ToolCallID: tc.ID,
-					})
-					continue
-				}
-			}
-		}
-
-		// Execute the tool
-		outputHandler.Writef("\n[yellow::i][tool: %s...][-:-:-]\nargs: %s", tc.FuncCall.Name, tc.FuncCall.Args)
-		toolRunningMode.Store(true)
-		resp, ok := tools.CallToolWithAgent(tc.FuncCall.Name, args)
-		toolRunningMode.Store(false)
-
-		if !ok {
-			// Tool execution failed entirely
-			if tools.IsMissionMode() {
-				tools.GetCurrentMission().AddFailure()
-			}
-			chatBody.Messages = append(chatBody.Messages, models.RoleMsg{
-				Role:       cfg.ToolRole,
-				Content:    string(resp),
-				ToolCallID: tc.ID,
-			})
-			continue
-		}
-
-		// Create tool response message
-		toolMsg := string(resp)
-		logger.Info("llm used a tool call", "tool_name", tc.FuncCall.Name, "args", args, "id", tc.ID, "cwd", tools.GetFSRoot(), "resp", toolMsg)
-
-		var toolResponseMsg models.RoleMsg
-		if strings.HasPrefix(strings.TrimSpace(toolMsg), `{"type":"multimodal_content"`) {
-			multimodalResp := models.MultimodalToolResp{}
-			if err := json.Unmarshal([]byte(toolMsg), &multimodalResp); err == nil && multimodalResp.Type == "multimodal_content" {
-				var contentParts []any
-				var textParts []string
-				for _, part := range multimodalResp.Parts {
-					switch part["type"] {
-					case "text":
-						textParts = append(textParts, part["text"])
-						contentParts = append(contentParts, models.TextContentPart{Type: "text", Text: part["text"]})
-					case "image_url":
-						contentParts = append(contentParts, models.ImageContentPart{
-							Type: "image_url",
-							Path: part["path"],
-							ImageURL: struct {
-								URL string `json:"url"`
-							}{URL: part["url"]},
-						})
-					}
-				}
-				toolResponseMsg = models.RoleMsg{
-					Role:            cfg.ToolRole,
-					ContentParts:    contentParts,
-					HasContentParts: true,
-					ToolCallID:      tc.ID,
-					Content:         strings.Join(textParts, "\n"),
-				}
-			} else {
-				toolResponseMsg = models.RoleMsg{
-					Role:       cfg.ToolRole,
-					Content:    toolMsg,
-					ToolCallID: tc.ID,
-				}
-			}
-		} else {
-			toolResponseMsg = models.RoleMsg{
-				Role:       cfg.ToolRole,
-				Content:    toolMsg,
-				ToolCallID: tc.ID,
-			}
-		}
-
-		// Mission mode: detect tool-level errors (bash failures, test failures, JSON errors)
-		if tools.IsMissionMode() && tools.IsToolError(tc.FuncCall.Name, toolResponseMsg.Content) {
-			tools.GetCurrentMission().AddFailure()
-			logger.Info("mission tool error detected", "tool", tc.FuncCall.Name)
-		} else if tools.IsMissionMode() {
-			tools.GetCurrentMission().ResetFailures()
-		}
-
-		// Mission mode: increment tool call counter for PM interval
-		if tools.IsMissionMode() {
-			tools.GetCurrentMission().IncrementToolCalls()
-		}
-
-		// Mission mode: detect repeated tool calls (same tool + args 3× in a row)
-		if tools.IsMissionMode() {
-			m := tools.GetCurrentMission()
-			key := tc.FuncCall.Name + ":" + tc.FuncCall.Args
-			if key == m.LastToolCall {
-				m.SameToolCount++
-			} else {
-				m.LastToolCall = key
-				m.SameToolCount = 1
-			}
-			if m.SameToolCount > 0 && m.SameToolCount%3 == 0 {
-				m.PMGuidanceNeeded = true
-				m.Log("Loop detected: %s repeated %d times", tc.FuncCall.Name, m.SameToolCount)
-			}
-		}
-
-		// Mission mode: inline PM check — fires even when LLM keeps making tool calls
-		if tools.IsMissionMode() {
-			m := tools.GetCurrentMission()
-			if m.PMGuidanceNeeded {
-				m.PMGuidanceNeeded = false
-				guidance := getPMGuidance(m)
-				m.Log("PM check-in triggered at tool call %d", m.Checkpoint.ToolCallCount)
-				chatBody.Messages = append(chatBody.Messages, models.RoleMsg{
-					Role:    cfg.UserRole,
-					Content: fmt.Sprintf("[PM Check-in]\n%s", guidance),
-				})
-			}
-		}
-
-		// Display and append the tool response
-		outputHandler.Writef("%s[-:-:b](%d) <%s>: [-:-:-]\n%s\n",
-			"\n\n", len(chatBody.Messages), cfg.ToolRole, toolResponseMsg.GetText())
-		chatBody.Messages = append(chatBody.Messages, toolResponseMsg)
-
+		executeOneToolCall(tc)
 	}
 
 	// Reload the original model if it was unloaded for VRAM management
@@ -1682,6 +1541,166 @@ func handleBatchToolCalls(textContent string, toolCalls []models.ToolCall) bool 
 	}
 	chatRoundChan <- crr
 	return true
+}
+
+// executeOneToolCall executes a single tool call, appends its response to chatBody.Messages.
+func executeOneToolCall(tc models.ToolCall) {
+	args, err := convertJSONToMapStringString(tc.FuncCall.Args)
+	if err != nil {
+		logger.Error("failed to parse tool call args", "name", tc.FuncCall.Name, "args", tc.FuncCall.Args, "error", err)
+		return
+	}
+
+	if !tools.IsMissionMode() {
+		if dangerous, label := tools.IsDangerousCommand(tc.FuncCall.Name, args); dangerous {
+			req := tools.ConfirmRequest{
+				ToolName: tc.FuncCall.Name,
+				Command:  args["command"],
+				ToolArgs: args,
+			}
+			approved := tools.RequestConfirmation(req)
+			if !approved {
+				logger.Info("dangerous command denied", "tool", tc.FuncCall.Name, "label", label)
+				chatBody.Messages = append(chatBody.Messages, models.RoleMsg{
+					Role:       cfg.ToolRole,
+					Content:    "[denied] This command requires user confirmation: " + label,
+					ToolCallID: tc.ID,
+				})
+				return
+			}
+		}
+	}
+
+	outputHandler.Writef("\n[yellow::i][tool: %s...][-:-:-]\nargs: %s", tc.FuncCall.Name, tc.FuncCall.Args)
+	toolRunningMode.Store(true)
+	resp, ok := tools.CallToolWithAgent(tc.FuncCall.Name, args)
+	toolRunningMode.Store(false)
+
+	if !ok {
+		if tools.IsMissionMode() {
+			tools.GetCurrentMission().AddFailure()
+		}
+		chatBody.Messages = append(chatBody.Messages, models.RoleMsg{
+			Role:       cfg.ToolRole,
+			Content:    string(resp),
+			ToolCallID: tc.ID,
+		})
+		return
+	}
+
+	toolMsg := string(resp)
+	logger.Info("llm used a tool call", "tool_name", tc.FuncCall.Name, "args", args, "id", tc.ID, "cwd", tools.GetFSRoot(), "resp", toolMsg)
+
+	var toolResponseMsg models.RoleMsg
+	if strings.HasPrefix(strings.TrimSpace(toolMsg), `{"type":"multimodal_content"`) {
+		multimodalResp := models.MultimodalToolResp{}
+		if err := json.Unmarshal([]byte(toolMsg), &multimodalResp); err == nil && multimodalResp.Type == "multimodal_content" {
+			var contentParts []any
+			var textParts []string
+			for _, part := range multimodalResp.Parts {
+				switch part["type"] {
+				case "text":
+					textParts = append(textParts, part["text"])
+					contentParts = append(contentParts, models.TextContentPart{Type: "text", Text: part["text"]})
+				case "image_url":
+					contentParts = append(contentParts, models.ImageContentPart{
+						Type: "image_url",
+						Path: part["path"],
+						ImageURL: struct {
+							URL string `json:"url"`
+						}{URL: part["url"]},
+					})
+				}
+			}
+			toolResponseMsg = models.RoleMsg{
+				Role:            cfg.ToolRole,
+				ContentParts:    contentParts,
+				HasContentParts: true,
+				ToolCallID:      tc.ID,
+				Content:         strings.Join(textParts, "\n"),
+			}
+		} else {
+			toolResponseMsg = models.RoleMsg{
+				Role:       cfg.ToolRole,
+				Content:    toolMsg,
+				ToolCallID: tc.ID,
+			}
+		}
+	} else {
+		toolResponseMsg = models.RoleMsg{
+			Role:       cfg.ToolRole,
+			Content:    toolMsg,
+			ToolCallID: tc.ID,
+		}
+	}
+
+	if tools.IsMissionMode() && tools.IsToolError(tc.FuncCall.Name, toolResponseMsg.Content) {
+		tools.GetCurrentMission().AddFailure()
+		logger.Info("mission tool error detected", "tool", tc.FuncCall.Name)
+	} else if tools.IsMissionMode() {
+		tools.GetCurrentMission().ResetFailures()
+	}
+
+	if tools.IsMissionMode() {
+		tools.GetCurrentMission().IncrementToolCalls()
+	}
+
+	if tools.IsMissionMode() {
+		m := tools.GetCurrentMission()
+		key := tc.FuncCall.Name + ":" + tc.FuncCall.Args
+		if key == m.LastToolCall {
+			m.SameToolCount++
+		} else {
+			m.LastToolCall = key
+			m.SameToolCount = 1
+		}
+		if m.SameToolCount > 0 && m.SameToolCount%3 == 0 {
+			m.PMGuidanceNeeded = true
+			m.Log("Loop detected: %s repeated %d times", tc.FuncCall.Name, m.SameToolCount)
+		}
+	}
+
+	if tools.IsMissionMode() {
+		m := tools.GetCurrentMission()
+		if m.PMGuidanceNeeded {
+			m.PMGuidanceNeeded = false
+			guidance := getPMGuidance(m)
+			m.Log("PM check-in triggered at tool call %d", m.Checkpoint.ToolCallCount)
+			chatBody.Messages = append(chatBody.Messages, models.RoleMsg{
+				Role:    cfg.UserRole,
+				Content: fmt.Sprintf("[PM Check-in]\n%s", guidance),
+			})
+		}
+	}
+
+	outputHandler.Writef("%s[-:-:b](%d) <%s>: [-:-:-]\n%s\n",
+		"\n\n", len(chatBody.Messages), cfg.ToolRole, toolResponseMsg.GetText())
+	chatBody.Messages = append(chatBody.Messages, toolResponseMsg)
+}
+
+// executeSingleToolCall executes the first (and only) tool call found in the message at msgIdx.
+// It refuses messages with multiple tool calls and does nothing if there are none.
+func executeSingleToolCall(msgIdx int) {
+	msg := chatBody.Messages[msgIdx]
+	if len(msg.ToolCalls) == 0 {
+		showToast("info", "no tool calls in this message")
+		return
+	}
+	if len(msg.ToolCalls) > 1 {
+		showToast("edit", "multiple tool calls not supported for direct execution")
+		return
+	}
+
+	executeOneToolCall(msg.ToolCalls[0])
+
+	cleanChatBody()
+	refreshChatDisplay()
+	updateStatusLine()
+	if err := updateStorageChat(activeChatName, chatBody.Messages); err != nil {
+		logger.Warn("failed to update storage", "error", err, "name", activeChatName)
+	}
+
+	chatRoundChan <- &models.ChatRoundReq{Role: cfg.AssistantRole}
 }
 
 // findCall: adds chatRoundReq into the chatRoundChan and returns true if does
