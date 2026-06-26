@@ -2016,7 +2016,7 @@ func addNewChat(chatName string) {
 	}
 	cardID := currentCardID
 	if cardID == "" {
-		cardID = cfg.AssistantRole
+		cardID = roleToID[cfg.AssistantRole]
 	}
 	chat := &models.Chat{
 		ID:        id + 1,

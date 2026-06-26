@@ -165,7 +165,7 @@ func loadOldChatOrGetNew() []models.RoleMsg {
 		maxID++
 		cardID := currentCardID
 		if cardID == "" {
-			cardID = cfg.AssistantRole
+			cardID = roleToID[cfg.AssistantRole]
 		}
 		chat := &models.Chat{
 			ID:        maxID,

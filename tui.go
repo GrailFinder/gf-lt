@@ -778,7 +778,7 @@ func initTUI() {
 		if event.Key() == tcell.KeyF1 {
 			agent := currentCardID
 			if agent == "" {
-				agent = cfg.AssistantRole
+				agent = roleToID[cfg.AssistantRole]
 			}
 			chatList, err := store.GetChatByChar(agent)
 			if err != nil {
