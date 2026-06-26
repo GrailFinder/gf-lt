@@ -25,6 +25,7 @@ var (
 	CodeBlockLeftRE  = regexp.MustCompile(`(?s)\x60{3}(?:.*?)\n`)
 	SingleBacktickRE = regexp.MustCompile(`\x60([^\x60]*)\x60`)
 	RoleRE           = regexp.MustCompile(`^(\w+):`)
+	RollRE           = regexp.MustCompile(`/roll \d+`)
 )
 
 var (

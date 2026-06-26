@@ -93,19 +93,20 @@ type Config struct {
 	CLIMode       bool
 	UseNotifySend bool
 	// Mission mode (auto issue solver)
-	MissionMode        bool
-	MissionIssueID      string
-	MissionAgentCard    string
-	MissionResumeFile   string
-	MissionPMInterval   int
-	MissionMaxFailures  int
+	MissionMode           bool
+	MissionIssueID        string
+	MissionAgentCard      string
+	MissionResumeFile     string
+	MissionPMInterval     int
+	MissionMaxFailures    int
 	MissionCheckpointFile string
-	OutputFormat        string // "text" or "json" — applies to CLI and mission modes
-	MissionOutputFormat string // deprecated, use OutputFormat
-	MissionQuiet        bool
-	MissionToolsEnabled bool   `toml:"MissionToolsEnabled"`
-	IssuesDir          string `toml:"IssuesDir"`
-	ModelManagement    *ModelManagementConfig `toml:"ModelManagement"`
+	OutputFormat          string // "text" or "json" — applies to CLI and mission modes
+	MissionOutputFormat   string // deprecated, use OutputFormat
+	MissionQuiet          bool
+	MissionToolsEnabled   bool                   `toml:"MissionToolsEnabled"`
+	IssuesDir             string                 `toml:"IssuesDir"`
+	ModelManagement       *ModelManagementConfig `toml:"ModelManagement"`
+	DisableRoll           bool                   `toml:"DisableRoll"`
 }
 
 func LoadConfig(fn string) (*Config, error) {

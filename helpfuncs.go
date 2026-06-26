@@ -6,6 +6,7 @@ import (
 	"gf-lt/models"
 	"gf-lt/pngmeta"
 	"image"
+	"math/rand/v2"
 	"os"
 	"os/exec"
 	"path"
@@ -1153,4 +1154,17 @@ func cellToPixel(cellX, cellY int, geom TermGeometry) (pixelX, pixelY int) {
 	cellWidth := geom.Width / geom.Cols
 	cellHeight := geom.Height / geom.Rows
 	return geom.X + cellX*cellWidth, geom.Y + cellY*cellHeight
+}
+
+func rollReqToRollResult(rr string) string {
+	res := strings.Split(rr, " ")
+	if len(res) < 2 {
+		return ""
+	}
+	maxNum, err := strconv.ParseInt(res[1], 10, 64)
+	if err != nil {
+		return ""
+	}
+	roll := rand.Int64N(maxNum) + 1
+	return fmt.Sprintf("roll of %d; result is %d", maxNum, roll)
 }
