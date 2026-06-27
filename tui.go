@@ -51,6 +51,9 @@ var (
 	fullscreenMode         bool
 	positionVisible        bool = true
 	ueberzugAvailable      bool = false
+	currentChatOverlayImg  *ueberzug.Image
+	overlayLastRow         int
+	overlayLastMsgIdx      int = -1
 	// pages
 	historyPage    = "historyPage"
 	agentPage      = "agentPage"
@@ -1159,6 +1162,7 @@ func initTUI() {
 		if event.Key() == tcell.KeyCtrlC {
 			logger.Info("caught Ctrl+C via tcell event")
 			go func() {
+				destroyChatOverlay()
 				if err := tools.PwShutDown(); err != nil {
 					logger.Error("shutdown failed", "err", err)
 				}
