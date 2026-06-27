@@ -244,7 +244,7 @@ func startNewChat(keepSysP bool) {
 	textView.SetText(chatToText(chatBody.Messages, cfg.ShowSys))
 	cardID := currentCardID
 	if cardID == "" {
-		cardID = cfg.AssistantRole
+		cardID = roleToID[cfg.AssistantRole]
 	}
 	newChat := &models.Chat{
 		ID:        id + 1,
