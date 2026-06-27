@@ -101,7 +101,6 @@ func outputCLIJSON() {
 	if !cfg.CLIMode || cfg.OutputFormat != "json" {
 		return
 	}
-
 	// Collect tool calls and their results from the full conversation
 	var toolCalls []map[string]any
 	for i := 0; i < len(chatBody.Messages); i++ {
@@ -136,7 +135,6 @@ func outputCLIJSON() {
 			}
 		}
 	}
-
 	// Find the last assistant message for the final content
 	var content string
 	var stats *models.ResponseStats
@@ -148,12 +146,10 @@ func outputCLIJSON() {
 			break
 		}
 	}
-
 	result := map[string]any{
 		"content": content,
 		"model":   chatBody.Model,
 	}
-
 	if len(toolCalls) > 0 {
 		result["tool_calls"] = toolCalls
 	}
@@ -163,7 +159,6 @@ func outputCLIJSON() {
 			"completion": stats.Tokens, // approximate — same as total for now
 		}
 	}
-
 	data, _ := json.MarshalIndent(result, "", "  ")
 	os.Stdout.Write(data)
 	os.Stdout.Write([]byte("\n"))
@@ -452,17 +447,14 @@ func warmUpModel() {
 // Returns the unloaded model ID (or "" on failure), so the caller can reload it later.
 func unloadModelForVRAM() string {
 	logger.Debug("unloadModelForVRAM: called", "isLocal", isLocalLlamacpp(), "modelManagement", cfg.ModelManagement != nil)
-
 	if !isLocalLlamacpp() || cfg.ModelManagement == nil || len(cfg.ModelManagement.VRAMFreeServers) == 0 {
 		return ""
 	}
-
 	models, err := fetchLCPModelsWithStatus()
 	if err != nil {
 		logger.Warn("unloadModelForVRAM: failed to fetch model status", "error", err)
 		return ""
 	}
-
 	var loadedModel string
 	for _, m := range models.Data {
 		if m.Status.Value == "loaded" {
@@ -474,10 +466,8 @@ func unloadModelForVRAM() string {
 		logger.Debug("unloadModelForVRAM: no model currently loaded")
 		return ""
 	}
-
 	logger.Info("unloading model to free VRAM", "model", loadedModel)
 	showToast("freeing VRAM", "Unloading "+loadedModel)
-
 	body, _ := json.Marshal(map[string]string{"model": loadedModel})
 	resp, err := httpClient.Post(unloadModelURL(), "application/json", bytes.NewReader(body))
 	if err != nil {
@@ -485,12 +475,10 @@ func unloadModelForVRAM() string {
 		return ""
 	}
 	resp.Body.Close()
-
 	if err := pollUntilModelStatus(loadedModel, false); err != nil {
 		logger.Error("unloadModelForVRAM: timeout", "model", loadedModel, "error", err)
 		return ""
 	}
-
 	return loadedModel
 }
 
@@ -499,10 +487,8 @@ func reloadModel(modelID string) {
 	if modelID == "" || !isLocalLlamacpp() {
 		return
 	}
-
 	logger.Info("reloading model", "model", modelID)
 	showToast("reloading model", "Loading "+modelID)
-
 	if err := loadModel(modelID); err != nil {
 		logger.Error("reloadModel: failed", "model", modelID, "error", err)
 		showToast("model reload failed", "Failed to load "+modelID)
@@ -544,13 +530,11 @@ func loadModel(modelID string) error {
 	if err != nil {
 		return fmt.Errorf("loadModel: failed to marshal request: %w", err)
 	}
-
 	resp, err := httpClient.Post(cfg.CurrentAPI, "application/json", bytes.NewReader(data))
 	if err != nil {
 		return fmt.Errorf("loadModel: request failed: %w", err)
 	}
 	resp.Body.Close()
-
 	return pollUntilModelStatus(modelID, true)
 }
 
@@ -568,7 +552,6 @@ func pollUntilModelStatus(modelID string, wantLoaded bool) error {
 	timeout := time.After(2 * time.Minute)
 	ticker := time.NewTicker(500 * time.Millisecond)
 	defer ticker.Stop()
-
 	for {
 		select {
 		case <-timeout:
@@ -856,45 +839,6 @@ func finalizeRespStats(tokenCount int, startTime time.Time) {
 	}
 }
 
-func dumpRequestToFile(api string, body []byte, token string, statusCode int, respError string) {
-	dumpDir := "dumps"
-	if err := os.MkdirAll(dumpDir, 0755); err != nil {
-		logger.Warn("failed to create dumps directory", "error", err)
-		return
-	}
-
-	timestamp := time.Now().Format("20060102_150405")
-	bodyFilename := fmt.Sprintf("%s/request_%s_%d_body.json", dumpDir, timestamp, statusCode)
-	curlFilename := fmt.Sprintf("%s/request_%s_%d.curl", dumpDir, timestamp, statusCode)
-
-	if err := os.WriteFile(bodyFilename, body, 0644); err != nil {
-		logger.Warn("failed to write request body dump", "error", err, "filename", bodyFilename)
-		return
-	}
-
-	var authPart string
-	if token != "" {
-		redacted := token
-		if len(token) > 16 {
-			redacted = token[:8] + "..." + token[len(token)-4:]
-		}
-		authPart = fmt.Sprintf(`-H "Authorization: Bearer %s"`, redacted)
-	}
-
-	curlCmd := fmt.Sprintf(`curl -X POST "%s" \
-  -H "Content-Type: application/json" \
-  %s \
-  --data-binary @%s`,
-		api, authPart, bodyFilename)
-
-	if err := os.WriteFile(curlFilename, []byte(curlCmd), 0644); err != nil {
-		logger.Warn("failed to write request dump", "error", err, "filename", curlFilename)
-		return
-	}
-
-	logger.Info("request dump saved", "curl_file", curlFilename, "body_file", bodyFilename, "status", statusCode)
-}
-
 // sendMsgToLLM expects streaming resp
 func sendMsgToLLM(body io.Reader) {
 	choseChunkParser()
@@ -944,7 +888,7 @@ func sendMsgToLLM(body io.Reader) {
 		// Parse the error response for detailed information
 		detailedError := extractDetailedErrorFromBytes(respBodyBytes, resp.StatusCode)
 		logger.Error("API returned error status", "status_code", resp.StatusCode, "detailed_error", detailedError)
-		dumpRequestToFile(cfg.CurrentAPI, bodyBytes, chunkParser.GetToken(), resp.StatusCode, detailedError)
+		dumpRequestToFile(cfg.CurrentAPI, bodyBytes, chunkParser.GetToken(), resp.StatusCode)
 		showToast("API Error", detailedError)
 		resp.Body.Close()
 		streamDone <- true
@@ -1375,6 +1319,17 @@ out:
 			return nil
 		}
 	}
+	// roll block
+	rollReq := models.RollRE.FindString(respTextNoThink)
+	if rollReq != "" && !cfg.DisableRoll {
+		rollRespText := rollReqToRollResult(rollReq)
+		// make tool msg
+		chatBody.Messages = append(chatBody.Messages, models.RoleMsg{
+			Role: cfg.ToolRole, Content: rollRespText,
+		})
+		outputHandler.Writef("%s[-:-:b](%d) %s[-:-:-]\n%s\n", "\n",
+			len(chatBody.Messages), roleToIcon(cfg.ToolRole), rollRespText)
+	}
 	// Fall back to legacy tool call detection (regex on text / completion endpoint)
 	if findCall(respTextNoThink, "") {
 		// Tool was found and executed, subsequent chatRound will signal cliRespDone when complete
@@ -1497,12 +1452,10 @@ func handleBatchToolCalls(textContent string, toolCalls []models.ToolCall) bool 
 	if len(toolCalls) == 0 {
 		return false
 	}
-
 	// Update the last assistant message with all tool calls
 	lastMsgIdx := len(chatBody.Messages) - 1
 	chatBody.Messages[lastMsgIdx].Content = textContent
 	chatBody.Messages[lastMsgIdx].ToolCalls = toolCalls
-
 	// Check if any tool call requires VRAM management (unload LLM, let MCP use VRAM, reload)
 	var origModel string
 	if mcpManager != nil {
@@ -1518,7 +1471,6 @@ func handleBatchToolCalls(textContent string, toolCalls []models.ToolCall) bool 
 	if origModel == "" {
 		logger.Debug("handleBatchToolCalls: no VRAM-free tool found, skipping unload")
 	}
-
 	for _, tc := range toolCalls {
 		// Parse the arguments JSON
 		args, err := convertJSONToMapStringString(tc.FuncCall.Args)
@@ -1526,7 +1478,6 @@ func handleBatchToolCalls(textContent string, toolCalls []models.ToolCall) bool 
 			logger.Error("failed to parse tool call args", "name", tc.FuncCall.Name, "args", tc.FuncCall.Args, "error", err)
 			continue
 		}
-
 		// Check for dangerous commands (skip in mission mode)
 		if !tools.IsMissionMode() {
 			if dangerous, label := tools.IsDangerousCommand(tc.FuncCall.Name, args); dangerous {
@@ -1547,13 +1498,11 @@ func handleBatchToolCalls(textContent string, toolCalls []models.ToolCall) bool 
 				}
 			}
 		}
-
 		// Execute the tool
 		outputHandler.Writef("\n[yellow::i][tool: %s...][-:-:-]\nargs: %s", tc.FuncCall.Name, tc.FuncCall.Args)
 		toolRunningMode.Store(true)
 		resp, ok := tools.CallToolWithAgent(tc.FuncCall.Name, args)
 		toolRunningMode.Store(false)
-
 		if !ok {
 			// Tool execution failed entirely
 			if tools.IsMissionMode() {
@@ -1566,11 +1515,9 @@ func handleBatchToolCalls(textContent string, toolCalls []models.ToolCall) bool 
 			})
 			continue
 		}
-
 		// Create tool response message
 		toolMsg := string(resp)
 		logger.Info("llm used a tool call", "tool_name", tc.FuncCall.Name, "args", args, "id", tc.ID, "cwd", tools.GetFSRoot(), "resp", toolMsg)
-
 		var toolResponseMsg models.RoleMsg
 		if strings.HasPrefix(strings.TrimSpace(toolMsg), `{"type":"multimodal_content"`) {
 			multimodalResp := models.MultimodalToolResp{}
@@ -1613,7 +1560,6 @@ func handleBatchToolCalls(textContent string, toolCalls []models.ToolCall) bool 
 				ToolCallID: tc.ID,
 			}
 		}
-
 		// Mission mode: detect tool-level errors (bash failures, test failures, JSON errors)
 		if tools.IsMissionMode() && tools.IsToolError(tc.FuncCall.Name, toolResponseMsg.Content) {
 			tools.GetCurrentMission().AddFailure()
@@ -1621,12 +1567,10 @@ func handleBatchToolCalls(textContent string, toolCalls []models.ToolCall) bool 
 		} else if tools.IsMissionMode() {
 			tools.GetCurrentMission().ResetFailures()
 		}
-
 		// Mission mode: increment tool call counter for PM interval
 		if tools.IsMissionMode() {
 			tools.GetCurrentMission().IncrementToolCalls()
 		}
-
 		// Mission mode: detect repeated tool calls (same tool + args 3× in a row)
 		if tools.IsMissionMode() {
 			m := tools.GetCurrentMission()
@@ -1642,7 +1586,6 @@ func handleBatchToolCalls(textContent string, toolCalls []models.ToolCall) bool 
 				m.Log("Loop detected: %s repeated %d times", tc.FuncCall.Name, m.SameToolCount)
 			}
 		}
-
 		// Mission mode: inline PM check — fires even when LLM keeps making tool calls
 		if tools.IsMissionMode() {
 			m := tools.GetCurrentMission()
@@ -1656,26 +1599,21 @@ func handleBatchToolCalls(textContent string, toolCalls []models.ToolCall) bool 
 				})
 			}
 		}
-
 		// Display and append the tool response
 		outputHandler.Writef("%s[-:-:b](%d) <%s>: [-:-:-]\n%s\n",
 			"\n\n", len(chatBody.Messages), cfg.ToolRole, toolResponseMsg.GetText())
 		chatBody.Messages = append(chatBody.Messages, toolResponseMsg)
-
 	}
-
 	// Reload the original model if it was unloaded for VRAM management
 	if origModel != "" {
 		reloadModel(origModel)
 	}
-
 	cleanChatBody()
 	refreshChatDisplay()
 	updateStatusLine()
 	if err := updateStorageChat(activeChatName, chatBody.Messages); err != nil {
 		logger.Warn("failed to update storage", "error", err, "name", activeChatName)
 	}
-
 	// Trigger the assistant to continue with the collected results
 	crr := &models.ChatRoundReq{
 		Role: cfg.AssistantRole,

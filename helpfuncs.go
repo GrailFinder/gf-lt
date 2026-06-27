@@ -793,7 +793,6 @@ func showIndexBar() {
 	updatedFlex := tview.NewFlex().SetDirection(tview.FlexRow).
 		AddItem(indexPickWindow, 3, 0, true). // Index field at top
 		AddItem(flex, 0, 1, false)            // Main flex layout below
-
 	// Add the index overlay as a page
 	pages.AddPage(indexPageName, updatedFlex, true, true)
 	app.SetFocus(indexPickWindow)
@@ -1085,7 +1084,6 @@ type TermGeometry struct {
 
 func getTerminalGeometry() (TermGeometry, error) {
 	var geom TermGeometry
-
 	out, err := exec.Command("xdotool", "getactivewindow").Output()
 	if err != nil {
 		return TermGeometry{}, err
@@ -1094,12 +1092,10 @@ func getTerminalGeometry() (TermGeometry, error) {
 	if winID == "0" {
 		return TermGeometry{}, errors.New("no active window")
 	}
-
 	out, err = exec.Command("xdotool", "getwindowgeometry", winID).Output()
 	if err != nil {
 		return TermGeometry{}, err
 	}
-
 	lines := strings.Split(string(out), "\n")
 	for _, line := range lines {
 		if strings.Contains(line, "Position:") {
@@ -1108,11 +1104,9 @@ func getTerminalGeometry() (TermGeometry, error) {
 			_, _ = fmt.Sscanf(line, " Geometry: %dx%d", &geom.Width, &geom.Height)
 		}
 	}
-
 	if geom.Width == 0 || geom.Height == 0 {
 		return TermGeometry{}, errors.New("invalid window geometry")
 	}
-
 	// Use terminal size captured at init time
 	if termCols > 0 && termRows > 0 {
 		geom.Cols = termCols
@@ -1146,7 +1140,6 @@ func getTerminalGeometry() (TermGeometry, error) {
 		logger.Warn("terminal geometry check", "cols", geom.Cols, "rows", geom.Rows, "termCols", termCols, "termRows", termRows)
 		return TermGeometry{}, errors.New("invalid terminal size")
 	}
-
 	return geom, nil
 }
 

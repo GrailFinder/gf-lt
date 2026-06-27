@@ -174,10 +174,10 @@ func loadOldChatOrGetNew() []models.RoleMsg {
 			Agent:     cardID,
 		}
 		if c, ok := sysMap[cardID]; ok {
-				chat.Name = fmt.Sprintf("%s_%v", c.Role, chat.ID)
-			} else {
-				chat.Name = fmt.Sprintf("%s_%v", cardID, chat.ID)
-			}
+			chat.Name = fmt.Sprintf("%s_%v", c.Role, chat.ID)
+		} else {
+			chat.Name = fmt.Sprintf("%s_%v", cardID, chat.ID)
+		}
 		activeChatName = chat.Name
 		chatMap[chat.Name] = chat
 		return defaultStarter
@@ -228,4 +228,37 @@ func readFromClipboard() (string, error) {
 	cmd.Stdout = &out
 	err := cmd.Run()
 	return out.String(), err
+}
+
+func dumpRequestToFile(api string, body []byte, token string, statusCode int) {
+	dumpDir := "dumps"
+	if err := os.MkdirAll(dumpDir, 0755); err != nil {
+		logger.Warn("failed to create dumps directory", "error", err)
+		return
+	}
+	timestamp := time.Now().Format("20060102_150405")
+	bodyFilename := fmt.Sprintf("%s/request_%s_%d_body.json", dumpDir, timestamp, statusCode)
+	curlFilename := fmt.Sprintf("%s/request_%s_%d.curl", dumpDir, timestamp, statusCode)
+	if err := os.WriteFile(bodyFilename, body, 0644); err != nil {
+		logger.Warn("failed to write request body dump", "error", err, "filename", bodyFilename)
+		return
+	}
+	var authPart string
+	if token != "" {
+		redacted := token
+		if len(token) > 16 {
+			redacted = token[:8] + "..." + token[len(token)-4:]
+		}
+		authPart = fmt.Sprintf(`-H "Authorization: Bearer %s"`, redacted)
+	}
+	curlCmd := fmt.Sprintf(`curl -X POST "%s" \
+  -H "Content-Type: application/json" \
+  %s \
+  --data-binary @%s`,
+		api, authPart, bodyFilename)
+	if err := os.WriteFile(curlFilename, []byte(curlCmd), 0644); err != nil {
+		logger.Warn("failed to write request dump", "error", err, "filename", curlFilename)
+		return
+	}
+	logger.Info("request dump saved", "curl_file", curlFilename, "body_file", bodyFilename, "status", statusCode)
 }
