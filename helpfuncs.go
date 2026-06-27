@@ -201,7 +201,6 @@ func updateStatusLine() {
 	}
 	status := makeStatusLine()
 	statusLineWidget.SetText(status)
-	updateImageOverlay()
 }
 
 func initSysCards() ([]*models.CharCard, error) {
@@ -666,7 +665,8 @@ func displayImageOverlay(imgPath string) {
 // image overlay for the best candidate (middle-most visible message with an
 // image). It skips if nothing changed since the last call.
 func updateImageOverlay() {
-	if !ueberzugAvailable {
+	if !ueberzugAvailable || !cfg.ImagePreview {
+		destroyChatOverlay()
 		return
 	}
 

@@ -1327,4 +1327,17 @@ func initTUI() {
 		}
 		return event
 	})
+	if ueberzugAvailable && cfg.ImagePreview {
+		go startOverlayTicker()
+	}
+}
+
+func startOverlayTicker() {
+	ticker := time.NewTicker(1 * time.Second)
+	defer ticker.Stop()
+	for range ticker.C {
+		app.QueueUpdateDraw(func() {
+			updateImageOverlay()
+		})
+	}
 }
