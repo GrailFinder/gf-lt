@@ -20,7 +20,7 @@ import (
 
 var (
 	termCols, termRows int
-	sttTranscribing   bool
+	sttTranscribing    bool
 )
 
 func isFullScreenPageActive() bool {
@@ -1327,7 +1327,7 @@ func initTUI() {
 		}
 		return event
 	})
-	if ueberzugAvailable && cfg.ImagePreview {
+	if ueberzugAvailable {
 		go startOverlayTicker()
 	}
 }
