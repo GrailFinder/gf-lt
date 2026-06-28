@@ -126,6 +126,7 @@ type Config struct {
 	CharSpecificContextEnabled bool   `toml:"CharSpecificContextEnabled"`
 	CharSpecificContextTag     string `toml:"CharSpecificContextTag"`
 	AutoTurn                   bool   `toml:"AutoTurn"`
+	DisableToolGuide           bool   `toml:"DisableToolGuide"`
 	// playwright browser
 	PlaywrightEnabled bool `toml:"PlaywrightEnabled"`
 	MemoryEnabled     bool `toml:"MemoryEnabled"`
@@ -134,21 +135,22 @@ type Config struct {
 	CLIMode       bool
 	UseNotifySend bool
 	// Mission mode (auto issue solver)
-	MissionMode        bool
-	MissionIssueID      string
-	MissionAgentCard    string
-	MissionResumeFile   string
-	ConfigDir           string // directory of the loaded config file (set during LoadConfig)
-	ExportDir           string // chat export directory (default: "chat_exports")
-	MissionPMInterval   int
-	MissionMaxFailures  int
+	MissionMode           bool
+	MissionIssueID        string
+	MissionAgentCard      string
+	MissionResumeFile     string
+	MissionPMInterval     int
+	MissionMaxFailures    int
+	ConfigDir             string // directory of the loaded config file (set during LoadConfig)
+	ExportDir             string // chat export directory (default: "chat_exports")
 	MissionCheckpointFile string
-	OutputFormat        string // "text" or "json" — applies to CLI and mission modes
-	MissionOutputFormat string // deprecated, use OutputFormat
-	MissionQuiet        bool
-	MissionToolsEnabled bool   `toml:"MissionToolsEnabled"`
-	IssuesDir          string `toml:"IssuesDir"`
-	ModelManagement    *ModelManagementConfig `toml:"ModelManagement"`
+	OutputFormat          string // "text" or "json" — applies to CLI and mission modes
+	MissionOutputFormat   string // deprecated, use OutputFormat
+	MissionQuiet          bool
+	MissionToolsEnabled   bool                   `toml:"MissionToolsEnabled"`
+	IssuesDir             string                 `toml:"IssuesDir"`
+	ModelManagement       *ModelManagementConfig `toml:"ModelManagement"`
+	DisableRoll           bool                   `toml:"DisableRoll"`
 }
 
 func LoadConfig(fn string) (*Config, error) {

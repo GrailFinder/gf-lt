@@ -135,6 +135,9 @@ func makePropsTable(props map[string]float32) *tview.Table {
 	addCheckboxRow("Char specific context", cfg.CharSpecificContextEnabled, func(checked bool) {
 		cfg.CharSpecificContextEnabled = checked
 	})
+	addCheckboxRow("Disable tool guide", cfg.DisableToolGuide, func(checked bool) {
+		cfg.DisableToolGuide = checked
+	})
 	// Add dropdowns
 	logLevels := []string{"Debug", "Info", "Warn"}
 	addListPopupRow("Set log level", logLevels, GetLogLevel(), func(option string) {

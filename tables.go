@@ -208,7 +208,9 @@ func makeChatTable(chatMap map[string]models.Chat) *tview.Table {
 				showToast("error", "no such card: "+agentName)
 				return
 			}
-			cc.SysPrompt = chatBody.Messages[0].Content
+			// strip <tool_guide> before saving so it doesn't get embedded in the card file
+			cleaned := removeToolGuide([]models.RoleMsg{{Role: "system", Content: chatBody.Messages[0].Content}})
+			cc.SysPrompt = cleaned[0].Content
 			cc.FirstMsg = chatBody.Messages[1].Content
 			if err := pngmeta.WriteToPng(cc.ToSpec(cfg.UserRole), cc.FilePath, cc.FilePath); err != nil {
 				logger.Error("failed to write charcard", "error", err)
@@ -222,18 +224,21 @@ func makeChatTable(chatMap map[string]models.Chat) *tview.Table {
 			pages.RemovePage(historyPage)
 			return
 		case "new_chat_from_card":
-			fi := strings.Index(selectedChat, "_")
-			agentName := selectedChat[fi+1:]
-			cc := GetCardByRole(agentName)
-			if cc == nil {
-				logger.Warn("no such card", "agent", agentName)
-				showToast("error", "no such card: "+agentName)
+			ch, ok := chatMap[selectedChat]
+			if !ok {
+				showToast("error", "chat not found")
+				return
+			}
+			cc, ok := sysMap[ch.Agent]
+			if !ok {
+				logger.Warn("no such card", "agent", ch.Agent)
+				showToast("error", "no such card: "+ch.Agent)
 				return
 			}
 			newCard, err := pngmeta.ReadCard(cc.FilePath, cfg.UserRole)
 			if err != nil {
 				logger.Error("failed to reload charcard", "path", cc.FilePath, "error", err)
-				newCard, err = pngmeta.ReadCardJson(cc.FilePath)
+				newCard, err = pngmeta.ReadCardJson(cc.FilePath, cfg.UserRole)
 				if err != nil {
 					logger.Error("failed to reload charcard", "path", cc.FilePath, "error", err)
 					showToast("error", "failed to reload card: "+cc.FilePath)
@@ -555,9 +560,9 @@ func makeRAGTable(fileList []string, loadedFiles []string) *tview.Flex {
 	return ragflex
 }
 
-func makeAgentTable(agentList []string) *tview.Table {
+func makeAgentTable(cards []*models.CharCard) *tview.Table {
 	actions := []string{"filepath", "load"}
-	rows, cols := len(agentList), len(actions)+1
+	rows, cols := len(cards), len(actions)+1
 	chatActTable := tview.NewTable().
 		SetBorders(true)
 	for r := 0; r < rows; r++ {
@@ -566,18 +571,14 @@ func makeAgentTable(agentList []string) *tview.Table {
 			switch c {
 			case 0:
 				chatActTable.SetCell(r, c,
-					tview.NewTableCell(agentList[r]).
+					tview.NewTableCell(cards[r].Role).
 						SetTextColor(color).
 						SetAlign(tview.AlignCenter).
 						SetSelectable(false))
 			case 1:
 				if actions[c-1] == "filepath" {
-					cc := GetCardByRole(agentList[r])
-					if cc == nil {
-						continue
-					}
 					chatActTable.SetCell(r, c,
-						tview.NewTableCell(cc.FilePath).
+						tview.NewTableCell(cards[r].FilePath).
 							SetTextColor(color).
 							SetAlign(tview.AlignCenter).
 							SetSelectable(false))
@@ -615,39 +616,16 @@ func makeAgentTable(agentList []string) *tview.Table {
 		tc := chatActTable.GetCell(row, column)
 		tc.SetTextColor(tcell.ColorRed)
 		chatActTable.SetSelectable(false, false)
-		selected := agentList[row]
 		// notification := fmt.Sprintf("chat: %s; action: %s", selectedChat, tc.Text)
 		switch tc.Text {
 		case "load":
-			if ok := charToStart(selected, true); !ok {
-				logger.Warn("no such sys msg", "name", selected)
-				pages.RemovePage(agentPage)
-				return
-			}
+			applyCharCard(cards[row], true)
 			// replace textview
 			textView.SetText(chatToText(chatBody.Messages, cfg.ShowSys))
 			colorText()
 			updateStatusLine()
-			// sysModal.ClearButtons()
 			pages.RemovePage(agentPage)
 			app.SetFocus(textArea)
-			return
-		case "rename":
-			pages.RemovePage(agentPage)
-			pages.AddPage(renamePage, renameWindow, true, true)
-			return
-		case "delete":
-			sc, ok := chatMap[selected]
-			if !ok {
-				// no chat found
-				pages.RemovePage(agentPage)
-				return
-			}
-			if err := store.RemoveChat(sc.ID); err != nil {
-				logger.Error("failed to remove chat from db", "chat_id", sc.ID, "chat_name", sc.Name)
-			}
-			showToast("chat deleted", selected+" was deleted")
-			pages.RemovePage(agentPage)
 			return
 		default:
 			pages.RemovePage(agentPage)

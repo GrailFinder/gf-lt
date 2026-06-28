@@ -20,8 +20,8 @@ import (
 
 var (
 	termCols, termRows int
-	sttTranscribing   bool
-	exportDir         string // initialized after config load, see init() in bot.go
+	sttTranscribing    bool
+	exportDir          string // initialized after config load, see init() in bot.go
 )
 
 func isFullScreenPageActive() bool {
@@ -52,6 +52,9 @@ var (
 	fullscreenMode         bool
 	positionVisible        bool = true
 	ueberzugAvailable      bool = false
+	currentChatOverlayImg  *ueberzug.Image
+	overlayLastRow         int
+	overlayLastMsgIdx      int = -1
 	// pages
 	historyPage    = "historyPage"
 	agentPage      = "agentPage"
@@ -85,6 +88,7 @@ var (
 [yellow]F10[white]: switch if LLM will respond on this message (for user to write multiple messages in a row)
 [yellow]F11[white]: import json chat file
 [yellow]F12[white]: show this help page
+[yellow]Ctrl+][white]: save current chat to database
 [yellow]Ctrl+w[white]: resume generation on the last msg
 [yellow]Ctrl+s[white]: load new char/agent
 [yellow]Ctrl+e[white]: export chat to json file
@@ -699,11 +703,6 @@ func initTUI() {
 	if cfg.AutoScrollEnabled {
 		textView.ScrollToEnd()
 	}
-	// init sysmap
-	_, err := initSysCards()
-	if err != nil {
-		logger.Error("failed to init sys cards", "error", err)
-	}
 	app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		if event.Key() == tcell.KeyRune && event.Rune() == '5' && event.Modifiers()&tcell.ModAlt != 0 {
 			// switch cfg.ShowSys
@@ -738,6 +737,16 @@ func initTUI() {
 			injectRole = !injectRole
 			updateStatusLine()
 		}
+		// Handle Ctrl+] to save chat to database
+		if event.Key() == tcell.KeyCtrlRightSq {
+			if err := updateStorageChat(activeChatName, chatBody.Messages); err != nil {
+				logger.Error("failed to save chat", "error", err)
+				showToast("error", "failed to save chat")
+			} else {
+				showToast("info", "chat saved")
+			}
+			return nil
+		}
 		// Handle Alt+T to toggle thinking block visibility
 		if event.Key() == tcell.KeyRune && event.Rune() == 't' && event.Modifiers()&tcell.ModAlt != 0 {
 			thinkingCollapsed = !thinkingCollapsed
@@ -770,16 +779,17 @@ func initTUI() {
 			return nil
 		}
 		if event.Key() == tcell.KeyF1 {
-			// chatList, err := loadHistoryChats()
-			chatList, err := store.GetChatByChar(cfg.AssistantRole)
+			agent := currentCardID
+			if agent == "" {
+				agent = roleToID[cfg.AssistantRole]
+			}
+			chatList, err := store.GetChatByChar(agent)
 			if err != nil {
 				logger.Error("failed to load chat history", "error", err)
 				return nil
 			}
-			// Check if there are no chats for this agent
 			if len(chatList) == 0 {
-				notification := "no chats found for agent: " + cfg.AssistantRole
-				showToast("info", notification)
+				showToast("info", "no chats found for agent: "+cfg.AssistantRole)
 				return nil
 			}
 			chatMap := make(map[string]models.Chat)
@@ -985,14 +995,13 @@ func initTUI() {
 		}
 		if event.Key() == tcell.KeyCtrlS {
 			// switch sys prompt
-			labels, err := initSysCards()
+			cards, err := initSysCards()
 			if err != nil {
 				logger.Error("failed to read sys dir", "error", err)
 				showToast("error", "failed to read: "+cfg.SysDir)
 				return nil
 			}
-			at := makeAgentTable(labels)
-			// sysModal.AddButtons(labels)
+			at := makeAgentTable(cards)
 			// load all chars
 			pages.AddPage(agentPage, at, true, true)
 			updateStatusLine()
@@ -1153,6 +1162,7 @@ func initTUI() {
 		if event.Key() == tcell.KeyCtrlC {
 			logger.Info("caught Ctrl+C via tcell event")
 			go func() {
+				destroyChatOverlay()
 				if err := tools.PwShutDown(); err != nil {
 					logger.Error("shutdown failed", "err", err)
 				}
@@ -1317,4 +1327,17 @@ func initTUI() {
 		}
 		return event
 	})
+	if ueberzugAvailable {
+		go startOverlayTicker()
+	}
+}
+
+func startOverlayTicker() {
+	ticker := time.NewTicker(1 * time.Second)
+	defer ticker.Stop()
+	for range ticker.C {
+		app.QueueUpdateDraw(func() {
+			updateImageOverlay()
+		})
+	}
 }
