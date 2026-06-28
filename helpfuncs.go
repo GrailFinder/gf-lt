@@ -433,26 +433,27 @@ func makeStatusLine() string {
 		contextInfo := fmt.Sprintf(" | context-estim: [orange:-:b]%d/%d[-:-:-]", contextTokens, maxCtx)
 		statusLine += contextInfo
 	}
-	row, _ := textView.GetScrollOffset()
-	scrollInfo := fmt.Sprintf(" | [green:-:b]row=%d[-:-:-]", row)
-	if first, last, atTop, atBottom, ok := getVisibleMsgRange(); ok {
-		var label string
-		if first == last {
-			label = fmt.Sprintf("msg=%d", first)
-		} else {
-			label = fmt.Sprintf("msgs=%d-%d", first, last)
-		}
-		switch {
-		case atTop && atBottom:
-			label += " ALL"
-		case atTop:
-			label += " TOP"
-		case atBottom:
-			label += " END"
-		}
-		scrollInfo += fmt.Sprintf(" [green:-:b]%s[-:-:-]", label)
-	}
-	statusLine += scrollInfo
+	// // helpful in debug of img view, not needed in use
+	// row, _ := textView.GetScrollOffset()
+	// scrollInfo := fmt.Sprintf(" | [green:-:b]row=%d[-:-:-]", row)
+	// if first, last, atTop, atBottom, ok := getVisibleMsgRange(); ok {
+	// 	var label string
+	// 	if first == last {
+	// 		label = fmt.Sprintf("msg=%d", first)
+	// 	} else {
+	// 		label = fmt.Sprintf("msgs=%d-%d", first, last)
+	// 	}
+	// 	switch {
+	// 	case atTop && atBottom:
+	// 		label += " ALL"
+	// 	case atTop:
+	// 		label += " TOP"
+	// 	case atBottom:
+	// 		label += " END"
+	// 	}
+	// 	scrollInfo += fmt.Sprintf(" [green:-:b]%s[-:-:-]", label)
+	// }
+	// statusLine += scrollInfo
 	return statusLine + imageInfo + shellModeInfo
 }
 
@@ -517,25 +518,20 @@ func getVisibleMsgRange() (first, last int, atTop, atBottom bool, ok bool) {
 		return 0, 0, false, false, false
 	}
 	lastVisible := row + height - 1
-
 	text := textView.GetText(true)
 	if text == "" {
 		return 0, 0, false, false, false
 	}
-
 	logicalLines := strings.Split(text, "\n")
-
 	var (
 		msgSpans  []msgLineRange
 		cursor    int
 		curIdx    = -1
 		spanStart int
 	)
-
 	for _, logicalLine := range logicalLines {
 		renderedLines := countRenderedLinesOfLine(logicalLine, width)
 		renderedEnd := cursor + renderedLines
-
 		if idx := parseMsgHeaderIdx(logicalLine); idx >= 0 {
 			if curIdx >= 0 {
 				msgSpans = append(msgSpans, msgLineRange{
@@ -547,10 +543,8 @@ func getVisibleMsgRange() (first, last int, atTop, atBottom bool, ok bool) {
 			curIdx = idx
 			spanStart = cursor
 		}
-
 		cursor = renderedEnd
 	}
-
 	if curIdx >= 0 {
 		msgSpans = append(msgSpans, msgLineRange{
 			msgIdx:    curIdx,
@@ -558,7 +552,6 @@ func getVisibleMsgRange() (first, last int, atTop, atBottom bool, ok bool) {
 			lineEnd:   cursor,
 		})
 	}
-
 	first = -1
 	last = -1
 	for _, s := range msgSpans {
@@ -571,7 +564,6 @@ func getVisibleMsgRange() (first, last int, atTop, atBottom bool, ok bool) {
 			}
 		}
 	}
-
 	if first < 0 {
 		return 0, 0, false, false, false
 	}
@@ -630,30 +622,24 @@ func displayImageOverlay(imgPath string) {
 		return
 	}
 	defer file.Close()
-
 	imgData, _, err := image.Decode(file)
 	if err != nil {
 		destroyChatOverlay()
 		return
 	}
-
 	const maxSize = 500
 	scaledImg := resize.Resize(0, uint(maxSize), imgData, resize.Lanczos3)
-
 	geom, err := getTerminalGeometry()
 	if err != nil {
 		destroyChatOverlay()
 		return
 	}
-
 	bounds := scaledImg.Bounds()
 	cellH := geom.Height / geom.Rows
 	padding := cellH
 	pixelX := geom.X + geom.Width - bounds.Dx() - padding
 	pixelY := geom.Y + padding
-
 	destroyChatOverlay()
-
 	uimg, err := ueberzug.NewImage(scaledImg, pixelX, pixelY)
 	if err != nil {
 		return
@@ -669,12 +655,10 @@ func updateImageOverlay() {
 		destroyChatOverlay()
 		return
 	}
-
 	currentRow, _ := textView.GetScrollOffset()
 	if currentRow == overlayLastRow {
 		return
 	}
-
 	first, last, _, _, ok := getVisibleMsgRange()
 	if !ok {
 		destroyChatOverlay()
@@ -682,11 +666,9 @@ func updateImageOverlay() {
 		overlayLastMsgIdx = -1
 		return
 	}
-
 	midMsg := (first + last) / 2
 	bestIdx := -1
 	bestPath := ""
-
 	for offset := 0; offset <= max(midMsg-first, last-midMsg); offset++ {
 		for _, tryIdx := range []int{midMsg + offset, midMsg - offset} {
 			if tryIdx < first || tryIdx > last {
@@ -706,7 +688,6 @@ func updateImageOverlay() {
 			}
 		}
 	}
-
 	// Fall back to last visible message
 	if bestIdx == -1 {
 		if path := findFirstImageInMsg(last); path != "" {
@@ -714,7 +695,6 @@ func updateImageOverlay() {
 			bestPath = path
 		}
 	}
-
 found:
 	if bestIdx < 0 || bestPath == "" {
 		destroyChatOverlay()
@@ -722,7 +702,6 @@ found:
 		overlayLastMsgIdx = -1
 		return
 	}
-
 	displayImageOverlay(bestPath)
 	overlayLastRow = currentRow
 	overlayLastMsgIdx = bestIdx
