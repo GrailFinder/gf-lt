@@ -655,6 +655,10 @@ func updateImageOverlay() {
 		destroyChatOverlay()
 		return
 	}
+	if name, _ := pages.GetFrontPage(); name != "main" {
+		destroyChatOverlay()
+		return
+	}
 	currentRow, _ := textView.GetScrollOffset()
 	if currentRow == overlayLastRow {
 		return
@@ -666,15 +670,16 @@ func updateImageOverlay() {
 		overlayLastMsgIdx = -1
 		return
 	}
+	if overlayLastMsgIdx >= first && overlayLastMsgIdx <= last {
+		overlayLastRow = currentRow
+		return
+	}
 	midMsg := (first + last) / 2
 	bestIdx := -1
 	bestPath := ""
 	for offset := 0; offset <= max(midMsg-first, last-midMsg); offset++ {
 		for _, tryIdx := range []int{midMsg + offset, midMsg - offset} {
 			if tryIdx < first || tryIdx > last {
-				continue
-			}
-			if tryIdx == overlayLastMsgIdx {
 				continue
 			}
 			if path := findFirstImageInMsg(tryIdx); path != "" {
