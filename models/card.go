@@ -3,6 +3,7 @@ package models
 import (
 	"crypto/md5"
 	"fmt"
+	"path/filepath"
 	"strings"
 )
 
@@ -45,7 +46,7 @@ func (c *CharCardSpec) Simplify(userName, fpath string) *CharCard {
 }
 
 func ComputeCardID(role, filePath string) string {
-	return fmt.Sprintf("%x", md5.Sum([]byte(role+filePath)))
+	return fmt.Sprintf("%x", md5.Sum([]byte(role+filepath.Base(filePath))))
 }
 
 type CharCard struct {

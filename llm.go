@@ -251,6 +251,17 @@ func (lcp LCPCompletion) FormMsg(msg, role string, resume bool) (io.Reader, erro
 		newMsg = *processMessageTag(&newMsg)
 		chatBody.Messages = append(chatBody.Messages, newMsg)
 	}
+	// roll block
+	rollReq := models.RollRE.FindString(msg)
+	if rollReq != "" && !cfg.DisableRoll {
+		rollRespText := rollReqToRollResult(rollReq)
+		// make tool msg
+		chatBody.Messages = append(chatBody.Messages, models.RoleMsg{
+			Role: cfg.ToolRole, Content: rollRespText,
+		})
+		outputHandler.Writef("%s[-:-:b](%d) %s[-:-:-]\n%s\n", "\n",
+			len(chatBody.Messages), roleToIcon(cfg.ToolRole), rollRespText)
+	}
 	// sending description of the tools and how to use them
 	if cfg.ToolUse && !resume && role == cfg.UserRole && !containsToolSysMsg() {
 		chatBody.Messages = append(chatBody.Messages, models.RoleMsg{Role: "system", Content: tools.ToolSysMsg})
@@ -380,7 +391,7 @@ func (op LCPChat) FormMsg(msg, role string, resume bool) (io.Reader, error) {
 		// Check if we have images to add to this message
 		if len(localImageAttachments) > 0 {
 			// Create a multimodal message with text and all images
-			newMsg = models.NewMultimodalMsg(role, []interface{}{})
+			newMsg = models.NewMultimodalMsg(role, []any{})
 			// Add the text content
 			newMsg.AddTextPart(msg)
 			// Add all image contents
@@ -402,6 +413,17 @@ func (op LCPChat) FormMsg(msg, role string, resume bool) (io.Reader, error) {
 		chatBody.Messages = append(chatBody.Messages, newMsg)
 		logger.Debug("LCPChat FormMsg: added message to chatBody", "role", newMsg.Role,
 			"content_len", len(newMsg.Content), "message_count_after_add", len(chatBody.Messages))
+	}
+	// roll block
+	rollReq := models.RollRE.FindString(msg)
+	if rollReq != "" && !cfg.DisableRoll {
+		rollRespText := rollReqToRollResult(rollReq)
+		// make tool msg
+		chatBody.Messages = append(chatBody.Messages, models.RoleMsg{
+			Role: cfg.ToolRole, Content: rollRespText,
+		})
+		outputHandler.Writef("%s[-:-:b](%d) %s[-:-:-]\n%s\n", "\n",
+			len(chatBody.Messages), roleToIcon(cfg.ToolRole), rollRespText)
 	}
 	// sending tool instructions for chat endpoints
 	// Update chatBody.Messages with tool guide (persist to stored messages)
@@ -507,6 +529,17 @@ func (ds DeepSeekerCompletion) FormMsg(msg, role string, resume bool) (io.Reader
 	if cfg.ToolUse && !resume && role == cfg.UserRole && !containsToolSysMsg() {
 		chatBody.Messages = append(chatBody.Messages, models.RoleMsg{Role: "system", Content: tools.ToolSysMsg})
 	}
+	// roll block
+	rollReq := models.RollRE.FindString(msg)
+	if rollReq != "" && !cfg.DisableRoll {
+		rollRespText := rollReqToRollResult(rollReq)
+		// make tool msg
+		chatBody.Messages = append(chatBody.Messages, models.RoleMsg{
+			Role: cfg.ToolRole, Content: rollRespText,
+		})
+		outputHandler.Writef("%s[-:-:b](%d) %s[-:-:-]\n%s\n", "\n",
+			len(chatBody.Messages), roleToIcon(cfg.ToolRole), rollRespText)
+	}
 	filteredMessages, botPersona := filterMessagesForCurrentCharacter(chatBody.Messages)
 	messages := make([]string, len(filteredMessages))
 	for i := range filteredMessages {
@@ -575,6 +608,17 @@ func (ds DeepSeekerChat) FormMsg(msg, role string, resume bool) (io.Reader, erro
 		newMsg := models.RoleMsg{Role: role, Content: msg}
 		newMsg = *processMessageTag(&newMsg)
 		chatBody.Messages = append(chatBody.Messages, newMsg)
+	}
+	// roll block
+	rollReq := models.RollRE.FindString(msg)
+	if rollReq != "" && !cfg.DisableRoll {
+		rollRespText := rollReqToRollResult(rollReq)
+		// make tool msg
+		chatBody.Messages = append(chatBody.Messages, models.RoleMsg{
+			Role: cfg.ToolRole, Content: rollRespText,
+		})
+		outputHandler.Writef("%s[-:-:b](%d) %s[-:-:-]\n%s\n", "\n",
+			len(chatBody.Messages), roleToIcon(cfg.ToolRole), rollRespText)
 	}
 	// sending tool instructions for chat endpoints
 	// Update chatBody.Messages with tool guide (persist to stored messages)
@@ -659,6 +703,17 @@ func (or OpenRouterCompletion) FormMsg(msg, role string, resume bool) (io.Reader
 		newMsg = *processMessageTag(&newMsg)
 		chatBody.Messages = append(chatBody.Messages, newMsg)
 	}
+	// roll block
+	rollReq := models.RollRE.FindString(msg)
+	if rollReq != "" && !cfg.DisableRoll {
+		rollRespText := rollReqToRollResult(rollReq)
+		// make tool msg
+		chatBody.Messages = append(chatBody.Messages, models.RoleMsg{
+			Role: cfg.ToolRole, Content: rollRespText,
+		})
+		outputHandler.Writef("%s[-:-:b](%d) %s[-:-:-]\n%s\n", "\n",
+			len(chatBody.Messages), roleToIcon(cfg.ToolRole), rollRespText)
+	}
 	// sending description of the tools and how to use them
 	if cfg.ToolUse && !resume && role == cfg.UserRole && !containsToolSysMsg() {
 		chatBody.Messages = append(chatBody.Messages, models.RoleMsg{Role: "system", Content: tools.ToolSysMsg})
@@ -735,7 +790,7 @@ func (or OpenRouterChat) FormMsg(msg, role string, resume bool) (io.Reader, erro
 		// Check if we have images to add to this message
 		if len(localImageAttachments) > 0 {
 			// Create a multimodal message with text and all images
-			newMsg = models.NewMultimodalMsg(role, []interface{}{})
+			newMsg = models.NewMultimodalMsg(role, []any{})
 			// Add the text content
 			newMsg.AddTextPart(msg)
 			// Add all image contents
@@ -755,6 +810,17 @@ func (or OpenRouterChat) FormMsg(msg, role string, resume bool) (io.Reader, erro
 		pendingImageAttachments = []string{}
 		newMsg = *processMessageTag(&newMsg)
 		chatBody.Messages = append(chatBody.Messages, newMsg)
+	}
+	// roll block
+	rollReq := models.RollRE.FindString(msg)
+	if rollReq != "" && !cfg.DisableRoll {
+		rollRespText := rollReqToRollResult(rollReq)
+		// make tool msg
+		chatBody.Messages = append(chatBody.Messages, models.RoleMsg{
+			Role: cfg.ToolRole, Content: rollRespText,
+		})
+		outputHandler.Writef("%s[-:-:b](%d) %s[-:-:-]\n%s\n", "\n",
+			len(chatBody.Messages), roleToIcon(cfg.ToolRole), rollRespText)
 	}
 	// sending tool instructions for chat endpoints
 	// Update chatBody.Messages with tool guide (persist to stored messages)

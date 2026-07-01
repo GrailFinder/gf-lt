@@ -21,7 +21,8 @@ import (
 
 var (
 	termCols, termRows int
-	sttTranscribing   bool
+	sttTranscribing    bool
+	exportDir          string // initialized after config load, see init() in bot.go
 )
 
 func isFullScreenPageActive() bool {
@@ -42,7 +43,7 @@ var (
 	bottomFlex             *tview.Flex
 	notificationWidget     *tview.TextView
 	imgView                *tview.Image
-	defaultImage           = "sysprompts/llama.png"
+	defaultImage           string // initialized after config load, see init() in bot.go
 	indexPickWindow        *tview.InputField
 	renameWindow           *tview.InputField
 	roleEditWindow         *tview.InputField
@@ -54,6 +55,9 @@ var (
 	fullscreenMode         bool
 	positionVisible        bool = true
 	ueberzugAvailable      bool = false
+	currentChatOverlayImg  *ueberzug.Image
+	overlayLastRow         int
+	overlayLastMsgIdx      int = -1
 	// pages
 	historyPage    = "historyPage"
 	agentPage      = "agentPage"
@@ -68,7 +72,6 @@ var (
 	imgPage        = "imgPage"
 	filePickerPage = "filePicker"
 	imagesPage     = "imagesPage"
-	exportDir      = "chat_exports"
 	// For overlay search functionality
 	searchField    *tview.InputField
 	searchPageName = "searchOverlay"
@@ -850,7 +853,7 @@ func initTUI() {
 		if event.Key() == tcell.KeyF1 {
 			agent := currentCardID
 			if agent == "" {
-				agent = cfg.AssistantRole
+				agent = roleToID[cfg.AssistantRole]
 			}
 			chatList, err := store.GetChatByChar(agent)
 			if err != nil {
@@ -1231,6 +1234,7 @@ func initTUI() {
 		if event.Key() == tcell.KeyCtrlC {
 			logger.Info("caught Ctrl+C via tcell event")
 			go func() {
+				destroyChatOverlay()
 				if err := tools.PwShutDown(); err != nil {
 					logger.Error("shutdown failed", "err", err)
 				}
@@ -1447,6 +1451,19 @@ func initTUI() {
 		}
 		return event
 	})
+	if ueberzugAvailable {
+		go startOverlayTicker()
+	}
+}
+
+func startOverlayTicker() {
+	ticker := time.NewTicker(1 * time.Second)
+	defer ticker.Stop()
+	for range ticker.C {
+		app.QueueUpdateDraw(func() {
+			updateImageOverlay()
+		})
+	}
 }
 
 func updateEditImageInfo() {

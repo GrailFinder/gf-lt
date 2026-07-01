@@ -22,7 +22,7 @@ LogFile = "log.log"
 UserRole = "user"
 ToolRole = "tool"
 AssistantRole = "assistant"
-SysDir = "sysprompts"
+SysDir = "sysprompts"     # relative paths resolve against the config.toml directory
 ChunkLimit = 100000
 AutoScrollEnabled = true
 AutoCleanToolCallsFromCtx = false
@@ -48,6 +48,7 @@ STT_LANG = "en"  # Language for WHISPER_BINARY mode
 STT_SR = 16000  # Sample rate for audio recording
 STT_SILENCE_MS = 1000  # Silence duration (ms) before auto-transcribing a segment (0 = no auto-segmentation)
 #
+ExportDir = "chat_exports"
 DBPATH = "gflt.db"
 FilePickerDir = "." # Directory for file picker start and coding assistant file operations (relative paths resolved against this)
 FilePickerExts = "png,jpg,jpeg,gif,webp" # Comma-separated list of allowed file extensions for file picker

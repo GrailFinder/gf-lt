@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"gf-lt/models"
 	"gf-lt/pngmeta"
+	"gf-lt/tools"
 	"image"
+	"math/rand/v2"
 	"os"
 	"os/exec"
 	"path"
@@ -17,7 +19,9 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/nfnt/resize"
 	"github.com/rivo/tview"
+	"gitlab.com/diamondburned/ueberzug-go"
 )
 
 // Cached model color - updated by background goroutine
@@ -243,7 +247,7 @@ func startNewChat(keepSysP bool) {
 	textView.SetText(chatToText(chatBody.Messages, cfg.ShowSys))
 	cardID := currentCardID
 	if cardID == "" {
-		cardID = cfg.AssistantRole
+		cardID = roleToID[cfg.AssistantRole]
 	}
 	newChat := &models.Chat{
 		ID:        id + 1,
@@ -429,7 +433,283 @@ func makeStatusLine() string {
 		contextInfo := fmt.Sprintf(" | context-estim: [orange:-:b]%d/%d[-:-:-]", contextTokens, maxCtx)
 		statusLine += contextInfo
 	}
+	// // helpful in debug of img view, not needed in use
+	// row, _ := textView.GetScrollOffset()
+	// scrollInfo := fmt.Sprintf(" | [green:-:b]row=%d[-:-:-]", row)
+	// if first, last, atTop, atBottom, ok := getVisibleMsgRange(); ok {
+	// 	var label string
+	// 	if first == last {
+	// 		label = fmt.Sprintf("msg=%d", first)
+	// 	} else {
+	// 		label = fmt.Sprintf("msgs=%d-%d", first, last)
+	// 	}
+	// 	switch {
+	// 	case atTop && atBottom:
+	// 		label += " ALL"
+	// 	case atTop:
+	// 		label += " TOP"
+	// 	case atBottom:
+	// 		label += " END"
+	// 	}
+	// 	scrollInfo += fmt.Sprintf(" [green:-:b]%s[-:-:-]", label)
+	// }
+	// statusLine += scrollInfo
 	return statusLine + imageInfo + shellModeInfo
+}
+
+// msgLineRange tracks which rendered line range a message occupies.
+type msgLineRange struct {
+	msgIdx    int
+	lineStart int
+	lineEnd   int
+}
+
+// parseMsgHeaderIdx extracts the message index from a line if it starts
+// with a message header like "(0) <role>:"
+func parseMsgHeaderIdx(line string) int {
+	line = strings.TrimSpace(line)
+	if !strings.HasPrefix(line, "(") {
+		return -1
+	}
+	closeParen := strings.IndexByte(line, ')')
+	if closeParen < 0 {
+		return -1
+	}
+	idx, err := strconv.Atoi(line[1:closeParen])
+	if err != nil {
+		return -1
+	}
+	rest := strings.TrimSpace(line[closeParen+1:])
+	if !strings.HasPrefix(rest, "<") {
+		return -1
+	}
+	gtEnd := strings.IndexByte(rest, '>')
+	if gtEnd < 0 {
+		return -1
+	}
+	if strings.TrimSpace(rest[gtEnd+1:]) != ":" {
+		return -1
+	}
+	return idx
+}
+
+// countRenderedLinesOfLine returns how many rendered (wrapped) lines a
+// single logical line occupies at the given terminal width.
+func countRenderedLinesOfLine(line string, width int) int {
+	if width <= 0 {
+		width = 80
+	}
+	lineWidth := tview.TaggedStringWidth(line)
+	if lineWidth <= 0 {
+		return 1
+	}
+	rendered := (lineWidth + width - 1) / width
+	return max(rendered, 1)
+}
+
+// getVisibleMsgRange returns the range of message indices currently visible
+// in the textView widget, plus whether the view is at the top or bottom
+// of the text. Returns ok=false if no messages are visible or the chat
+// is empty.
+func getVisibleMsgRange() (first, last int, atTop, atBottom bool, ok bool) {
+	row, _ := textView.GetScrollOffset()
+	_, _, width, height := textView.GetInnerRect()
+	if width <= 0 || height <= 0 {
+		return 0, 0, false, false, false
+	}
+	lastVisible := row + height - 1
+	text := textView.GetText(true)
+	if text == "" {
+		return 0, 0, false, false, false
+	}
+	logicalLines := strings.Split(text, "\n")
+	var (
+		msgSpans  []msgLineRange
+		cursor    int
+		curIdx    = -1
+		spanStart int
+	)
+	for _, logicalLine := range logicalLines {
+		renderedLines := countRenderedLinesOfLine(logicalLine, width)
+		renderedEnd := cursor + renderedLines
+		if idx := parseMsgHeaderIdx(logicalLine); idx >= 0 {
+			if curIdx >= 0 {
+				msgSpans = append(msgSpans, msgLineRange{
+					msgIdx:    curIdx,
+					lineStart: spanStart,
+					lineEnd:   cursor,
+				})
+			}
+			curIdx = idx
+			spanStart = cursor
+		}
+		cursor = renderedEnd
+	}
+	if curIdx >= 0 {
+		msgSpans = append(msgSpans, msgLineRange{
+			msgIdx:    curIdx,
+			lineStart: spanStart,
+			lineEnd:   cursor,
+		})
+	}
+	first = -1
+	last = -1
+	for _, s := range msgSpans {
+		if s.lineStart <= lastVisible && s.lineEnd > row {
+			if first == -1 || s.msgIdx < first {
+				first = s.msgIdx
+			}
+			if s.msgIdx > last {
+				last = s.msgIdx
+			}
+		}
+	}
+	if first < 0 {
+		return 0, 0, false, false, false
+	}
+	atTop = row == 0
+	atBottom = row+height >= cursor
+	return first, last, atTop, atBottom, true
+}
+
+// findFirstImageInMsg returns the file path of the first valid image in the
+// given message, or empty string if none found.
+func findFirstImageInMsg(msgIdx int) string {
+	if msgIdx < 0 || msgIdx >= len(chatBody.Messages) {
+		return ""
+	}
+	msg := &chatBody.Messages[msgIdx]
+	if !msg.HasContentParts {
+		return ""
+	}
+	for _, part := range msg.ContentParts {
+		var displayPath string
+		switch p := part.(type) {
+		case models.ImageContentPart:
+			displayPath = p.Path
+		case map[string]any:
+			if partType, exists := p["type"]; exists && partType == "image_url" {
+				if pathVal, pathExists := p["path"]; pathExists {
+					if pathStr, isStr := pathVal.(string); isStr {
+						displayPath = pathStr
+					}
+				}
+			}
+		}
+		if displayPath != "" && tools.IsImageFile(displayPath) {
+			if _, err := os.Stat(displayPath); err == nil {
+				return displayPath
+			}
+		}
+	}
+	return ""
+}
+
+// destroyChatOverlay destroys the current ueberzug image overlay if any.
+func destroyChatOverlay() {
+	if currentChatOverlayImg != nil {
+		currentChatOverlayImg.Destroy()
+		currentChatOverlayImg = nil
+	}
+}
+
+// displayImageOverlay decodes, resizes, and shows an image overlay at the
+// top-right corner of the terminal using ueberzug.
+func displayImageOverlay(imgPath string) {
+	file, err := os.Open(imgPath)
+	if err != nil {
+		destroyChatOverlay()
+		return
+	}
+	defer file.Close()
+	imgData, _, err := image.Decode(file)
+	if err != nil {
+		destroyChatOverlay()
+		return
+	}
+	const maxSize = 500
+	scaledImg := resize.Resize(0, uint(maxSize), imgData, resize.Lanczos3)
+	geom, err := getTerminalGeometry()
+	if err != nil {
+		destroyChatOverlay()
+		return
+	}
+	bounds := scaledImg.Bounds()
+	cellH := geom.Height / geom.Rows
+	padding := cellH
+	pixelX := geom.X + geom.Width - bounds.Dx() - padding
+	pixelY := geom.Y + padding
+	destroyChatOverlay()
+	uimg, err := ueberzug.NewImage(scaledImg, pixelX, pixelY)
+	if err != nil {
+		return
+	}
+	currentChatOverlayImg = uimg
+}
+
+// updateImageOverlay checks the currently visible message range and shows an
+// image overlay for the best candidate (middle-most visible message with an
+// image). It skips if nothing changed since the last call.
+func updateImageOverlay() {
+	if !ueberzugAvailable || !cfg.ImagePreview {
+		destroyChatOverlay()
+		return
+	}
+	if name, _ := pages.GetFrontPage(); name != "main" {
+		destroyChatOverlay()
+		return
+	}
+	currentRow, _ := textView.GetScrollOffset()
+	if currentRow == overlayLastRow {
+		return
+	}
+	first, last, _, _, ok := getVisibleMsgRange()
+	if !ok {
+		destroyChatOverlay()
+		overlayLastRow = currentRow
+		overlayLastMsgIdx = -1
+		return
+	}
+	if overlayLastMsgIdx >= first && overlayLastMsgIdx <= last {
+		overlayLastRow = currentRow
+		return
+	}
+	midMsg := (first + last) / 2
+	bestIdx := -1
+	bestPath := ""
+	for offset := 0; offset <= max(midMsg-first, last-midMsg); offset++ {
+		for _, tryIdx := range []int{midMsg + offset, midMsg - offset} {
+			if tryIdx < first || tryIdx > last {
+				continue
+			}
+			if path := findFirstImageInMsg(tryIdx); path != "" {
+				if bestIdx == -1 {
+					bestIdx = tryIdx
+					bestPath = path
+				}
+				if tryIdx == midMsg {
+					goto found
+				}
+			}
+		}
+	}
+	// Fall back to last visible message
+	if bestIdx == -1 {
+		if path := findFirstImageInMsg(last); path != "" {
+			bestIdx = last
+			bestPath = path
+		}
+	}
+found:
+	if bestIdx < 0 || bestPath == "" {
+		destroyChatOverlay()
+		overlayLastRow = currentRow
+		overlayLastMsgIdx = -1
+		return
+	}
+	displayImageOverlay(bestPath)
+	overlayLastRow = currentRow
+	overlayLastMsgIdx = bestIdx
 }
 
 func getContextTokens() int {
@@ -553,6 +833,7 @@ func updateFlexLayout() {
 		// flex already contains only focused widget; do nothing
 		return
 	}
+	destroyChatOverlay()
 	flex.Clear()
 	flex.AddItem(textView, 0, 40, false)
 	if shellMode {
@@ -792,7 +1073,6 @@ func showIndexBar() {
 	updatedFlex := tview.NewFlex().SetDirection(tview.FlexRow).
 		AddItem(indexPickWindow, 3, 0, true). // Index field at top
 		AddItem(flex, 0, 1, false)            // Main flex layout below
-
 	// Add the index overlay as a page
 	pages.AddPage(indexPageName, updatedFlex, true, true)
 	app.SetFocus(indexPickWindow)
@@ -1084,7 +1364,6 @@ type TermGeometry struct {
 
 func getTerminalGeometry() (TermGeometry, error) {
 	var geom TermGeometry
-
 	out, err := exec.Command("xdotool", "getactivewindow").Output()
 	if err != nil {
 		return TermGeometry{}, err
@@ -1093,12 +1372,10 @@ func getTerminalGeometry() (TermGeometry, error) {
 	if winID == "0" {
 		return TermGeometry{}, errors.New("no active window")
 	}
-
 	out, err = exec.Command("xdotool", "getwindowgeometry", winID).Output()
 	if err != nil {
 		return TermGeometry{}, err
 	}
-
 	lines := strings.Split(string(out), "\n")
 	for _, line := range lines {
 		if strings.Contains(line, "Position:") {
@@ -1107,11 +1384,9 @@ func getTerminalGeometry() (TermGeometry, error) {
 			_, _ = fmt.Sscanf(line, " Geometry: %dx%d", &geom.Width, &geom.Height)
 		}
 	}
-
 	if geom.Width == 0 || geom.Height == 0 {
 		return TermGeometry{}, errors.New("invalid window geometry")
 	}
-
 	// Use terminal size captured at init time
 	if termCols > 0 && termRows > 0 {
 		geom.Cols = termCols
@@ -1145,7 +1420,6 @@ func getTerminalGeometry() (TermGeometry, error) {
 		logger.Warn("terminal geometry check", "cols", geom.Cols, "rows", geom.Rows, "termCols", termCols, "termRows", termRows)
 		return TermGeometry{}, errors.New("invalid terminal size")
 	}
-
 	return geom, nil
 }
 
@@ -1153,4 +1427,17 @@ func cellToPixel(cellX, cellY int, geom TermGeometry) (pixelX, pixelY int) {
 	cellWidth := geom.Width / geom.Cols
 	cellHeight := geom.Height / geom.Rows
 	return geom.X + cellX*cellWidth, geom.Y + cellY*cellHeight
+}
+
+func rollReqToRollResult(rr string) string {
+	res := strings.Split(rr, " ")
+	if len(res) < 2 {
+		return ""
+	}
+	maxNum, err := strconv.ParseInt(res[1], 10, 64)
+	if err != nil {
+		return ""
+	}
+	roll := rand.Int64N(maxNum) + 1
+	return fmt.Sprintf("roll of %d; result is %d", maxNum, roll)
 }

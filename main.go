@@ -78,23 +78,19 @@ func main() {
 	flag.StringVar(&cfg.IssuesDir, "issues-dir", "auto", "Directory containing issues (default: ./issues, overridden by GF_LT_ISSUES_DIR env if set)")
 	flag.StringVar(&cfg.CurrentAPI, "api", "", "Override API endpoint (default: from config.toml)")
 	flag.Parse()
-
 	// Restore config.toml ChatAPI if --api flag wasn't explicitly set
 	if cfg.CurrentAPI == "" {
 		cfg.CurrentAPI = cfg.ChatAPI
 	}
-
 	if cfg.MissionMode {
 		cfg.CLIMode = true
 	}
-
 	// Priority: -model flag > GF_LT_MODEL env > "auto"
 	if cfg.CurrentModel == "auto" {
 		if envModel := os.Getenv("GF_LT_MODEL"); envModel != "" {
 			cfg.CurrentModel = envModel
 		}
 	}
-
 	// Priority: --issues-dir flag > GF_LT_ISSUES_DIR env > "./issues"
 	if cfg.IssuesDir == "auto" {
 		if envDir := os.Getenv("GF_LT_ISSUES_DIR"); envDir != "" {
@@ -145,16 +141,13 @@ func setupSignalHandler() {
 	go func() {
 		sig := <-sigCh
 		fmt.Fprintf(os.Stderr, "\n[signal] %v received, exporting chat...\n", sig)
-
 		issueID := "interrupted"
 		if m := tools.GetCurrentMission(); m != nil {
 			issueID = m.Issue.ID
 			m.Status = mission.StatusAborted
 			m.SaveCheckpoint(mission.DefaultCheckpointPath())
 		}
-
 		exportMissionChat(issueID)
-
 		code := 130 // 128 + SIGINT(2)
 		if sig == syscall.SIGTERM {
 			code = 143 // 128 + SIGTERM(15)
@@ -278,7 +271,6 @@ func handleCLICommand(msg string) bool {
 	parts := strings.Fields(msg)
 	cmd := strings.ToLower(parts[0])
 	args := parts[1:]
-
 	switch cmd {
 	case "/help", "/h":
 		printCLIHelp()
@@ -445,19 +437,15 @@ func runMissionMode() {
 	setupSignalHandler()
 	outputHandler = &CLIOutputHandler{}
 	cliRespDone = make(chan bool, 1)
-
 	checkpointPath := missionCheckpoint
 	if checkpointPath == "" {
 		checkpointPath = mission.DefaultCheckpointPath()
 	}
-
 	var resumeFrom *mission.Checkpoint
 	var issue *mission.Issue
 	var issueStatus mission.IssueStatus
 	var err error
-
 	issueManager := mission.NewIssueManager(cfg.IssuesDir)
-
 	if missionResumeFile != "" {
 		resumeFrom, err = mission.LoadCheckpoint(missionResumeFile)
 		if err != nil {
@@ -486,7 +474,6 @@ func runMissionMode() {
 			}
 			fmt.Printf("Auto-selected issue %s\n", issue.ID)
 		}
-
 		if issueStatus == mission.StatusOpen {
 			if err := issueManager.MoveIssue(issue.ID, mission.StatusOpen, mission.StatusInProgress); err != nil {
 				fmt.Fprintf(os.Stderr, "Failed to move issue to in_progress: %v\n", err)
@@ -496,13 +483,10 @@ func runMissionMode() {
 			fmt.Printf("Issue moved to in_progress\n")
 		}
 	}
-
 	m := mission.NewMission(issue, issueManager, cfg.MissionPMInterval, cfg.MissionMaxFailures, cfg.MissionQuiet)
-
 	if resumeFrom != nil {
 		m.Checkpoint = resumeFrom
 	}
-
 	// Load agent card if provided
 	var agentSysprompt string
 	if missionAgentCard != "" {
@@ -523,7 +507,6 @@ func runMissionMode() {
 			fmt.Printf("Using default agent card: %s\n", card.Role)
 		}
 	}
-
 	if !cfg.MissionQuiet {
 		fmt.Println("\n=== Mission Started ===")
 		fmt.Printf("Issue: %s - %s\n", issue.ID, issue.Title)
@@ -531,7 +514,6 @@ func runMissionMode() {
 		fmt.Printf("PM Interval: %d tool calls\n", cfg.MissionPMInterval)
 		fmt.Printf("Max Failures: %d\n\n", cfg.MissionMaxFailures)
 	}
-
 	runMission(m, checkpointPath, agentSysprompt)
 }
 
@@ -539,26 +521,21 @@ func runMission(m *mission.Mission, checkpointPath string, agentSysprompt string
 	startTime := time.Now()
 	m.Status = mission.StatusRunning
 	cfg.CLIMode = true // Use CLI mode infrastructure
-
 	if err := m.SaveCheckpoint(checkpointPath); err != nil {
 		m.Log("Warning: failed to save initial checkpoint: %v", err)
 	}
-
 	tools.SetCurrentMission(m)
-
 	// Set token callback for agent-based LLM calls (PM agent, etc.)
 	tools.SetTokenFunc(func() string {
 		choseChunkParser()
 		return chunkParser.GetToken()
 	})
-
 	outputHandler = &CLIOutputHandler{}
 	cliRespDone = make(chan bool, 1)
 	chatBody.Model = cfg.CurrentModel
 	tools.InitTools(cfg, logger, store)
 	tools.InitPMAgent(cfg, logger)
 	startNewCLIChat()
-
 	// Set working directory to issue's project path
 	if m.Issue.ProjectPath != "" {
 		if err := tools.SetFSCwd(m.Issue.ProjectPath); err != nil {
@@ -567,13 +544,11 @@ func runMission(m *mission.Mission, checkpointPath string, agentSysprompt string
 			m.Log("Working directory set to: %s (FilePickerDir=%s)", m.Issue.ProjectPath, tools.GetFSRoot())
 		}
 	}
-
 	// Build initial system message with agent prompt + issue context
 	workflowDocs := ""
 	if wf, err := os.ReadFile("docs/issue-workflow.md"); err == nil {
 		workflowDocs = "\n\n## Issue Workflow Guidelines:\n" + string(wf)
 	}
-
 	systemMsg := fmt.Sprintf(
 		"%s\n\n## Current Issue\n\nIssue ID: %s\nTitle: %s\n\nDescription:\n%s\n\nProject path: %s\n\nAcceptance criteria:\n- %s%s",
 		agentSysprompt,
@@ -584,7 +559,6 @@ func runMission(m *mission.Mission, checkpointPath string, agentSysprompt string
 		strings.Join(m.Issue.AcceptanceCriteria, "\n- "),
 		workflowDocs,
 	)
-
 	// Add initial context messages
 	m.AddToConversation("system", systemMsg)
 	chatBody.Messages = append(chatBody.Messages, models.RoleMsg{
@@ -595,10 +569,8 @@ func runMission(m *mission.Mission, checkpointPath string, agentSysprompt string
 	chatBody.Messages = append(chatBody.Messages, models.RoleMsg{
 		Role: cfg.AssistantRole, Content: "I'm ready to solve this issue. Let me start by examining the codebase and understanding the current structure before implementing the solution.",
 	})
-
 	// Start the message loop
 	go missionMessageLoop(m, checkpointPath, startTime)
-
 	// Block until context done (interrupt) or mission completes
 	<-ctx.Done()
 }
@@ -609,10 +581,8 @@ func missionMessageLoop(m *mission.Mission, checkpointPath string, startTime tim
 		Role:    cfg.UserRole,
 		UserMsg: "Proceed with the issue. What is your next step?",
 	}
-
 	var emptyRespRetries int
 	missionSummarizeFailures = 0 // reset at mission start
-
 	for {
 		select {
 		case <-cliRespDone:
@@ -631,11 +601,9 @@ func missionMessageLoop(m *mission.Mission, checkpointPath string, startTime tim
 			} else {
 				emptyRespRetries = 0
 			}
-
 			// Response complete - check for mission completion signals
 			m.Log("Response complete. Tool calls: %d, Failures: %d",
 				m.Checkpoint.ToolCallCount, m.Checkpoint.ConsecutiveFailures)
-
 			// PM check-in — checked before success/abort so guidance can fire mid-mission
 			if m.PMGuidanceNeeded {
 				m.PMGuidanceNeeded = false
@@ -648,13 +616,11 @@ func missionMessageLoop(m *mission.Mission, checkpointPath string, startTime tim
 				chatRoundChan <- &models.ChatRoundReq{Role: cfg.AssistantRole}
 				continue
 			}
-
 			// Check for create_pr tool completion
 			if m.Status == mission.StatusSuccess {
 				missionComplete(m, checkpointPath, mission.StatusSuccess, startTime)
 				return
 			}
-
 			// Check failure threshold
 			if m.ShouldAbort() {
 				m.Log("Maximum failures reached (%d), aborting mission", m.Checkpoint.ConsecutiveFailures)
@@ -662,10 +628,8 @@ func missionMessageLoop(m *mission.Mission, checkpointPath string, startTime tim
 				missionComplete(m, checkpointPath, mission.StatusFailed, startTime)
 				return
 			}
-
 			// Context window management — compact if > 90% saturation
 			summarizeAndCompact()
-
 			// If summarization failed repeatedly and context is saturated, abort
 			if missionSummarizeFailures >= 3 {
 				maxCtx := getMaxContextTokens()
@@ -679,14 +643,12 @@ func missionMessageLoop(m *mission.Mission, checkpointPath string, startTime tim
 					return
 				}
 			}
-
 			// Continue conversation - ask for next action
 			m.AddToConversation("user", "Continue working on the issue. What is your next step?")
 			chatBody.Messages = append(chatBody.Messages, models.RoleMsg{
 				Role: cfg.UserRole, Content: "Continue working on the issue. What is your next step?",
 			})
 			chatRoundChan <- &models.ChatRoundReq{Role: cfg.UserRole, UserMsg: "Continue working on the issue. What is your next step?"}
-
 		case <-ctx.Done():
 			m.Log("Mission interrupted")
 			m.Status = mission.StatusAborted
@@ -705,21 +667,17 @@ func summarizeAndCompact() {
 	if contextTokens == 0 || float64(contextTokens)/float64(maxCtx) < 0.9 {
 		return
 	}
-
 	messages := chatBody.Messages
 	if len(messages) < 20 {
 		return
 	}
-
 	keep := 15
 	split := len(messages) - keep
 	if split < 3 {
 		return
 	}
-
 	toSummarize := messages[:split]
 	toKeep := messages[split:]
-
 	summary, err := tools.SummarizeChat(toSummarize)
 	if err != nil || strings.TrimSpace(summary) == "" {
 		missionSummarizeFailures++
@@ -727,12 +685,10 @@ func summarizeAndCompact() {
 		return
 	}
 	missionSummarizeFailures = 0 // reset on success
-
 	summaryMsg := models.RoleMsg{
 		Role:    "system",
 		Content: fmt.Sprintf("[Context summary of previous conversation]\n%s", summary),
 	}
-
 	chatBody.Messages = append([]models.RoleMsg{summaryMsg}, toKeep...)
 	logger.Info("context compressed", "summarized", split, "messages_kept", keep, "summary_len", len(summary))
 }
@@ -803,13 +759,10 @@ func exportMissionChat(issueID string) {
 func missionComplete(m *mission.Mission, checkpointPath string, status mission.MissionStatus, startTime time.Time) {
 	// Export chat for analysis
 	exportMissionChat(m.Issue.ID)
-
 	duration := time.Since(startTime)
-
 	// Save final checkpoint
 	m.Status = status
 	m.SaveCheckpoint(checkpointPath)
-
 	// Move issue to appropriate status
 	switch status {
 	case mission.StatusSuccess:
@@ -817,7 +770,6 @@ func missionComplete(m *mission.Mission, checkpointPath string, status mission.M
 	case mission.StatusFailed, mission.StatusAborted:
 		m.MoveToStatus(mission.StatusArchive)
 	}
-
 	if !cfg.MissionQuiet {
 		fmt.Println("\n=== Mission " + string(status) + " ===")
 		fmt.Printf("Issue: %s\n", m.Issue.ID)
@@ -825,7 +777,6 @@ func missionComplete(m *mission.Mission, checkpointPath string, status mission.M
 		fmt.Printf("Commits: %d\n", len(m.Checkpoint.CommitsMade))
 		fmt.Printf("Duration: %s\n", duration)
 	}
-
 	if cfg.OutputFormat == "json" {
 		result := mission.MissionResult{
 			Status:     status,
@@ -837,7 +788,6 @@ func missionComplete(m *mission.Mission, checkpointPath string, status mission.M
 		}
 		fmt.Println(result.ToJSON())
 	}
-
 	if status == mission.StatusSuccess {
 		os.Exit(0)
 	} else {
