@@ -34,6 +34,7 @@ var (
 	textArea               *tview.TextArea
 	editArea               *tview.TextArea
 	toolCallEditArea       *tview.TextArea
+	editImageInfoView      *tview.TextView
 	textView               *tview.TextView
 	statusLineWidget       *tview.TextView
 	helpView               *tview.TextView
@@ -494,6 +495,10 @@ func initTUI() {
 	toolCallEditArea = tview.NewTextArea().
 		SetPlaceholder(`{"id": "...", "type": "function", "function": {"name": "...", "arguments": "..."}}`)
 	toolCallEditArea.SetBorder(true).SetTitle("tool call JSON")
+	editImageInfoView = tview.NewTextView()
+	editImageInfoView.SetBorder(true).SetTitle("Images")
+	editImageInfoView.SetTextColor(tcell.ColorOrange)
+	editImageInfoView.SetTextAlign(tview.AlignLeft)
 	saveEditMsg := func() {
 		defer colorText()
 		editedMsg := editArea.GetText()
@@ -529,6 +534,25 @@ func initTUI() {
 	editArea.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		if event.Key() == tcell.KeyEscape {
 			saveEditMsg()
+			return nil
+		}
+		if event.Key() == tcell.KeyCtrlO {
+			filePicker := makeFilePicker()
+			if filePicker != nil {
+				pages.AddPage(filePickerPage, filePicker, true, true)
+			}
+			return nil
+		}
+		if event.Key() == tcell.KeyCtrlW {
+			if selectedIndex >= 0 && selectedIndex < len(chatBody.Messages) {
+				m := &chatBody.Messages[selectedIndex]
+				if m.RemoveLastImagePart() {
+					updateEditImageInfo()
+					showToast("edit", "removed last image")
+				} else {
+					showToast("edit", "no images to remove")
+				}
+			}
 			return nil
 		}
 		return event
@@ -610,24 +634,26 @@ func initTUI() {
 				roleEditWindow.SetText(m.Role)
 				pages.AddPage(roleEditPage, roleEditWindow, true, true)
 				roleEditMode = false // Reset the flag
-			case editMode:
-				hideIndexBar() // Hide overlay first
-				editFlex := tview.NewFlex().SetDirection(tview.FlexRow).
-					AddItem(editArea, 0, 1, true).
-					AddItem(toolCallEditArea, 0, 1, false)
-				pages.AddPage(editMsgPage, editFlex, true, true)
-				editArea.SetText(m.GetText(), true)
-				if len(m.ToolCalls) == 1 {
-					tcJSON, _ := json.MarshalIndent(m.ToolCalls[0], "", "  ")
-					toolCallEditArea.SetText(string(tcJSON), true)
-					toolCallEditArea.SetDisabled(false)
-				} else if len(m.ToolCalls) > 1 {
-					toolCallEditArea.SetText("[multiple tool calls — not editable]", false)
-					toolCallEditArea.SetDisabled(true)
-				} else {
-					toolCallEditArea.SetText("", true)
-					toolCallEditArea.SetDisabled(false)
-				}
+		case editMode:
+			hideIndexBar() // Hide overlay first
+			editFlex := tview.NewFlex().SetDirection(tview.FlexRow).
+				AddItem(editArea, 0, 3, true).
+				AddItem(editImageInfoView, 4, 0, false).
+				AddItem(toolCallEditArea, 0, 2, false)
+			pages.AddPage(editMsgPage, editFlex, true, true)
+			editArea.SetText(m.GetText(), true)
+			if len(m.ToolCalls) == 1 {
+				tcJSON, _ := json.MarshalIndent(m.ToolCalls[0], "", "  ")
+				toolCallEditArea.SetText(string(tcJSON), true)
+				toolCallEditArea.SetDisabled(false)
+			} else if len(m.ToolCalls) > 1 {
+				toolCallEditArea.SetText("[multiple tool calls — not editable]", false)
+				toolCallEditArea.SetDisabled(true)
+			} else {
+				toolCallEditArea.SetText("", true)
+				toolCallEditArea.SetDisabled(false)
+			}
+			updateEditImageInfo()
 			default:
 				msgText := m.GetText()
 				if err := copyToClipboard(msgText); err != nil {
@@ -1421,4 +1447,57 @@ func initTUI() {
 		}
 		return event
 	})
+}
+
+func updateEditImageInfo() {
+	if editImageInfoView == nil {
+		return
+	}
+	if selectedIndex < 0 || selectedIndex >= len(chatBody.Messages) {
+		editImageInfoView.SetText("")
+		return
+	}
+	m := &chatBody.Messages[selectedIndex]
+	if !m.HasContentParts {
+		editImageInfoView.SetText("[gray](no images attached — Ctrl+O: add, Ctrl+W: remove last)[-]")
+		return
+	}
+	var images []string
+	for _, part := range m.ContentParts {
+		switch p := part.(type) {
+		case models.ImageContentPart:
+			displayPath := p.Path
+			if displayPath == "" {
+				displayPath = "image (data-only, no file path)"
+			} else {
+				displayPath = extractDisplayPath(displayPath, cfg.FilePickerDir)
+			}
+			images = append(images, displayPath)
+		case map[string]any:
+			if t, ok := p["type"]; ok && t == "image_url" {
+				displayPath := ""
+				if pathVal, ok := p["path"]; ok {
+					if pathStr, ok := pathVal.(string); ok {
+						displayPath = pathStr
+					}
+				}
+				if displayPath == "" {
+					displayPath = "image (data-only, no file path)"
+				} else {
+					displayPath = extractDisplayPath(displayPath, cfg.FilePickerDir)
+				}
+				images = append(images, displayPath)
+			}
+		}
+	}
+	if len(images) == 0 {
+		editImageInfoView.SetText("[gray](no images attached — Ctrl+O: add, Ctrl+W: remove last)[-]")
+		return
+	}
+	var sb strings.Builder
+	for i, imgPath := range images {
+		fmt.Fprintf(&sb, "[orange::i][%d] %s[-:-:-]\n", i+1, imgPath)
+	}
+	fmt.Fprintf(&sb, "\n[gray]%d image(s) — Ctrl+O: add, Ctrl+W: remove last[-]", len(images))
+	editImageInfoView.SetText(sb.String())
 }

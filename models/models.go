@@ -403,6 +403,33 @@ func (m *RoleMsg) AddImagePart(imageURL, imagePath string) {
 	m.ContentParts = append(m.ContentParts, imagePart)
 }
 
+// RemoveLastImagePart removes the last image content part from the message.
+// Returns true if an image was removed, false if no images were found.
+// If removing the last image leaves no remaining parts, reverts to simple Content format.
+func (m *RoleMsg) RemoveLastImagePart() bool {
+	for i := len(m.ContentParts) - 1; i >= 0; i-- {
+		switch part := m.ContentParts[i].(type) {
+		case ImageContentPart:
+			m.ContentParts = append(m.ContentParts[:i], m.ContentParts[i+1:]...)
+			if len(m.ContentParts) == 0 {
+				m.HasContentParts = false
+				m.Content = ""
+			}
+			return true
+		case map[string]any:
+			if t, ok := part["type"]; ok && t == "image_url" {
+				m.ContentParts = append(m.ContentParts[:i], m.ContentParts[i+1:]...)
+				if len(m.ContentParts) == 0 {
+					m.HasContentParts = false
+					m.Content = ""
+				}
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // CreateImageURLFromPath creates a data URL from an image file path
 func CreateImageURLFromPath(imagePath string) (string, error) {
 	// Read the image file

@@ -1188,9 +1188,21 @@ geom, err := getTerminalGeometry()
 								currentFilePickerUeberzugImg.Destroy()
 								currentFilePickerUeberzugImg = nil
 							}
-							AddImageAttachment(filePath)
-							updatePendingImagesView()
-							statusView.SetText("Image added: " + path.Base(filePath) + " (total: " + strconv.Itoa(len(pendingImageAttachments)) + ")")
+							if editMode && selectedIndex >= 0 && selectedIndex < len(chatBody.Messages) {
+								imageURL, err := models.CreateImageURLFromPath(filePath)
+								if err != nil {
+									logger.Error("failed to create image URL", "error", err)
+									statusView.SetText("Error: " + err.Error())
+								} else {
+									chatBody.Messages[selectedIndex].AddImagePart(imageURL, filePath)
+									updateEditImageInfo()
+									statusView.SetText("Image added to msg #" + strconv.Itoa(selectedIndex) + ": " + path.Base(filePath))
+								}
+							} else {
+								AddImageAttachment(filePath)
+								updatePendingImagesView()
+								statusView.SetText("Image added: " + path.Base(filePath) + " (total: " + strconv.Itoa(len(pendingImageAttachments)) + ")")
+							}
 						} else {
 							if currentFilePickerUeberzugImg != nil {
 								currentFilePickerUeberzugImg.Destroy()
@@ -1214,7 +1226,14 @@ geom, err := getTerminalGeometry()
 				}
 				// Handle 'd' to remove last image even while searching
 				if r == 'd' {
-					if len(pendingImageAttachments) > 0 {
+					if editMode && selectedIndex >= 0 && selectedIndex < len(chatBody.Messages) {
+						if chatBody.Messages[selectedIndex].RemoveLastImagePart() {
+							updateEditImageInfo()
+							statusView.SetText("Removed last image from msg #" + strconv.Itoa(selectedIndex))
+						} else {
+							statusView.SetText("No images to remove from msg #" + strconv.Itoa(selectedIndex))
+						}
+					} else if len(pendingImageAttachments) > 0 {
 						removed := pendingImageAttachments[len(pendingImageAttachments)-1]
 						RemoveLastImageAttachment()
 						updatePendingImagesView()
@@ -1283,8 +1302,14 @@ geom, err := getTerminalGeometry()
 				return nil
 			}
 			if event.Rune() == 'd' {
-				// Remove last pending image
-				if len(pendingImageAttachments) > 0 {
+				if editMode && selectedIndex >= 0 && selectedIndex < len(chatBody.Messages) {
+					if chatBody.Messages[selectedIndex].RemoveLastImagePart() {
+						updateEditImageInfo()
+						statusView.SetText("Removed last image from msg #" + strconv.Itoa(selectedIndex))
+					} else {
+						statusView.SetText("No images to remove from msg #" + strconv.Itoa(selectedIndex))
+					}
+				} else if len(pendingImageAttachments) > 0 {
 					removed := pendingImageAttachments[len(pendingImageAttachments)-1]
 					RemoveLastImageAttachment()
 					updatePendingImagesView()
@@ -1355,10 +1380,21 @@ geom, err := getTerminalGeometry()
 							currentFilePickerUeberzugImg = nil
 						}
 						logger.Info("adding image", "file", actualItemName)
-						AddImageAttachment(filePath)
-						updatePendingImagesView()
-						logger.Info("after adding image", "file", actualItemName, "count", len(pendingImageAttachments))
-						statusView.SetText("Image added: " + path.Base(filePath) + " (total: " + strconv.Itoa(len(pendingImageAttachments)) + ")")
+						if editMode && selectedIndex >= 0 && selectedIndex < len(chatBody.Messages) {
+							imageURL, err := models.CreateImageURLFromPath(filePath)
+							if err != nil {
+								logger.Error("failed to create image URL", "error", err)
+								statusView.SetText("Error: " + err.Error())
+							} else {
+								chatBody.Messages[selectedIndex].AddImagePart(imageURL, filePath)
+								updateEditImageInfo()
+								statusView.SetText("Image added to msg #" + strconv.Itoa(selectedIndex) + ": " + path.Base(filePath))
+							}
+						} else {
+							AddImageAttachment(filePath)
+							updatePendingImagesView()
+							statusView.SetText("Image added: " + path.Base(filePath) + " (total: " + strconv.Itoa(len(pendingImageAttachments)) + ")")
+						}
 						logger.Info("after setting text", "file", actualItemName)
 					} else {
 						if currentFilePickerUeberzugImg != nil {
