@@ -265,6 +265,39 @@ func startNewChat(keepSysP bool) {
 	colorText()
 }
 
+func forkChat(forkIndex int) {
+	id, err := store.ChatGetMaxID()
+	if err != nil {
+		logger.Error("failed to get chat id", "error", err)
+	}
+	var forked []models.RoleMsg
+	if forkIndex < 2 {
+		if len(chatBody.Messages) >= 2 {
+			forked = append([]models.RoleMsg{}, chatBody.Messages[:2]...)
+		}
+	} else {
+		forked = append([]models.RoleMsg{}, chatBody.Messages[:forkIndex+1]...)
+	}
+	chatBody.Messages = forked
+	textView.SetText(chatToText(chatBody.Messages, cfg.ShowSys))
+	cardID := currentCardID
+	if cardID == "" {
+		cardID = roleToID[cfg.AssistantRole]
+	}
+	newChat := &models.Chat{
+		ID:        id + 1,
+		Name:      fmt.Sprintf("%d_%s", id+1, cfg.AssistantRole),
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+		Msgs:      "",
+		Agent:     cardID,
+	}
+	activeChatName = newChat.Name
+	chatMap[newChat.Name] = newChat
+	updateStatusLine()
+	colorText()
+}
+
 func renameUser(oldname, newname string) {
 	if oldname == "" {
 		// not provided; deduce who user is
@@ -1085,6 +1118,20 @@ func hideIndexBar() {
 	app.SetFocus(textView)
 	// Clear the index field
 	indexPickWindow.SetText("")
+}
+
+func showForkBar() {
+	updatedFlex := tview.NewFlex().SetDirection(tview.FlexRow).
+		AddItem(forkPickWindow, 3, 0, true).
+		AddItem(flex, 0, 1, false)
+	pages.AddPage(forkPageName, updatedFlex, true, true)
+	app.SetFocus(forkPickWindow)
+}
+
+func hideForkBar() {
+	pages.RemovePage(forkPageName)
+	app.SetFocus(textView)
+	forkPickWindow.SetText("")
 }
 
 // addRegionTags adds region tags to search matches in the text for tview highlighting
