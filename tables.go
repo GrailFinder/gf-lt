@@ -888,7 +888,7 @@ func makeFilePicker() *tview.Flex {
 	}
 	// Pending images list
 	pendingImagesView := tview.NewTextView()
-	pendingImagesView.SetBorder(true).SetTitle("Pending Images [d: remove last]").SetTitleAlign(tview.AlignLeft)
+	pendingImagesView.SetBorder(true).SetTitle("Images [d: remove last]").SetTitleAlign(tview.AlignLeft)
 	pendingImagesView.SetTextColor(tcell.ColorOrange)
 	pendingImagesView.SetTextAlign(tview.AlignLeft)
 	// Horizontal flex for list + preview
@@ -903,12 +903,38 @@ func makeFilePicker() *tview.Flex {
 	}
 	// Helper to update pending images display
 	updatePendingImagesView := func() {
-		if len(pendingImageAttachments) == 0 {
+		var images []string
+		if editMode && selectedIndex >= 0 && selectedIndex < len(chatBody.Messages) {
+			m := &chatBody.Messages[selectedIndex]
+			if m.HasContentParts {
+				for _, part := range m.ContentParts {
+					switch p := part.(type) {
+					case models.ImageContentPart:
+						if p.Path != "" {
+							images = append(images, path.Base(p.Path))
+						}
+					case map[string]any:
+						if t, ok := p["type"]; ok && t == "image_url" {
+							if pathVal, ok := p["path"]; ok {
+								if pathStr, ok := pathVal.(string); ok && pathStr != "" {
+									images = append(images, path.Base(pathStr))
+								}
+							}
+						}
+					}
+				}
+			}
+		} else {
+			for _, p := range pendingImageAttachments {
+				images = append(images, path.Base(p))
+			}
+		}
+		if len(images) == 0 {
 			pendingImagesView.SetText("(none)")
 		} else {
 			var lines []string
-			for i, p := range pendingImageAttachments {
-				lines = append(lines, fmt.Sprintf("%d. %s", i+1, path.Base(p)))
+			for i, img := range images {
+				lines = append(lines, fmt.Sprintf("%d. %s", i+1, img))
 			}
 			pendingImagesView.SetText(strings.Join(lines, "\n"))
 		}
@@ -1196,6 +1222,7 @@ geom, err := getTerminalGeometry()
 								} else {
 									chatBody.Messages[selectedIndex].AddImagePart(imageURL, filePath)
 									updateEditImageInfo()
+									updatePendingImagesView()
 									statusView.SetText("Image added to msg #" + strconv.Itoa(selectedIndex) + ": " + path.Base(filePath))
 								}
 							} else {
@@ -1229,6 +1256,7 @@ geom, err := getTerminalGeometry()
 					if editMode && selectedIndex >= 0 && selectedIndex < len(chatBody.Messages) {
 						if chatBody.Messages[selectedIndex].RemoveLastImagePart() {
 							updateEditImageInfo()
+							updatePendingImagesView()
 							statusView.SetText("Removed last image from msg #" + strconv.Itoa(selectedIndex))
 						} else {
 							statusView.SetText("No images to remove from msg #" + strconv.Itoa(selectedIndex))
@@ -1305,6 +1333,7 @@ geom, err := getTerminalGeometry()
 				if editMode && selectedIndex >= 0 && selectedIndex < len(chatBody.Messages) {
 					if chatBody.Messages[selectedIndex].RemoveLastImagePart() {
 						updateEditImageInfo()
+						updatePendingImagesView()
 						statusView.SetText("Removed last image from msg #" + strconv.Itoa(selectedIndex))
 					} else {
 						statusView.SetText("No images to remove from msg #" + strconv.Itoa(selectedIndex))
@@ -1388,6 +1417,7 @@ geom, err := getTerminalGeometry()
 							} else {
 								chatBody.Messages[selectedIndex].AddImagePart(imageURL, filePath)
 								updateEditImageInfo()
+								updatePendingImagesView()
 								statusView.SetText("Image added to msg #" + strconv.Itoa(selectedIndex) + ": " + path.Base(filePath))
 							}
 						} else {
