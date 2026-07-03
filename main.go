@@ -34,6 +34,7 @@ var (
 	toolRunningMode   atomic.Bool
 	editMode          = false
 	roleEditMode      = false
+	forkMode          = false
 	injectRole        = true
 	selectedIndex     = int(-1)
 	shellMode         = false

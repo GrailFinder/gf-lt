@@ -45,6 +45,7 @@ var (
 	imgView                *tview.Image
 	defaultImage           string // initialized after config load, see init() in bot.go
 	indexPickWindow        *tview.InputField
+	forkPickWindow         *tview.InputField
 	renameWindow           *tview.InputField
 	roleEditWindow         *tview.InputField
 	shellInput             *tview.InputField
@@ -73,8 +74,9 @@ var (
 	filePickerPage = "filePicker"
 	imagesPage     = "imagesPage"
 	// For overlay search functionality
-	searchField    *tview.InputField
-	searchPageName = "searchOverlay"
+	searchField     *tview.InputField
+	searchPageName  = "searchOverlay"
+	forkPageName    = "forkOverlay"
 	// help text
 	helpText = `
 [yellow]Esc[white]: send msg
@@ -672,6 +674,48 @@ func initTUI() {
 			return event
 		}
 	})
+	forkPickWindow = tview.NewInputField().
+		SetLabel("Fork from msg index (empty=new chat): ").
+		SetFieldWidth(4).
+		SetAcceptanceFunc(tview.InputFieldInteger).
+		SetDoneFunc(func(key tcell.Key) {
+			hideForkBar()
+		})
+	forkPickWindow.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		switch event.Key() {
+		case tcell.KeyEscape:
+			hideForkBar()
+			forkMode = false
+			return nil
+		case tcell.KeyEnter:
+			forkMode = false
+			si := forkPickWindow.GetText()
+			hideForkBar()
+			if si == "" {
+				startNewChat(true)
+				return nil
+			}
+			siInt, err := strconv.Atoi(si)
+			if err != nil || siInt < 0 {
+				showToast("cancel", "invalid index, starting new chat")
+				startNewChat(true)
+				return nil
+			}
+			if siInt >= len(chatBody.Messages) {
+				showToast("error", "index out of bounds, starting new chat")
+				startNewChat(true)
+				return nil
+			}
+			if botRespMode.Load() {
+				showToast("error", "cannot fork while bot is responding")
+				return nil
+			}
+			forkChat(siInt)
+			return nil
+		default:
+			return event
+		}
+	})
 	//
 	renameWindow = tview.NewInputField().
 		SetLabel("Enter a msg index: ").
@@ -1032,7 +1076,12 @@ func initTUI() {
 			return nil
 		}
 		if event.Key() == tcell.KeyCtrlN {
-			startNewChat(true)
+			if botRespMode.Load() {
+				showToast("error", "cannot fork while bot is responding")
+				return nil
+			}
+			forkMode = true
+			showForkBar()
 			return nil
 		}
 		if event.Key() == tcell.KeyCtrlO {

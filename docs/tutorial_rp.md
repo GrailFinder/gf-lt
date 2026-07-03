@@ -169,7 +169,7 @@ You can export your chat into a JSON file:
 - `Ctrl+E`: It will create a JSON file: `chat_exports/{chatname}.json`
 - `F11`: To import an exported chat.
 - `F1`: Opens the chat table. Chats are stored in an SQLite database (gflt.db). The chat table gives you a number of options (load, delete, update, start new chat, move system prompt into a message).
-- `Ctrl+N`: Keybind for quick new chat start. This is a bit different from starting a new chat from the table, since it does not re-read the card, but instead takes the first two messages from the old chat. This might be important in cases where you changed the card or want to preserve updates that you've made in the system prompt or first message of the old chat.
+- `Ctrl+N`: Prompts for a message index to fork from. Enter a number to fork the chat at that message (preserving all messages up to it). Leave empty and press Enter to start a fresh new chat (re-reads the character card).
 - `Ctrl+S`: Allows you to pick a character card. Chats are saved tied to character cards; by loading a new card you can now act upon the chats of that card.
 - `Ctrl+]`: Manually saves the current chat to the database.
 
