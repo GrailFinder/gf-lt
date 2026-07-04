@@ -1282,7 +1282,11 @@ out:
 		lastRespStats = nil
 	}
 	if r.Resume {
-		chatBody.Messages[len(chatBody.Messages)-1].Content += respText.String()
+		cleanPart := stripOverlappingPrefix(
+			chatBody.Messages[len(chatBody.Messages)-1].Content,
+			respText.String(),
+		)
+		chatBody.Messages[len(chatBody.Messages)-1].Content += cleanPart
 		updatedMsg := chatBody.Messages[len(chatBody.Messages)-1]
 		processedMsg := processMessageTag(&updatedMsg)
 		chatBody.Messages[len(chatBody.Messages)-1] = *processedMsg

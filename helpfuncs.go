@@ -1488,3 +1488,30 @@ func rollReqToRollResult(rr string) string {
 	roll := rand.Int64N(maxNum) + 1
 	return fmt.Sprintf("roll of %d; result is %d", maxNum, roll)
 }
+
+// stripOverlappingPrefix removes the prefix of newPart that overlaps with the
+// suffix of existing. This prevents duplication when resuming generation via the
+// chat endpoint, where models often echo the end of the previous assistant
+// message before continuing.
+func stripOverlappingPrefix(existing, newPart string) string {
+	if existing == "" || newPart == "" {
+		return newPart
+	}
+	// Check up to the last 500 characters of existing for overlap
+	overlap := existing
+	if len(overlap) > 500 {
+		overlap = overlap[len(overlap)-500:]
+	}
+	// Find the longest suffix of overlap that matches a prefix of newPart
+	bestLen := 0
+	for end := len(overlap); end >= 0; end-- {
+		suffix := overlap[end:]
+		if strings.HasPrefix(newPart, suffix) && len(suffix) > bestLen {
+			bestLen = len(suffix)
+		}
+	}
+	if bestLen > 0 {
+		return newPart[bestLen:]
+	}
+	return newPart
+}
