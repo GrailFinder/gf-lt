@@ -87,15 +87,21 @@ This document explains how to set up and configure the application using the `co
 - Enable or disable text-to-speech functionality.
 
 #### TTS_URL (`"http://localhost:8880/v1/audio/speech"`)
-- The endpoint for TTS API (used with `kokoro` provider).
+- The endpoint for the TTS API (OpenAI `/v1/audio/speech` format).
 
 #### TTS_SPEED (`1.2`)
 - Playback speed for speech output (1.0 is normal speed).
 
-#### TTS_PROVIDER (`"kokoro"`)
-- TTS provider to use. Options: `"kokoro"` or `"google"`.
-  - `"kokoro"`: Uses Kokoro FastAPI TTS server (requires TTS_URL to be set). Provides high-quality voice synthesis but requires a running Kokoro server.
-  - `"google"`: Uses Google Translate TTS with gopxl/beep for local playback. Works offline using Google's public TTS API with local audio playback via gopxl/beep. Supports multiple languages via TTS_LANGUAGE setting.
+#### TTS_PROVIDER (`"openai"`)
+- TTS provider to use. Options: `"openai"`, `"kokoro"` (alias for `"openai"`), or `"google"`.
+  - `"openai"` / `"kokoro"`: Uses any OpenAI-compatible TTS API (requires TTS_URL to be set). Provides high-quality voice synthesis.
+  - `"google"`: Uses Google Translate TTS for local playback. Works offline using Google's public TTS API. Supports multiple languages via TTS_LANGUAGE setting.
+
+#### TTS_VOICE (`""`)
+- Voice name passed to the OpenAI-compatible TTS API. Examples: `"af_bella"`, `"alloy"`, `"echo"`, `"fable"`, `"onyx"`, `"nova"`, `"shimmer"`. If empty, the server default is used.
+
+#### TTS_MODEL (`""`)
+- Model name passed to the OpenAI-compatible TTS API. Defaults to `"tts-1"` if empty.
 
 #### TTS_LANGUAGE (`"en"`)
 - Language code for TTS (used with `google` provider).

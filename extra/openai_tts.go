@@ -18,15 +18,14 @@ import (
 	"github.com/neurosnap/sentences/english"
 )
 
-type KokoroOrator struct {
-	logger   *slog.Logger
-	mu       sync.Mutex
-	URL      string
-	Format   models.AudioFormat
-	Stream   bool
-	Speed    float32
-	Language string
-	Voice    string
+type OpenAICompatOrator struct {
+	logger *slog.Logger
+	mu     sync.Mutex
+	URL    string
+	Format models.AudioFormat
+	Speed  float32
+	Voice  string
+	Model  string
 	// fields for playback control
 	cmd    *exec.Cmd
 	cmdMu  sync.Mutex
@@ -36,11 +35,11 @@ type KokoroOrator struct {
 	interrupt  bool
 }
 
-func (o *KokoroOrator) GetLogger() *slog.Logger {
+func (o *OpenAICompatOrator) GetLogger() *slog.Logger {
 	return o.logger
 }
 
-func (o *KokoroOrator) fetchAudio(text string) ([]byte, error) {
+func (o *OpenAICompatOrator) fetchAudio(text string) ([]byte, error) {
 	body, err := o.requestSound(text)
 	if err != nil {
 		return nil, fmt.Errorf("request failed: %w", err)
@@ -53,7 +52,7 @@ func (o *KokoroOrator) fetchAudio(text string) ([]byte, error) {
 	return data, nil
 }
 
-func (o *KokoroOrator) playAudio(data []byte) error {
+func (o *OpenAICompatOrator) playAudio(data []byte) error {
 	var stderrBuf bytes.Buffer
 	cmd := exec.Command("ffplay", "-nodisp", "-autoexit", "-i", "pipe:0")
 	cmd.Stderr = &stderrBuf
@@ -105,7 +104,7 @@ func (o *KokoroOrator) playAudio(data []byte) error {
 	}
 }
 
-func (o *KokoroOrator) Speak(text string) error {
+func (o *OpenAICompatOrator) Speak(text string) error {
 	o.logger.Debug("fn: Speak is called", "text-len", len(text))
 	data, err := o.fetchAudio(text)
 	if err != nil {
@@ -119,7 +118,7 @@ type audioResult struct {
 	err  error
 }
 
-func (o *KokoroOrator) speakSentences(sentences []string) {
+func (o *OpenAICompatOrator) speakSentences(sentences []string) {
 	if len(sentences) == 0 {
 		return
 	}
@@ -159,17 +158,39 @@ func (o *KokoroOrator) speakSentences(sentences []string) {
 		}
 	}
 }
-func (o *KokoroOrator) requestSound(text string) (io.ReadCloser, error) {
+func (o *OpenAICompatOrator) tryQuantize() {
+	modelURL := strings.Replace(o.URL, "/v1/audio/speech", "/v1/model", 1)
+	if modelURL == o.URL {
+		return
+	}
+	payload, err := json.Marshal(map[string]interface{}{
+		"language": "english",
+		"quantize": true,
+	})
+	if err != nil {
+		o.logger.Warn("tts quantize: marshal failed", "error", err)
+		return
+	}
+	resp, err := http.DefaultClient.Post(modelURL, "application/json", bytes.NewReader(payload)) //nolint:noctx
+	if err != nil {
+		o.logger.Warn("tts quantize: request failed", "url", modelURL, "error", err)
+		return
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	o.logger.Info("tts quantize", "status", resp.StatusCode, "response", strings.TrimSpace(string(body)))
+}
+
+func (o *OpenAICompatOrator) requestSound(text string) (io.ReadCloser, error) {
 	if o.URL == "" {
 		return nil, fmt.Errorf("TTS URL is empty")
 	}
 	payload := map[string]interface{}{
-		"model":           "tts-1",
+		"model":           o.Model,
 		"input":           text,
 		"voice":           o.Voice,
-		"response_format": "mp3",
+		"response_format": string(o.Format),
 		"speed":           o.Speed,
-		"stream_format":   "audio",
 	}
 	payloadBytes, err := json.Marshal(payload)
 	if err != nil {
@@ -193,7 +214,7 @@ func (o *KokoroOrator) requestSound(text string) (io.ReadCloser, error) {
 	return resp.Body, nil
 }
 
-func (o *KokoroOrator) stoproutine() {
+func (o *OpenAICompatOrator) stoproutine() {
 	for {
 		<-TTSDoneChan
 		o.logger.Debug("orator got done signal")
@@ -211,7 +232,7 @@ func (o *KokoroOrator) stoproutine() {
 	}
 }
 
-func (o *KokoroOrator) Stop() {
+func (o *OpenAICompatOrator) Stop() {
 	o.cmdMu.Lock()
 	defer o.cmdMu.Unlock()
 	// Signal any running Speak to stop
@@ -236,7 +257,7 @@ func (o *KokoroOrator) Stop() {
 	o.mu.Unlock()
 }
 
-func (o *KokoroOrator) readroutine() {
+func (o *OpenAICompatOrator) readroutine() {
 	tokenizer, _ := english.NewSentenceTokenizer(nil)
 	for {
 		select {

@@ -142,7 +142,7 @@ An image appears on the screen. I show it to Seraphina. "Did you see that creatu
 
 #### TTS and STT
 
-I like to have Whisper as a binary and Kokoro as a TTS Docker container;
+I like to have Whisper as a binary and an OpenAI-compatible TTS Docker container;
 such a setup would be:
 ```
 make setup-whisper
@@ -161,7 +161,7 @@ Instead, enable it when you want to use it: `Ctrl+P`, select the cell named `TTS
 
 With focus on the input widget, press `Ctrl+R` to start recording from your microphone. Say your text, then press `Ctrl+R` again to stop recording. Soon the audio should be transcribed and appear in the input widget. You're free to edit, delete, or send it as is with `Esc`.
 
-If you have enabled `TTS Enabled`, then the LLM response should be read by Kokoro TTS.
+If you have enabled `TTS Enabled`, then the LLM response should be read by your TTS server.
 
 #### Chat management
 

@@ -112,6 +112,8 @@ type Config struct {
 	TTS_SPEED    float32 `toml:"TTS_SPEED"`
 	TTS_PROVIDER string  `toml:"TTS_PROVIDER"`
 	TTS_LANGUAGE string  `toml:"TTS_LANGUAGE"`
+	TTS_VOICE    string  `toml:"TTS_VOICE"`
+	TTS_MODEL    string  `toml:"TTS_MODEL"`
 	// STT
 	STT_TYPE          string `toml:"STT_TYPE"` // WHISPER_SERVER, WHISPER_BINARY, OPENAI_COMPAT, crips_asr
 	STT_URL           string `toml:"STT_URL"`

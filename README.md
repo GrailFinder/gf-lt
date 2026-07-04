@@ -51,7 +51,7 @@ set values as you need them to be;
 
 #### setting up STT/TTS services
 For speech-to-text (STT) and text-to-speech (TTS) functionality:
-1. The project uses Whisper.cpp for STT and Kokoro for TTS
+1. The project uses Whisper.cpp for STT and an OpenAI-compatible server for TTS
 2. Docker Compose automatically downloads the required Whisper model on first run
 3. To start all services: `make docker-up`
 4. To start only STT service: `make docker-up-whisper`

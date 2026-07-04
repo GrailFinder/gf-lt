@@ -31,12 +31,14 @@ RAGBatchSize = 1
 RAGWordLimit = 250
 RAGOverlapWords = 25
 RAGDir = "ragimport"
-# extra tts
+# extra tts (OpenAI-compatible / Google Translate)
 TTS_ENABLED = false
 TTS_URL = "http://localhost:8880/v1/audio/speech"
 TTS_SPEED = 1.2
-TTS_PROVIDER = "kokoro"
-TTS_LANGUAGE = "en"
+TTS_PROVIDER = "openai"      # "openai" (or "kokoro" alias) | "google"
+TTS_VOICE = ""               # voice name (e.g. "af_bella", "alloy", "echo", etc.)
+TTS_MODEL = ""               # model name (defaults to "tts-1" if empty)
+TTS_LANGUAGE = "en"          # language code for "google" provider
 # Speech-to-Text / ASR
 STT_ENABLED = false
 STT_TYPE = "WHISPER_SERVER"  # WHISPER_SERVER | WHISPER_BINARY | OPENAI_COMPAT | crips_asr

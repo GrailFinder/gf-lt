@@ -33,16 +33,19 @@ func NewOrator(log *slog.Logger, cfg *config.Config) Orator {
 		provider = "google" // does not require local setup
 	}
 	switch strings.ToLower(provider) {
-	case "kokoro": // kokoro
-		orator := &KokoroOrator{
-			logger:   log,
-			URL:      cfg.TTS_URL,
-			Format:   models.AFMP3,
-			Stream:   false,
-			Speed:    cfg.TTS_SPEED,
-			Language: "a",
-			Voice:    "af_bella(1)+af_sky(1)",
+	case "openai", "kokoro": // OpenAI-compatible TTS
+		orator := &OpenAICompatOrator{
+			logger: log,
+			URL:    cfg.TTS_URL,
+			Format: models.AFMP3,
+			Speed:  cfg.TTS_SPEED,
+			Voice:  cfg.TTS_VOICE,
+			Model:  cfg.TTS_MODEL,
 		}
+		if orator.Model == "" {
+			orator.Model = "tts-1"
+		}
+		orator.tryQuantize()
 		go orator.readroutine()
 		go orator.stoproutine()
 		return orator
