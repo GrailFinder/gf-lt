@@ -57,7 +57,7 @@ var (
 	positionVisible        bool = true
 	ueberzugAvailable      bool = false
 	currentChatOverlayImg  *ueberzug.Image
-	overlayLastRow         int
+	overlayLastRow         int = -1
 	overlayLastMsgIdx      int = -1
 	// pages
 	historyPage    = "historyPage"
