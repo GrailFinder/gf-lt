@@ -1,13 +1,17 @@
 package main
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"gf-lt/models"
 	"gf-lt/pngmeta"
 	"gf-lt/tools"
 	"image"
+	"io"
 	"math/rand/v2"
+	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path"
@@ -745,7 +749,59 @@ found:
 	overlayLastMsgIdx = bestIdx
 }
 
+// fetchSlotTokens queries the llama.cpp /slots endpoint to get the actual
+// prompt token count for the current model. Runs in a goroutine to avoid
+// blocking the TUI. Results are stored in cachedSlotTokens.
+func fetchSlotTokens() {
+	if !isLocalLlamacpp() {
+		return
+	}
+	cachedSlotTokens = 0
+	currentModel := chatBody.Model
+	currentAPI := cfg.CurrentAPI
+	go func() {
+		u, err := url.Parse(currentAPI)
+		if err != nil {
+			return
+		}
+		slotsURL := u.Scheme + "://" + u.Host + "/slots?model=" + currentModel
+		req, err := http.NewRequest("GET", slotsURL, nil)
+		if err != nil {
+			logger.Warn("failed to create slots request", "error", err)
+			return
+		}
+		resp, err := httpClient.Do(req)
+		if err != nil {
+			logger.Warn("failed to fetch slots", "error", err, "url", slotsURL)
+			return
+		}
+		defer resp.Body.Close()
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			logger.Warn("failed to read slots response", "error", err)
+			return
+		}
+		var slots []struct {
+			NPromptTokens int `json:"n_prompt_tokens"`
+		}
+		if err := json.Unmarshal(body, &slots); err != nil {
+			logger.Warn("failed to parse slots response", "error", err)
+			return
+		}
+		if len(slots) > 0 {
+			cachedSlotTokens = slots[0].NPromptTokens
+			logger.Debug("fetched slot tokens", "tokens", cachedSlotTokens, "model", currentModel)
+			app.QueueUpdateDraw(func() {
+				updateStatusLine()
+			})
+		}
+	}()
+}
+
 func getContextTokens() int {
+	if cachedSlotTokens > 0 {
+		return cachedSlotTokens
+	}
 	if chatBody == nil || chatBody.Messages == nil {
 		return 0
 	}

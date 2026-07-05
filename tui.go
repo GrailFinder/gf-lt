@@ -59,6 +59,7 @@ var (
 	currentChatOverlayImg  *ueberzug.Image
 	overlayLastRow         int = -1
 	overlayLastMsgIdx      int = -1
+	cachedSlotTokens       int // actual token count from llama.cpp /slots, fetched after each response
 	// pages
 	historyPage    = "historyPage"
 	agentPage      = "agentPage"

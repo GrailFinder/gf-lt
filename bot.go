@@ -1306,6 +1306,7 @@ out:
 	cleanChatBody()
 	refreshChatDisplay()
 	updateStatusLine()
+	fetchSlotTokens()
 	// bot msg is done; now check it for func call
 	// logChat(activeChatName, chatBody.Messages)
 	if err := updateStorageChat(activeChatName, chatBody.Messages); err != nil {

@@ -7,6 +7,7 @@ import (
 	"gf-lt/tools"
 	"io"
 	"net/http"
+	"net/url"
 	"regexp"
 	"strings"
 
@@ -125,15 +126,11 @@ func fetchMediaMarker() {
 	currentModel := chatBody.Model
 	currentAPI := cfg.CurrentAPI
 	go func() {
-		baseURL := currentAPI
-		if strings.Contains(baseURL, "/completion") {
-			baseURL = strings.TrimSuffix(baseURL, "/completion")
-		} else if strings.Contains(baseURL, "/v1/chat/completions") {
-			baseURL = strings.TrimSuffix(baseURL, "/v1/chat/completions")
-		} else {
+		u, err := url.Parse(currentAPI)
+		if err != nil {
 			return
 		}
-		propsURL := baseURL + "/props?model=" + currentModel
+		propsURL := u.Scheme + "://" + u.Host + "/props?model=" + currentModel
 		req, err := http.NewRequest("GET", propsURL, nil)
 		if err != nil {
 			logger.Warn("failed to create props request", "error", err)
