@@ -297,6 +297,10 @@ func handleCLICommand(msg string) bool {
 		startNewCLIChat()
 		fmt.Printf("Switched to syscard: %s (%s)\n", card.Role, card.FilePath)
 	case "/undo", "/u":
+		if botRespMode.Load() {
+			fmt.Println("Cannot delete while bot is responding.")
+			return true
+		}
 		if len(chatBody.Messages) == 0 {
 			fmt.Println("No messages to delete.")
 			return true

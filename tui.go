@@ -75,9 +75,9 @@ var (
 	filePickerPage = "filePicker"
 	imagesPage     = "imagesPage"
 	// For overlay search functionality
-	searchField     *tview.InputField
-	searchPageName  = "searchOverlay"
-	forkPageName    = "forkOverlay"
+	searchField    *tview.InputField
+	searchPageName = "searchOverlay"
+	forkPageName   = "forkOverlay"
 	// help text
 	helpText = `
 [yellow]Esc[white]: send msg
@@ -640,26 +640,26 @@ func initTUI() {
 				roleEditWindow.SetText(m.Role)
 				pages.AddPage(roleEditPage, roleEditWindow, true, true)
 				roleEditMode = false // Reset the flag
-		case editMode:
-			hideIndexBar() // Hide overlay first
-			editFlex := tview.NewFlex().SetDirection(tview.FlexRow).
-				AddItem(editArea, 0, 3, true).
-				AddItem(editImageInfoView, 4, 0, false).
-				AddItem(toolCallEditArea, 0, 2, false)
-			pages.AddPage(editMsgPage, editFlex, true, true)
-			editArea.SetText(m.GetText(), true)
-			if len(m.ToolCalls) == 1 {
-				tcJSON, _ := json.MarshalIndent(m.ToolCalls[0], "", "  ")
-				toolCallEditArea.SetText(string(tcJSON), true)
-				toolCallEditArea.SetDisabled(false)
-			} else if len(m.ToolCalls) > 1 {
-				toolCallEditArea.SetText("[multiple tool calls — not editable]", false)
-				toolCallEditArea.SetDisabled(true)
-			} else {
-				toolCallEditArea.SetText("", true)
-				toolCallEditArea.SetDisabled(false)
-			}
-			updateEditImageInfo()
+			case editMode:
+				hideIndexBar() // Hide overlay first
+				editFlex := tview.NewFlex().SetDirection(tview.FlexRow).
+					AddItem(editArea, 0, 3, true).
+					AddItem(editImageInfoView, 4, 0, false).
+					AddItem(toolCallEditArea, 0, 2, false)
+				pages.AddPage(editMsgPage, editFlex, true, true)
+				editArea.SetText(m.GetText(), true)
+				if len(m.ToolCalls) == 1 {
+					tcJSON, _ := json.MarshalIndent(m.ToolCalls[0], "", "  ")
+					toolCallEditArea.SetText(string(tcJSON), true)
+					toolCallEditArea.SetDisabled(false)
+				} else if len(m.ToolCalls) > 1 {
+					toolCallEditArea.SetText("[multiple tool calls — not editable]", false)
+					toolCallEditArea.SetDisabled(true)
+				} else {
+					toolCallEditArea.SetText("", true)
+					toolCallEditArea.SetDisabled(false)
+				}
+				updateEditImageInfo()
 			default:
 				msgText := m.GetText()
 				if err := copyToClipboard(msgText); err != nil {

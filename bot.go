@@ -1281,6 +1281,22 @@ out:
 		}
 		lastRespStats = nil
 	}
+	if msgIdx >= len(chatBody.Messages) {
+		botRespMode.Store(false)
+		cleanChatBody()
+		refreshChatDisplay()
+		updateStatusLine()
+		if err := updateStorageChat(activeChatName, chatBody.Messages); err != nil {
+			logger.Warn("failed to update storage", "error", err, "name", activeChatName)
+		}
+		if cfg.CLIMode && cliRespDone != nil {
+			select {
+			case cliRespDone <- true:
+			default:
+			}
+		}
+		return nil
+	}
 	if r.Resume {
 		cleanPart := stripOverlappingPrefix(
 			chatBody.Messages[len(chatBody.Messages)-1].Content,
@@ -1460,6 +1476,9 @@ func handleBatchToolCalls(textContent string, toolCalls []models.ToolCall) bool 
 	}
 	// Update the last assistant message with all tool calls
 	lastMsgIdx := len(chatBody.Messages) - 1
+	if lastMsgIdx < 0 {
+		return false
+	}
 	chatBody.Messages[lastMsgIdx].Content = textContent
 	chatBody.Messages[lastMsgIdx].ToolCalls = toolCalls
 	// Check if any tool call requires VRAM management (unload LLM, let MCP use VRAM, reload)
@@ -1626,6 +1645,10 @@ func executeOneToolCall(tc models.ToolCall) {
 // executeSingleToolCall executes the first (and only) tool call found in the message at msgIdx.
 // It refuses messages with multiple tool calls and does nothing if there are none.
 func executeSingleToolCall(msgIdx int) {
+	if msgIdx < 0 || msgIdx >= len(chatBody.Messages) {
+		showToast("error", "message not found")
+		return
+	}
 	msg := chatBody.Messages[msgIdx]
 	if len(msg.ToolCalls) == 0 {
 		showToast("info", "no tool calls in this message")
@@ -1734,6 +1757,10 @@ func findCall(msg, toolCall string) bool {
 	// Use the tool call ID from streaming response (lastToolCall.ID)
 	// Don't generate random ID - the ID should match between assistant message and tool response
 	lastMsgIdx := len(chatBody.Messages) - 1
+	if lastMsgIdx < 0 {
+		logger.Warn("findCall: no messages to update")
+		return true
+	}
 	if lastToolCall.ID != "" {
 		chatBody.Messages[lastMsgIdx].ToolCallID = lastToolCall.ID
 	}
