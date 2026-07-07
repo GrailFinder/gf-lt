@@ -1439,7 +1439,7 @@ func initTUI() {
 			}
 			return nil
 		}
-		if event.Key() == tcell.KeyCtrlE {
+		if event.Key() == tcell.KeyCtrlUnderscore { // Ctrl+/ (Ctrl+^ / Ctrl+6 also available via KeyCtrlCarat)
 			if botRespMode.Load() {
 				return nil
 			}
