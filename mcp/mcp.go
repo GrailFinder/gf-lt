@@ -6,6 +6,7 @@ import (
 	"gf-lt/config"
 	"gf-lt/tools"
 	"log/slog"
+	"os"
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -190,13 +191,39 @@ func (m *Manager) callTool(name string, args map[string]string) []byte {
 		case *mcp.TextContent:
 			output.WriteString(c.Text)
 		case *mcp.ImageContent:
-			fmt.Fprintf(&output, "[image: %s]", c.Data)
+			ext := ".png"
+			if c.MIMEType != "" {
+				if parts := strings.Split(c.MIMEType, "/"); len(parts) == 2 {
+					ext = "." + parts[1]
+				}
+			}
+			f, err := os.CreateTemp("", "mcp-image-*"+ext)
+			if err != nil {
+				fmt.Fprintf(&output, "[image: %d bytes]", len(c.Data))
+				continue
+			}
+			f.Write(c.Data)
+			f.Close()
+			fmt.Fprintf(&output, "[image: %s]", f.Name())
 		case *mcp.EmbeddedResource:
 			if c.Resource != nil {
 				if c.Resource.Text != "" {
 					fmt.Fprintf(&output, "[resource: %s - %s]", c.Resource.URI, c.Resource.Text)
 				} else if len(c.Resource.Blob) > 0 {
-					fmt.Fprintf(&output, "[resource: %s (binary)]", c.Resource.URI)
+					ext := ".bin"
+					if c.Resource.MIMEType != "" {
+						if parts := strings.Split(c.Resource.MIMEType, "/"); len(parts) == 2 {
+							ext = "." + parts[1]
+						}
+					}
+					f, err := os.CreateTemp("", "mcp-resource-*"+ext)
+					if err != nil {
+						fmt.Fprintf(&output, "[resource: %s (%d bytes)]", c.Resource.URI, len(c.Resource.Blob))
+						continue
+					}
+					f.Write(c.Resource.Blob)
+					f.Close()
+					fmt.Fprintf(&output, "[resource: %s - %s]", c.Resource.URI, f.Name())
 				}
 			}
 		}

@@ -47,6 +47,7 @@ var (
 	interruptResp          atomic.Bool
 	ragger                 *rag.RAG
 	chunkParser            ChunkParser
+	imagePathRe            = regexp.MustCompile(`\[image: ([^\]]+)\]`)
 	lastToolCall           *models.FuncCall
 	lastCompletedToolCalls []models.ToolCall
 	lastRespStats          *models.ResponseStats
@@ -1517,6 +1518,22 @@ func handleBatchToolCalls(textContent string, toolCalls []models.ToolCall) bool 
 	return true
 }
 
+// extractImagesFromToolResponse scans a tool response string for [image: /path] markers
+// and returns existing image file paths.
+func extractImagesFromToolResponse(toolMsg string) []string {
+	matches := imagePathRe.FindAllStringSubmatch(toolMsg, -1)
+	var paths []string
+	for _, m := range matches {
+		if len(m) >= 2 {
+			p := strings.TrimSpace(m[1])
+			if _, err := os.Stat(p); err == nil && tools.IsImageFile(p) {
+				paths = append(paths, p)
+			}
+		}
+	}
+	return paths
+}
+
 // executeOneToolCall executes a single tool call, appends its response to chatBody.Messages.
 func executeOneToolCall(tc models.ToolCall) {
 	args, err := convertJSONToMapStringString(tc.FuncCall.Args)
@@ -1596,10 +1613,46 @@ func executeOneToolCall(tc models.ToolCall) {
 			}
 		}
 	} else {
-		toolResponseMsg = models.RoleMsg{
-			Role:       cfg.ToolRole,
-			Content:    toolMsg,
-			ToolCallID: tc.ID,
+		if imagePaths := extractImagesFromToolResponse(toolMsg); len(imagePaths) > 0 {
+			var contentParts []any
+			contentParts = append(contentParts, models.TextContentPart{Type: "text", Text: toolMsg})
+			for _, p := range imagePaths {
+				imageURL, err := models.CreateImageURLFromPath(p)
+				if err != nil {
+					logger.Error("failed to create image URL from tool response",
+						"error", err, "path", p)
+					continue
+				}
+				contentParts = append(contentParts, models.ImageContentPart{
+					Type: "image_url",
+					Path: p,
+					ImageURL: struct {
+						URL string `json:"url"`
+					}{URL: imageURL},
+				})
+				AddImageAttachment(p)
+			}
+			if len(contentParts) > 0 {
+				toolResponseMsg = models.RoleMsg{
+					Role:            cfg.ToolRole,
+					Content:         toolMsg,
+					ContentParts:    contentParts,
+					HasContentParts: true,
+					ToolCallID:      tc.ID,
+				}
+			} else {
+				toolResponseMsg = models.RoleMsg{
+					Role:       cfg.ToolRole,
+					Content:    toolMsg,
+					ToolCallID: tc.ID,
+				}
+			}
+		} else {
+			toolResponseMsg = models.RoleMsg{
+				Role:       cfg.ToolRole,
+				Content:    toolMsg,
+				ToolCallID: tc.ID,
+			}
 		}
 	}
 	if tools.IsMissionMode() && tools.IsToolError(tc.FuncCall.Name, toolResponseMsg.Content) {
@@ -1869,11 +1922,49 @@ func findCall(msg, toolCall string) bool {
 			}
 		}
 	} else {
-		toolResponseMsg = models.RoleMsg{
-			Role:           cfg.ToolRole,
-			Content:        toolMsg,
-			ToolCallID:     lastToolCall.ID,
-			IsShellCommand: isShellCommand,
+		if imagePaths := extractImagesFromToolResponse(toolMsg); len(imagePaths) > 0 {
+			var contentParts []any
+			contentParts = append(contentParts, models.TextContentPart{Type: "text", Text: toolMsg})
+			for _, p := range imagePaths {
+				imageURL, err := models.CreateImageURLFromPath(p)
+				if err != nil {
+					logger.Error("failed to create image URL from tool response",
+						"error", err, "path", p)
+					continue
+				}
+				contentParts = append(contentParts, models.ImageContentPart{
+					Type: "image_url",
+					Path: p,
+					ImageURL: struct {
+						URL string `json:"url"`
+					}{URL: imageURL},
+				})
+				AddImageAttachment(p)
+			}
+			if len(contentParts) > 0 {
+				toolResponseMsg = models.RoleMsg{
+					Role:            cfg.ToolRole,
+					Content:         toolMsg,
+					ContentParts:    contentParts,
+					HasContentParts: true,
+					ToolCallID:      lastToolCall.ID,
+					IsShellCommand:  isShellCommand,
+				}
+			} else {
+				toolResponseMsg = models.RoleMsg{
+					Role:           cfg.ToolRole,
+					Content:        toolMsg,
+					ToolCallID:     lastToolCall.ID,
+					IsShellCommand: isShellCommand,
+				}
+			}
+		} else {
+			toolResponseMsg = models.RoleMsg{
+				Role:           cfg.ToolRole,
+				Content:        toolMsg,
+				ToolCallID:     lastToolCall.ID,
+				IsShellCommand: isShellCommand,
+			}
 		}
 	}
 	outputHandler.Writef("%s[-:-:b](%d) <%s>: [-:-:-]\n%s\n",
