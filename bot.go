@@ -48,6 +48,7 @@ var (
 	ragger                 *rag.RAG
 	chunkParser            ChunkParser
 	imagePathRe            = regexp.MustCompile(`\[image: ([^\]]+)\]`)
+	originalImagePathRe    = regexp.MustCompile(`(?:Image(?: saved to)?: )([^\s\[]+)`)
 	lastToolCall           *models.FuncCall
 	lastCompletedToolCalls []models.ToolCall
 	lastRespStats          *models.ResponseStats
@@ -1534,6 +1535,17 @@ func extractImagesFromToolResponse(toolMsg string) []string {
 	return paths
 }
 
+// extractOriginalImagePath scans a tool response string for the original image
+// path from the server's TextContent (e.g. "Image saved to: /path/file.png").
+// Returns empty string if not found.
+func extractOriginalImagePath(toolMsg string) string {
+	matches := originalImagePathRe.FindStringSubmatch(toolMsg)
+	if len(matches) >= 2 {
+		return strings.TrimSpace(matches[1])
+	}
+	return ""
+}
+
 // executeOneToolCall executes a single tool call, appends its response to chatBody.Messages.
 func executeOneToolCall(tc models.ToolCall) {
 	args, err := convertJSONToMapStringString(tc.FuncCall.Args)
@@ -1616,21 +1628,26 @@ func executeOneToolCall(tc models.ToolCall) {
 		if imagePaths := extractImagesFromToolResponse(toolMsg); len(imagePaths) > 0 {
 			var contentParts []any
 			contentParts = append(contentParts, models.TextContentPart{Type: "text", Text: toolMsg})
+			originalPath := extractOriginalImagePath(toolMsg)
 			for _, p := range imagePaths {
-				imageURL, err := models.CreateImageURLFromPath(p)
+				displayPath := originalPath
+				if displayPath == "" {
+					displayPath = p
+				}
+				imageURL, err := models.CreateImageURLFromPath(displayPath)
 				if err != nil {
 					logger.Error("failed to create image URL from tool response",
-						"error", err, "path", p)
+						"error", err, "path", displayPath)
 					continue
 				}
 				contentParts = append(contentParts, models.ImageContentPart{
 					Type: "image_url",
-					Path: p,
+					Path: displayPath,
 					ImageURL: struct {
 						URL string `json:"url"`
 					}{URL: imageURL},
 				})
-				AddImageAttachment(p)
+				AddImageAttachment(displayPath)
 			}
 			if len(contentParts) > 0 {
 				toolResponseMsg = models.RoleMsg{
@@ -1925,21 +1942,26 @@ func findCall(msg, toolCall string) bool {
 		if imagePaths := extractImagesFromToolResponse(toolMsg); len(imagePaths) > 0 {
 			var contentParts []any
 			contentParts = append(contentParts, models.TextContentPart{Type: "text", Text: toolMsg})
+			originalPath := extractOriginalImagePath(toolMsg)
 			for _, p := range imagePaths {
-				imageURL, err := models.CreateImageURLFromPath(p)
+				displayPath := originalPath
+				if displayPath == "" {
+					displayPath = p
+				}
+				imageURL, err := models.CreateImageURLFromPath(displayPath)
 				if err != nil {
 					logger.Error("failed to create image URL from tool response",
-						"error", err, "path", p)
+						"error", err, "path", displayPath)
 					continue
 				}
 				contentParts = append(contentParts, models.ImageContentPart{
 					Type: "image_url",
-					Path: p,
+					Path: displayPath,
 					ImageURL: struct {
 						URL string `json:"url"`
 					}{URL: imageURL},
 				})
-				AddImageAttachment(p)
+				AddImageAttachment(displayPath)
 			}
 			if len(contentParts) > 0 {
 				toolResponseMsg = models.RoleMsg{
