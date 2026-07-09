@@ -1625,10 +1625,14 @@ func executeOneToolCall(tc models.ToolCall) {
 			}
 		}
 	} else {
-		if imagePaths := extractImagesFromToolResponse(toolMsg); len(imagePaths) > 0 {
+		imagePaths := extractImagesFromToolResponse(toolMsg)
+		originalPath := extractOriginalImagePath(toolMsg)
+		if len(imagePaths) > 0 || originalPath != "" {
+			if len(imagePaths) == 0 {
+				imagePaths = append(imagePaths, originalPath)
+			}
 			var contentParts []any
 			contentParts = append(contentParts, models.TextContentPart{Type: "text", Text: toolMsg})
-			originalPath := extractOriginalImagePath(toolMsg)
 			for _, p := range imagePaths {
 				displayPath := originalPath
 				if displayPath == "" {
@@ -1647,7 +1651,7 @@ func executeOneToolCall(tc models.ToolCall) {
 						URL string `json:"url"`
 					}{URL: imageURL},
 				})
-				AddImageAttachment(displayPath)
+
 			}
 			if len(contentParts) > 0 {
 				toolResponseMsg = models.RoleMsg{
@@ -1939,10 +1943,14 @@ func findCall(msg, toolCall string) bool {
 			}
 		}
 	} else {
-		if imagePaths := extractImagesFromToolResponse(toolMsg); len(imagePaths) > 0 {
+		imagePaths := extractImagesFromToolResponse(toolMsg)
+		originalPath := extractOriginalImagePath(toolMsg)
+		if len(imagePaths) > 0 || originalPath != "" {
+			if len(imagePaths) == 0 {
+				imagePaths = append(imagePaths, originalPath)
+			}
 			var contentParts []any
 			contentParts = append(contentParts, models.TextContentPart{Type: "text", Text: toolMsg})
-			originalPath := extractOriginalImagePath(toolMsg)
 			for _, p := range imagePaths {
 				displayPath := originalPath
 				if displayPath == "" {
@@ -1961,7 +1969,7 @@ func findCall(msg, toolCall string) bool {
 						URL string `json:"url"`
 					}{URL: imageURL},
 				})
-				AddImageAttachment(displayPath)
+
 			}
 			if len(contentParts) > 0 {
 				toolResponseMsg = models.RoleMsg{

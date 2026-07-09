@@ -7,6 +7,7 @@ import (
 	"gf-lt/tools"
 	"log/slog"
 	"os"
+	"regexp"
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -191,6 +192,9 @@ func (m *Manager) callTool(name string, args map[string]string) []byte {
 		case *mcp.TextContent:
 			output.WriteString(c.Text)
 		case *mcp.ImageContent:
+			if p := extractImagePathFromText(output.String()); p != "" {
+				continue
+			}
 			ext := ".png"
 			if c.MIMEType != "" {
 				if parts := strings.Split(c.MIMEType, "/"); len(parts) == 2 {
@@ -230,6 +234,16 @@ func (m *Manager) callTool(name string, args map[string]string) []byte {
 	}
 
 	return []byte(output.String())
+}
+
+var imagePathFromTextRe = regexp.MustCompile(`(?:Image(?: saved to)?: )([^\s\[]+)`)
+
+func extractImagePathFromText(text string) string {
+	matches := imagePathFromTextRe.FindStringSubmatch(text)
+	if len(matches) >= 2 {
+		return strings.TrimSpace(matches[1])
+	}
+	return ""
 }
 
 func convertToolToOpenAI(serverName string, tool *mcp.Tool) map[string]any {
