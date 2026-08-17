@@ -53,6 +53,11 @@ func pwStart(args map[string]string) []byte {
 	if browserStarted {
 		return []byte(`{"error": "Browser already started"}`)
 	}
+	if pw == nil {
+		if err := CheckPlaywright(); err != nil {
+			return []byte(fmt.Sprintf(`{"error": "playwright not available: %s"}`, err.Error()))
+		}
+	}
 	var err error
 	browser, err = pw.Chromium.Launch(playwright.BrowserTypeLaunchOptions{
 		Headless: playwright.Bool(!cfg.PlaywrightDebug),

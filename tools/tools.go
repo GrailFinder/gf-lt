@@ -163,6 +163,8 @@ func InitTools(initCfg *config.Config, log *slog.Logger, store storage.FullRepo)
 				return nil
 			}
 		}
+	} else {
+		removeBrowserTools()
 	}
 	// Initialize fs root directory
 	SetFSRoot(cfg.FilePickerDir)
@@ -428,7 +430,7 @@ func runCmd(args map[string]string) []byte {
 		return []byte(FsFileEdit(args))
 	case "insert_at":
 		return []byte(FsInsertAt(args))
-	case "mkdir", "ls", "cat", "stat", "pwd", "cd", "cp", "mv", "rm", "sed", "grep", "head", "tail", "wc", "sort", "uniq", "echo", "printf", "time", "go", "find", "file", "git":
+	case "mkdir", "ls", "cat", "stat", "pwd", "cd", "cp", "mv", "rm", "sed", "grep", "head", "tail", "wc", "sort", "uniq", "echo", "printf", "time", "go", "find", "file", "git", "magick", "which":
 		// File operations, git, and shell commands - use ExecChain which has pipe/chaining support
 		return executeCommand(args)
 	default:
@@ -1143,6 +1145,17 @@ var FnMap = map[string]FnHandler{
 	"summarize_chat": summarizeChat,
 	// Issue management - always available
 	"create_issue": createIssueTool,
+}
+
+func removeBrowserTools() {
+	delete(FnMap, "browser")
+	var filtered []models.Tool
+	for _, tool := range BaseTools {
+		if tool.Function.Name != "browser" {
+			filtered = append(filtered, tool)
+		}
+	}
+	BaseTools = filtered
 }
 
 func removeWindowToolsFromBaseTools() {
