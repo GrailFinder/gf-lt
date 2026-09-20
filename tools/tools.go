@@ -32,8 +32,10 @@ Meta discussions outside of roleplay is allowed if clearly labeled as out of cha
 If you choose to call a function ONLY do a tool call in openai format with NO suffix.
 You may put optional reasoning inside <think></think> but it must come BEFORE the tool call. Never put anything after the tool call.
 Examples of common operations:
-- Read file: run "cat /path/file.txt" or run "head -n 100 /path/file.txt" (first 100 lines), run "sed -n '40,55p' /path/file.txt" (line range)
-- Edit file: use file_edit to replace a line range (preferred over sed for targeted changes). Example: file_edit llm.go 182 186 "new content"
+- Read file: use read tool with path, offset, limit. Example: read main.go 40 20 (lines 40-60)
+- Overwrite file: use write to set the full content of a file. Example: write counter.json "{\"count\": 5}"
+- Edit file (targeted): use edit to replace an exact text match. Example: edit main.go "return nil" "return err"
+- Edit file (line range): use file_edit to replace a line range. Example: file_edit llm.go 182 186 "new content"
 - Count lines: run "wc -l /path/file.txt"
 - Find files: run "find . -name '*.go'"
 - Search content: run "grep -r pattern /dir"
@@ -78,6 +80,21 @@ Your current tools:
 "name":"read_url_raw",
 "args": ["url"],
 "when_to_use": "get raw content from a webpage"
+},
+{
+"name":"read",
+"args": ["path", "offset", "limit"],
+"when_to_use": "Read file content with optional line range. offset=start line (default 1), limit=max lines (default 2000). Example: read main.go 40 20"
+},
+{
+"name":"write",
+"args": ["file_path", "content"],
+"when_to_use": "Write or overwrite a file with full content. Creates parent directories. Use for new files or full file replacements. Example: write config.toml \"port=8080\""
+},
+{
+"name":"edit",
+"args": ["file_path", "old_text", "new_text"],
+"when_to_use": "Replace an exact text match in a file with new text. The old_text must be unique in the file. Use for targeted edits without line numbers. Example: edit main.go \"return nil\" \"return err\""
 }
 ]
 </tools>
@@ -430,6 +447,12 @@ func runCmd(args map[string]string) []byte {
 		return []byte(FsFileEdit(args))
 	case "insert_at":
 		return []byte(FsInsertAt(args))
+	case "read":
+		return []byte(FsRead(args))
+	case "write":
+		return []byte(FsWrite(args))
+	case "edit":
+		return []byte(FsEdit(args))
 	case "mkdir", "ls", "cat", "stat", "pwd", "cd", "cp", "mv", "rm", "sed", "grep", "head", "tail", "wc", "sort", "uniq", "echo", "printf", "time", "go", "find", "file", "git", "magick", "which":
 		// File operations, git, and shell commands - use ExecChain which has pipe/chaining support
 		return executeCommand(args)
@@ -634,8 +657,11 @@ func getHelp(args []string) string {
   # File operations
   ls [path]       - list files in directory
   cat <file>      - read file content
+  read <file> [offset] [limit] - read file (with line range support)
   file_edit <file> <start> [end] <content> - replace line range
   insert_at <file> <line> <content> - insert before line
+  write <file> <content> - write/overwrite file (full content)
+  edit <file> <old_text> <new_text> - replace exact text match
   view_img <file> - view image file
   stat <file>     - get file info
   rm <file>       - delete file
@@ -729,6 +755,30 @@ Use: command to execute. Example: ls -la | grep foo`
   If line exceeds file length, content is appended to the end.
   Example:
     insert_at main.go 3 "import \"fmt\""`
+	case "read":
+		return `read <path> [offset] [limit]
+  Read file content. Supports offset (start line) and limit (max lines).
+  Defaults: offset=1, limit=2000.
+  Examples:
+    read main.go
+    read main.go 40 20      (lines 40-60)
+    read large_file.log 1 100 (first 100 lines)`
+	case "write":
+		return `write <file_path> <content>
+  Write content to a file. Creates the file if it doesn't exist, overwrites if it does.
+  Creates parent directories as needed.
+  Use for full file overwrites or creating new files.
+  Examples:
+    write counter.json "{\"one\": \"1\", \"two\": \"2\"}"
+    write newfile.go "package main\nfunc main() {}"`
+	case "edit":
+		return `edit <file_path> <old_text> <new_text>
+  Replace an exact text match in a file with new text.
+  The old_text must appear exactly once in the file (ambiguous matches are rejected).
+  Use for targeted edits without knowing line numbers.
+  Examples:
+    edit main.go "return nil" "return err"
+    edit config.toml "port = 8080" "port = 9090"`
 	case "git":
 		return `git <subcommand>
   Read-only git commands.
@@ -1138,6 +1188,15 @@ var FnMap = map[string]FnHandler{
 	"insert_at": func(args map[string]string) []byte {
 		return []byte(FsInsertAt(args))
 	},
+	"read": func(args map[string]string) []byte {
+		return []byte(FsRead(args))
+	},
+	"write": func(args map[string]string) []byte {
+		return []byte(FsWrite(args))
+	},
+	"edit": func(args map[string]string) []byte {
+		return []byte(FsEdit(args))
+	},
 	// Unified run command
 	"bash": runCmd,
 	// Browser tool - routes to runBrowserCommand
@@ -1434,6 +1493,80 @@ var BaseTools = []models.Tool{
 					"new_content": models.ToolArgProps{
 						Type:        "string",
 						Description: "content to insert (use \\n for newlines)",
+					},
+				},
+			},
+		},
+	},
+	// read - read a file with offset/limit
+	models.Tool{
+		Type: "function",
+		Function: models.ToolFunc{
+			Name:        "read",
+			Description: "Read the content of a file. Supports offset and limit for reading specific line ranges. Default reads from line 1, up to 2000 lines.",
+			Parameters: models.ToolFuncParams{
+				Type:     "object",
+				Required: []string{"path"},
+				Properties: map[string]models.ToolArgProps{
+					"path": models.ToolArgProps{
+						Type:        "string",
+						Description: "path to the file to read",
+					},
+					"offset": models.ToolArgProps{
+						Type:        "string",
+						Description: "line number to start reading from (1-indexed, default 1)",
+					},
+					"limit": models.ToolArgProps{
+						Type:        "string",
+						Description: "maximum number of lines to read (default 2000)",
+					},
+				},
+			},
+		},
+	},
+	// write - overwrite a file with new content
+	models.Tool{
+		Type: "function",
+		Function: models.ToolFunc{
+			Name:        "write",
+			Description: "Write content to a file. Creates the file if it doesn't exist, overwrites if it does. Creates parent directories as needed. Use this for full file overwrites or creating new files.",
+			Parameters: models.ToolFuncParams{
+				Type:     "object",
+				Required: []string{"file_path", "content"},
+				Properties: map[string]models.ToolArgProps{
+					"file_path": models.ToolArgProps{
+						Type:        "string",
+						Description: "path to the file to write",
+					},
+					"content": models.ToolArgProps{
+						Type:        "string",
+						Description: "full content to write to the file",
+					},
+				},
+			},
+		},
+	},
+	// edit - replace exact text in a file
+	models.Tool{
+		Type: "function",
+		Function: models.ToolFunc{
+			Name:        "edit",
+			Description: "Replace an exact text match in a file with new text. The old_text must appear exactly once in the file. Use this for targeted edits without knowing line numbers.",
+			Parameters: models.ToolFuncParams{
+				Type:     "object",
+				Required: []string{"file_path", "old_text", "new_text"},
+				Properties: map[string]models.ToolArgProps{
+					"file_path": models.ToolArgProps{
+						Type:        "string",
+						Description: "path to the file to edit",
+					},
+					"old_text": models.ToolArgProps{
+						Type:        "string",
+						Description: "exact text to find in the file (must be unique)",
+					},
+					"new_text": models.ToolArgProps{
+						Type:        "string",
+						Description: "replacement text",
 					},
 				},
 			},
