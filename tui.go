@@ -128,6 +128,7 @@ var (
 [yellow]Ctrl+t[white]: toggle tool call/response visibility (collapse/expand tool calls and non-shell tool responses)
 [yellow]Alt+i[white]: show colorscheme selection popup
 [yellow]Alt+p[white]: show images from current chat (preview, attach to next msg)
+[yellow]Alt+x[white]: clear the text area input
 [yellow]Insert[white]: paste from clipboard to the text area (use it instead shift+insert)
 
 === scrolling chat window (some keys similar to vim) ===
@@ -897,6 +898,9 @@ func initTUI() {
 			}
 			showColorschemeSelectionPopup()
 			return nil
+		}
+		if event.Key() == tcell.KeyRune && event.Rune() == 'x' && event.Modifiers()&tcell.ModAlt != 0 {
+			textArea.SetText("", true)
 		}
 		if event.Key() == tcell.KeyF1 {
 			agent := currentCardID
