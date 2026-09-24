@@ -16,6 +16,7 @@ import (
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
+	"github.com/rivo/uniseg"
 	"gitlab.com/diamondburned/ueberzug-go"
 )
 
@@ -78,6 +79,7 @@ var (
 	searchField    *tview.InputField
 	searchPageName = "searchOverlay"
 	forkPageName   = "forkOverlay"
+	bottomFlexSize = 4
 	// help text
 	helpText = `
 [yellow]Esc[white]: send msg
@@ -231,7 +233,8 @@ func showToast(title, message string) {
 			bottomFlex = tview.NewFlex().SetDirection(tview.FlexColumn).
 				AddItem(textArea, 0, 1, true).
 				AddItem(notificationWidget, 40, 1, false)
-			flex.AddItem(bottomFlex, 0, 10, true)
+			// flex.AddItem(bottomFlex, 0, 10, true)
+			flex.AddItem(bottomFlex, bottomFlexSize, 0, true)
 			if positionVisible {
 				flex.AddItem(statusLineWidget, 0, 2, false)
 			}
@@ -244,7 +247,7 @@ func showToast(title, message string) {
 			bottomFlex = tview.NewFlex().SetDirection(tview.FlexColumn).
 				AddItem(textArea, 0, 1, true).
 				AddItem(notificationWidget, 0, 0, false)
-			flex.AddItem(bottomFlex, 0, 10, true)
+			flex.AddItem(bottomFlex, bottomFlexSize, 0, true)
 			if positionVisible {
 				flex.AddItem(statusLineWidget, 0, 2, false)
 			}
@@ -415,7 +418,7 @@ func initTUI() {
 	//
 	flex = tview.NewFlex().SetDirection(tview.FlexRow).
 		AddItem(textView, 0, 40, false).
-		AddItem(bottomFlex, 0, 10, true)
+		AddItem(bottomFlex, bottomFlexSize, 0, true)
 	if positionVisible {
 		flex.AddItem(statusLineWidget, 0, 2, false)
 	}
@@ -491,7 +494,7 @@ func initTUI() {
 	// Initially set up flex without search bar
 	flex = tview.NewFlex().SetDirection(tview.FlexRow).
 		AddItem(textView, 0, 40, false).
-		AddItem(bottomFlex, 0, 10, true)
+		AddItem(bottomFlex, bottomFlexSize, 0, true)
 	if positionVisible {
 		flex.AddItem(statusLineWidget, 0, 2, false)
 	}
@@ -1504,6 +1507,8 @@ func initTUI() {
 	if ueberzugAvailable {
 		go startOverlayTicker()
 	}
+	go startOverlayTicker()
+	go startTAResizeTicker()
 }
 
 func startOverlayTicker() {
@@ -1512,6 +1517,60 @@ func startOverlayTicker() {
 	for range ticker.C {
 		app.QueueUpdateDraw(func() {
 			updateImageOverlay()
+		})
+	}
+}
+
+// textAreaContentLines returns the number of visual rows the text currently in
+// textArea occupies, taking soft wrapping into account.
+func textAreaContentLines() int {
+	_, _, width, _ := textArea.GetInnerRect()
+	if width <= 0 {
+		// The widget has not been drawn yet, assume a sane default.
+		width = 80
+	}
+	lines := 0
+	for _, line := range strings.Split(textArea.GetText(), "\n") {
+		w := uniseg.StringWidth(line)
+		n := 1
+		if w > width {
+			n = (w + width - 1) / width
+		}
+		lines += n
+	}
+	if lines < 1 {
+		lines = 1
+	}
+	return lines
+}
+
+// resizeTextArea grows/shrinks the bottom flex so the whole input text (plus
+// its border) is visible. It returns true when the size actually changed.
+// Must be called from the tview main goroutine.
+func resizeTextArea() bool {
+	// Content rows plus two border rows. Keep room for the 2-line placeholder.
+	height := textAreaContentLines() + 2
+	if height < 4 {
+		height = 4
+	}
+	// Never let the input eat the whole chat view.
+	if _, _, _, screenH := flex.GetInnerRect(); screenH > 0 && height > screenH-4 {
+		height = screenH - 4
+	}
+	if height == bottomFlexSize {
+		return false
+	}
+	bottomFlexSize = height
+	flex.ResizeItem(bottomFlex, bottomFlexSize, 0)
+	return true
+}
+
+func startTAResizeTicker() {
+	ticker := time.NewTicker(300 * time.Millisecond)
+	defer ticker.Stop()
+	for range ticker.C {
+		app.QueueUpdate(func() {
+			resizeTextArea()
 		})
 	}
 }
