@@ -83,24 +83,32 @@ func mapToString[V any](m map[string]V) string {
 	return rs.String()
 }
 
-// stripThinkingFromMsg removes thinking blocks from assistant messages.
-// Skips user, tool, and system messages as they may contain thinking examples.
+// stripThinkingFromMsg returns a view of msg with thinking blocks removed, for
+// use when building an LLM request. It never mutates msg: whether thinking is
+// kept in chat history is a separate concern (cfg.StoreThinking).
 func stripThinkingFromMsg(msg *models.RoleMsg) *models.RoleMsg {
 	if !cfg.StripThinkingFromAPI {
 		return msg
 	}
+	return withoutThinking(msg)
+}
+
+// withoutThinking returns a copy of msg with <think> blocks removed from its
+// text content. User, tool and system messages are returned untouched, as they
+// may legitimately contain thinking examples. The input is not modified.
+func withoutThinking(msg *models.RoleMsg) *models.RoleMsg {
 	// Skip user, tool, they might contain thinking and system messages - examples
 	if msg.Role == cfg.UserRole || msg.Role == cfg.ToolRole || msg.Role == "system" {
 		return msg
 	}
-	// Strip thinking from assistant messages
 	msgText := msg.GetText()
-	if models.ThinkRE.MatchString(msgText) {
-		cleanedText := models.ThinkRE.ReplaceAllString(msgText, "")
-		cleanedText = strings.TrimSpace(cleanedText)
-		msg.SetText(cleanedText)
+	if !models.ThinkRE.MatchString(msgText) {
+		return msg
 	}
-	return msg
+	cleanedText := strings.TrimSpace(models.ThinkRE.ReplaceAllString(msgText, ""))
+	clone := msg.Copy()
+	clone.SetText(cleanedText)
+	return &clone
 }
 
 // refreshChatDisplay updates the chat display based on current character view

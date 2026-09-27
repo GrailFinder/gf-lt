@@ -293,10 +293,28 @@ func (m *RoleMsg) Copy() RoleMsg {
 		tcs = make([]ToolCall, len(m.ToolCalls))
 		copy(tcs, m.ToolCalls)
 	}
+	// Deep-copy content parts: text parts are mutable through SetText and
+	// callers use copies to rewrite content without touching the original.
+	// Keep nil when there are no parts so copies stay comparable with reflect.
+	var parts []any
+	if len(m.ContentParts) > 0 {
+		parts = make([]any, len(m.ContentParts))
+		for i, p := range m.ContentParts {
+			if mp, ok := p.(map[string]any); ok {
+				np := make(map[string]any, len(mp))
+				for k, v := range mp {
+					np[k] = v
+				}
+				parts[i] = np
+				continue
+			}
+			parts[i] = p
+		}
+	}
 	return RoleMsg{
 		Role:            m.Role,
 		Content:         m.Content,
-		ContentParts:    m.ContentParts,
+		ContentParts:    parts,
 		ToolCallID:      m.ToolCallID,
 		KnownTo:         m.KnownTo,
 		Stats:           m.Stats,

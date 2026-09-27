@@ -138,6 +138,14 @@ func makePropsTable(props map[string]float32) *tview.Table {
 	addCheckboxRow("Disable tool guide", cfg.DisableToolGuide, func(checked bool) {
 		cfg.DisableToolGuide = checked
 	})
+	// Thinking handling: storing in history is independent from sending to the LLM
+	addCheckboxRow("Store thinking in history", cfg.ShouldStoreThinking(), func(checked bool) {
+		v := checked
+		cfg.StoreThinking = &v
+	})
+	addCheckboxRow("Send thinking to LLM (keep in context)", !cfg.StripThinkingFromAPI, func(checked bool) {
+		cfg.StripThinkingFromAPI = !checked
+	})
 	// Add dropdowns
 	logLevels := []string{"Debug", "Info", "Warn"}
 	addListPopupRow("Set log level", logLevels, GetLogLevel(), func(option string) {

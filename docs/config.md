@@ -172,7 +172,18 @@ These settings enable browser automation tools available to the LLM.
   - Enable debug mode for Playwright browser. When set to `true`, the browser runs in visible (non-headless) mode, displaying the GUI for debugging purposes. When `false`, the browser runs in headless mode by default.
 
 ### StripThinkingFromAPI (`true`)
-- Strip thinking blocks from messages before sending to LLM. Keeps them in chat history for local viewing but reduces token usage in API calls.
+- Controls only what is *sent to the LLM*. When `true`, `<think>` blocks are removed from
+  assistant messages in outgoing requests (saves tokens; the blocks remain in local chat
+  history and display). Set to `false` to keep thinking in the context sent to the model —
+  some reasoning models follow instructions better when their previous thinking is preserved.
+
+### StoreThinking (`true`)
+- Controls only what is *kept locally*. When `true` (default), `<think>` blocks are stored in
+  `chatBody`, persisted chats, exports, and shown in the UI. When `false`, thinking blocks are
+  discarded as soon as the response is complete, keeping history compact.
+
+The two options are independent: all four combinations are valid (e.g. `StoreThinking = false`
+with `StripThinkingFromAPI = false` means thinking is shown live but kept nowhere).
 
 #### ReasoningEffort (`"medium"`)
 - OpenRouter reasoning configuration (only applies to OpenRouter chat API). Valid values: `xhigh`, `high`, `medium`, `low`, `minimal`, `none`. Empty or `none` disables reasoning.

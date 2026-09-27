@@ -953,8 +953,9 @@ func sendMsgToLLM(body io.Reader) {
 	counter := uint32(0)
 	tokenCount := 0
 	startTime := time.Now()
-	hasReasoning := false
-	reasoningSent := false
+	// thinkingBlockOpen tracks whether a <think> block is currently open, so
+	// interleaved reasoning/content produces correctly delimited blocks.
+	thinkingBlockOpen := false
 	// Accumulate streaming tool calls by index for multi-tool-call support
 	type streamingToolCall struct {
 		Index int
@@ -1058,8 +1059,8 @@ func sendMsgToLLM(body io.Reader) {
 		// 	break
 		// }
 		if chunk.Finished {
-			// Close the thinking block if we were streaming reasoning and haven't closed it yet
-			if hasReasoning && !reasoningSent {
+			// Close the thinking block if it is still open
+			if thinkingBlockOpen {
 				chunkChan <- "</think>"
 				tokenCount++
 			}
@@ -1075,13 +1076,15 @@ func sendMsgToLLM(body io.Reader) {
 		if counter == 0 {
 			chunk.Chunk = strings.TrimPrefix(chunk.Chunk, " ")
 		}
-		// Handle reasoning chunks - stream them immediately as they arrive
-		if chunk.Reasoning != "" && !reasoningSent {
-			if !hasReasoning {
-				// First reasoning chunk - send opening tag
+		// Handle reasoning chunks - stream them immediately as they arrive.
+		// Track open/close per block rather than once per response: some models
+		// interleave reasoning with content, and a single hasReasoning/reasoningSent
+		// pair silently dropped every thinking block after the first.
+		if chunk.Reasoning != "" {
+			if !thinkingBlockOpen {
 				chunkChan <- "<think>"
 				tokenCount++
-				hasReasoning = true
+				thinkingBlockOpen = true
 			}
 			// Stream reasoning content immediately
 			answerText = strings.ReplaceAll(chunk.Reasoning, "\n\n", "\n")
@@ -1090,12 +1093,11 @@ func sendMsgToLLM(body io.Reader) {
 				tokenCount++
 			}
 		}
-		// When we get content and have been streaming reasoning, close the thinking block
-		if chunk.Chunk != "" && hasReasoning && !reasoningSent {
-			// Close the thinking block before sending actual content
+		// Close the thinking block before streaming actual content
+		if chunk.Chunk != "" && thinkingBlockOpen {
 			chunkChan <- "</think>"
 			tokenCount++
-			reasoningSent = true
+			thinkingBlockOpen = false
 		}
 		// bot sends way too many \n
 		answerText = strings.ReplaceAll(chunk.Chunk, "\n\n", "\n")
@@ -1363,6 +1365,12 @@ out:
 		}
 	} else {
 		chatBody.Messages[msgIdx].Content = respText.String()
+		// StoreThinking is about persistence/display only; whether thinking goes
+		// to the LLM is StripThinkingFromAPI's business.
+		if !cfg.ShouldStoreThinking() {
+			chatBody.Messages[msgIdx].Content = strings.TrimSpace(
+				models.ThinkRE.ReplaceAllString(chatBody.Messages[msgIdx].Content, ""))
+		}
 		processedMsg := processMessageTag(&chatBody.Messages[msgIdx])
 		chatBody.Messages[msgIdx] = *processedMsg
 		if msgStats != nil && chatBody.Messages[msgIdx].Role != cfg.ToolRole {

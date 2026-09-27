@@ -584,8 +584,12 @@ func (ds DeepSeekerChat) ParseChunk(data []byte) (*models.TextChunk, error) {
 		resp.Chunk = llmchunk.Choices[0].Delta.Content
 		resp.Finished = true
 	} else {
+		// Reasoning must go into the dedicated Reasoning field (as LCPChat and
+		// OpenRouterChat do), otherwise it is indistinguishable from the answer:
+		// it never gets wrapped in <think> tags, is stored in Content, and is
+		// sent back to the LLM as part of the message.
 		if llmchunk.Choices[0].Delta.ReasoningContent != "" {
-			resp.Chunk = llmchunk.Choices[0].Delta.ReasoningContent
+			resp.Reasoning = llmchunk.Choices[0].Delta.ReasoningContent
 		} else {
 			resp.Chunk = llmchunk.Choices[0].Delta.Content
 		}

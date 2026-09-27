@@ -69,6 +69,7 @@ type Config struct {
 	ToolRole                      string `toml:"ToolRole"`
 	ToolUse                       bool   `toml:"ToolUse"`
 	StripThinkingFromAPI          bool   `toml:"StripThinkingFromAPI"`
+	StoreThinking                 *bool  `toml:"StoreThinking"` // nil = true; see ShouldStoreThinking
 	ReasoningEffort               string `toml:"ReasoningEffort"`
 	AssistantRole                 string `toml:"AssistantRole"`
 	SysDir                        string `toml:"SysDir"`
@@ -275,4 +276,15 @@ func LoadConfig(fn string) (*Config, error) {
 	}
 	// if any value is empty fill with default
 	return config, nil
+}
+
+// ShouldStoreThinking reports whether thinking blocks are kept in the chat
+// history (chatBody, storage, display). This is independent of
+// StripThinkingFromAPI, which only controls what is sent to the LLM.
+// Unset in config means true, so thinking is stored by default.
+func (c *Config) ShouldStoreThinking() bool {
+	if c.StoreThinking == nil {
+		return true
+	}
+	return *c.StoreThinking
 }
