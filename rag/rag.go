@@ -1064,11 +1064,7 @@ func (r *RAG) Search(query string, limit int) ([]models.VectorRow, error) {
 	scoreMap := make(map[string]float64)
 	// Add embedding results
 	for rank, row := range embResults {
-		score := 1.0 / (float64(rank) + rrfK)
-		scoreMap[row.Slug] += score
-		if row.Slug == "kjv_bible.epub_1786_0" {
-			r.logger.Debug("target chunk embedding rank", "rank", rank, "score", score)
-		}
+		scoreMap[row.Slug] += 1.0 / (float64(rank) + rrfK)
 	}
 	// Add keyword results with weight boost when phrases are present
 	kwWeight := 1.0
@@ -1079,9 +1075,6 @@ func (r *RAG) Search(query string, limit int) ([]models.VectorRow, error) {
 	for rank, row := range kwResults {
 		score := kwWeight * (1.0 / (float64(rank) + rrfK))
 		scoreMap[row.Slug] += score
-		if row.Slug == "kjv_bible.epub_1786_0" {
-			r.logger.Debug("target chunk keyword rank", "rank", rank, "score", score, "kwWeight", kwWeight, "rrfK", rrfK)
-		}
 		// Ensure row exists in combined results
 		if _, exists := seen[row.Slug]; !exists {
 			embResults = append(embResults, row)
@@ -1092,18 +1085,6 @@ func (r *RAG) Search(query string, limit int) ([]models.VectorRow, error) {
 	for _, row := range embResults {
 		score := scoreMap[row.Slug]
 		scoredRows = append(scoredRows, scoredRow{row: row, score: score})
-	}
-	// Debug: log scores for target chunk and top chunks
-	if strings.Contains(strings.ToLower(query), "bald") || strings.Contains(strings.ToLower(query), "she bears") {
-		for _, sr := range scoredRows {
-			if sr.row.Slug == "kjv_bible.epub_1786_0" {
-				r.logger.Debug("target chunk score", "slug", sr.row.Slug, "score", sr.score, "distance", sr.row.Distance)
-			}
-		}
-		// Log top 5 scores
-		for i := 0; i < len(scoredRows) && i < 5; i++ {
-			r.logger.Debug("top scored row", "rank", i+1, "slug", scoredRows[i].row.Slug, "score", scoredRows[i].score, "distance", scoredRows[i].row.Distance)
-		}
 	}
 	// Sort by descending RRF score
 	sort.Slice(scoredRows, func(i, j int) bool {

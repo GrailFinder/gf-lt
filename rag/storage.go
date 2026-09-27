@@ -292,6 +292,10 @@ func (vs *VectorStorage) GetVectorBySlug(slug string) (*models.VectorRow, error)
 }
 
 // SearchKeyword performs full-text search using FTS5
+//
+// Distances are normalized onto the same scale as SearchClosest (see
+// normalizeBM25Distances), so callers may compare vector and keyword results
+// directly.
 func (vs *VectorStorage) SearchKeyword(query string, limit int) ([]models.VectorRow, error) {
 	// Use FTS5 bm25 ranking. bm25 returns negative values where more negative is better.
 	// We'll order by bm25 (ascending) and limit.
@@ -330,7 +334,48 @@ func (vs *VectorStorage) SearchKeyword(query string, limit int) ([]models.Vector
 			}
 		}
 	}
+	normalizeBM25Distances(results)
 	return results, nil
+}
+
+// normalizeBM25Distances converts the raw FTS5 bm25 scores left in
+// VectorRow.Distance by scanRows into the same "1 - similarity" scale that
+// SearchClosest returns.
+//
+// This matters because RerankResults sorts mixed vector/keyword results by
+// Distance. FTS5 bm25 is negative and effectively unbounded (typically
+// -1..-15), while cosine distance lives in [0, 2]. Comparing them raw meant
+// every keyword hit outranked every vector hit regardless of semantic quality.
+//
+// The bm25 magnitude is normalized against the best (most negative) hit in the
+// returned set, then mapped to closeness = |score| / |best| in (0, 1] and
+// distance = 1 - closeness. The result is monotone in relevance, lands in
+// [0, 1), and is directly comparable with cosine distance. Note that the
+// normalization is relative to the returned set, so it expresses rank quality
+// rather than an absolute semantic score.
+func normalizeBM25Distances(results []models.VectorRow) {
+	var best float32
+	for _, r := range results {
+		if b := -r.Distance; b > best { // bm25 is negative: more negative is better
+			best = b
+		}
+	}
+	for i := range results {
+		if best <= 0 {
+			// Degenerate (zero relevance signal): treat every hit as maximally
+			// distant rather than as a perfect match.
+			results[i].Distance = 1
+			continue
+		}
+		closeness := (-results[i].Distance) / best
+		switch {
+		case closeness < 0:
+			closeness = 0
+		case closeness > 1:
+			closeness = 1
+		}
+		results[i].Distance = 1 - closeness
+	}
 }
 
 // scanRows converts SQL rows to VectorRow slice
@@ -343,10 +388,9 @@ func (vs *VectorStorage) scanRows(rows *sql.Rows) ([]models.VectorRow, error) {
 			vs.logger.Error("failed to scan FTS row", "error", err)
 			continue
 		}
-		// Convert BM25 score to distance-like metric (lower is better)
-		// BM25 is negative, more negative is better. Keep as negative.
-		distance := float32(score) // Keep negative, more negative is better
-		// No clamping needed; negative distances are fine
+		// scanRows leaves the raw bm25 score in Distance; SearchKeyword
+		// normalizes it onto the cosine-distance scale before returning.
+		distance := float32(score)
 		results = append(results, models.VectorRow{
 			Slug:     slug,
 			RawText:  rawText,
