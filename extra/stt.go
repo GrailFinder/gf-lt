@@ -26,13 +26,9 @@ type StreamCloser interface {
 func NewSTT(logger *slog.Logger, cfg *config.Config) STT {
 	sttType := cfg.STT_TYPE
 	switch sttType {
-	case "WHISPER_BINARY", "whisper_binary":
-		logger.Debug("stt init, chosen whisper binary")
-		return NewWhisperBinary(logger, cfg)
-	case "WHISPER_SERVER", "whisper_server":
-		logger.Debug("stt init, chosen whisper server")
-		return newWhisperServer(logger, cfg)
-	case "OPENAI_COMPAT", "openai_compat", "crips_asr":
+	case "OPENAI_COMPAT", "openai_compat", "crispasr", "crips_asr":
+		// Any server exposing POST /v1/audio/transcriptions, e.g. CrispASR in
+		// --server mode. "crips_asr" is a long-standing typo, kept working.
 		logger.Debug("stt init, chosen OpenAI-compatible backend")
 		return newOpenAICompatSTT(logger, cfg)
 	default:

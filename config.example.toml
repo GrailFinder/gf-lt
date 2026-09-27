@@ -40,13 +40,12 @@ TTS_VOICE = ""               # voice name (e.g. "af_bella", "alloy", "echo", etc
 TTS_MODEL = ""               # model name (defaults to "tts-1" if empty)
 TTS_LANGUAGE = "en"          # language code for "google" provider
 # Speech-to-Text / ASR
+# Any server exposing POST /v1/audio/transcriptions, e.g. CrispASR in --server mode:
+#   crispasr --server --port 8085 -m /path/to/parakeet.gguf --backend parakeet
 STT_ENABLED = false
-STT_TYPE = "WHISPER_SERVER"  # WHISPER_SERVER | WHISPER_BINARY | OPENAI_COMPAT | crips_asr
-STT_URL = "http://localhost:8081/inference"  # Base URL. For OPENAI_COMPAT, /v1/audio/transcriptions is appended automatically
-ASR_MODEL = "whisper-1"  # Model name passed to OpenAI-compatible backends (OPENAI_COMPAT / crips_asr)
-WhisperBinaryPath = "./batteries/whisper.cpp/build/bin/whisper-cli"  # Path to whisper binary (WHISPER_BINARY mode)
-WhisperModelPath = "./batteries/whisper.cpp/models/ggml-large-v3-turbo-q5_0.bin"  # Path to whisper model (WHISPER_BINARY mode)
-STT_LANG = "en"  # Language for WHISPER_BINARY mode
+STT_TYPE = "OPENAI_COMPAT"  # OPENAI_COMPAT (aliases: openai_compat, crispasr)
+STT_URL = "http://localhost:8085"  # Base URL; /v1/audio/transcriptions is appended automatically
+ASR_MODEL = "whisper-1"  # Model name sent to the server. Ignored by backends like CrispASR that use their own loaded model.
 STT_SR = 16000  # Sample rate for audio recording
 STT_SILENCE_MS = 1000  # Silence duration (ms) before auto-transcribing a segment (0 = no auto-segmentation)
 #

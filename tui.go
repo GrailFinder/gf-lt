@@ -105,7 +105,7 @@ var (
 [yellow]Ctrl+o[white]: open image file picker
 [yellow]Ctrl+p[white]: props edit form (min-p, dry, etc.)
 [yellow]Ctrl+v[white]: show API link selection popup to choose current API
-[yellow]Ctrl+r[white]: start/stop recording from your microphone (needs stt server or whisper binary)
+[yellow]Ctrl+r[white]: start/stop recording from your microphone (needs an STT server)
 [yellow]Ctrl+t[white]: (un)collapse tool messages
 [yellow]Ctrl+l[white]: show model selection popup to choose current model
 [yellow]Ctrl+k[white]: switch tool use (recommend tool use to llm after user msg)
@@ -1187,22 +1187,10 @@ func initTUI() {
 				}
 				sttTranscribing = true
 				updateStatusLine()
-				finalText, err := asr.StopRecording()
-				if err != nil {
+				// Transcripts arrive asynchronously on the Utterances channel.
+				if _, err := asr.StopRecording(); err != nil {
 					logger.Error("stt error", "error", err)
 					showToast("stt error", err.Error())
-				}
-				if asr.Utterances() == nil {
-					// Non-utterance backend (WhisperBinary) — sync path
-					if finalText != "" {
-						prevText := textArea.GetText()
-						if prevText != "" && !strings.HasSuffix(prevText, "\n") {
-							finalText = "\n" + finalText
-						}
-						textArea.SetText(prevText+finalText, true)
-					}
-					sttTranscribing = false
-					updateStatusLine()
 				}
 				return nil
 			}

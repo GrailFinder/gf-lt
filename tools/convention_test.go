@@ -23,7 +23,7 @@ func TestNoStringConventionErrorsRemain(t *testing.T) {
 		}
 		if info.IsDir() {
 			switch info.Name() {
-			case ".git", "node_modules", "dumps", "chat_exports", "batteries", "onnx", "test_forloop":
+			case ".git", "node_modules", "dumps", "chat_exports", "onnx", "test_forloop":
 				return filepath.SkipDir
 			}
 			return nil

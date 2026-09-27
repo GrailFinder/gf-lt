@@ -142,20 +142,18 @@ An image appears on the screen. I show it to Seraphina. "Did you see that creatu
 
 #### TTS and STT
 
-I like to have Whisper as a binary and an OpenAI-compatible TTS Docker container;
+I like to run the STT and TTS servers myself and point the app at them;
 such a setup would be:
 ```
-make setup-whisper
-make docker-up-kokoro
-sed -i "/STT_TYPE/s/=.*/= \"WHISPER_BINARY\"/" config.toml
+crispasr --server --port 8085 -m /path/to/parakeet.gguf --backend parakeet
+sed -i "/STT_TYPE/s/=.*/= \"openai_compat\"/" config.toml
+sed -i "/STT_URL/s/=.*/= \"http:\/\/localhost:8085\"/" config.toml
 sed -i "/STT_ENABLED/s/=.*/= true/" config.toml
 ```
-If you prefer both to be containers:
-```
-make docker-up
-sed -i "/STT_TYPE/s/=.*/= \"WHISPER_SERVER\"/" config.toml
-sed -i "/STT_ENABLED/s/=.*/= true/" config.toml
-```
+Any server exposing `POST /v1/audio/transcriptions` works the same way;
+`STT_TYPE = \"crips_asr\"` is an alias for `openai_compat`.
+For TTS, start an OpenAI-compatible `/v1/audio/speech` server and set `TTS_URL`.
+
 You don't want TTS to be enabled through config, since it'll try to read each LLM message.
 Instead, enable it when you want to use it: `Ctrl+P`, select the cell named `TTS Enabled`, switch to `Yes`, then press `x` to exit.
 

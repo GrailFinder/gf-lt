@@ -54,17 +54,14 @@ set values as you need them to be;
 [description of config variables](docs/config.md)
 
 #### setting up STT/TTS services
-For speech-to-text (STT) and text-to-speech (TTS) functionality:
-1. The project uses Whisper.cpp for STT and an OpenAI-compatible server for TTS
-2. Docker Compose automatically downloads the required Whisper model on first run
-3. To start all services: `make docker-up`
-4. To start only STT service: `make docker-up-whisper`
-5. To start only TTS service: `make docker-up-kokoro`
-6. To stop all services: `make docker-down`
-7. To stop only STT service: `make docker-down-whisper`
-8. To stop only TTS service: `make docker-down-kokoro`
-9. To view all service logs: `make docker-logs`
-10. To view only STT service logs: `make docker-logs-whisper`
-11. To view only TTS service logs: `make docker-logs-kokoro`
-12. The STT service runs on http://localhost:8081
-13. The TTS service runs on http://localhost:8880
+STT and TTS are separate HTTP servers, configured in `config.toml`. This project does not
+build or start them for you; run whichever ones you want yourself.
+
+- **TTS** — any OpenAI-compatible `/v1/audio/speech` server. Set `TTS_URL`, `TTS_MODEL`
+  and `TTS_VOICE` in `config.toml`. For `wav` output only, an `audio.cpp` audiocpp_server
+  works; make sure `TTS_MODEL` matches an `id` in its `server.json`.
+- **STT** — press `Ctrl+R` to start/stop recording. With `STT_TYPE = "openai_compat"`
+  (alias `crips_asr`), set `STT_URL` to any server exposing
+  `POST /v1/audio/transcriptions`; CrispASR in `--server` mode is one such server.
+  The `model` field is ignored by such servers, so `ASR_MODEL` only matters for
+  backends that validate it.

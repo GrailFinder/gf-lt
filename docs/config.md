@@ -113,20 +113,14 @@ This document explains how to set up and configure the application using the `co
 #### STT_ENABLED (`false`)
 - Enable or disable speech-to-text functionality.
 
-#### STT_TYPE (`"WHISPER_SERVER"`)
-- Type of STT engine to use. Options are `"WHISPER_SERVER"` or `"WHISPER_BINARY"`. Whisper server is used inside of docker continer, while binary can be local.
+#### STT_TYPE (`"OPENAI_COMPAT"`)
+- Type of STT engine. `"OPENAI_COMPAT"` is the only backend; it speaks the OpenAI
+  `POST /v1/audio/transcriptions` API, so any compatible server works (CrispASR in
+  `--server` mode, whisper.cpp's `whisper-server`, etc.). Aliases: `openai_compat`, `crispasr`.
 
-#### STT_URL (`"http://localhost:8081/inference"`)
-- The endpoint for STT API (used with WHISPER_SERVER).
-
-#### WhisperBinaryPath (`"./batteries/whisper.cpp/build/bin/whisper-cli"`)
-- Path to the whisper binary (used with WHISPER_BINARY mode).
-
-#### WhisperModelPath (`"./batteries/whisper.cpp/ggml-large-v3-turbo-q5_0.bin"`)
-- Path to the whisper model file (used with WHISPER_BINARY mode).
-
-#### STT_LANG (`"en"`)
-- Language for speech recognition (used with WHISPER_BINARY mode).
+#### STT_URL (`"http://localhost:8085"`)
+- Base URL of the STT server. `/v1/audio/transcriptions` is appended automatically, so give
+  the bare host:port, not the full path.
 
 #### STT_SR (`16000`)
 - Sample rate for mic recording.

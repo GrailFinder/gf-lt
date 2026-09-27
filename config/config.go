@@ -124,15 +124,12 @@ type Config struct {
 	// audio/wav-only encoder audio.cpp exposes; set explicitly for other servers.
 	TTS_FORMAT string `toml:"TTS_FORMAT"`
 	// STT
-	STT_TYPE          string `toml:"STT_TYPE"` // WHISPER_SERVER, WHISPER_BINARY, OPENAI_COMPAT, crips_asr
-	STT_URL           string `toml:"STT_URL"`
-	STT_SR            int    `toml:"STT_SR"`
-	STT_ENABLED       bool   `toml:"STT_ENABLED"`
-	WhisperBinaryPath string `toml:"WhisperBinaryPath"`
-	WhisperModelPath  string `toml:"WhisperModelPath"`
-	STT_LANG          string `toml:"STT_LANG"`
-	ASR_MODEL         string `toml:"ASR_MODEL"`
-	STT_SILENCE_MS    int    `toml:"STT_SILENCE_MS"`
+	STT_TYPE       string `toml:"STT_TYPE"` // OPENAI_COMPAT (alias: crispasr)
+	STT_URL        string `toml:"STT_URL"`
+	STT_SR         int    `toml:"STT_SR"`
+	STT_ENABLED    bool   `toml:"STT_ENABLED"`
+	ASR_MODEL      string `toml:"ASR_MODEL"`
+	STT_SILENCE_MS int    `toml:"STT_SILENCE_MS"`
 	// character spefic contetx
 	CharSpecificContextEnabled bool   `toml:"CharSpecificContextEnabled"`
 	CharSpecificContextTag     string `toml:"CharSpecificContextTag"`
@@ -193,8 +190,6 @@ func LoadConfig(fn string) (*Config, error) {
 	config.EmbedModelPath = resolvePath(config.EmbedModelPath, config.ConfigDir)
 	config.EmbedTokenizerPath = resolvePath(config.EmbedTokenizerPath, config.ConfigDir)
 	config.ExportDir = resolvePath(config.ExportDir, config.ConfigDir)
-	config.WhisperBinaryPath = resolvePath(config.WhisperBinaryPath, config.ConfigDir)
-	config.WhisperModelPath = resolvePath(config.WhisperModelPath, config.ConfigDir)
 
 	// Default FilePickerDir to current working directory if not set
 	if config.FilePickerDir == "" {
