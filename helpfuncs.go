@@ -934,9 +934,17 @@ func updateFlexLayout() {
 	flex.Clear()
 	flex.AddItem(textView, 0, 40, false)
 	if shellMode {
-		flex.AddItem(shellInput, 0, 10, false)
+		// Single-line input, no border: 3 rows of padding is plenty.
+		flex.AddItem(shellInput, 3, 0, false)
 	} else {
-		flex.AddItem(bottomFlex, 0, 10, true)
+		// Use bottomFlexSize, not a fixed proportion: the text area is
+		// auto-sized by resizeTextArea (multiline input), and re-adding it
+		// with a proportional size here discarded that sizing on every
+		// layout rebuild (Alt+1 shell toggle, Alt+6, fullscreen exit).
+		// Note resizeTextArea cannot repair it afterwards, because it
+		// early-returns when the size already matches - only the flex itself
+		// was wrong.
+		flex.AddItem(bottomFlex, bottomFlexSize, 0, true)
 	}
 	if positionVisible {
 		flex.AddItem(statusLineWidget, 0, 2, false)
