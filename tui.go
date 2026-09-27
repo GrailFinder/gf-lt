@@ -268,6 +268,10 @@ func initTUI() {
 	// Start background goroutine to update model color cache
 	startModelColorUpdater()
 	go func() {
+		// Tell the tools package a human is reachable. Until this runs, every
+		// confirmation request is denied immediately instead of blocking.
+		tools.RegisterConfirmConsumer()
+		defer tools.UnregisterConfirmConsumer()
 		for req := range tools.ConfirmChan {
 			if app == nil {
 				req.Result <- false

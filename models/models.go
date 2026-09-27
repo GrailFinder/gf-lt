@@ -82,7 +82,7 @@ type TextChunk struct {
 	Chunk     string
 	Finished  bool
 	ToolResp  bool
-	Reasoning string // For models that send reasoning separately (OpenRouter, etc.)
+	Reasoning string          // For models that send reasoning separately (OpenRouter, etc.)
 	ToolCalls []ToolDeltaResp // All tool call deltas from this chunk
 }
 

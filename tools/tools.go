@@ -11,12 +11,12 @@ import (
 	"log/slog"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
-	"unicode/utf8"
 
 	"gf-lt/rag"
 
@@ -33,14 +33,28 @@ Meta discussions outside of roleplay is allowed if clearly labeled as out of cha
 If you choose to call a function ONLY do a tool call in openai format with NO suffix.
 You may put optional reasoning inside <think></think> but it must come BEFORE the tool call. Never put anything after the tool call.
 Examples of common operations:
-- Read file: use read tool with path, offset, limit. Example: read main.go 40 20 (lines 40-60)
+- Read file: use the read tool (path, offset, limit), or read main.go 40 20 via bash
+- Shell: any command works - ls, cat, grep, find, git, go, sed, pipes, redirects
 - View image: use read tool on image files (png, jpg, gif, webp). Example: read screenshot.png
-- Overwrite file: use write to set the full content of a file. Example: write counter.json "{\"count\": 5}"
-- Edit file (targeted): use edit to replace an exact text match. Example: edit main.go "return nil" "return err"
-- Edit file (line range): use file_edit to replace a line range. Example: file_edit llm.go 182 186 "new content"
+- Create a file: use write. Example: write counter.json "{\"count\": 5}"
+- Edit file (small, quotable): use edit_text to replace an exact unique text match. Example: edit_text main.go "return nil" "return err"
+- Edit file (multi-line): use edit_lines to replace a line range. Example: edit_lines llm.go 182 186 "new content"
 - Count lines: run "wc -l /path/file.txt"
 - Find files: run "find . -name '*.go'"
 - Search content: run "grep -r pattern /dir"
+
+Tool errors: a failed tool returns a first line of the form
+  [tool_error: <code>] <what went wrong>
+optionally followed by a "hint:" line saying what to try instead. codes:
+  invalid_args  a malformed call - fix the arguments
+  not_found     the named file/tool/subject does not exist
+  models.Conflict      the call was valid but the state is wrong (ambiguous match, non-zero exit)
+  models.Denied        policy refused it; retrying unchanged will not help
+  models.Unavailable   an optional dependency is missing
+  models.Internal      we broke; the details are in the log, not here
+Anything after the error header is real output (for example a compiler's
+messages) and is usually what you need to act on. Do not repeat a call that
+returned the same error twice - change your approach instead.
 </tool_guide>
 `
 	ToolSysMsg = `Tools are enabled. While making a tool call avoid writing anything else.
@@ -51,7 +65,7 @@ Your current tools:
 {
 "name":"bash",
 "args": ["command"],
-"when_to_use": "Main tool for file operations, shell commands, memory, and git. Use help for all commands. Examples: ls -la, help, mkdir -p foo/bar, cat file.txt, git status, memory store foo bar, grep pattern file, grep -r pattern dir, find . -name '*.go', cd /path, pwd, head -n 100 file, tail -n 10 file, wc -l file, sort file, uniq file, sed 's/old/new/g' file, file_edit llm.go 182 186 \"new content\", echo text, go build ./..., stat file, cp src dst, mv src dst, rm file"
+"when_to_use": "Main tool for file operations, shell commands, memory, and git. Use help for all commands. Examples: ls -la, help, mkdir -p foo/bar, cat file.txt, git status, memory store foo bar, grep pattern file, grep -r pattern dir, find . -name '*.go', cd /path, pwd, head -n 100 file, tail -n 10 file, wc -l file, sort file, uniq file, sed 's/old/new/g' file, edit_lines llm.go 182 186 \"new content\", echo text, go build ./..., stat file, cp src dst, mv src dst, rm file"
 },
 {
 "name":"browser",
@@ -193,7 +207,7 @@ func InitTools(initCfg *config.Config, log *slog.Logger, store storage.FullRepo)
 	sa, err := searcher.NewWebSurfer(searcher.SearcherTypeScraper, "")
 	if err != nil {
 		if logger != nil {
-			logger.Warn("search agent unavailable; web_search tool disabled", "error", err)
+			logger.Warn("search agent models.Unavailable; web_search tool disabled", "error", err)
 		}
 		WebSearcher = nil
 	} else {
@@ -259,13 +273,13 @@ func (t *Tools) GetWebAgentClient() *agent.AgentClient {
 // 	}
 // }
 
-func websearch(args map[string]string) []byte {
+func websearch(args map[string]string) ([]byte, error) {
 	// make http request return bytes
 	query, ok := args["query"]
 	if !ok || query == "" {
 		msg := "query not provided to web_search tool"
 		logger.Error(msg)
-		return []byte(msg)
+		return []byte(msg), nil
 	}
 	limitS, ok := args["limit"]
 	if !ok || limitS == "" {
@@ -281,24 +295,24 @@ func websearch(args map[string]string) []byte {
 	if err != nil {
 		msg := "search tool failed; error: " + err.Error()
 		logger.Error(msg)
-		return []byte(msg)
+		return []byte(msg), nil
 	}
 	data, err := json.Marshal(resp)
 	if err != nil {
 		msg := "failed to marshal search result; error: " + err.Error()
 		logger.Error(msg)
-		return []byte(msg)
+		return []byte(msg), nil
 	}
-	return data
+	return data, nil
 }
 
 // rag search (searches local document database)
-func ragsearch(args map[string]string) []byte {
+func ragsearch(args map[string]string) ([]byte, error) {
 	query, ok := args["query"]
 	if !ok || query == "" {
 		msg := "query not provided to rag_search tool"
 		logger.Error(msg)
-		return []byte(msg)
+		return []byte(msg), nil
 	}
 	limitS, ok := args["limit"]
 	if !ok || limitS == "" {
@@ -314,31 +328,31 @@ func ragsearch(args map[string]string) []byte {
 	if ragInstance == nil {
 		msg := "rag not initialized; rag_search tool is not available"
 		logger.Error(msg)
-		return []byte(msg)
+		return []byte(msg), nil
 	}
 	results, err := ragInstance.Search(query, limit)
 	if err != nil {
 		msg := "rag search failed; error: " + err.Error()
 		logger.Error(msg)
-		return []byte(msg)
+		return []byte(msg), nil
 	}
 	data, err := json.Marshal(results)
 	if err != nil {
 		msg := "failed to marshal rag search result; error: " + err.Error()
 		logger.Error(msg)
-		return []byte(msg)
+		return []byte(msg), nil
 	}
-	return data
+	return data, nil
 }
 
 // web search raw (returns raw data without processing)
-func websearchRaw(args map[string]string) []byte {
+func websearchRaw(args map[string]string) ([]byte, error) {
 	// make http request return bytes
 	query, ok := args["query"]
 	if !ok || query == "" {
 		msg := "query not provided to websearch_raw tool"
 		logger.Error(msg)
-		return []byte(msg)
+		return []byte(msg), nil
 	}
 	limitS, ok := args["limit"]
 	if !ok || limitS == "" {
@@ -354,127 +368,114 @@ func websearchRaw(args map[string]string) []byte {
 	if err != nil {
 		msg := "search tool failed; error: " + err.Error()
 		logger.Error(msg)
-		return []byte(msg)
+		return []byte(msg), nil
 	}
 	// Return raw response without any processing
-	return []byte(fmt.Sprintf("%+v", resp))
+	return []byte(fmt.Sprintf("%+v", resp)), nil
 }
 
 // retrieves url content (text)
-func readURL(args map[string]string) []byte {
+func readURL(args map[string]string) ([]byte, error) {
 	// make http request return bytes
 	link, ok := args["url"]
 	if !ok || link == "" {
 		msg := "link not provided to read_url tool"
 		logger.Error(msg)
-		return []byte(msg)
+		return []byte(msg), nil
 	}
 	resp, err := WebSearcher.RetrieveFromLink(context.Background(), link)
 	if err != nil {
 		msg := "search tool failed; error: " + err.Error()
 		logger.Error(msg)
-		return []byte(msg)
+		return []byte(msg), nil
 	}
 	data, err := json.Marshal(resp)
 	if err != nil {
 		msg := "failed to marshal search result; error: " + err.Error()
 		logger.Error(msg)
-		return []byte(msg)
+		return []byte(msg), nil
 	}
-	return data
+	return data, nil
 }
 
 // retrieves url content raw (returns raw content without processing)
-func readURLRaw(args map[string]string) []byte {
+func readURLRaw(args map[string]string) ([]byte, error) {
 	// make http request return bytes
 	link, ok := args["url"]
 	if !ok || link == "" {
 		msg := "link not provided to read_url_raw tool"
 		logger.Error(msg)
-		return []byte(msg)
+		return []byte(msg), nil
 	}
 	resp, err := WebSearcher.RetrieveFromLink(context.Background(), link)
 	if err != nil {
 		msg := "search tool failed; error: " + err.Error()
 		logger.Error(msg)
-		return []byte(msg)
+		return []byte(msg), nil
 	}
 	// Return raw response without any processing
-	return []byte(fmt.Sprintf("%+v", resp))
+	return []byte(fmt.Sprintf("%+v", resp)), nil
 }
 
-// Unified run command - single entry point for shell, memory, and other built-in commands
-func runCmd(args map[string]string) []byte {
-	commandStr := args["command"]
+// runCmd is the bash tool: policy check, then two tiers. See router.go.
+func runCmd(args map[string]string) ([]byte, error) {
+	commandStr := strings.TrimSpace(args["command"])
 	if commandStr == "" {
-		msg := "command not provided to run tool"
-		logger.Error(msg)
-		return []byte(msg)
+		return nil, models.InvalidArgs("command is required", "")
 	}
-	if strings.HasPrefix(commandStr, "bash ") {
-		commandStr = strings.TrimPrefix(commandStr, "bash ")
-		commandStr = strings.Trim(commandStr, "\"")
+
+	// Command policy runs here, once, before any normalisation and before any
+	// dispatch - so the modern /v1/chat path, the legacy /completion path and
+	// the subcommand router are all covered by the same check, and so that
+	// nothing we do afterwards can hide a command from it.
+	//
+	// Order matters. Stripping a leading "bash " first would turn
+	// `bash -c "rm -rf /"` into `-c "rm -rf /"`, which the policy can no longer
+	// recognise as a shell wrapper, and the command would run.
+	if err := EnforceCommandPolicy("bash", commandStr); err != nil {
+		return nil, err
 	}
+
+	commandStr = stripBashPrefix(commandStr)
 	parts := tokenize(commandStr)
 	if len(parts) == 0 {
-		return []byte("[error] empty command")
+		return nil, models.InvalidArgs("empty command", "")
 	}
-	subcmd := parts[0]
-	rest := parts[1:]
-	// Route to appropriate handler
-	switch subcmd {
-	case "help":
-		// help - show all commands
-		// help <cmd> - show help for specific command
-		return []byte(getHelp(rest))
-	case "memory":
-		// memory store <topic> <data> | memory get <topic> | memory list | memory forget <topic>
-		return []byte(FsMemory(append([]string{"store"}, rest...), ""))
-	case "window", "windows":
-		// window list - list all windows
-		if !windowToolsAvailable {
-			return []byte("[error] window tools unavailable: xdotool and/or maim not found on PATH")
-		}
-		return listWindows(args)
-	case "capture", "screenshot":
-		// capture <window-name> - capture a window
-		if !windowToolsAvailable {
-			return []byte("[error] window capture unavailable: xdotool and/or maim not found on PATH")
-		}
-		return captureWindow(args)
-	case "capture_and_view", "screenshot_and_view":
-		// capture and view screenshot
-		if !windowToolsAvailable {
-			return []byte("[error] window capture unavailable: xdotool and/or maim not found on PATH")
-		}
-		return captureWindowAndView(args)
-	case "view_img":
-		// view_img <file> - view image for multimodal
-		return []byte(FsViewImg(rest, ""))
-	case "browser":
-		// browser <action> [args...] - Playwright browser automation
-		return runBrowserCommand(rest, args)
-	case "file_edit":
-		return []byte(FsFileEdit(args))
-	case "insert_at":
-		return []byte(FsInsertAt(args))
-	case "read":
-		return []byte(FsRead(args))
-	case "write":
-		return []byte(FsWrite(args))
-	case "edit":
-		return []byte(FsEdit(args))
-	case "mkdir", "ls", "cat", "stat", "pwd", "cd", "cp", "mv", "rm", "sed", "grep", "head", "tail", "wc", "sort", "uniq", "echo", "printf", "time", "go", "find", "file", "git", "magick", "which":
-		// File operations, git, and shell commands - use ExecChain which has pipe/chaining support
-		return executeCommand(args)
-	default:
-		// Unknown subcommand - tell user to run help tool
-		return []byte("[error] command not allowed. Run 'help' tool to see available commands.")
+
+	// Tier 1: a Go capability.
+	if v, ok := lookupVerb(parts[0]); ok {
+		return v.run(parts[1:], args)
 	}
+
+	// Tier 2: the shell. Default-allow, bounded by the veto list above.
+	return executeCommand(commandStr)
+}
+
+// stripBashPrefix accepts the redundant "bash " some models prefix a bash tool
+// call with. `bash ls` means `ls`; `bash -c "..."` does not - that is a nested
+// shell and must be left intact (the policy has already judged it).
+func stripBashPrefix(commandStr string) string {
+	rest, ok := strings.CutPrefix(commandStr, "bash ")
+	if !ok {
+		return strings.TrimSpace(strings.Trim(commandStr, "\""))
+	}
+	trimmed := strings.TrimSpace(rest)
+	if trimmed == "-c" || strings.HasPrefix(trimmed, "-c ") || strings.HasPrefix(trimmed, "--") {
+		return commandStr
+	}
+	return strings.TrimSpace(strings.Trim(trimmed, "\""))
+}
+
+// toBytes adapts a string-returning builtin to the handler signature.
+func toBytes(s string, err error) ([]byte, error) {
+	if err != nil {
+		return nil, err
+	}
+	return []byte(s), nil
 }
 
 // browserCmd handles top-level browser tool calls
-func browserCmd(args map[string]string) []byte {
+func browserCmd(args map[string]string) ([]byte, error) {
 	action := args["action"]
 	argsStr := args["args"]
 	if action == "" && argsStr != "" {
@@ -503,7 +504,7 @@ Actions:
   screenshot [path]  - take screenshot
   screenshot_and_view - take and view screenshot
   wait <selector>    - wait for element
-  drag <from> <to>   - drag element`)
+  drag <from> <to>   - drag element`), nil
 	}
 	// Prepend action to args for runBrowserCommand
 	fullArgs := append([]string{action}, browserArgs...)
@@ -511,7 +512,7 @@ Actions:
 }
 
 // runBrowserCommand routes browser subcommands to Playwright handlers
-func runBrowserCommand(args []string, originalArgs map[string]string) []byte {
+func runBrowserCommand(args []string, originalArgs map[string]string) ([]byte, error) {
 	if len(args) == 0 {
 		return []byte(`usage: browser <action> [args...]
 Actions:
@@ -527,7 +528,7 @@ Actions:
   screenshot [path]  - take screenshot
   screenshot_and_view - take and view screenshot
   wait <selector>    - wait for element
-  drag <from> <to>   - drag element`)
+  drag <from> <to>   - drag element`), nil
 	}
 	action := args[0]
 	rest := args[1:]
@@ -545,7 +546,7 @@ Actions:
 			url = rest[0]
 		}
 		if url == "" {
-			return []byte("usage: browser go <url>")
+			return []byte("usage: browser go <url>"), nil
 		}
 		return pwNavigate(map[string]string{"url": url})
 	case "click":
@@ -559,13 +560,13 @@ Actions:
 			index = rest[1]
 		}
 		if selector == "" {
-			return []byte("usage: browser click <selector> [index]")
+			return []byte("usage: browser click <selector> [index]"), nil
 		}
 		return pwClick(map[string]string{"selector": selector, "index": index})
 	case "fill":
 		// browser fill <selector> <text>
 		if len(rest) < 2 {
-			return []byte("usage: browser fill <selector> <text>")
+			return []byte("usage: browser fill <selector> <text>"), nil
 		}
 		return pwFill(map[string]string{"selector": rest[0], "text": strings.Join(rest[1:], " ")})
 	case "text":
@@ -605,13 +606,13 @@ Actions:
 			selector = rest[0]
 		}
 		if selector == "" {
-			return []byte("usage: browser wait <selector>")
+			return []byte("usage: browser wait <selector>"), nil
 		}
 		return pwWaitForSelector(map[string]string{"selector": selector})
 	case "drag":
 		// browser drag <x1> <y1> <x2> <y2> OR browser drag <from_selector> <to_selector>
 		if len(rest) < 4 && len(rest) < 2 {
-			return []byte("usage: browser drag <x1> <y1> <x2> <y2> OR browser drag <from_selector> <to_selector>")
+			return []byte("usage: browser drag <x1> <y1> <x2> <y2> OR browser drag <from_selector> <to_selector>"), nil
 		}
 		// Check if first arg is a number (coordinates) or selector
 		_, err := strconv.Atoi(rest[0])
@@ -619,7 +620,7 @@ Actions:
 		if err == nil || err2 == nil {
 			// Coordinates: browser drag 100 200 300 400
 			if len(rest) < 4 {
-				return []byte("usage: browser drag <x1> <y1> <x2> <y2>")
+				return []byte("usage: browser drag <x1> <y1> <x2> <y2>"), nil
 			}
 			return pwDrag(map[string]string{
 				"x1": rest[0], "y1": rest[1],
@@ -659,266 +660,99 @@ Examples:
   browser screenshot
   browser screenshot_and_view
   browser drag 100 200 300 400
-  browser drag #item1 #container2`)
+  browser drag #item1 #container2`), nil
 	default:
-		return []byte("unknown browser action: " + action)
+		return nil, models.InvalidArgs("unknown browser action: "+action, "use: start, stop, running, go, click, fill, text, html, screenshot, screenshot_and_view, wait, drag")
 	}
 }
 
 // getHelp returns help text.
 //
-// The first section lists the live *tool* set (from FnMap + advertised schemas),
-// because the previous version of this output listed the bash subcommand
-// vocabulary while reading like a tool list - an agent that took it at face value
-// and called a "tool" named `ls` was told to run `help`, having just been given
-// the documentation. Tools and bash subcommands are now explicitly separated.
+// The first section lists the live *tool* set, and the second the tier-1 verb
+// table, both generated from the registries that actually dispatch. The previous
+// version listed the bash subcommand vocabulary in prose while reading like a
+// tool list - an agent that took it at face value and called a "tool" named `ls`
+// was told to run `help`, having just been given the documentation.
 func getHelp(args []string) string {
 	if len(args) == 0 {
-		return ToolsHelp() + "\n" + bashSubcommandHelp()
+		return ToolsHelp() + "\n\n" + verbHelpText()
 	}
-	if len(args) > 0 && (args[0] == "tools" || args[0] == "tool") {
-		return ToolsHelp()
+	if usage, ok := verbHelpFor(args[0]); ok {
+		return usage
 	}
-	if len(args) > 0 && (args[0] == "bash" || args[0] == "commands") {
-		return bashSubcommandHelp()
-	}
-	// fall through to the per-command help below
 	switch args[0] {
-	case "ls":
-		return bashCommandHelp("ls")
+	case "tools", "tool":
+		return ToolsHelp()
+	case "bash", "commands", "shell":
+		return verbHelpText()
 	}
-	return bashCommandHelp(args[0])
+	return fmt.Sprintf("%q is not a tier-1 verb; it is passed to the shell.\n\n%s",
+		args[0], verbHelpText())
 }
 
-// bashSubcommandHelp documents the verbs the `bash` tool routes internally.
-// These are NOT separate tools.
-func bashSubcommandHelp() string {
-	return `The "bash" tool routes these subcommands internally (they are not separate tools):
-
-  # File operations
-  ls [path]       - list files in directory
-  cat <file>      - read file content
-  read <file> [offset] [limit] - read file (with line range support)
-  file_edit <file> <start> [end] <content> - replace line range
-  insert_at <file> <line> <content> - insert before line
-  write <file> <content> - write/overwrite file (full content)
-  edit <file> <old_text> <new_text> - replace exact text match
-  view_img <file> - view image file
-  stat <file>     - get file info
-  rm <file>       - delete file
-  cp <src> <dst> - copy file
-  mv <src> <dst> - move/rename file
-  mkdir [-p] <dir> - create directory (use full path)
-  pwd             - print working directory
-  cd <dir>        - change directory
-  sed 's/old/new/[g]' [file] - text replacement
-
-  # Text processing
-  echo <args>     - echo back input
-  time             - show current time
-  grep <pattern>  - filter lines (supports -i, -v, -c, -r for recursive)
-  find <pattern>  - find files by name recursively
-  head [n]         - show first n lines
-  tail [n]         - show last n lines
-  wc [-l|-w|-c]   - count lines/words/chars
-  sort [-r|-n]    - sort lines
-  uniq [-c]       - remove duplicates
-
-  # Git (read-only)
-  git <cmd>       - git commands (status, log, diff, show, branch, etc.)
-
-  # Go
-  go <cmd>        - go commands (run, build, test, mod, etc.)
-
-  # Memory
-  memory store <topic> <data>  - save to memory
-  memory get <topic>           - retrieve from memory
-  memory list                   - list all topics
-  memory forget <topic>         - delete from memory
-
-Use "help tools" for the tool list, "help <cmd>" for one subcommand (e.g. "help git").`
+func executeCommand(commandStr string) ([]byte, error) {
+	if strings.TrimSpace(commandStr) == "" {
+		return nil, models.InvalidArgs("command is required", "")
+	}
+	if shellPassthroughEnabled() {
+		return runInShell(commandStr)
+	}
+	out, err := ExecChain(commandStr)
+	return []byte(out), err
 }
 
-func bashCommandHelp(cmd string) string {
-	switch cmd {
-	case "ls":
-		return `ls [directory]
-  List files in a directory.
-  Examples:
-    bash "ls"
-    bash "ls /home/user"
-    bash "ls -la" (via shell)`
-	case "cat":
-		return `cat <file>
-  Read file content.
-  Examples:
-    bash "cat readme.md"
-    bash "cat -b image.png" (base64 output)`
-	case "view_img":
-		return `view_img <image-file>
-  View an image file for multimodal analysis.
-  Supports: png, jpg, jpeg, gif, webp, svg
-  Example:
-    bash "view_img screenshot.png"`
-	case "file_edit":
-		return `file_edit <file> <start> [end] <content>
-  Replace a range of lines with new content.
-  Arguments: file_path start_line [end_line] new_content
-  Line numbers are 1-indexed. end_line defaults to start_line if omitted.
-  Use file_edit 1 N 'content' (N = line count) to overwrite the entire file.
-  Examples:
-    file_edit main.go 42 42 "return nil"
-    file_edit main.go 10 15 "func foo() {\n  return bar\n}"`
-	case "memory":
-		return `memory <subcommand> [args]
-  Manage memory storage.
-  Subcommands:
-    store <topic> <data>  - save data to a topic
-    get <topic>           - retrieve data from a topic
-    list                  - list all topics
-    forget <topic>        - delete a topic
-  Examples:
-    bash "memory store foo bar"
-    bash "memory get foo"
-    bash "memory list"`
-	case "insert_at":
-		return `insert_at <file> <line> <content>
-  Insert new content before a specific line number (1-indexed).
-  If line exceeds file length, content is appended to the end.
-  Example:
-    insert_at main.go 3 "import \"fmt\""`
-	case "read":
-		return `read <path> [offset] [limit]
-  Read file content. Supports offset (start line) and limit (max lines).
-  Defaults: offset=1, limit=2000.
-  Examples:
-    read main.go
-    read main.go 40 20      (lines 40-60)
-    read large_file.log 1 100 (first 100 lines)`
-	case "write":
-		return `write <file_path> <content>
-  Write content to a file. Creates the file if it doesn't exist, overwrites if it does.
-  Creates parent directories as needed.
-  Use for full file overwrites or creating new files.
-  Examples:
-    write counter.json "{\"one\": \"1\", \"two\": \"2\"}"
-    write newfile.go "package main\nfunc main() {}"`
-	case "edit":
-		return `edit <file_path> <old_text> <new_text>
-  Replace an exact text match in a file with new text.
-  The old_text must appear exactly once in the file (ambiguous matches are rejected).
-  Use for targeted edits without knowing line numbers.
-  Examples:
-    edit main.go "return nil" "return err"
-    edit config.toml "port = 8080" "port = 9090"`
-	case "git":
-		return `git <subcommand>
-  Read-only git commands.
-  Allowed: status, log, diff, show, branch, reflog, rev-parse, shortlog, describe, rev-list
-  Examples:
-    bash "git status"
-    bash "git log --oneline -5"
-    bash "git diff HEAD~1"`
-	case "grep":
-		return `grep <pattern> [options] [file|dir]
-  Filter lines matching a pattern.
-  Options:
-    -i  ignore case
-    -v  invert match
-    -c  count matches
-    -r  recursive search in directory
-    -E  extended regex
-  Example:
-    bash "grep error log.txt"
-    bash "grep -i warn log.txt"
-    bash "grep -r TODO ." (search recursively in current dir)`
-	case "find":
-		return `find [path] [options]
-  Full Unix find command supported.
-  Common options: -name <pattern>, -type f|d, -mtime, -size, -exec.
-  Example:
-    bash "find . -name '*.go'" (find Go files)
-    bash "find . -type f -name '*.txt'" (find text files)
-    bash "find . -mtime -7" (modified in last 7 days)`
-	case "cd":
-		return `cd <directory>
-  Change working directory.
-  Example:
-    bash "cd /tmp"
-    bash "cd .."`
-	case "pwd":
-		return `pwd
-  Print working directory.
-  Example:
-    bash "pwd"`
-	case "mkdir":
-		return `mkdir [-p] <directory>
-  Create a directory (use full path).
-  Options:
-    -p, --parents  create parent directories as needed
-  Examples:
-    bash "mkdir /full/path/myfolder"
-    bash "mkdir -p /full/path/to/nested/folder"`
-	case "sed":
-		return `sed [options] [file]
-  Stream editor - substitution, insertion, deletion.
-  Full Unix sed syntax supported:
-    s/old/new/[flags]  substitution (g=global, i=ignore case)
-    -n                suppress output (use with p to print lines)
-    -i                in-place editing
-    -e script         add script command
-    /pattern/cmd      act on matching lines
-  Examples:
-    bash "sed 's/foo/bar/g' file.txt"
-    bash "sed -i 's/foo/bar/' file.txt"
-    bash "sed -n '40,55p' file.txt" (print lines 40-55)
-    bash "cat file.txt | sed 's/foo/bar/'" (pipe from stdin)`
-	case "go":
-		return `go <command>
-  Go toolchain commands.
-  Allowed: run, build, test, mod, get, install, clean, fmt, vet, etc.
-  Examples:
-    bash "go run main.go"
-    bash "go build ./..."
-    bash "go test ./..."
-    bash "go mod tidy"
-    bash "go get github.com/package"`
-	case "window", "windows":
-		return `window
-  List available windows.
-  Requires: xdotool and maim
-  Example:
-    bash "window"`
-	case "capture", "screenshot":
-		return `capture <window-name-or-id>
-  Capture a screenshot of a window.
-  Requires: xdotool and maim
-  Examples:
-    run "capture Firefox"
-    run "capture 0x12345678"
-    run "capture_and_view Firefox"`
-	case "capture_and_view":
-		return `capture_and_view <window-name-or-id>
-  Capture a window and return for viewing.
-  Requires: xdotool and maim
-  Examples:
-    run "capture_and_view Firefox"`
-	default:
-		return fmt.Sprintf("No help available for: %s. Use: bash \"help\" for all commands.", cmd)
-	}
+// shellPassthroughEnabled reports whether tier 2 goes to a real shell. Default on.
+func shellPassthroughEnabled() bool {
+	return cfg == nil || !cfg.DisableShellPassthrough
 }
 
-// Command Execution Tool with pipe/chaining support
-func executeCommand(args map[string]string) []byte {
-	commandStr := args["command"]
-	if commandStr == "" {
-		msg := "command not provided to execute_command tool"
-		logger.Error(msg)
-		return []byte(msg)
+// runInShell hands the command to the user's shell verbatim.
+//
+// This replaced gf-lt's own chain parser, which handled pipes and redirects but
+// did not expand globs, variables or command substitution - and reported success
+// while doing so. `echo *.go` came back as the literal string "*.go", `echo $HOME`
+// as the literal "$HOME", both with err == nil. A silent wrong answer is worse
+// than a failure, because nothing downstream can tell it apart from a right one.
+//
+// Non-interactive on purpose (no rc files, no aliases, no job control) so
+// behaviour does not depend on the user's dotfiles. Bounded by MaxToolResultBytes
+// in CallToolWithAgent, and by the veto list in dangerous.go, which unwraps
+// shell indirection before matching.
+func runInShell(commandStr string) ([]byte, error) {
+	shell, shellArgs := resolveShell()
+	if shell == "" {
+		return nil, models.Unavailable("no shell found on PATH",
+			"install bash or sh, or set DisableShellPassthrough=true to use the built-in executor")
 	}
-	// Use chain execution for pipe/chaining support
-	result := ExecChain(commandStr)
-	return []byte(result)
+	cmd := exec.Command(shell, append(append([]string{}, shellArgs...), commandStr)...)
+	cmd.Dir = cfg.FilePickerDir
+	cmd.Env = append(os.Environ(), "GF_LT_SHELL=1")
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return output, &models.ToolError{
+			Code: models.CodeConflict,
+			Msg:  fmt.Sprintf("%s exited with a non-zero status", filepath.Base(shell)),
+			Hint: "the output above says what failed; fix that and re-run",
+			Err:  err,
+		}
+	}
+	return output, nil
+}
+
+// resolveShell picks the shell to run, and whether it needs a -c flag.
+func resolveShell() (string, []string) {
+	for _, candidate := range []struct {
+		shell string
+		args  []string
+	}{
+		{"bash", []string{"-c"}},
+		{"sh", []string{"-c"}},
+	} {
+		if path, err := exec.LookPath(candidate.shell); err == nil {
+			return path, candidate.args
+		}
+	}
+	return "", nil
 }
 
 // // handleCdCommand handles the cd command to update FilePickerDir
@@ -965,23 +799,20 @@ func executeCommand(args map[string]string) []byte {
 // }
 
 // Helper functions for command execution
-func viewImgTool(args map[string]string) []byte {
+func viewImgTool(args map[string]string) ([]byte, error) {
 	file, ok := args["file"]
 	if !ok || file == "" {
-		msg := "file not provided to view_img tool"
-		logger.Error(msg)
-		return []byte(msg)
+		return nil, models.InvalidArgs("file is required", "")
 	}
-	result := FsViewImg([]string{file}, "")
-	return []byte(result)
+	return toBytes(FsViewImg([]string{file}, ""))
 }
 
-func helpTool(args map[string]string) []byte {
+func helpTool(args map[string]string) ([]byte, error) {
 	command, ok := args["command"]
 	if !ok || strings.TrimSpace(command) == "" {
-		return []byte(getHelp(nil))
+		return []byte(getHelp(nil)), nil
 	}
-	return []byte(getHelp(tokenize(command)))
+	return []byte(getHelp(tokenize(command))), nil
 }
 
 // func summarizeChat(args map[string]string) []byte {
@@ -1001,13 +832,13 @@ func windowIDToHex(decimalID string) string {
 	return fmt.Sprintf("0x%x", id)
 }
 
-func listWindows(args map[string]string) []byte {
+func listWindows(args map[string]string) ([]byte, error) {
 	cmd := exec.Command(xdotoolPath, "search", "--name", ".")
 	output, err := cmd.Output()
 	if err != nil {
 		msg := "failed to list windows: " + err.Error()
 		logger.Error(msg)
-		return []byte(msg)
+		return []byte(msg), nil
 	}
 	windowIDs := strings.Fields(string(output))
 	windows := make(map[string]string)
@@ -1028,15 +859,15 @@ func listWindows(args map[string]string) []byte {
 	if err != nil {
 		msg := "failed to marshal window list: " + err.Error()
 		logger.Error(msg)
-		return []byte(msg)
+		return []byte(msg), nil
 	}
-	return data
+	return data, nil
 }
 
-func captureWindow(args map[string]string) []byte {
+func captureWindow(args map[string]string) ([]byte, error) {
 	window, ok := args["window"]
 	if !ok || window == "" {
-		return []byte("window parameter required (window ID or name)")
+		return []byte("window parameter required (window ID or name)"), nil
 	}
 	var windowID string
 	if _, err := strconv.Atoi(window); err == nil {
@@ -1045,7 +876,7 @@ func captureWindow(args map[string]string) []byte {
 		cmd := exec.Command(xdotoolPath, "search", "--name", window)
 		output, err := cmd.Output()
 		if err != nil || len(strings.Fields(string(output))) == 0 {
-			return []byte("window not found: " + window)
+			return []byte("window not found: " + window), nil
 		}
 		windowID = strings.Fields(string(output))[0]
 	}
@@ -1062,15 +893,15 @@ func captureWindow(args map[string]string) []byte {
 	if err := cmd.Run(); err != nil {
 		msg := "failed to capture window: " + err.Error()
 		logger.Error(msg)
-		return []byte(msg)
+		return []byte(msg), nil
 	}
-	return []byte("screenshot saved: " + filename)
+	return []byte("screenshot saved: " + filename), nil
 }
 
-func captureWindowAndView(args map[string]string) []byte {
+func captureWindowAndView(args map[string]string) ([]byte, error) {
 	window, ok := args["window"]
 	if !ok || window == "" {
-		return []byte("window parameter required (window ID or name)")
+		return []byte("window parameter required (window ID or name)"), nil
 	}
 	var windowID string
 	if _, err := strconv.Atoi(window); err == nil {
@@ -1079,7 +910,7 @@ func captureWindowAndView(args map[string]string) []byte {
 		cmd := exec.Command(xdotoolPath, "search", "--name", window)
 		output, err := cmd.Output()
 		if err != nil || len(strings.Fields(string(output))) == 0 {
-			return []byte("window not found: " + window)
+			return []byte("window not found: " + window), nil
 		}
 		windowID = strings.Fields(string(output))[0]
 	}
@@ -1096,13 +927,13 @@ func captureWindowAndView(args map[string]string) []byte {
 	if err := captureCmd.Run(); err != nil {
 		msg := "failed to capture window: " + err.Error()
 		logger.Error(msg)
-		return []byte(msg)
+		return []byte(msg), nil
 	}
 	dataURL, err := models.CreateImageURLFromPath(filename)
 	if err != nil {
 		msg := "failed to create image URL: " + err.Error()
 		logger.Error(msg)
-		return []byte(msg)
+		return []byte(msg), nil
 	}
 	result := models.MultimodalToolResp{
 		Type: "multimodal_content",
@@ -1115,12 +946,16 @@ func captureWindowAndView(args map[string]string) []byte {
 	if err != nil {
 		msg := "failed to marshal result: " + err.Error()
 		logger.Error(msg)
-		return []byte(msg)
+		return []byte(msg), nil
 	}
-	return jsonResult
+	return jsonResult, nil
 }
 
-type FnHandler func(map[string]string) []byte
+// FnHandler is a tool implementation. It returns the model-facing output and,
+// independently, an error. The two are orthogonal on purpose: a tool that applied
+// 3 of 4 edits still has useful output, so the output is not discarded when the
+// error is non-nil. See errors.go for how the error reaches the model.
+type FnHandler func(args map[string]string) ([]byte, error)
 
 // FS Command Handlers - Unix-style file operations
 // Convert map[string]string to []string for tools package
@@ -1135,21 +970,21 @@ func argsToSlice(args map[string]string) []string {
 	return result
 }
 
-func memoryTool(args map[string]string) []byte {
+func memoryTool(args map[string]string) ([]byte, error) {
 	action := args["action"]
 	topic := args["topic"]
 	data := args["data"]
 	switch action {
 	case "store":
-		return []byte(FsMemory([]string{"store", topic, data}, ""))
+		return toBytes(FsMemory([]string{"store", topic, data}, ""))
 	case "get":
-		return []byte(FsMemory([]string{"get", topic}, ""))
+		return toBytes(FsMemory([]string{"get", topic}, ""))
 	case "list", "topics":
-		return []byte(FsMemory([]string{action}, ""))
+		return toBytes(FsMemory([]string{action}, ""))
 	case "forget", "delete":
-		return []byte(FsMemory([]string{action, topic}, ""))
+		return toBytes(FsMemory([]string{action, topic}, ""))
 	default:
-		return []byte("[error] unknown memory action: " + action)
+		return nil, models.InvalidArgs("unknown memory action: "+action, "use: store, get, list, topics, forget, delete")
 	}
 }
 
@@ -1215,21 +1050,10 @@ func init() {
 	FnMap["read_url_raw"] = readURLRaw
 	FnMap["view_img"] = viewImgTool
 	FnMap["help"] = helpTool
-	FnMap["file_edit"] = func(args map[string]string) []byte {
-		return []byte(FsFileEdit(args))
-	}
-	FnMap["insert_at"] = func(args map[string]string) []byte {
-		return []byte(FsInsertAt(args))
-	}
-	FnMap["read"] = func(args map[string]string) []byte {
-		return []byte(FsRead(args))
-	}
-	FnMap["write"] = func(args map[string]string) []byte {
-		return []byte(FsWrite(args))
-	}
-	FnMap["edit"] = func(args map[string]string) []byte {
-		return []byte(FsEdit(args))
-	}
+	FnMap["edit_lines"] = func(args map[string]string) ([]byte, error) { return toBytes(FsEditLines(args)) }
+	FnMap["read"] = func(args map[string]string) ([]byte, error) { return toBytes(FsRead(args)) }
+	FnMap["write"] = func(args map[string]string) ([]byte, error) { return toBytes(FsWrite(args)) }
+	FnMap["edit_text"] = func(args map[string]string) ([]byte, error) { return toBytes(FsEditText(args)) }
 	// Unified run command
 	FnMap["bash"] = runCmd
 	// Browser tool - routes to runBrowserCommand
@@ -1298,12 +1122,12 @@ func removeWindowToolsFromBaseTools() {
 	BaseTools = filtered
 }
 
-func summarizeChat(args map[string]string) []byte {
+func summarizeChat(args map[string]string) ([]byte, error) {
 	data, err := json.Marshal(args)
 	if err != nil {
-		return []byte("error: failed to marshal arguments")
+		return []byte("error: failed to marshal arguments"), nil
 	}
-	return data
+	return data, nil
 }
 
 // for pw agentA
@@ -1313,50 +1137,25 @@ func summarizeChat(args map[string]string) []byte {
 
 // Always provide clear feedback about what you're doing and what you found.`
 
-// MaxToolResultBytes caps a single tool result before it enters the chat
-// context. Tool output otherwise flows in unbounded: `bash` on a large file,
-// websearch, base64 images. One fat result can push an otherwise healthy
-// conversation into context compaction, and silent exhaustion is a much worse
-// failure mode than an explicit truncation notice. Mirrors read's continuation
-// trailer: say what was cut and how to get the rest.
-const MaxToolResultBytes = 24 * 1024
-
-// TruncateToolResult clamps a tool result to MaxToolResultBytes, appending a
-// notice that says how to retrieve the remainder. Byte-safe: it cuts on a rune
-// boundary so the result stays valid UTF-8.
-func TruncateToolResult(toolName string, raw []byte) []byte {
-	if len(raw) <= MaxToolResultBytes {
-		return raw
-	}
-	cut := MaxToolResultBytes
-	for cut > 0 && !utf8.RuneStart(raw[cut]) {
-		cut--
-	}
-	notice := fmt.Sprintf(
-		"\n\n[output truncated: %d of %d bytes shown. Re-run with a narrower scope (e.g. grep/head, an offset+limit range, or a lower limit) to see the rest.]",
-		cut, len(raw),
-	)
-	out := make([]byte, 0, cut+len(notice))
-	out = append(out, raw[:cut]...)
-	out = append(out, notice...)
-	return out
-}
-
-func CallToolWithAgent(name string, args map[string]string) ([]byte, bool) {
+func CallToolWithAgent(name string, args map[string]string) ([]byte, error) {
 	f, ok := FnMap[name]
 	if !ok {
-		// An unknown tool name is a model error, not a tool error: make that
-		// legible in the same channel as everything else, and point at the
-		// self-describing listing.
-		return []byte(fmt.Sprintf(
-			"[error] tool %q not found. Call the help tool to list the %d available tools.",
-			name, len(FnMap))), false
+		err := &models.ToolError{
+			Code: models.CodeUnknownTool,
+			Msg:  fmt.Sprintf("no such tool: %q", name),
+			Hint: fmt.Sprintf("call the help tool to list the %d available tools", len(FnMap)),
+		}
+		return models.RenderToolResult(name, nil, err), err
 	}
-	raw := f(args)
+	out, err := f(args)
 	if a := agent.Get(name); a != nil {
-		raw = a.Process(args, raw)
+		out = a.Process(args, out)
 	}
-	return TruncateToolResult(name, raw), true
+	rendered := models.RenderToolResult(name, out, err)
+	if err != nil && logger != nil {
+		logger.Debug("tool call failed", "tool", name, "code", models.ErrorCodeOf(err), "error", err)
+	}
+	return TruncateToolResult(name, rendered), err
 }
 
 // openai style def
@@ -1486,7 +1285,7 @@ var BaseTools = []models.Tool{
 		Type: "function",
 		Function: models.ToolFunc{
 			Name:        "help",
-			Description: "List what you can actually do right now. With no arguments: the live tool set, then the bash subcommand vocabulary (marked as not separate tools). Pass command=\"tools\" for just the tool list, or command=\"<subcommand>\" for one subcommand (e.g. \"help git\").",
+			Description: "List what you can actually do right now. With no arguments: the live tool set, then the Go capabilities the bash tool handles directly. Pass command=\"tools\" for just the tool list, or command=\"<verb>\" for one verb (e.g. \"help read\"). Anything not listed is passed to the shell.",
 			Parameters: models.ToolFuncParams{
 				Type:     "object",
 				Required: []string{},
@@ -1504,14 +1303,14 @@ var BaseTools = []models.Tool{
 		Type: "function",
 		Function: models.ToolFunc{
 			Name:        "bash",
-			Description: "Execute commands: shell, git, memory. Examples: ls -la, git status, memory store foo bar, help, help memory, find . -name '*.go'",
+			Description: "Run a shell command, or a built-in verb. Most things are shell: ls, cat, grep, find, git, go, sed, pipes and redirects all work as typed. Built-in verbs with no shell equivalent: read <file> [offset] [limit], write <file> <content> (add overwrite=true to replace an existing non-empty file), edit_text <file> <old> <new>, edit_lines <file> <start> [end] <content>, view_img <file>, memory <store|get|list|forget>, browser <action>, window, capture. Use help to list the current set.",
 			Parameters: models.ToolFuncParams{
 				Type:     "object",
 				Required: []string{"command"},
 				Properties: map[string]models.ToolArgProps{
 					"command": models.ToolArgProps{
 						Type:        "string",
-						Description: "command to execute. Examples: ls, cat file.txt, grep pattern, git status, memory store, help",
+						Description: "command to execute: either a shell command (ls, cat f, grep -r x ., git status, go build ./...) or a built-in verb (read, write, edit, memory, browser, help).",
 					},
 				},
 			},
@@ -1539,12 +1338,12 @@ var BaseTools = []models.Tool{
 			},
 		},
 	},
-	// file_edit - replace a line range
+	// edit_lines - replace a line range
 	models.Tool{
 		Type: "function",
 		Function: models.ToolFunc{
-			Name:        "file_edit",
-			Description: "Replace a range of lines in an existing file with new content.",
+			Name:        "edit_lines",
+			Description: "Replace an inclusive range of lines with new content. Choose this when the change is multi-line, or when you can only locate it by line number - quoting a long block back exactly is where edit_text fails. For a one-line change you can quote exactly, edit_text is cheaper: it skips the read-and-count. A start_line one past the last line appends.",
 			Parameters: models.ToolFuncParams{
 				Type:     "object",
 				Required: []string{"file_path", "start_line", "new_content"},
@@ -1555,41 +1354,15 @@ var BaseTools = []models.Tool{
 					},
 					"start_line": models.ToolArgProps{
 						Type:        "integer",
-						Description: "1-indexed line number where replacement starts. To delete lines without replacing, pass new_content as an empty string.",
+						Description: "1-indexed line where replacement starts. Past the end of the file, it appends. To delete lines without replacing, pass new_content as an empty string.",
 					},
 					"end_line": models.ToolArgProps{
 						Type:        "integer",
-						Description: "1-indexed line number where replacement ends (inclusive). Defaults to start_line. Must be >= start_line.",
+						Description: "1-indexed line where replacement ends (inclusive). Defaults to start_line. Must be >= start_line.",
 					},
 					"new_content": models.ToolArgProps{
 						Type:        "string",
 						Description: "replacement content (use \\n for newlines). Pass empty string to delete the line range.",
-					},
-				},
-			},
-		},
-	},
-	// insert_at - insert content at a specific line
-	models.Tool{
-		Type: "function",
-		Function: models.ToolFunc{
-			Name:        "insert_at",
-			Description: "Insert new content at a specific line number in an existing file. Does not delete any existing lines.",
-			Parameters: models.ToolFuncParams{
-				Type:     "object",
-				Required: []string{"file_path", "line", "new_content"},
-				Properties: map[string]models.ToolArgProps{
-					"file_path": models.ToolArgProps{
-						Type:        "string",
-						Description: "path to the file to edit",
-					},
-					"line": models.ToolArgProps{
-						Type:        "integer",
-						Description: "1-indexed line number to insert before. If line exceeds file length, content is appended to the end of the file.",
-					},
-					"new_content": models.ToolArgProps{
-						Type:        "string",
-						Description: "content to insert (use \\n for newlines)",
 					},
 				},
 			},
@@ -1626,7 +1399,7 @@ var BaseTools = []models.Tool{
 		Type: "function",
 		Function: models.ToolFunc{
 			Name:        "write",
-			Description: "Write content to a file. Creates the file if it doesn't exist, overwrites if it does. Creates parent directories as needed. Use this for full file overwrites or creating new files. Empty content is rejected unless truncate=true is also set (to clear a file deliberately); to delete a file use the bash tool: rm <path>.",
+			Description: "Write a file. Use this to create a new file, or to replace one wholesale - not to change part of a file, which is what edit_text and edit_lines are for. Overwriting a non-empty file requires overwrite=true, and the result always says what was there before (\"was 412 lines, now 3\"), so check it. Empty content is rejected unless truncate=true is also set; to delete a file use the bash tool: rm <path>.",
 			Parameters: models.ToolFuncParams{
 				Type:     "object",
 				Required: []string{"file_path", "content"},
@@ -1651,8 +1424,8 @@ var BaseTools = []models.Tool{
 	models.Tool{
 		Type: "function",
 		Function: models.ToolFunc{
-			Name:        "edit",
-			Description: "Replace an exact text match in a file with new text. The old_text must appear exactly once in the file. Use this for targeted edits without knowing line numbers.",
+			Name:        "edit_text",
+			Description: "Replace an exact run of text with new text. Choose this for a small, distinctive change you can quote exactly - a flag, a comment, a line of markdown - and you do not know or want the line number. old_text must appear exactly once, or the call is refused rather than guessed; add surrounding context to disambiguate. For anything multi-line, use edit_lines instead.",
 			Parameters: models.ToolFuncParams{
 				Type:     "object",
 				Required: []string{"file_path", "old_text", "new_text"},

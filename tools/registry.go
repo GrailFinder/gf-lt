@@ -31,7 +31,7 @@ func AvailableTools() []string {
 // AvailableToolCount returns the number of live tools.
 func AvailableToolCount() int { return len(FnMap) }
 
-// internalCount returns how many live handlers are application-internal.
+// internalCount returns how many live handlers are application-models.Internal.
 func internalCount() int {
 	n := 0
 	for name := range FnMap {

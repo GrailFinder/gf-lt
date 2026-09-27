@@ -73,7 +73,7 @@ gf-lt --mission                              # Enter mission mode
 gf-lt --mission --issue-id 5                 # Process specific issue (optional, auto-picks if not provided)
 gf-lt --mission --agent-card ./card.json     # Custom agent personality (optional)
 gf-lt --resume ./mission-checkpoint.json     # Resume from checkpoint (default: mission-checkpoint.json)
-gf-lt --pm-interval 75                        # PM check-in every N tool calls (all tools: bash, file_edit, etc.) (default: 75)
+gf-lt --pm-interval 75                        # PM check-in every N tool calls (all tools: bash, edit_lines, etc.) (default: 75)
 gf-lt --max-failures 3                        # Consecutive failures before abort (default: 3)
 gf-lt --checkpoint-file ./checkpoint.json    # Custom checkpoint path
 gf-lt --output json                           # Structured JSON output
@@ -109,7 +109,7 @@ mission_tools_enabled: false     # Enable mission-only tools outside mission mod
 
 **Bundled tools (always available via `bash`):**
 - `bash` - Execute shell commands (git, npm, make, etc.)
-- `file_edit` - Modify existing files
+- `edit_text` / `edit_lines` - Modify existing files (by quoted text, or by line range)
 - `grep`, `find`, `cat` - File operations
 
 ## Core Components
@@ -441,7 +441,7 @@ Default agent card bundled with gf-lt.
 **Status: DONE**.
 **Impact**: Previously the PM interval only counted mission-specific tool calls (`create_pr`, `add_issue_comment`, etc.), so in short missions the PM never fired. Also, PM messages were injected as `system` role with generic third-person prompts.
 **Implementation**: 
-- Moved `IncrementToolCalls()` from individual mission tool handlers to `handleBatchToolCalls()` in `bot.go` so EVERY tool call (bash, file_edit, etc.) increments the counter.
+- Moved `IncrementToolCalls()` from individual mission tool handlers to `handleBatchToolCalls()` in `bot.go` so EVERY tool call (bash, edit_lines, etc.) increments the counter.
 - Changed PM message role from `"system"` to `cfg.UserRole` so the guidance appears as a direct user message.
 - Rewrote `getPMGuidance()` prompt to address the coder as "you" with imperative tone ("Run the tests now", "Check that main.go handles the error").
 - Added `PMGuidanceNeeded` flag on the Mission struct, set by `IncrementToolCalls()` when `ShouldPMCheckIn()` returns true. Checked in `missionMessageLoop()` before the StatusSuccess check so guidance fires even if `create_pr` was already called.

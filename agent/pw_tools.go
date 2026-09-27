@@ -286,13 +286,18 @@ func parseOpenAIToolCall(toolCalls []interface{}) (func() []byte, string, bool) 
 	var args map[string]string
 	if err := json.Unmarshal([]byte(argsStr), &args); err != nil {
 		return func() []byte {
-			return []byte(fmt.Sprintf(`{"error": "failed to parse arguments: %v"}`, err))
+			return models.RenderToolResult(name, nil, models.InvalidArgs(
+				"tool call arguments are not a JSON object of strings", ""))
 		}, id, true
 	}
 	return func() []byte {
 		fn, ok := pwToolMap[name]
 		if !ok {
-			return []byte(fmt.Sprintf(`{"error": "tool %s not found"}`, name))
+			return models.RenderToolResult(name, nil, &models.ToolError{
+				Code: models.CodeUnknownTool,
+				Msg:  fmt.Sprintf("no such tool: %q", name),
+				Hint: "call the help tool to see what is available",
+			})
 		}
 		return fn(args)
 	}, id, true
@@ -311,14 +316,16 @@ func findToolCallFromText(text string) (func() []byte, string, bool) {
 	end := strings.LastIndex(jsStr, "}")
 	if start == -1 || end == -1 || end <= start {
 		return func() []byte {
-			return []byte(`{"error": "no valid JSON found in tool call"}`)
+			return models.RenderToolResult("", nil, models.InvalidArgs(
+				"no valid JSON found in the tool call", "emit a single {...} object"))
 		}, "", true
 	}
 	jsStr = jsStr[start : end+1]
 	var fc models.FuncCall
 	if err := json.Unmarshal([]byte(jsStr), &fc); err != nil {
 		return func() []byte {
-			return []byte(fmt.Sprintf(`{"error": "failed to parse tool call: %v}`, err))
+			return models.RenderToolResult("", nil, models.InvalidArgs(
+				"the tool call is not valid JSON", "emit a single {...} object with name and args"))
 		}, "", true
 	}
 	if fc.ID == "" {
@@ -327,7 +334,11 @@ func findToolCallFromText(text string) (func() []byte, string, bool) {
 	return func() []byte {
 		fn, ok := pwToolMap[fc.Name]
 		if !ok {
-			return []byte(fmt.Sprintf(`{"error": "tool %s not found"}`, fc.Name))
+			return models.RenderToolResult(fc.Name, nil, &models.ToolError{
+				Code: models.CodeUnknownTool,
+				Msg:  fmt.Sprintf("no such tool: %q", fc.Name),
+				Hint: "call the help tool to see what is available",
+			})
 		}
 		return fn(fc.Args)
 	}, fc.ID, true

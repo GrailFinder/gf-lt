@@ -129,6 +129,11 @@ type Config struct {
 	CharSpecificContextTag     string `toml:"CharSpecificContextTag"`
 	AutoTurn                   bool   `toml:"AutoTurn"`
 	DisableToolGuide           bool   `toml:"DisableToolGuide"`
+	// DisableShellPassthrough sends tier-2 commands through gf-lt's built-in
+	// ExecChain instead of a real shell. Off by default, because ExecChain is a
+	// partial reimplementation: it does not expand globs, variables or command
+	// substitution, and reports success when it silently gets them wrong.
+	DisableShellPassthrough bool `toml:"DisableShellPassthrough"`
 	// playwright browser
 	PlaywrightEnabled bool `toml:"PlaywrightEnabled"`
 	MemoryEnabled     bool `toml:"MemoryEnabled"`

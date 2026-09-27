@@ -78,9 +78,9 @@ func IsImageFile(path string) bool {
 	return ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".gif" || ext == ".webp" || ext == ".svg"
 }
 
-func FsViewImg(args []string, stdin string) string {
+func FsViewImg(args []string, stdin string) (string, error) {
 	if len(args) == 0 {
-		return "[error] usage: view_img <image-path>"
+		return "", models.InvalidArgs("usage: view_img <image-path>", "")
 	}
 	path := args[0]
 	var abs string
@@ -90,18 +90,18 @@ func FsViewImg(args []string, stdin string) string {
 		var err error
 		abs, err = resolvePath(path)
 		if err != nil {
-			return fmt.Sprintf("[error] %v", err)
+			return "", models.Internal("could not resolve path", err)
 		}
 	}
 	if _, err := os.Stat(abs); err != nil {
-		return fmt.Sprintf("[error] view_img: %v", err)
+		return "", readError(path, err)
 	}
 	if !IsImageFile(path) {
-		return fmt.Sprintf("[error] not an image file: %s (use cat to read text files)", path)
+		return "", models.InvalidArgs(fmt.Sprintf("not an image file: %s", path), "use the read tool to read text files")
 	}
 	dataURL, err := models.CreateImageURLFromPath(abs)
 	if err != nil {
-		return fmt.Sprintf("[error] view_img: %v", err)
+		return "", models.Internal("view_img failed", err)
 	}
 	result := models.MultimodalToolResp{
 		Type: "multimodal_content",
@@ -112,9 +112,9 @@ func FsViewImg(args []string, stdin string) string {
 	}
 	jsonResult, err := json.Marshal(result)
 	if err != nil {
-		return fmt.Sprintf("[error] view_img: %v", err)
+		return "", models.Internal("view_img failed", err)
 	}
-	return string(jsonResult)
+	return string(jsonResult), nil
 }
 
 var allowedGitSubcommands = map[string]bool{
@@ -158,9 +158,9 @@ var missionGitSubcommands = map[string]bool{
 	"rev-list":    true,
 }
 
-func FsGit(args []string, stdin string) string {
+func FsGit(args []string, stdin string) (string, error) {
 	if len(args) == 0 {
-		return "[error] usage: git <subcommand> [options]"
+		return "", models.InvalidArgs("usage: git <subcommand> [options]", "")
 	}
 	subcmd := args[0]
 	allowed := allowedGitSubcommands[subcmd]
@@ -168,11 +168,11 @@ func FsGit(args []string, stdin string) string {
 		allowed = missionGitSubcommands[subcmd]
 	}
 	if !allowed {
-		return fmt.Sprintf("[error] git: '%s' is not an allowed git command", subcmd)
+		return "", models.Denied(fmt.Sprintf("git '%s' is not an allowed git command", subcmd))
 	}
 	abs, err := resolvePath(".")
 	if err != nil {
-		return fmt.Sprintf("[error] git: %v", err)
+		return "", models.Internal("git failed", err)
 	}
 	if currentMission != nil {
 		currentMission.Log("FsGit: dir=%s, args=%v", abs, args)
@@ -184,14 +184,14 @@ func FsGit(args []string, stdin string) string {
 		currentMission.Log("FsGit: output (err=%v): %s", err, strings.TrimSpace(string(output)))
 	}
 	if err != nil {
-		return fmt.Sprintf("[error] git %s: %v\n%s", subcmd, err, string(output))
+		return string(output), &models.ToolError{Code: models.CodeConflict, Msg: fmt.Sprintf("git %s exited with an error", subcmd), Hint: "read the output above; fix the reported problem or adjust the arguments", Err: err}
 	}
-	return string(output)
+	return string(output), nil
 }
 
-func FsCd(args []string, stdin string) string {
+func FsCd(args []string, stdin string) (string, error) {
 	if len(args) == 0 {
-		return "[error] usage: cd <dir>"
+		return "", models.InvalidArgs("usage: cd <dir>", "")
 	}
 	dir := args[0]
 	// Resolve the path: absolute paths are used as-is; relative paths are
@@ -207,30 +207,30 @@ func FsCd(args []string, stdin string) string {
 	// or a parent of it, just use the current FilePickerDir as-is.
 	// Real shells are idempotent when you cd to a directory you're already in.
 	if abs == cfg.FilePickerDir {
-		return "Already in: " + abs
+		return "Already in: " + abs, nil
 	}
 	info, err := os.Stat(abs)
 	if err != nil {
-		return fmt.Sprintf("[error] cd: %v", err)
+		return "", models.NotFound(fmt.Sprintf("cd: no such directory: %s", dir), "list the parent directory with `bash ls`")
 	}
 	if !info.IsDir() {
-		return "[error] cd: not a directory: " + dir
+		return "", models.InvalidArgs("cd: not a directory: "+dir, "")
 	}
 	cfg.FilePickerDir = abs
-	return "Changed directory to: " + cfg.FilePickerDir
+	return "Changed directory to: " + cfg.FilePickerDir, nil
 }
 
-func FsMemory(args []string, stdin string) string {
+func FsMemory(args []string, stdin string) (string, error) {
 	if len(args) == 0 {
-		return "[error] usage: memory store <topic> <data> | memory get <topic> | memory list | memory forget <topic>"
+		return "", models.InvalidArgs("usage: memory store <topic> <data> | memory get <topic> | memory list | memory forget <topic>", "")
 	}
 	if memoryStore == nil {
-		return "[error] memory store not initialized"
+		return "", models.Unavailable("memory store not initialized", "memory is disabled in this session")
 	}
 	switch args[0] {
 	case "store":
 		if len(args) < 3 && stdin == "" {
-			return "[error] usage: memory store <topic> <data>"
+			return "", models.InvalidArgs("usage: memory store <topic> <data>", "")
 		}
 		topic := args[1]
 		var data string
@@ -241,39 +241,39 @@ func FsMemory(args []string, stdin string) string {
 		}
 		_, err := memoryStore.Memorise(agentRole, topic, data)
 		if err != nil {
-			return fmt.Sprintf("[error] failed to store: %v", err)
+			return "", models.Internal("failed to store memory", err)
 		}
-		return "Stored under topic: " + topic
+		return "Stored under topic: " + topic, nil
 	case "get":
 		if len(args) < 2 {
-			return "[error] usage: memory get <topic>"
+			return "", models.InvalidArgs("usage: memory get <topic>", "")
 		}
 		topic := args[1]
 		data, err := memoryStore.Recall(agentRole, topic)
 		if err != nil {
-			return fmt.Sprintf("[error] failed to recall: %v", err)
+			return "", models.Internal("failed to recall memory", err)
 		}
-		return fmt.Sprintf("Topic: %s\n%s", topic, data)
+		return fmt.Sprintf("Topic: %s\n%s", topic, data), nil
 	case "list", "topics":
 		topics, err := memoryStore.RecallTopics(agentRole)
 		if err != nil {
-			return fmt.Sprintf("[error] failed to list topics: %v", err)
+			return "", models.Internal("failed to list memory topics", err)
 		}
 		if len(topics) == 0 {
-			return "No topics stored."
+			return "No topics stored.", nil
 		}
-		return "Topics: " + strings.Join(topics, ", ")
+		return "Topics: " + strings.Join(topics, ", "), nil
 	case "forget", "delete":
 		if len(args) < 2 {
-			return "[error] usage: memory forget <topic>"
+			return "", models.InvalidArgs("usage: memory forget <topic>", "")
 		}
 		topic := args[1]
 		err := memoryStore.Forget(agentRole, topic)
 		if err != nil {
-			return fmt.Sprintf("[error] failed to forget: %v", err)
+			return "", models.Internal("failed to forget memory topic", err)
 		}
-		return "Deleted topic: " + topic
+		return "Deleted topic: " + topic, nil
 	default:
-		return fmt.Sprintf("[error] unknown subcommand: %s. Use: store, get, list, topics, forget, delete", args[0])
+		return "", models.InvalidArgs(fmt.Sprintf("unknown memory subcommand: %s", args[0]), "use: store, get, list, topics, forget, delete")
 	}
 }

@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"gf-lt/models"
 	"os"
 	"strings"
 	"testing"
@@ -47,52 +48,19 @@ func TestAvailableToolsSorted(t *testing.T) {
 }
 
 func TestUnknownToolErrorIsActionable(t *testing.T) {
-	out, ok := CallToolWithAgent("definitely_not_a_tool", map[string]string{})
-	if ok {
-		t.Error("expected ok=false for unknown tool")
+	out, err := CallToolWithAgent("definitely_not_a_tool", map[string]string{})
+	if err == nil {
+		t.Fatal("expected an error for an unknown tool")
+	}
+	if models.ErrorCodeOf(err) != models.CodeUnknownTool {
+		t.Errorf("unknown tool should be unknown_tool, got %s", models.ErrorCodeOf(err))
+	}
+	// A model error must not consume a mission failure.
+	if models.IsFailure(err) {
+		t.Error("an unknown tool name should not count as a tool failure")
 	}
 	if !strings.Contains(string(out), "help") {
 		t.Errorf("unknown-tool error should point at the help tool, got: %s", out)
-	}
-}
-
-func TestHelpListsToolsAndSeparatesSubcommands(t *testing.T) {
-	help := getHelp(nil)
-	if !strings.Contains(help, "Available tools (") {
-		t.Errorf("help should list the live tool set:\n%s", help)
-	}
-	if !strings.Contains(help, "not separate tools") {
-		t.Errorf("help should mark bash subcommands as not-tools:\n%s", help)
-	}
-	toolsOnly := getHelp([]string{"tools"})
-	if !strings.Contains(toolsOnly, "Available tools (") {
-		t.Error("help tools should list tools")
-	}
-	if strings.Contains(toolsOnly, "not separate tools") {
-		t.Error("help tools should not include the subcommand list")
-	}
-	for _, name := range AvailableTools() {
-		if internalTools[name] {
-			continue
-		}
-		if !strings.Contains(toolsOnly, name) {
-			t.Errorf("help tools omits registered tool %q", name)
-		}
-	}
-}
-
-func TestBrowserArgsAreQuoteAware(t *testing.T) {
-	// The tool is unavailable in CI without Playwright, so test the parsing
-	// boundary directly: tokenize is what browserCmd now uses.
-	got := tokenize(`fill "#search" "hello world"`)
-	want := []string{"fill", "#search", "hello world"}
-	if len(got) != len(want) {
-		t.Fatalf("tokenize = %q, want %q", got, want)
-	}
-	for i := range want {
-		if got[i] != want[i] {
-			t.Fatalf("tokenize = %q, want %q", got, want)
-		}
 	}
 }
 
@@ -103,22 +71,27 @@ func TestWriteRefusesEmptyContentUnlessTruncateSet(t *testing.T) {
 	t.Cleanup(func() { SetFSRoot(prev) })
 	path := "keep.txt"
 	abs := dir + "/" + path
-	if got := FsWrite(map[string]string{"file_path": path, "content": "hello\n"}); strings.HasPrefix(got, "[error]") {
-		t.Fatalf("normal write failed: %s", got)
+	if out, err := FsWrite(map[string]string{"file_path": path, "content": "hello\n"}); err != nil {
+		t.Fatalf("normal write failed: %v", out)
 	}
 
-	got := FsWrite(map[string]string{"file_path": path, "content": ""})
-	if !strings.HasPrefix(got, "[error]") {
+	got, err := FsWrite(map[string]string{"file_path": path, "content": ""})
+	if err == nil {
 		t.Fatalf("empty content should be refused, got: %s", got)
+	}
+	// Conflict, not denied: the fix is one argument away, and a refusal the
+	// model cannot retry its way out of should not cost a mission failure.
+	if models.ErrorCodeOf(err) != models.CodeConflict {
+		t.Errorf("empty write should be a conflict, got %s", models.ErrorCodeOf(err))
 	}
 	if data := mustReadFile(t, abs); data != "hello\n" {
 		t.Fatalf("file was modified by a refused write: %q", data)
 	}
 
 	// explicit opt-in truncates, and says so
-	got = FsWrite(map[string]string{"file_path": path, "content": "", "truncate": "true"})
-	if strings.HasPrefix(got, "[error]") {
-		t.Fatalf("truncate=true should be allowed: %s", got)
+	got, err = FsWrite(map[string]string{"file_path": path, "content": "", "truncate": "true", "overwrite": "true"})
+	if err != nil {
+		t.Fatalf("truncate=true should be allowed: %v", err)
 	}
 	if !strings.Contains(got, "truncated") {
 		t.Errorf("truncation should be reported explicitly, got: %s", got)
@@ -150,4 +123,51 @@ func mustReadFile(t *testing.T, path string) string {
 		t.Fatal(err)
 	}
 	return string(b)
+}
+
+func TestHelpListsToolsAndSeparatesSubcommands(t *testing.T) {
+	help := getHelp(nil)
+	if !strings.Contains(help, "Available tools (") {
+		t.Errorf("help should list the live tool set:\n%s", help)
+	}
+	if !strings.Contains(help, "Tier 2") {
+		t.Errorf("help should say what falls through to the shell:\n%s", help)
+	}
+	toolsOnly := getHelp([]string{"tools"})
+	if !strings.Contains(toolsOnly, "Available tools (") {
+		t.Error("help tools should list tools")
+	}
+	if strings.Contains(toolsOnly, "Tier 1") {
+		t.Error("help tools should not include the verb table")
+	}
+	// The verb table is generated from the router's own table, so it cannot go
+	// stale the way the hand-written list did.
+	for _, v := range VerbNames() {
+		if !strings.Contains(help, v) {
+			t.Errorf("help omits tier-1 verb %q", v)
+		}
+	}
+	for _, name := range AvailableTools() {
+		if internalTools[name] {
+			continue
+		}
+		if !strings.Contains(toolsOnly, name) {
+			t.Errorf("help tools omits registered tool %q", name)
+		}
+	}
+}
+
+func TestBrowserArgsAreQuoteAware(t *testing.T) {
+	// The tool is unavailable in CI without Playwright, so test the parsing
+	// boundary directly: tokenize is what browserCmd now uses.
+	got := tokenize(`fill "#search" "hello world"`)
+	want := []string{"fill", "#search", "hello world"}
+	if len(got) != len(want) {
+		t.Fatalf("tokenize = %q, want %q", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("tokenize = %q, want %q", got, want)
+		}
+	}
 }

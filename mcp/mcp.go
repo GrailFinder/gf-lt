@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"gf-lt/config"
+	"gf-lt/models"
 	"gf-lt/tools"
 	"log/slog"
 	"os"
@@ -148,17 +149,17 @@ func (m *Manager) RegisterToolHandlers(fnMap map[string]tools.FnHandler) {
 			prefixedName := fmt.Sprintf("mcp_%s_%s", server.name, tool.Name)
 			m.toolMap[prefixedName] = server
 
-			fnMap[prefixedName] = func(args map[string]string) []byte {
+			fnMap[prefixedName] = func(args map[string]string) ([]byte, error) {
 				return m.callTool(prefixedName, args)
 			}
 		}
 	}
 }
 
-func (m *Manager) callTool(name string, args map[string]string) []byte {
+func (m *Manager) callTool(name string, args map[string]string) ([]byte, error) {
 	server, ok := m.toolMap[name]
 	if !ok {
-		return []byte(fmt.Sprintf("MCP tool %s not found", name))
+		return nil, models.NewToolNotFound(fmt.Sprintf("MCP tool %s not found", name))
 	}
 
 	toolName := strings.TrimPrefix(name, fmt.Sprintf("mcp_%s_", server.name))
@@ -173,7 +174,7 @@ func (m *Manager) callTool(name string, args map[string]string) []byte {
 		Arguments: mcpArgs,
 	})
 	if err != nil {
-		return []byte(fmt.Sprintf("MCP tool call failed: %v", err))
+		return nil, models.NewToolInternal("MCP tool call failed", err)
 	}
 
 	if result.IsError {
@@ -183,7 +184,11 @@ func (m *Manager) callTool(name string, args map[string]string) []byte {
 				errMsg.WriteString(tc.Text)
 			}
 		}
-		return []byte("MCP tool error: " + errMsg.String())
+		// The MCP server produced its own error prose. We cannot reclassify it
+		// without guessing, so it is reported as a conflict: well-formed call,
+		// unacceptable outcome. The server's text is kept verbatim as the output.
+		return []byte(errMsg.String()), models.NewToolError(models.CodeConflict,
+			"MCP tool reported an error", "read the server message above and adjust the call", nil)
 	}
 
 	var output strings.Builder
@@ -233,7 +238,7 @@ func (m *Manager) callTool(name string, args map[string]string) []byte {
 		}
 	}
 
-	return []byte(output.String())
+	return []byte(output.String()), nil
 }
 
 var imagePathFromTextRe = regexp.MustCompile(`(?:Image(?: saved to)?: )([^\s\[]+)`)

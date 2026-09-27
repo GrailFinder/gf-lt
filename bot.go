@@ -351,7 +351,8 @@ func consolidateAssistantMessages(messages []models.RoleMsg) []models.RoleMsg {
 // OpenAI-compatible chat APIs (OpenRouter, OpenAI, DeepSeek).
 //
 // Those APIs reject a request with:
-//   "messages[N]: tool messages must include a non-empty string tool_call_id"
+//
+//	"messages[N]: tool messages must include a non-empty string tool_call_id"
 //
 // We produce "tool" messages from several places that have no matching
 // assistant tool_calls entry (shell commands, /roll results, summaries, agent
@@ -1602,40 +1603,12 @@ func executeOneToolCall(tc models.ToolCall) {
 		logger.Error("failed to parse tool call args", "name", tc.FuncCall.Name, "args", tc.FuncCall.Args, "error", err)
 		return
 	}
-	if !tools.IsMissionMode() {
-		if dangerous, label := tools.IsDangerousCommand(tc.FuncCall.Name, args); dangerous {
-			req := tools.ConfirmRequest{
-				ToolName: tc.FuncCall.Name,
-				Command:  args["command"],
-				ToolArgs: args,
-			}
-			approved := tools.RequestConfirmation(req)
-			if !approved {
-				logger.Info("dangerous command denied", "tool", tc.FuncCall.Name, "label", label)
-				chatBody.Messages = append(chatBody.Messages, models.RoleMsg{
-					Role:       cfg.ToolRole,
-					Content:    "[denied] This command requires user confirmation: " + label,
-					ToolCallID: tc.ID,
-				})
-				return
-			}
-		}
-	}
+	// Command policy (veto/confirm) is enforced inside the bash tool itself,
+	// so there is no check to repeat here - see tools/dangerous.go.
 	outputHandler.Writef("\n[yellow::i][tool: %s...][-:-:-]\nargs: %s", tc.FuncCall.Name, tc.FuncCall.Args)
 	toolRunningMode.Store(true)
-	resp, ok := tools.CallToolWithAgent(tc.FuncCall.Name, args)
+	resp, toolErr := tools.CallToolWithAgent(tc.FuncCall.Name, args)
 	toolRunningMode.Store(false)
-	if !ok {
-		if tools.IsMissionMode() {
-			tools.GetCurrentMission().AddFailure()
-		}
-		chatBody.Messages = append(chatBody.Messages, models.RoleMsg{
-			Role:       cfg.ToolRole,
-			Content:    string(resp),
-			ToolCallID: tc.ID,
-		})
-		return
-	}
 	toolMsg := string(resp)
 	logger.Info("llm used a tool call", "tool_name", tc.FuncCall.Name, "args", args, "id", tc.ID, "cwd", tools.GetFSRoot(), "resp", toolMsg)
 	var toolResponseMsg models.RoleMsg
@@ -1725,11 +1698,22 @@ func executeOneToolCall(tc models.ToolCall) {
 			}
 		}
 	}
-	if tools.IsMissionMode() && tools.IsToolError(tc.FuncCall.Name, toolResponseMsg.Content) {
-		tools.GetCurrentMission().AddFailure()
-		logger.Info("mission tool error detected", "tool", tc.FuncCall.Name)
-	} else if tools.IsMissionMode() {
-		tools.GetCurrentMission().ResetFailures()
+	// The returned error, not the rendered text, is the authoritative signal.
+	// IsFailure excludes denials: refusing a destructive command is a correct
+	// outcome, and charging a mission failure for it only teaches the solver to
+	// look for a workaround.
+	if tools.IsMissionMode() {
+		switch {
+		case toolErr == nil:
+			tools.GetCurrentMission().ResetFailures()
+		case models.IsFailure(toolErr):
+			tools.GetCurrentMission().AddFailure()
+			logger.Info("mission tool failure", "tool", tc.FuncCall.Name,
+				"code", models.ErrorCodeOf(toolErr), "error", toolErr)
+		default:
+			// denied: not a failure, but also not a success worth rewarding
+			logger.Info("mission tool denied", "tool", tc.FuncCall.Name, "error", toolErr)
+		}
 	}
 	if tools.IsMissionMode() {
 		tools.GetCurrentMission().IncrementToolCalls()
@@ -1897,56 +1881,15 @@ func findCall(msg, toolCall string) bool {
 			Args: mapToString(lastToolCall.Args),
 		},
 	}
-	// Check for dangerous commands that require user confirmation (skip in mission mode)
-	if !tools.IsMissionMode() {
-		if dangerous, label := tools.IsDangerousCommand(fc.Name, fc.Args); dangerous {
-			req := tools.ConfirmRequest{
-				ToolName: fc.Name,
-				Command:  fc.Args["command"],
-				ToolArgs: fc.Args,
-			}
-			approved := tools.RequestConfirmation(req)
-			if !approved {
-				// User denied or timed out — stop the flow, user takes over
-				toolResponseMsg := models.RoleMsg{
-					Role:       cfg.ToolRole,
-					Content:    "[denied] This command requires user confirmation: " + label,
-					ToolCallID: lastToolCall.ID,
-				}
-				chatBody.Messages = append(chatBody.Messages, toolResponseMsg)
-				lastToolCall.ID = ""
-				logger.Info("dangerous command denied by user", "tool", fc.Name, "label", label)
-				// Don't trigger chatRound — stop here, user takes over
-				return true
-			}
-			// User approved — continue with normal execution
-		}
-	}
+	// Command policy (veto/confirm) is enforced inside the bash tool itself,
+	// so there is no check to repeat here - see tools/dangerous.go.
 	// Show tool call progress indicator before execution
 	argsJSON, _ := json.Marshal(fc.Args)
 	outputHandler.Writef("\n[yellow::i][tool: %s...][-:-:-]\nargs: %s", fc.Name, string(argsJSON))
 	toolRunningMode.Store(true)
-	resp, okT := tools.CallToolWithAgent(fc.Name, fc.Args)
-	if !okT {
-		// Create tool response message with the proper tool_call_id
-		toolResponseMsg := models.RoleMsg{
-			Role:       cfg.ToolRole,
-			Content:    string(resp),
-			ToolCallID: lastToolCall.ID, // Use the stored tool call ID
-		}
-		chatBody.Messages = append(chatBody.Messages, toolResponseMsg)
-		logger.Debug("findCall: added tool not implemented response", "role", toolResponseMsg.Role,
-			"content_len", len(toolResponseMsg.Content), "tool_call_id", toolResponseMsg.ToolCallID)
-		// Clear the stored tool call ID after using it
-		lastToolCall.ID = ""
-		// Trigger the assistant to continue processing with the new tool response
-		// by calling chatRound with empty content to continue the assistant's response
-		crr := &models.ChatRoundReq{
-			Role: cfg.AssistantRole,
-		}
-		// failed to find tool
-		chatRoundChan <- crr
-		return true
+	resp, toolErr := tools.CallToolWithAgent(fc.Name, fc.Args)
+	if toolErr != nil {
+		logger.Debug("findCall: tool reported an error", "tool", fc.Name, "error", toolErr)
 	}
 	toolRunningMode.Store(false)
 	toolMsg := string(resp)

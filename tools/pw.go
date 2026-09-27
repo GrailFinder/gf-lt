@@ -47,15 +47,18 @@ func CheckPlaywright() error {
 	return nil
 }
 
-func pwStart(args map[string]string) []byte {
+func pwStart(args map[string]string) ([]byte, error) {
 	browserStartMu.Lock()
 	defer browserStartMu.Unlock()
 	if browserStarted {
-		return []byte(`{"error": "Browser already started"}`)
+		// Not a failure: start is idempotent, and reporting an already-running
+		// browser as an error used to spend a mission failure for doing the right
+		// thing. (Its mirror, stop-when-stopped, was already a success.)
+		return []byte(`{"success": true, "message": "Browser was already started"}`), nil
 	}
 	if pw == nil {
 		if err := CheckPlaywright(); err != nil {
-			return []byte(fmt.Sprintf(`{"error": "playwright not available: %s"}`, err.Error()))
+			return nil, models.Unavailable("playwright is not available", "install the playwright browsers, or enable Playwright in config")
 		}
 	}
 	var err error
@@ -63,22 +66,22 @@ func pwStart(args map[string]string) []byte {
 		Headless: playwright.Bool(!cfg.PlaywrightDebug),
 	})
 	if err != nil {
-		return []byte(fmt.Sprintf(`{"error": "failed to launch browser: %s"}`, err.Error()))
+		return nil, models.Internal("failed to launch the browser", err)
 	}
 	page, err = browser.NewPage()
 	if err != nil {
 		browser.Close()
-		return []byte(fmt.Sprintf(`{"error": "failed to create page: %s"}`, err.Error()))
+		return nil, models.Internal("failed to open a page", err)
 	}
 	browserStarted = true
-	return []byte(`{"success": true, "message": "Browser started"}`)
+	return []byte(`{"success": true, "message": "Browser started"}`), nil
 }
 
-func pwStop(args map[string]string) []byte {
+func pwStop(args map[string]string) ([]byte, error) {
 	browserStartMu.Lock()
 	defer browserStartMu.Unlock()
 	if !browserStarted {
-		return []byte(`{"success": true, "message": "Browser was not running"}`)
+		return []byte(`{"success": true, "message": "Browser was not running"}`), nil
 	}
 	if page != nil {
 		page.Close()
@@ -89,40 +92,40 @@ func pwStop(args map[string]string) []byte {
 		browser = nil
 	}
 	browserStarted = false
-	return []byte(`{"success": true, "message": "Browser stopped"}`)
+	return []byte(`{"success": true, "message": "Browser stopped"}`), nil
 }
 
-func pwIsRunning(args map[string]string) []byte {
+func pwIsRunning(args map[string]string) ([]byte, error) {
 	if browserStarted {
-		return []byte(`{"running": true, "message": "Browser is running"}`)
+		return []byte(`{"running": true, "message": "Browser is running"}`), nil
 	}
-	return []byte(`{"running": false, "message": "Browser is not running"}`)
+	return []byte(`{"running": false, "message": "Browser is not running"}`), nil
 }
 
-func pwNavigate(args map[string]string) []byte {
+func pwNavigate(args map[string]string) ([]byte, error) {
 	url, ok := args["url"]
 	if !ok || url == "" {
-		return []byte(`{"error": "url not provided"}`)
+		return nil, models.InvalidArgs("url is required", "browser go <url>")
 	}
 	if !browserStarted || page == nil {
-		return []byte(`{"error": "Browser not started. Call pw_start first."}`)
+		return nil, browserNotStarted()
 	}
 	_, err := page.Goto(url)
 	if err != nil {
-		return []byte(fmt.Sprintf(`{"error": "failed to navigate: %s"}`, err.Error()))
+		return nil, pwCallErr("navigate", err)
 	}
 	title, _ := page.Title()
 	pageURL := page.URL()
-	return []byte(fmt.Sprintf(`{"success": true, "title": "%s", "url": "%s"}`, title, pageURL))
+	return []byte(fmt.Sprintf(`{"success": true, "title": "%s", "url": "%s"}`, title, pageURL)), nil
 }
 
-func pwClick(args map[string]string) []byte {
+func pwClick(args map[string]string) ([]byte, error) {
 	selector, ok := args["selector"]
 	if !ok || selector == "" {
-		return []byte(`{"error": "selector not provided"}`)
+		return nil, models.InvalidArgs("selector is required", "pass a CSS selector, e.g. #submit or .result-row")
 	}
 	if !browserStarted || page == nil {
-		return []byte(`{"error": "Browser not started. Call pw_start first."}`)
+		return nil, browserNotStarted()
 	}
 	index := 0
 	if args["index"] != "" {
@@ -135,29 +138,29 @@ func pwClick(args map[string]string) []byte {
 	locator := page.Locator(selector)
 	count, err := locator.Count()
 	if err != nil {
-		return []byte(fmt.Sprintf(`{"error": "failed to find elements: %s"}`, err.Error()))
+		return nil, models.Internal("could not query the page for elements", err)
 	}
 	if index >= count {
-		return []byte(fmt.Sprintf(`{"error": "Element not found at index %d (found %d elements)"}`, index, count))
+		return nil, models.NotFound(fmt.Sprintf("no element at index %d (found %d)", index, count), "use an index within range, or omit it to click the first match")
 	}
 	err = locator.Nth(index).Click()
 	if err != nil {
-		return []byte(fmt.Sprintf(`{"error": "failed to click: %s"}`, err.Error()))
+		return nil, pwCallErr("click", err)
 	}
-	return []byte(`{"success": true, "message": "Clicked element"}`)
+	return []byte(`{"success": true, "message": "Clicked element"}`), nil
 }
 
-func pwFill(args map[string]string) []byte {
+func pwFill(args map[string]string) ([]byte, error) {
 	selector, ok := args["selector"]
 	if !ok || selector == "" {
-		return []byte(`{"error": "selector not provided"}`)
+		return nil, models.InvalidArgs("selector is required", "pass a CSS selector, e.g. #submit or .result-row")
 	}
 	text := args["text"]
 	if text == "" {
 		text = ""
 	}
 	if !browserStarted || page == nil {
-		return []byte(`{"error": "Browser not started. Call pw_start first."}`)
+		return nil, browserNotStarted()
 	}
 	index := 0
 	if args["index"] != "" {
@@ -170,50 +173,67 @@ func pwFill(args map[string]string) []byte {
 	locator := page.Locator(selector)
 	count, err := locator.Count()
 	if err != nil {
-		return []byte(fmt.Sprintf(`{"error": "failed to find elements: %s"}`, err.Error()))
+		return nil, models.Internal("could not query the page for elements", err)
 	}
 	if index >= count {
-		return []byte(fmt.Sprintf(`{"error": "Element not found at index %d"}`, index))
+		return nil, models.NotFound(fmt.Sprintf("no element at index %d", index), "omit the index to click the first match")
 	}
 	err = locator.Nth(index).Fill(text)
 	if err != nil {
-		return []byte(fmt.Sprintf(`{"error": "failed to fill: %s"}`, err.Error()))
+		return nil, pwCallErr("fill", err)
 	}
-	return []byte(`{"success": true, "message": "Filled input"}`)
+	return []byte(`{"success": true, "message": "Filled input"}`), nil
 }
 
-func pwExtractText(args map[string]string) []byte {
+func pwExtractText(args map[string]string) ([]byte, error) {
 	selector := args["selector"]
 	if selector == "" {
 		selector = "body"
 	}
 	if !browserStarted || page == nil {
-		return []byte(`{"error": "Browser not started. Call pw_start first."}`)
+		return nil, browserNotStarted()
 	}
 	locator := page.Locator(selector)
 	count, err := locator.Count()
 	if err != nil {
-		return []byte(fmt.Sprintf(`{"error": "failed to find elements: %s"}`, err.Error()))
+		return nil, models.Internal("could not query the page for elements", err)
 	}
 	if count == 0 {
-		return []byte(`{"error": "No elements found"}`)
+		return nil, models.NotFound("no elements matched", "check the selector, or take a screenshot to see the current page")
 	}
 	if selector == "body" {
 		text, err := page.Locator("body").TextContent()
 		if err != nil {
-			return []byte(fmt.Sprintf(`{"error": "failed to get text: %s"}`, err.Error()))
+			return nil, pwCallErr("read text", err)
 		}
-		return []byte(fmt.Sprintf(`{"text": "%s"}`, text))
+		return []byte(fmt.Sprintf(`{"text": "%s"}`, text)), nil
 	}
+	// A node can vanish between Count() and TextContent() on a live page, so
+	// partial extraction is the normal case, not an edge case. The extracted
+	// text is returned alongside the error rather than being discarded - which
+	// is the whole reason the handler signature carries both.
 	var texts []string
+	var failures int
 	for i := 0; i < count; i++ {
 		text, err := locator.Nth(i).TextContent()
 		if err != nil {
+			failures++
+			if logger != nil {
+				logger.Debug("pwExtractText: element unreadable", "index", i, "error", err)
+			}
 			continue
 		}
 		texts = append(texts, text)
 	}
-	return []byte(fmt.Sprintf(`{"text": "%s"}`, joinLines(texts)))
+	out := []byte(fmt.Sprintf(`{"text": "%s"}`, joinLines(texts)))
+	if failures > 0 {
+		return out, &models.ToolError{
+			Code: models.CodeConflict,
+			Msg:  fmt.Sprintf("extracted %d of %d elements; %d could not be read", len(texts), count, failures),
+			Hint: "the text above is what was readable; the page may have changed, so re-read before relying on it",
+		}
+	}
+	return out, nil
 }
 
 func joinLines(lines []string) string {
@@ -227,11 +247,11 @@ func joinLines(lines []string) string {
 	return sb.String()
 }
 
-func pwScreenshot(args map[string]string) []byte {
+func pwScreenshot(args map[string]string) ([]byte, error) {
 	selector := args["selector"]
 	fullPage := args["full_page"] == "true"
 	if !browserStarted || page == nil {
-		return []byte(`{"error": "Browser not started. Call pw_start first."}`)
+		return nil, browserNotStarted()
 	}
 	path := fmt.Sprintf("/tmp/pw_screenshot_%d.png", os.Getpid())
 	var err error
@@ -247,16 +267,16 @@ func pwScreenshot(args map[string]string) []byte {
 		})
 	}
 	if err != nil {
-		return []byte(fmt.Sprintf(`{"error": "failed to take screenshot: %s"}`, err.Error()))
+		return nil, pwCallErr("take a screenshot", err)
 	}
-	return []byte(fmt.Sprintf(`{"path": "%s"}`, path))
+	return []byte(fmt.Sprintf(`{"path": "%s"}`, path)), nil
 }
 
-func pwScreenshotAndView(args map[string]string) []byte {
+func pwScreenshotAndView(args map[string]string) ([]byte, error) {
 	selector := args["selector"]
 	fullPage := args["full_page"] == "true"
 	if !browserStarted || page == nil {
-		return []byte(`{"error": "Browser not started. Call pw_start first."}`)
+		return nil, browserNotStarted()
 	}
 	path := fmt.Sprintf("/tmp/pw_screenshot_%d.png", os.Getpid())
 	var err error
@@ -272,11 +292,11 @@ func pwScreenshotAndView(args map[string]string) []byte {
 		})
 	}
 	if err != nil {
-		return []byte(fmt.Sprintf(`{"error": "failed to take screenshot: %s"}`, err.Error()))
+		return nil, pwCallErr("take a screenshot", err)
 	}
 	dataURL, err := models.CreateImageURLFromPath(path)
 	if err != nil {
-		return []byte(fmt.Sprintf(`{"error": "failed to create image URL: %s"}`, err.Error()))
+		return nil, models.Internal("failed to encode the screenshot", err)
 	}
 	resp := models.MultimodalToolResp{
 		Type: "multimodal_content",
@@ -287,18 +307,18 @@ func pwScreenshotAndView(args map[string]string) []byte {
 	}
 	jsonResult, err := json.Marshal(resp)
 	if err != nil {
-		return []byte(fmt.Sprintf(`{"error": "failed to marshal result: %s"}`, err.Error()))
+		return nil, models.Internal("failed to encode the screenshot result", err)
 	}
-	return jsonResult
+	return jsonResult, nil
 }
 
-func pwWaitForSelector(args map[string]string) []byte {
+func pwWaitForSelector(args map[string]string) ([]byte, error) {
 	selector, ok := args["selector"]
 	if !ok || selector == "" {
-		return []byte(`{"error": "selector not provided"}`)
+		return nil, models.InvalidArgs("selector is required", "pass a CSS selector, e.g. #submit or .result-row")
 	}
 	if !browserStarted || page == nil {
-		return []byte(`{"error": "Browser not started. Call pw_start first."}`)
+		return nil, browserNotStarted()
 	}
 	timeout := 30000
 	if args["timeout"] != "" {
@@ -313,30 +333,30 @@ func pwWaitForSelector(args map[string]string) []byte {
 		Timeout: playwright.Float(float64(timeout)),
 	})
 	if err != nil {
-		return []byte(fmt.Sprintf(`{"error": "element not found: %s"}`, err.Error()))
+		return nil, models.NotFound("the element was not found on the page", "re-read the page with `browser text` and retry")
 	}
-	return []byte(`{"success": true, "message": "Element found"}`)
+	return []byte(`{"success": true, "message": "Element found"}`), nil
 }
 
-func pwDrag(args map[string]string) []byte {
+func pwDrag(args map[string]string) ([]byte, error) {
 	x1, ok := args["x1"]
 	if !ok {
-		return []byte(`{"error": "x1 not provided"}`)
+		return nil, models.InvalidArgs("x1 is required", "")
 	}
 	y1, ok := args["y1"]
 	if !ok {
-		return []byte(`{"error": "y1 not provided"}`)
+		return nil, models.InvalidArgs("y1 is required", "")
 	}
 	x2, ok := args["x2"]
 	if !ok {
-		return []byte(`{"error": "x2 not provided"}`)
+		return nil, models.InvalidArgs("x2 is required", "")
 	}
 	y2, ok := args["y2"]
 	if !ok {
-		return []byte(`{"error": "y2 not provided"}`)
+		return nil, models.InvalidArgs("y2 is required", "")
 	}
 	if !browserStarted || page == nil {
-		return []byte(`{"error": "Browser not started. Call pw_start first."}`)
+		return nil, browserNotStarted()
 	}
 	var fx1, fy1, fx2, fy2 float64
 	if parsedX1, err := strconv.ParseFloat(x1, 64); err != nil {
@@ -362,34 +382,34 @@ func pwDrag(args map[string]string) []byte {
 	mouse := page.Mouse()
 	err := mouse.Move(fx1, fy1)
 	if err != nil {
-		return []byte(fmt.Sprintf(`{"error": "failed to move mouse: %s"}`, err.Error()))
+		return nil, pwCallErr("move the mouse", err)
 	}
 	err = mouse.Down()
 	if err != nil {
-		return []byte(fmt.Sprintf(`{"error": "failed to mouse down: %s"}`, err.Error()))
+		return nil, pwCallErr("press the mouse button", err)
 	}
 	err = mouse.Move(fx2, fy2)
 	if err != nil {
-		return []byte(fmt.Sprintf(`{"error": "failed to move mouse: %s"}`, err.Error()))
+		return nil, pwCallErr("move the mouse", err)
 	}
 	err = mouse.Up()
 	if err != nil {
-		return []byte(fmt.Sprintf(`{"error": "failed to mouse up: %s"}`, err.Error()))
+		return nil, pwCallErr("release the mouse button", err)
 	}
-	return []byte(fmt.Sprintf(`{"success": true, "message": "Dragged from (%s,%s) to (%s,%s)"}`, x1, y1, x2, y2))
+	return []byte(fmt.Sprintf(`{"success": true, "message": "Dragged from (%s,%s) to (%s,%s)"}`, x1, y1, x2, y2)), nil
 }
 
-func pwDragBySelector(args map[string]string) []byte {
+func pwDragBySelector(args map[string]string) ([]byte, error) {
 	fromSelector, ok := args["fromSelector"]
 	if !ok || fromSelector == "" {
-		return []byte(`{"error": "fromSelector not provided"}`)
+		return nil, models.InvalidArgs("fromSelector is required", "")
 	}
 	toSelector, ok := args["toSelector"]
 	if !ok || toSelector == "" {
-		return []byte(`{"error": "toSelector not provided"}`)
+		return nil, models.InvalidArgs("toSelector is required", "")
 	}
 	if !browserStarted || page == nil {
-		return []byte(`{"error": "Browser not started. Call pw_start first."}`)
+		return nil, browserNotStarted()
 	}
 	fromJS := fmt.Sprintf(`
 		function getCenter(selector) {
@@ -411,95 +431,95 @@ func pwDragBySelector(args map[string]string) []byte {
 	`, toSelector)
 	fromResult, err := page.Evaluate(fromJS)
 	if err != nil {
-		return []byte(fmt.Sprintf(`{"error": "failed to get from element: %s"}`, err.Error()))
+		return nil, pwCallErr("resolve the drag source", err)
 	}
 	fromMap, ok := fromResult.(map[string]interface{})
 	if !ok || fromMap == nil {
-		return []byte(fmt.Sprintf(`{"error": "from selector '%s' not found"}`, fromSelector))
+		return nil, models.NotFound(fmt.Sprintf("drag source %q matched nothing", fromSelector), "check the selector with `browser html`")
 	}
 	fromX := fromMap["x"].(float64)
 	fromY := fromMap["y"].(float64)
 	toResult, err := page.Evaluate(toJS)
 	if err != nil {
-		return []byte(fmt.Sprintf(`{"error": "failed to get to element: %s"}`, err.Error()))
+		return nil, pwCallErr("resolve the drag target", err)
 	}
 	toMap, ok := toResult.(map[string]interface{})
 	if !ok || toMap == nil {
-		return []byte(fmt.Sprintf(`{"error": "to selector '%s' not found"}`, toSelector))
+		return nil, models.NotFound(fmt.Sprintf("drag target %q matched nothing", toSelector), "check the selector with `browser html`")
 	}
 	toX := toMap["x"].(float64)
 	toY := toMap["y"].(float64)
 	mouse := page.Mouse()
 	err = mouse.Move(fromX, fromY)
 	if err != nil {
-		return []byte(fmt.Sprintf(`{"error": "failed to move mouse: %s"}`, err.Error()))
+		return nil, pwCallErr("move the mouse", err)
 	}
 	err = mouse.Down()
 	if err != nil {
-		return []byte(fmt.Sprintf(`{"error": "failed to mouse down: %s"}`, err.Error()))
+		return nil, pwCallErr("press the mouse button", err)
 	}
 	err = mouse.Move(toX, toY)
 	if err != nil {
-		return []byte(fmt.Sprintf(`{"error": "failed to move mouse: %s"}`, err.Error()))
+		return nil, pwCallErr("move the mouse", err)
 	}
 	err = mouse.Up()
 	if err != nil {
-		return []byte(fmt.Sprintf(`{"error": "failed to mouse up: %s"}`, err.Error()))
+		return nil, pwCallErr("release the mouse button", err)
 	}
 	msg := fmt.Sprintf("Dragged from %s (%.0f,%.0f) to %s (%.0f,%.0f)", fromSelector, fromX, fromY, toSelector, toX, toY)
-	return []byte(fmt.Sprintf(`{"success": true, "message": "%s"}`, msg))
+	return []byte(fmt.Sprintf(`{"success": true, "message": "%s"}`, msg)), nil
 }
 
 // nolint:unused
-func pwClickAt(args map[string]string) []byte {
+func pwClickAt(args map[string]string) ([]byte, error) {
 	x, ok := args["x"]
 	if !ok {
-		return []byte(`{"error": "x not provided"}`)
+		return nil, models.InvalidArgs("x is required", "")
 	}
 	y, ok := args["y"]
 	if !ok {
-		return []byte(`{"error": "y not provided"}`)
+		return nil, models.InvalidArgs("y is required", "")
 	}
 	if !browserStarted || page == nil {
-		return []byte(`{"error": "Browser not started. Call pw_start first."}`)
+		return nil, browserNotStarted()
 	}
 	fx, err := strconv.ParseFloat(x, 64)
 	if err != nil {
-		return []byte(fmt.Sprintf(`{"error": "failed to parse x: %s"}`, err.Error()))
+		return nil, models.InvalidArgs(fmt.Sprintf("x is not a number: %s", err), "pass a numeric coordinate")
 	}
 	fy, err := strconv.ParseFloat(y, 64)
 	if err != nil {
-		return []byte(fmt.Sprintf(`{"error": "failed to parse y: %s"}`, err.Error()))
+		return nil, models.InvalidArgs(fmt.Sprintf("y is not a number: %s", err), "pass a numeric coordinate")
 	}
 	mouse := page.Mouse()
 	err = mouse.Click(fx, fy)
 	if err != nil {
-		return []byte(fmt.Sprintf(`{"error": "failed to click: %s"}`, err.Error()))
+		return nil, pwCallErr("click", err)
 	}
-	return []byte(fmt.Sprintf(`{"success": true, "message": "Clicked at (%s,%s)"}`, x, y))
+	return []byte(fmt.Sprintf(`{"success": true, "message": "Clicked at (%s,%s)"}`, x, y)), nil
 }
 
-func pwGetHTML(args map[string]string) []byte {
+func pwGetHTML(args map[string]string) ([]byte, error) {
 	selector := args["selector"]
 	if selector == "" {
 		selector = "body"
 	}
 	if !browserStarted || page == nil {
-		return []byte(`{"error": "Browser not started. Call pw_start first."}`)
+		return nil, browserNotStarted()
 	}
 	locator := page.Locator(selector)
 	count, err := locator.Count()
 	if err != nil {
-		return []byte(fmt.Sprintf(`{"error": "failed to find elements: %s"}`, err.Error()))
+		return nil, models.Internal("could not query the page for elements", err)
 	}
 	if count == 0 {
-		return []byte(`{"error": "No elements found"}`)
+		return nil, models.NotFound("no elements matched", "check the selector, or take a screenshot to see the current page")
 	}
 	html, err := locator.First().InnerHTML()
 	if err != nil {
-		return []byte(fmt.Sprintf(`{"error": "failed to get HTML: %s"}`, err.Error()))
+		return nil, pwCallErr("read HTML", err)
 	}
-	return []byte(fmt.Sprintf(`{"html": %s}`, jsonString(html)))
+	return []byte(fmt.Sprintf(`{"html": %s}`, jsonString(html))), nil
 }
 
 type DOMElement struct {
@@ -574,42 +594,42 @@ func elementToDOM(el playwright.Locator) (DOMElement, error) {
 	return dom, nil
 }
 
-func pwGetDOM(args map[string]string) []byte {
+func pwGetDOM(args map[string]string) ([]byte, error) {
 	selector := args["selector"]
 	if selector == "" {
 		selector = "body"
 	}
 	if !browserStarted || page == nil {
-		return []byte(`{"error": "Browser not started. Call pw_start first."}`)
+		return nil, browserNotStarted()
 	}
 	locator := page.Locator(selector)
 	count, err := locator.Count()
 	if err != nil {
-		return []byte(fmt.Sprintf(`{"error": "failed to find elements: %s"}`, err.Error()))
+		return nil, models.Internal("could not query the page for elements", err)
 	}
 	if count == 0 {
-		return []byte(`{"error": "No elements found"}`)
+		return nil, models.NotFound("no elements matched", "check the selector, or take a screenshot to see the current page")
 	}
 	dom, err := elementToDOM(locator.First())
 	if err != nil {
-		return []byte(fmt.Sprintf(`{"error": "failed to get DOM: %s"}`, err.Error()))
+		return nil, pwCallErr("read the DOM", err)
 	}
 	data, err := json.Marshal(dom)
 	if err != nil {
-		return []byte(fmt.Sprintf(`{"error": "failed to marshal DOM: %s"}`, err.Error()))
+		return nil, models.Internal("failed to encode the DOM", err)
 	}
-	return []byte(fmt.Sprintf(`{"dom": %s}`, string(data)))
+	return []byte(fmt.Sprintf(`{"dom": %s}`, string(data))), nil
 }
 
 // nolint:unused
-func pwSearchElements(args map[string]string) []byte {
+func pwSearchElements(args map[string]string) ([]byte, error) {
 	text := args["text"]
 	selector := args["selector"]
 	if text == "" && selector == "" {
-		return []byte(`{"error": "text or selector not provided"}`)
+		return nil, models.InvalidArgs("text or selector is required", "")
 	}
 	if !browserStarted || page == nil {
-		return []byte(`{"error": "Browser not started. Call pw_start first."}`)
+		return nil, browserNotStarted()
 	}
 	var locator playwright.Locator
 	if text != "" {
@@ -619,10 +639,10 @@ func pwSearchElements(args map[string]string) []byte {
 	}
 	count, err := locator.Count()
 	if err != nil {
-		return []byte(fmt.Sprintf(`{"error": "failed to search elements: %s"}`, err.Error()))
+		return nil, models.Internal("could not search the page", err)
 	}
 	if count == 0 {
-		return []byte(`{"elements": []}`)
+		return []byte(`{"elements": []}`), nil
 	}
 	var results []map[string]string
 	for i := 0; i < count; i++ {
@@ -639,12 +659,57 @@ func pwSearchElements(args map[string]string) []byte {
 	}
 	data, err := json.Marshal(results)
 	if err != nil {
-		return []byte(fmt.Sprintf(`{"error": "failed to marshal results: %s"}`, err.Error()))
+		return nil, models.Internal("failed to encode the search results", err)
 	}
-	return []byte(fmt.Sprintf(`{"elements": %s}`, string(data)))
+	return []byte(fmt.Sprintf(`{"elements": %s}`, string(data))), nil
 }
 
 func jsonString(s string) string {
 	b, _ := json.Marshal(s)
 	return string(b)
+}
+
+// browserNotStarted is the "the call was well-formed but the browser is not
+// running" error. It used to be the same hand-written string in thirteen places,
+// telling the model to run `pw_start` - a command that does not exist, not as a
+// tool, not as a bash verb, not as a browser action. The verb is `start`.
+//
+// It is a models.Conflict rather than invalid_args: nothing about the call was
+// malformed, the world was simply not in the state it requires, and the fix is
+// one tool call away.
+func browserNotStarted() *models.ToolError {
+	return &models.ToolError{
+		Code: models.CodeConflict,
+		Msg:  "the browser is not running",
+		Hint: "call `browser start` first",
+	}
+}
+
+// pwCallErr classifies a failed Playwright interaction. The arguments were fine
+// and the browser was up, so this is a models.Conflict: the page was not in the state
+// the call needed. Playwright's own message is kept as the cause for the log and
+// is deliberately not shown to the model, which gets the recovery step instead.
+func pwCallErr(what string, err error) *models.ToolError {
+	return &models.ToolError{
+		Code: models.CodeConflict,
+		Msg:  "failed to " + what,
+		Hint: "re-read the page with `browser text` or `browser html` to see its current state, then retry",
+		Err:  err,
+	}
+}
+
+// appendMultimodalErrorPart embeds a models.ToolError as a leading text part of a
+// multimodal payload, keeping the existing parts (notably the image) intact.
+//
+// This is the option-(b) arrangement: a multimodal tool result is recognised by
+// its prefix downstream, so a prepended text header would make the image
+// unreadable. The error therefore travels inside the payload where the model
+// reads it, while the handler still returns a real error to the host.
+func appendMultimodalErrorPart(payload []byte, err error) ([]byte, error) {
+	var resp models.MultimodalToolResp
+	if uerr := json.Unmarshal(payload, &resp); uerr != nil || resp.Type != "multimodal_content" {
+		return payload, err
+	}
+	parts := append([]map[string]string{models.MultimodalErrorPart(err)}, resp.Parts...)
+	return json.Marshal(models.MultimodalToolResp{Type: resp.Type, Parts: parts})
 }

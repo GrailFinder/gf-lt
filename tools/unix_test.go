@@ -50,7 +50,7 @@ func TestUnixCatMultipleFiles(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := ExecChain(tt.cmd)
+			result, _ := ExecChain(tt.cmd)
 			if !tt.check(result) {
 				t.Errorf("check failed for %q, got %q", tt.cmd, result)
 			}
@@ -102,7 +102,7 @@ func TestUnixGrepPatternQuoting(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := ExecChain(tt.cmd)
+			result, _ := ExecChain(tt.cmd)
 			if !tt.check(result) {
 				t.Errorf("check failed for %q, got %q", tt.cmd, result)
 			}
@@ -119,7 +119,7 @@ func TestUnixForLoop(t *testing.T) {
 	os.WriteFile(filepath.Join(tmpDir, "cat.txt"), []byte("I have a cat\n"), 0644)
 	os.WriteFile(filepath.Join(tmpDir, "red.txt"), []byte("red color\n"), 0644)
 
-	result := ExecChain("cd " + tmpDir + " && for f in *.txt; do echo \"file: $f\"; done")
+	result, _ := ExecChain("cd " + tmpDir + " && for f in *.txt; do echo \"file: $f\"; done")
 	if result == "" {
 		t.Error("empty result from for loop execution")
 	}
@@ -181,7 +181,7 @@ func TestUnixComplexPiping(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := ExecChain(tt.cmd)
+			result, _ := ExecChain(tt.cmd)
 			if !tt.check(result) {
 				t.Errorf("check failed for %q, got %q", tt.cmd, result)
 			}

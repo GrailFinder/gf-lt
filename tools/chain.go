@@ -2,7 +2,9 @@ package tools
 
 import (
 	"errors"
+
 	"fmt"
+	"gf-lt/models"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -128,11 +130,16 @@ func ParseChain(input string) []Segment {
 }
 
 // ExecChain executes a command string with pipe/chaining support.
-// Returns the combined output of all commands.
-func ExecChain(command string) string {
+//
+// Returns the combined output of all commands and, separately, an error when the
+// chain failed. The two are orthogonal: a failing `go test` or `git` still
+// produces output that is the whole point of the call, and the error says how the
+// command ended. This replaces the old "FAIL" substring heuristic that IsToolError
+// used to run over the rendered text.
+func ExecChain(command string) (string, error) {
 	segments := ParseChain(command)
 	if len(segments) == 0 {
-		return "[error] empty command"
+		return "", models.InvalidArgs("empty command", "")
 	}
 
 	// Check if we have a redirect
@@ -150,7 +157,7 @@ func ExecChain(command string) string {
 	if redirectIdx >= 0 && redirectIdx+1 < len(segments) {
 		targetPath, err := resolveRedirectPath(segments[redirectIdx+1].Raw)
 		if err != nil {
-			return fmt.Sprintf("[error] redirect: %v", err)
+			return "", models.InvalidArgs(fmt.Sprintf("cannot redirect to that path: %v", err), "redirect targets must stay inside the workspace root")
 		}
 		redirectTo = targetPath
 		redirectCmd := segments[redirectIdx].Raw
@@ -170,10 +177,11 @@ func ExecChain(command string) string {
 		var lastErr error
 		lastOutput, lastErr = execSingle(redirectCmd, "")
 		if lastErr != nil {
-			return fmt.Sprintf("[error] redirect: %v", lastErr)
+			return "", &models.ToolError{Code: models.CodeConflict, Msg: "redirect source command failed",
+				Hint: "the source command exited non-zero; fix it before redirecting", Err: lastErr}
 		}
 		if err := writeFile(redirectTo, lastOutput, isAppend); err != nil {
-			return fmt.Sprintf("[error] redirect: %v", err)
+			return "", models.Internal("redirect write failed", err)
 		}
 		mode := "Wrote"
 		if isAppend {
@@ -184,7 +192,7 @@ func ExecChain(command string) string {
 
 		// If no remaining segments or no chaining, just return the write confirmation
 		if len(segments) == 0 || !hasChainingAfterRedirect {
-			return redirectResult
+			return redirectResult, nil
 		}
 
 		// There are remaining commands after the redirect
@@ -197,9 +205,9 @@ func ExecChain(command string) string {
 				collected = append(collected, out)
 			}
 		}
-		return strings.Join(collected, "\n")
+		return strings.Join(collected, "\n"), nil
 	} else if redirectIdx >= 0 && redirectIdx+1 >= len(segments) {
-		return "[error] redirect: target file required"
+		return "", models.InvalidArgs("redirect: target file required", "write it as: command > file")
 	}
 
 	var collected []string
@@ -235,17 +243,28 @@ func ExecChain(command string) string {
 	if redirectTo != "" {
 		output := lastOutput
 		if err := writeFile(redirectTo, output, isAppend); err != nil {
-			return fmt.Sprintf("[error] redirect: %v", err)
+			return "", models.Internal("redirect write failed", err)
 		}
 		mode := "Wrote"
 		if isAppend {
 			mode = "Appended"
 		}
 		size := humanSizeChain(int64(len(output)))
-		return fmt.Sprintf("%s %s → %s", mode, size, filepath.Base(redirectTo))
+		return fmt.Sprintf("%s %s → %s", mode, size, filepath.Base(redirectTo)), nil
 	}
 
-	return strings.Join(collected, "\n")
+	out := strings.Join(collected, "\n")
+	if lastErr != nil {
+		// A non-zero exit is a real failure, and the output explaining it is
+		// usually the reason the model ran the command at all.
+		return out, &models.ToolError{
+			Code: models.CodeConflict,
+			Msg:  "command exited with a non-zero status",
+			Hint: "the output above reports what failed; fix that and re-run",
+			Err:  lastErr,
+		}
+	}
+	return out, nil
 }
 
 // execSingle executes a single command (with arguments) and returns output and error.
@@ -318,30 +337,31 @@ func tokenize(input string) []string {
 // All other commands (find, sed, grep, cat, ls, etc.) fall through to exec.Command
 // for full Unix flag support and pipe chaining.
 func execBuiltin(name string, args []string, stdin string) (string, error) {
-	var result string
 	switch name {
 	case "cd":
-		result = FsCd(args, stdin)
+		return FsCd(args, stdin)
 	case "go":
 		if len(args) == 0 {
-			return "[error] usage: go <subcommand> [options]", nil
+			return "", models.InvalidArgs("usage: go <subcommand> [options]", "")
 		}
 		cmd := exec.Command("go", args...)
 		cmd.Dir = cfg.FilePickerDir
 		output, err := cmd.CombinedOutput()
 		if err != nil {
-			return fmt.Sprintf("[error] go %s: %v\n%s", args[0], err, string(output)), nil
+			// Keep the compiler output: it is the whole point of the call.
+			return string(output), &models.ToolError{
+				Code: models.CodeConflict,
+				Msg:  fmt.Sprintf("go %s failed", args[0]),
+				Hint: "the compiler output above names the file and line to fix",
+				Err:  err,
+			}
 		}
 		return string(output), nil
 	case "git":
-		result = FsGit(args, stdin)
+		return FsGit(args, stdin)
 	default:
 		return "", errors.New("not a builtin")
 	}
-	if strings.HasPrefix(result, "[error]") {
-		return result, errors.New(result)
-	}
-	return result, nil
 }
 
 // resolveRedirectPath resolves the target path for a redirect operator

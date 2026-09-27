@@ -16,8 +16,8 @@ import (
 )
 
 var (
-	currentMission    *mission.Mission
-	pmAgent           *agent.AgentClient
+	currentMission   *mission.Mission
+	pmAgent          *agent.AgentClient
 	MissionBaseTools []models.Tool
 )
 
@@ -193,7 +193,7 @@ func SummarizeChat(messages []models.RoleMsg) (string, error) {
 			"4. What the current state is (branch, files changed, tests passing)\n"+
 			"5. What remains to be done\n\n"+
 			"Preserve file paths, function names, and error messages. Be specific, not generic.\n\n%s",
-			conversationText)
+		conversationText)
 
 	body, err := ag.FormFirstMsg(sysPrompt, userPrompt)
 	if err != nil {
@@ -206,19 +206,19 @@ func SummarizeChat(messages []models.RoleMsg) (string, error) {
 	return string(resp), nil
 }
 
-func moveIssueTool(args map[string]string) []byte {
+func moveIssueTool(args map[string]string) ([]byte, error) {
 	if currentMission == nil {
-		return []byte(`{"error": "No active mission"}`)
+		return nil, models.Unavailable("no active mission", "these tools only work in mission mode (--mission / --mission-tools)")
 	}
 
 	status := args["status"]
 	if status == "" {
-		return []byte(`{"error": "status is required (review, done, archive)"}`)
+		return nil, models.InvalidArgs("status is required (review, done, archive)", "")
 	}
 
 	// Don't allow overwriting a completed mission
 	if currentMission.Status == mission.StatusSuccess {
-		return []byte(fmt.Sprintf(`{"error": "Mission is already completed (StatusSuccess), cannot move", "current_status": "%s"}`, currentMission.Status))
+		return nil, models.Conflict(fmt.Sprintf("mission is already completed (status %q) and cannot be moved further", currentMission.Status), "read the issue to see its final state")
 	}
 
 	var targetStatus mission.IssueStatus
@@ -230,28 +230,28 @@ func moveIssueTool(args map[string]string) []byte {
 	case "archive":
 		targetStatus = mission.StatusArchive
 	default:
-		return []byte(fmt.Sprintf(`{"error": "Invalid status: %s. Use: review, done, archive"}`, status))
+		return nil, models.InvalidArgs(fmt.Sprintf("invalid status: %s", status), "use: review, done, archive")
 	}
 
 	if err := currentMission.MoveToStatus(targetStatus); err != nil {
-		return []byte(fmt.Sprintf(`{"error": "%v"}`, err))
+		return nil, models.Internal("failed to save checkpoint", err)
 	}
 
 	if err := currentMission.SaveCheckpoint("mission-checkpoint.json"); err != nil {
 		currentMission.Log("Warning: failed to save checkpoint after move_issue: %v", err)
 	}
 
-	return []byte(fmt.Sprintf(`{"success": true, "status": "%s", "issue_id": "%s"}`, status, currentMission.Issue.ID))
+	return []byte(fmt.Sprintf(`{"success": true, "status": "%s", "issue_id": "%s"}`, status, currentMission.Issue.ID)), nil
 }
 
-func createIssueTool(args map[string]string) []byte {
+func createIssueTool(args map[string]string) ([]byte, error) {
 	id := args["id"]
 	title := args["title"]
 	description := args["description"]
 	branchName := args["branch_name"]
 
 	if title == "" {
-		return []byte(`{"error": "title is required"}`)
+		return nil, models.InvalidArgs("title is required", "")
 	}
 
 	if id == "" {
@@ -323,12 +323,12 @@ func createIssueTool(args map[string]string) []byte {
 
 	openDir := filepath.Join(issuesDir, string(mission.StatusOpen))
 	if err := os.MkdirAll(openDir, 0755); err != nil {
-		return []byte(fmt.Sprintf(`{"error": "Failed to create directory: %v"}`, err))
+		return nil, models.Internal("failed to create the issues directory", err)
 	}
 
 	path := filepath.Join(openDir, id+".json")
 	if err := mission.SaveIssue(issue, path); err != nil {
-		return []byte(fmt.Sprintf(`{"error": "Failed to save issue: %v"}`, err))
+		return nil, models.Internal("failed to save issue", err)
 	}
 
 	if currentMission != nil {
@@ -337,12 +337,12 @@ func createIssueTool(args map[string]string) []byte {
 		}
 	}
 
-	return []byte(fmt.Sprintf(`{"success": true, "issue_id": "%s", "path": "%s"}`, id, path))
+	return []byte(fmt.Sprintf(`{"success": true, "issue_id": "%s", "path": "%s"}`, id, path)), nil
 }
 
-func createPRTool(args map[string]string) []byte {
+func createPRTool(args map[string]string) ([]byte, error) {
 	if currentMission == nil {
-		return []byte(`{"error": "No active mission"}`)
+		return nil, models.Unavailable("no active mission", "these tools only work in mission mode (--mission / --mission-tools)")
 	}
 
 	title := args["title"]
@@ -428,9 +428,9 @@ func createPRTool(args map[string]string) []byte {
 
 	result := map[string]interface{}{
 		"success":     true,
-		"pr_title":     title,
-		"branch_name":  branchName,
-		"issue_id":     currentMission.Issue.ID,
+		"pr_title":    title,
+		"branch_name": branchName,
+		"issue_id":    currentMission.Issue.ID,
 		"base_branch": baseBranch,
 		"pr_body":     body,
 		"pr_file":     prFile,
@@ -441,7 +441,11 @@ func createPRTool(args map[string]string) []byte {
 
 	currentMission.Status = mission.StatusSuccess
 
-	return []byte(mustMarshalJSON(result))
+	payload, err := mustMarshalJSON(result)
+	if err != nil {
+		return nil, err
+	}
+	return []byte(payload), nil
 }
 
 func getCurrentBranch(projectPath string) (string, error) {
@@ -458,9 +462,9 @@ func getCurrentBranch(projectPath string) (string, error) {
 	return branch, nil
 }
 
-func pmConsultTool(args map[string]string) []byte {
+func pmConsultTool(args map[string]string) ([]byte, error) {
 	if currentMission == nil {
-		return []byte(`{"error": "No active mission"}`)
+		return nil, models.Unavailable("no active mission", "these tools only work in mission mode (--mission / --mission-tools)")
 	}
 
 	question := args["question"]
@@ -498,22 +502,26 @@ func pmConsultTool(args map[string]string) []byte {
 
 	response := pmAgentChat(prompt)
 
-	return []byte(mustMarshalJSON(map[string]interface{}{
+	payload, err := mustMarshalJSON(map[string]interface{}{
 		"pm_response": response,
 		"issue_id":    currentMission.Issue.ID,
-	}))
+	})
+	if err != nil {
+		return nil, err
+	}
+	return []byte(payload), nil
 }
 
-func addIssueCommentTool(args map[string]string) []byte {
+func addIssueCommentTool(args map[string]string) ([]byte, error) {
 	if currentMission == nil {
-		return []byte(`{"error": "No active mission"}`)
+		return nil, models.Unavailable("no active mission", "these tools only work in mission mode (--mission / --mission-tools)")
 	}
 
 	body := args["body"]
 	author := args["author"]
 
 	if body == "" {
-		return []byte(`{"error": "body is required"}`)
+		return nil, models.InvalidArgs("body is required", "")
 	}
 
 	if author == "" {
@@ -522,49 +530,21 @@ func addIssueCommentTool(args map[string]string) []byte {
 
 	currentMission.AddIssueComment(author, body)
 	if err := currentMission.SaveIssue(); err != nil {
-		return []byte(fmt.Sprintf(`{"error": "Failed to save issue comment: %v"}`, err))
+		return nil, models.Internal("failed to save the issue comment", err)
 	}
 
-	return []byte(fmt.Sprintf(`{"success": true, "comment_by": "%s", "issue_id": "%s"}`, author, currentMission.Issue.ID))
+	return []byte(fmt.Sprintf(`{"success": true, "comment_by": "%s", "issue_id": "%s"}`, author, currentMission.Issue.ID)), nil
 }
 
-func mustMarshalJSON(v interface{}) string {
+// mustMarshalJSON encodes a tool success payload.
+//
+// It used to swallow a marshal failure into an `{"error": ...}` body and return
+// it as if it were a success, which is the old convention in miniature: a
+// failure the host could not see. It propagates instead.
+func mustMarshalJSON(v interface{}) (string, error) {
 	data, err := json.MarshalIndent(v, "", "  ")
 	if err != nil {
-		return fmt.Sprintf(`{"error": "Failed to marshal response: %v"}`, err)
+		return "", models.Internal("failed to encode the tool response", err)
 	}
-	return string(data)
-}
-
-// IsToolError returns true if the tool response appears to contain an error.
-// Checks for: bash [error] prefix, JSON error field, go test FAIL, compile errors.
-func IsToolError(toolName, resp string) bool {
-	trimmed := strings.TrimSpace(resp)
-
-	// Bash/system command errors (prefix [error])
-	if strings.HasPrefix(trimmed, "[error]") {
-		return true
-	}
-
-	// JSON error field (mission tools and others)
-	if strings.HasPrefix(trimmed, "{") {
-		if strings.Contains(trimmed, `"error"`) {
-			return true
-		}
-	}
-
-	// Go test failures
-	if strings.HasPrefix(toolName, "bash") || toolName == "run_command" {
-		if strings.Contains(resp, "\nFAIL\n") || strings.Contains(resp, "\nFAIL\t") {
-			return true
-		}
-		// Go compile errors ("cannot use", "undefined", "expected")
-		if strings.Contains(resp, "cannot use") || strings.Contains(resp, "undefined") {
-			if strings.Contains(resp, ".go:") {
-				return true
-			}
-		}
-	}
-
-	return false
+	return string(data), nil
 }

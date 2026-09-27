@@ -37,7 +37,7 @@ func TestPiping(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := ExecChain(tt.cmd)
+			result, _ := ExecChain(tt.cmd)
 			if !tt.check(result) {
 				t.Errorf("check failed for %q, got %q", tt.name, result)
 			}
@@ -59,7 +59,7 @@ func TestChaining(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := ExecChain(tt.cmd)
+			result, _ := ExecChain(tt.cmd)
 			if !tt.check(result) {
 				t.Errorf("check failed for %q, got %q", tt.name, result)
 			}
@@ -73,25 +73,25 @@ func TestRedirect(t *testing.T) {
 	defer os.Remove(tmpFile)
 
 	// Test echo >
-	result1 := ExecChain("echo hello world > " + tmpFile)
+	result1, _ := ExecChain("echo hello world > " + tmpFile)
 	if !strings.Contains(result1, "Wrote") {
 		t.Errorf("echo > failed: %q", result1)
 	}
 
 	// Test cat
-	result2 := ExecChain("cat " + tmpFile)
+	result2, _ := ExecChain("cat " + tmpFile)
 	if !strings.Contains(result2, "hello") {
 		t.Errorf("cat failed: %q", result2)
 	}
 
 	// Test echo >>
-	result3 := ExecChain("echo more >> " + tmpFile)
+	result3, _ := ExecChain("echo more >> " + tmpFile)
 	if !strings.Contains(result3, "Appended") {
 		t.Errorf("echo >> failed: %q", result3)
 	}
 
 	// Test cat after append
-	result4 := ExecChain("cat " + tmpFile)
+	result4, _ := ExecChain("cat " + tmpFile)
 	if !strings.Contains(result4, "hello") || !strings.Contains(result4, "more") {
 		t.Errorf("cat after append failed: %q", result4)
 	}
