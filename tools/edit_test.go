@@ -21,8 +21,11 @@ func TestFsRead(t *testing.T) {
 
 	// Read with offset
 	res = FsRead(map[string]string{"path": tmp, "offset": "3"})
-	if !strings.HasPrefix(res, "line3") {
-		t.Fatal("read offset should start at line3, got:", res[:20])
+	if !strings.Contains(res, "lines 3-10 of 10") {
+		t.Error("read should announce the effective line range, got:", res[:60])
+	}
+	if !strings.Contains(res, "line3") {
+		t.Fatal("read offset should start at line3, got:", res)
 	}
 	if !strings.Contains(res, "line10") {
 		t.Fatal("read offset should include to end")
@@ -30,7 +33,7 @@ func TestFsRead(t *testing.T) {
 
 	// Read with offset and limit
 	res = FsRead(map[string]string{"path": tmp, "offset": "3", "limit": "2"})
-	if !strings.HasPrefix(res, "line3\nline4") {
+	if !strings.Contains(res, "line3\nline4") {
 		t.Fatal("read offset+limit wrong:", res)
 	}
 	if !strings.Contains(res, "6 more lines") {
@@ -47,6 +50,27 @@ func TestFsRead(t *testing.T) {
 	res = FsRead(map[string]string{"path": tmp, "limit": "3"})
 	if !strings.Contains(res, "7 more lines") {
 		t.Fatal("expected truncation hint, got:", res)
+	}
+}
+
+func TestFsReadImage(t *testing.T) {
+	// Create a tiny valid PNG (1x1 red pixel)
+	pngBytes := []byte(
+		"\x89PNG\r\n\x1a\n" +
+			"\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x02\x00\x00\x00\x90wS\xde" +
+			"\x00\x00\x00\x0cIDATx\x9cc\xf8\x0f\x00\x00\x01\x01\x00\x05\x9a\x0a\x05" +
+			"\x00\x00\x00\x00IEND\xaeB`\x82",
+	)
+	tmp := filepath.Join(cfg.FilePickerDir, "test_read.png")
+	os.WriteFile(tmp, pngBytes, 0644)
+	defer os.Remove(tmp)
+
+	res := FsRead(map[string]string{"path": tmp})
+	if !strings.Contains(res, "multimodal_content") {
+		t.Fatal("expected multimodal_content for image, got:", res)
+	}
+	if !strings.Contains(res, "image_url") {
+		t.Fatal("expected image_url in response")
 	}
 }
 

@@ -16,6 +16,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"gf-lt/rag"
 
@@ -33,6 +34,7 @@ If you choose to call a function ONLY do a tool call in openai format with NO su
 You may put optional reasoning inside <think></think> but it must come BEFORE the tool call. Never put anything after the tool call.
 Examples of common operations:
 - Read file: use read tool with path, offset, limit. Example: read main.go 40 20 (lines 40-60)
+- View image: use read tool on image files (png, jpg, gif, webp). Example: read screenshot.png
 - Overwrite file: use write to set the full content of a file. Example: write counter.json "{\"count\": 5}"
 - Edit file (targeted): use edit to replace an exact text match. Example: edit main.go "return nil" "return err"
 - Edit file (line range): use file_edit to replace a line range. Example: file_edit llm.go 182 186 "new content"
@@ -133,11 +135,14 @@ After that you are free to respond to the user.
 var WebSearcher searcher.WebSurfer
 
 var (
-	xdotoolPath  string
-	maimPath     string
-	logger       *slog.Logger
-	cfg          *config.Config
-	getTokenFunc func() string
+	xdotoolPath string
+	maimPath    string
+	// windowToolsAvailable mirrors Tools.WindowToolsAvailable for the
+	// package-level registration helpers, which run before/without a Tools value.
+	windowToolsAvailable bool
+	logger               *slog.Logger
+	cfg                  *config.Config
+	getTokenFunc         func() string
 )
 
 type Tools struct {
@@ -203,6 +208,7 @@ func InitTools(initCfg *config.Config, log *slog.Logger, store storage.FullRepo)
 		store:  store,
 	}
 	t.checkWindowTools()
+	registerWindowTools()
 	t.initAgentsB()
 	if initCfg.MemoryEnabled {
 		SetMemoryStore(&memoryAdapter{store: store, cfg: cfg}, cfg.AssistantRole)
@@ -216,6 +222,7 @@ func (t *Tools) checkWindowTools() {
 	xdotoolPath, _ = exec.LookPath("xdotool")
 	maimPath, _ = exec.LookPath("maim")
 	t.WindowToolsAvailable = xdotoolPath != "" && maimPath != ""
+	windowToolsAvailable = t.WindowToolsAvailable
 	if t.WindowToolsAvailable {
 		t.logger.Info("window tools available: xdotool and maim found")
 	} else {
@@ -243,11 +250,6 @@ func (t *Tools) GetWebAgentClient() *agent.AgentClient {
 		t.webAgentClient = agent.NewAgentClient(t.cfg, t.logger, getToken)
 	})
 	return t.webAgentClient
-}
-
-func RegisterWindowTools(modelHasVision bool) {
-	removeWindowToolsFromBaseTools()
-	// Window tools registration happens here if needed
 }
 
 // func RegisterPlaywrightTools() {
@@ -430,12 +432,21 @@ func runCmd(args map[string]string) []byte {
 		return []byte(FsMemory(append([]string{"store"}, rest...), ""))
 	case "window", "windows":
 		// window list - list all windows
+		if !windowToolsAvailable {
+			return []byte("[error] window tools unavailable: xdotool and/or maim not found on PATH")
+		}
 		return listWindows(args)
 	case "capture", "screenshot":
 		// capture <window-name> - capture a window
+		if !windowToolsAvailable {
+			return []byte("[error] window capture unavailable: xdotool and/or maim not found on PATH")
+		}
 		return captureWindow(args)
 	case "capture_and_view", "screenshot_and_view":
 		// capture and view screenshot
+		if !windowToolsAvailable {
+			return []byte("[error] window capture unavailable: xdotool and/or maim not found on PATH")
+		}
 		return captureWindowAndView(args)
 	case "view_img":
 		// view_img <file> - view image for multimodal
@@ -466,10 +477,17 @@ func runCmd(args map[string]string) []byte {
 func browserCmd(args map[string]string) []byte {
 	action := args["action"]
 	argsStr := args["args"]
-	// Parse args string into slice (space-separated, respecting quoted strings)
+	if action == "" && argsStr != "" {
+		// allow the shorthand `browser "go https://example.com"`
+		action = argsStr
+		argsStr = ""
+	}
+	// Parse args string into slice. tokenize() is quote-aware, so
+	// `fill "#search" "hello world"` keeps the multi-word value intact. Using
+	// strings.Fields here made that impossible to express.
 	var browserArgs []string
 	if argsStr != "" {
-		browserArgs = strings.Fields(argsStr)
+		browserArgs = tokenize(argsStr)
 	}
 	if action == "" {
 		return []byte(`usage: browser <action> [args...]
@@ -647,13 +665,36 @@ Examples:
 	}
 }
 
-// getHelp returns help text for commands
+// getHelp returns help text.
+//
+// The first section lists the live *tool* set (from FnMap + advertised schemas),
+// because the previous version of this output listed the bash subcommand
+// vocabulary while reading like a tool list - an agent that took it at face value
+// and called a "tool" named `ls` was told to run `help`, having just been given
+// the documentation. Tools and bash subcommands are now explicitly separated.
 func getHelp(args []string) string {
 	if len(args) == 0 {
-		// General help - show all commands
-		return `Available commands:
-  help <cmd>     - show help for a command (use: help memory, help git, etc.)
-  
+		return ToolsHelp() + "\n" + bashSubcommandHelp()
+	}
+	if len(args) > 0 && (args[0] == "tools" || args[0] == "tool") {
+		return ToolsHelp()
+	}
+	if len(args) > 0 && (args[0] == "bash" || args[0] == "commands") {
+		return bashSubcommandHelp()
+	}
+	// fall through to the per-command help below
+	switch args[0] {
+	case "ls":
+		return bashCommandHelp("ls")
+	}
+	return bashCommandHelp(args[0])
+}
+
+// bashSubcommandHelp documents the verbs the `bash` tool routes internally.
+// These are NOT separate tools.
+func bashSubcommandHelp() string {
+	return `The "bash" tool routes these subcommands internally (they are not separate tools):
+
   # File operations
   ls [path]       - list files in directory
   cat <file>      - read file content
@@ -671,43 +712,34 @@ func getHelp(args []string) string {
   pwd             - print working directory
   cd <dir>        - change directory
   sed 's/old/new/[g]' [file] - text replacement
-  
+
   # Text processing
   echo <args>     - echo back input
   time             - show current time
   grep <pattern>  - filter lines (supports -i, -v, -c, -r for recursive)
   find <pattern>  - find files by name recursively
   head [n]         - show first n lines
-  tail [n]        - show last n lines
+  tail [n]         - show last n lines
   wc [-l|-w|-c]   - count lines/words/chars
   sort [-r|-n]    - sort lines
   uniq [-c]       - remove duplicates
-  
+
   # Git (read-only)
   git <cmd>       - git commands (status, log, diff, show, branch, etc.)
-  
+
   # Go
   go <cmd>        - go commands (run, build, test, mod, etc.)
-  
+
   # Memory
   memory store <topic> <data>  - save to memory
   memory get <topic>           - retrieve from memory
   memory list                   - list all topics
   memory forget <topic>         - delete from memory
-  
-  # Window (requires xdotool + maim)
-  window              - list available windows
-  capture <name>    - capture a window screenshot
-  capture_and_view <name> - capture and view screenshot
 
-  # System
-  <any shell command> - run shell command directly
+Use "help tools" for the tool list, "help <cmd>" for one subcommand (e.g. "help git").`
+}
 
-Use: command to execute. Example: ls -la | grep foo`
-	}
-
-	// Specific command help
-	cmd := args[0]
+func bashCommandHelp(cmd string) string {
 	switch cmd {
 	case "ls":
 		return `ls [directory]
@@ -946,14 +978,10 @@ func viewImgTool(args map[string]string) []byte {
 
 func helpTool(args map[string]string) []byte {
 	command, ok := args["command"]
-	var rest []string
-	if ok && command != "" {
-		parts := strings.Fields(command)
-		if len(parts) > 1 {
-			rest = parts[1:]
-		}
+	if !ok || strings.TrimSpace(command) == "" {
+		return []byte(getHelp(nil))
 	}
-	return []byte(getHelp(rest))
+	return []byte(getHelp(tokenize(command)))
 }
 
 // func summarizeChat(args map[string]string) []byte {
@@ -1174,36 +1202,41 @@ func (m *memoryAdapter) Forget(agent, topic string) error {
 	return m.store.Forget(agent, topic)
 }
 
-var FnMap = map[string]FnHandler{
-	"rag_search":    ragsearch,
-	"websearch":     websearch,
-	"websearch_raw": websearchRaw,
-	"read_url":      readURL,
-	"read_url_raw":  readURLRaw,
-	"view_img":      viewImgTool,
-	"help":          helpTool,
-	"file_edit": func(args map[string]string) []byte {
+// FnMap maps a tool name to its handler. Populated in init() rather than as a
+// package-level composite literal: getHelp -> ToolsHelp -> AvailableTools ->
+// FnMap would otherwise be an initialization cycle.
+var FnMap = map[string]FnHandler{}
+
+func init() {
+	FnMap["rag_search"] = ragsearch
+	FnMap["websearch"] = websearch
+	FnMap["websearch_raw"] = websearchRaw
+	FnMap["read_url"] = readURL
+	FnMap["read_url_raw"] = readURLRaw
+	FnMap["view_img"] = viewImgTool
+	FnMap["help"] = helpTool
+	FnMap["file_edit"] = func(args map[string]string) []byte {
 		return []byte(FsFileEdit(args))
-	},
-	"insert_at": func(args map[string]string) []byte {
+	}
+	FnMap["insert_at"] = func(args map[string]string) []byte {
 		return []byte(FsInsertAt(args))
-	},
-	"read": func(args map[string]string) []byte {
+	}
+	FnMap["read"] = func(args map[string]string) []byte {
 		return []byte(FsRead(args))
-	},
-	"write": func(args map[string]string) []byte {
+	}
+	FnMap["write"] = func(args map[string]string) []byte {
 		return []byte(FsWrite(args))
-	},
-	"edit": func(args map[string]string) []byte {
+	}
+	FnMap["edit"] = func(args map[string]string) []byte {
 		return []byte(FsEdit(args))
-	},
+	}
 	// Unified run command
-	"bash": runCmd,
+	FnMap["bash"] = runCmd
 	// Browser tool - routes to runBrowserCommand
-	"browser":        browserCmd,
-	"summarize_chat": summarizeChat,
+	FnMap["browser"] = browserCmd
+	FnMap["summarize_chat"] = summarizeChat
 	// Issue management - always available
-	"create_issue": createIssueTool,
+	FnMap["create_issue"] = createIssueTool
 }
 
 func removeBrowserTools() {
@@ -1217,22 +1250,52 @@ func removeBrowserTools() {
 	BaseTools = filtered
 }
 
+// registerWindowTools registers the window tools as *real tools* (not just bash
+// subcommands) and removes them again when xdotool/maim are missing.
+//
+// This previously could not work: removeWindowToolsFromBaseTools() deleted
+// FnMap["list_windows"] etc., but those names were never in FnMap, so the whole
+// availability gate was a no-op. The names now match.
+func registerWindowTools() {
+	if !windowToolsAvailable {
+		removeWindowToolsFromBaseTools()
+		return
+	}
+	if _, ok := FnMap["list_windows"]; !ok {
+		FnMap["list_windows"] = listWindows
+		FnMap["capture_window"] = captureWindow
+		BaseTools = append(BaseTools, windowListToolDef, captureWindowToolDef)
+	}
+}
+
+// RegisterWindowTools is called once the model's vision capability is known.
+// capture_window_and_view returns an image, so it is only advertised to a model
+// that can actually look at one.
+func RegisterWindowTools(modelHasVision bool) {
+	registerWindowTools()
+	if !windowToolsAvailable || !modelHasVision {
+		return
+	}
+	if _, ok := FnMap["capture_window_and_view"]; ok {
+		return
+	}
+	FnMap["capture_window_and_view"] = captureWindowAndView
+	BaseTools = append(BaseTools, captureWindowAndViewToolDef)
+}
+
 func removeWindowToolsFromBaseTools() {
-	windowToolNames := map[string]bool{
-		"list_windows":            true,
-		"capture_window":          true,
-		"capture_window_and_view": true,
-	}
-	var filtered []models.Tool
-	for _, tool := range BaseTools {
-		if !windowToolNames[tool.Function.Name] {
-			filtered = append(filtered, tool)
-		}
-	}
-	BaseTools = filtered
 	delete(FnMap, "list_windows")
 	delete(FnMap, "capture_window")
 	delete(FnMap, "capture_window_and_view")
+	var filtered []models.Tool
+	for _, tool := range BaseTools {
+		switch tool.Function.Name {
+		case "list_windows", "capture_window", "capture_window_and_view":
+			continue
+		}
+		filtered = append(filtered, tool)
+	}
+	BaseTools = filtered
 }
 
 func summarizeChat(args map[string]string) []byte {
@@ -1250,16 +1313,50 @@ func summarizeChat(args map[string]string) []byte {
 
 // Always provide clear feedback about what you're doing and what you found.`
 
+// MaxToolResultBytes caps a single tool result before it enters the chat
+// context. Tool output otherwise flows in unbounded: `bash` on a large file,
+// websearch, base64 images. One fat result can push an otherwise healthy
+// conversation into context compaction, and silent exhaustion is a much worse
+// failure mode than an explicit truncation notice. Mirrors read's continuation
+// trailer: say what was cut and how to get the rest.
+const MaxToolResultBytes = 24 * 1024
+
+// TruncateToolResult clamps a tool result to MaxToolResultBytes, appending a
+// notice that says how to retrieve the remainder. Byte-safe: it cuts on a rune
+// boundary so the result stays valid UTF-8.
+func TruncateToolResult(toolName string, raw []byte) []byte {
+	if len(raw) <= MaxToolResultBytes {
+		return raw
+	}
+	cut := MaxToolResultBytes
+	for cut > 0 && !utf8.RuneStart(raw[cut]) {
+		cut--
+	}
+	notice := fmt.Sprintf(
+		"\n\n[output truncated: %d of %d bytes shown. Re-run with a narrower scope (e.g. grep/head, an offset+limit range, or a lower limit) to see the rest.]",
+		cut, len(raw),
+	)
+	out := make([]byte, 0, cut+len(notice))
+	out = append(out, raw[:cut]...)
+	out = append(out, notice...)
+	return out
+}
+
 func CallToolWithAgent(name string, args map[string]string) ([]byte, bool) {
 	f, ok := FnMap[name]
 	if !ok {
-		return []byte(fmt.Sprintf("tool %s not found", name)), false
+		// An unknown tool name is a model error, not a tool error: make that
+		// legible in the same channel as everything else, and point at the
+		// self-describing listing.
+		return []byte(fmt.Sprintf(
+			"[error] tool %q not found. Call the help tool to list the %d available tools.",
+			name, len(FnMap))), false
 	}
 	raw := f(args)
 	if a := agent.Get(name); a != nil {
-		return a.Process(args, raw), true
+		raw = a.Process(args, raw)
 	}
-	return raw, true
+	return TruncateToolResult(name, raw), true
 }
 
 // openai style def
@@ -1389,7 +1486,7 @@ var BaseTools = []models.Tool{
 		Type: "function",
 		Function: models.ToolFunc{
 			Name:        "help",
-			Description: "List all available commands. Use this to discover what commands are available when unsure.",
+			Description: "List what you can actually do right now. With no arguments: the live tool set, then the bash subcommand vocabulary (marked as not separate tools). Pass command=\"tools\" for just the tool list, or command=\"<subcommand>\" for one subcommand (e.g. \"help git\").",
 			Parameters: models.ToolFuncParams{
 				Type:     "object",
 				Required: []string{},
@@ -1456,18 +1553,18 @@ var BaseTools = []models.Tool{
 						Type:        "string",
 						Description: "path to the file to edit",
 					},
-				"start_line": models.ToolArgProps{
-					Type:        "integer",
-					Description: "1-indexed line number where replacement starts. To delete lines without replacing, pass new_content as an empty string.",
-				},
-				"end_line": models.ToolArgProps{
-					Type:        "integer",
-					Description: "1-indexed line number where replacement ends (inclusive). Defaults to start_line. Must be >= start_line.",
-				},
-			"new_content": models.ToolArgProps{
-				Type:        "string",
-				Description: "replacement content (use \\n for newlines). Pass empty string to delete the line range.",
-			},
+					"start_line": models.ToolArgProps{
+						Type:        "integer",
+						Description: "1-indexed line number where replacement starts. To delete lines without replacing, pass new_content as an empty string.",
+					},
+					"end_line": models.ToolArgProps{
+						Type:        "integer",
+						Description: "1-indexed line number where replacement ends (inclusive). Defaults to start_line. Must be >= start_line.",
+					},
+					"new_content": models.ToolArgProps{
+						Type:        "string",
+						Description: "replacement content (use \\n for newlines). Pass empty string to delete the line range.",
+					},
 				},
 			},
 		},
@@ -1503,7 +1600,7 @@ var BaseTools = []models.Tool{
 		Type: "function",
 		Function: models.ToolFunc{
 			Name:        "read",
-			Description: "Read the content of a file. Supports offset and limit for reading specific line ranges. Default reads from line 1, up to 2000 lines.",
+			Description: "Read the content of a file. For text files: supports offset and limit for line ranges (default: line 1, up to 2000 lines). The response starts with a header naming the line range and whether it was truncated. For image files (png, jpg, gif, webp, svg): returns the image for visual analysis.",
 			Parameters: models.ToolFuncParams{
 				Type:     "object",
 				Required: []string{"path"},
@@ -1529,7 +1626,7 @@ var BaseTools = []models.Tool{
 		Type: "function",
 		Function: models.ToolFunc{
 			Name:        "write",
-			Description: "Write content to a file. Creates the file if it doesn't exist, overwrites if it does. Creates parent directories as needed. Use this for full file overwrites or creating new files.",
+			Description: "Write content to a file. Creates the file if it doesn't exist, overwrites if it does. Creates parent directories as needed. Use this for full file overwrites or creating new files. Empty content is rejected unless truncate=true is also set (to clear a file deliberately); to delete a file use the bash tool: rm <path>.",
 			Parameters: models.ToolFuncParams{
 				Type:     "object",
 				Required: []string{"file_path", "content"},
@@ -1541,6 +1638,10 @@ var BaseTools = []models.Tool{
 					"content": models.ToolArgProps{
 						Type:        "string",
 						Description: "full content to write to the file",
+					},
+					"truncate": models.ToolArgProps{
+						Type:        "string",
+						Description: "opt-in: set to \"true\" to allow empty content (clears the file). Any other non-empty content is rejected.",
 					},
 				},
 			},

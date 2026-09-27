@@ -83,6 +83,11 @@ func FsFileEdit(args map[string]string) string {
 // FsRead reads a file with optional offset and limit (1-indexed lines).
 // Accepts: path (required), offset (optional, line to start from, default 1),
 // limit (optional, max lines to read, default 2000).
+//
+// The response is always prefixed with a header naming the effective offset and
+// limit, so a truncated read is distinguishable at a glance from a complete one
+// - previously the limit was only visible from the trailer, and only when
+// truncation actually happened.
 func FsRead(args map[string]string) string {
 	path := args["path"]
 	if path == "" {
@@ -95,6 +100,11 @@ func FsRead(args map[string]string) string {
 	}
 	if currentMission != nil {
 		currentMission.Log("FsRead: path=%s -> abs=%s, offset=%s, limit=%s", path, abs, args["offset"], args["limit"])
+	}
+
+	// If it's an image, delegate to view_img (returns multimodal_content JSON)
+	if IsImageFile(abs) {
+		return FsViewImg([]string{abs}, "")
 	}
 
 	data, err := os.ReadFile(abs)
@@ -135,21 +145,43 @@ func FsRead(args map[string]string) string {
 
 	result := strings.Join(lines[startIdx:endIdx], "\n")
 	remaining := totalLines - endIdx
+	header := fmt.Sprintf("[%s: lines %d-%d of %d (limit %d)]\n",
+		path, offset, endIdx, totalLines, limit)
 	if remaining > 0 {
-		result += fmt.Sprintf("\n[%d more lines in file. Use offset=%d to continue.]", remaining, endIdx+1)
+		header += fmt.Sprintf("[truncated: %d more lines. Continue with offset=%d]\n", remaining, endIdx+1)
 	}
-
-	return result
+	return header + result
 }
 
 // FsWrite overwrites a file with new content. Creates parent directories if needed.
 // Accepts: file_path (required), content (required).
+//
+// Empty content is refused by default. Previously `write` with content:"" silently
+// truncated the target to zero bytes and reported it as a routine success, which
+// is the most destructive thing this tool can do. Truncating a file is an explicit
+// act, so it has to be spelled: content="" requires truncate="true".
 func FsWrite(args map[string]string) string {
 	filePath := args["file_path"]
 	content := args["content"]
 
 	if filePath == "" {
 		return "[error] file_path not provided"
+	}
+
+	truncateOK := false
+	switch strings.ToLower(strings.TrimSpace(args["truncate"])) {
+	case "", "false", "no", "0":
+		truncateOK = false
+	case "true", "yes", "1":
+		truncateOK = true
+	default:
+		return "[error] truncate must be true or false"
+	}
+
+	if content == "" && !truncateOK {
+		return "[error] content is empty: this would truncate the file to 0 bytes. " +
+			"To intentionally clear a file, pass truncate=\"true\" alongside empty content. " +
+			"To delete a file, use the bash tool: rm <path>."
 	}
 
 	abs, err := resolvePath(filePath)
@@ -172,6 +204,9 @@ func FsWrite(args map[string]string) string {
 	lines := strings.Count(content, "\n")
 	if !strings.HasSuffix(content, "\n") {
 		lines++
+	}
+	if content == "" {
+		return fmt.Sprintf("truncated %s to 0 bytes (explicit truncate=true)", filePath)
 	}
 	return fmt.Sprintf("wrote %s (%d lines, %d bytes)", filePath, lines, len(content))
 }

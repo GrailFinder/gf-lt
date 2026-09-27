@@ -347,6 +347,55 @@ func consolidateAssistantMessages(messages []models.RoleMsg) []models.RoleMsg {
 	return result
 }
 
+// sanitizeToolMessagesForAPI makes the message history acceptable to
+// OpenAI-compatible chat APIs (OpenRouter, OpenAI, DeepSeek).
+//
+// Those APIs reject a request with:
+//   "messages[N]: tool messages must include a non-empty string tool_call_id"
+//
+// We produce "tool" messages from several places that have no matching
+// assistant tool_calls entry (shell commands, /roll results, summaries, agent
+// output). Such messages are demoted to "user" role, which is the accepted way
+// of passing raw output back to the model. Assistant tool_calls that lack an id
+// get a generated one so the pairing stays valid.
+func sanitizeToolMessagesForAPI(messages []models.RoleMsg) []models.RoleMsg {
+	if len(messages) == 0 {
+		return messages
+	}
+	// Collect every tool call id announced by an assistant message.
+	known := make(map[string]bool, len(messages))
+	for i := range messages {
+		for _, tc := range messages[i].ToolCalls {
+			if tc.ID != "" {
+				known[tc.ID] = true
+			}
+		}
+		if messages[i].ToolCall != nil && messages[i].ToolCall.ID != "" {
+			known[messages[i].ToolCall.ID] = true
+		}
+	}
+	out := make([]models.RoleMsg, 0, len(messages))
+	for i := range messages {
+		m := messages[i]
+		// Make sure assistant tool calls always carry an id.
+		if len(m.ToolCalls) > 0 {
+			for j := range m.ToolCalls {
+				if m.ToolCalls[j].ID == "" {
+					m.ToolCalls[j].ID = fmt.Sprintf("call_%d_%d", time.Now().UnixMilli(), j)
+				}
+				known[m.ToolCalls[j].ID] = true
+			}
+		}
+		if m.Role == "tool" && (m.ToolCallID == "" || !known[m.ToolCallID]) {
+			// Orphan tool result: no assistant tool_call to answer.
+			m.Role = "user"
+			m.ToolCallID = ""
+		}
+		out = append(out, m)
+	}
+	return out
+}
+
 // GetLogLevel returns the current log level as a string
 func GetLogLevel() string {
 	level := logLevel.Level()

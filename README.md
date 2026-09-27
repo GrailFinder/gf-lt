@@ -14,6 +14,10 @@ made with use of [tview](https://github.com/rivo/tview)
 #### showcase on youtube
 [![gf-lt video showcase](assets/yt_thumb.jpg)](https://youtu.be/WCS4Xc902F8 "gf-lt showcase")
 
+#### feature map
+![feature map](docs/featuremap.png)
+[interactive/regeneratable source + notes](docs/featuremap.md) · [toolset issues & improvement wishes](docs/tool_issues.md)
+
 #### how it looks
 ![how it looks](assets/ex01.png)
 
