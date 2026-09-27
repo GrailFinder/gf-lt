@@ -146,7 +146,9 @@ func setupSignalHandler() {
 		if m := tools.GetCurrentMission(); m != nil {
 			issueID = m.Issue.ID
 			m.Status = mission.StatusAborted
-			m.SaveCheckpoint(mission.DefaultCheckpointPath())
+			if err := m.SaveCheckpoint(mission.DefaultCheckpointPath()); err != nil {
+				fmt.Fprintf(os.Stderr, "[signal] failed to save mission checkpoint: %v\n", err)
+			}
 		}
 		exportMissionChat(issueID)
 		code := 130 // 128 + SIGINT(2)
@@ -657,7 +659,9 @@ func missionMessageLoop(m *mission.Mission, checkpointPath string, startTime tim
 		case <-ctx.Done():
 			m.Log("Mission interrupted")
 			m.Status = mission.StatusAborted
-			m.SaveCheckpoint(checkpointPath)
+			if err := m.SaveCheckpoint(checkpointPath); err != nil {
+				logger.Error("failed to save checkpoint on interrupt", "error", err, "path", checkpointPath)
+			}
 			return
 		}
 	}
@@ -767,13 +771,19 @@ func missionComplete(m *mission.Mission, checkpointPath string, status mission.M
 	duration := time.Since(startTime)
 	// Save final checkpoint
 	m.Status = status
-	m.SaveCheckpoint(checkpointPath)
+	if err := m.SaveCheckpoint(checkpointPath); err != nil {
+		logger.Error("failed to save final checkpoint", "error", err, "path", checkpointPath, "status", string(status))
+	}
 	// Move issue to appropriate status
 	switch status {
 	case mission.StatusSuccess:
-		m.MoveToStatus(mission.StatusReview)
+		if err := m.MoveToStatus(mission.StatusReview); err != nil {
+			logger.Error("failed to move issue to review", "error", err, "issue_id", m.Issue.ID)
+		}
 	case mission.StatusFailed, mission.StatusAborted:
-		m.MoveToStatus(mission.StatusArchive)
+		if err := m.MoveToStatus(mission.StatusArchive); err != nil {
+			logger.Error("failed to move issue to archive", "error", err, "issue_id", m.Issue.ID)
+		}
 	}
 	if !cfg.MissionQuiet {
 		fmt.Println("\n=== Mission " + string(status) + " ===")

@@ -24,7 +24,14 @@ func PwShutDown() error {
 	if pw == nil {
 		return nil
 	}
-	pwStop(nil)
+	if _, err := pwStop(nil); err != nil {
+		// Still attempt the full stop below; the close errors are not fatal on
+		// their own, but they are worth surfacing to the caller.
+		if stopErr := pw.Stop(); stopErr != nil {
+			return fmt.Errorf("browser stop: %w (close error: %v)", stopErr, err)
+		}
+		return fmt.Errorf("closing browser handles: %w", err)
+	}
 	return pw.Stop()
 }
 

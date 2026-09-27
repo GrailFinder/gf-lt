@@ -206,14 +206,13 @@ func (m *Manager) callTool(name string, args map[string]string) ([]byte, error) 
 					ext = "." + parts[1]
 				}
 			}
-			f, err := os.CreateTemp("", "mcp-image-*"+ext)
+			name, err := writeTempBlob("mcp-image-*", ext, c.Data)
 			if err != nil {
+				m.logger.Warn("failed to write MCP image to temp file", "error", err)
 				fmt.Fprintf(&output, "[image: %d bytes]", len(c.Data))
 				continue
 			}
-			f.Write(c.Data)
-			f.Close()
-			fmt.Fprintf(&output, "[image: %s]", f.Name())
+			fmt.Fprintf(&output, "[image: %s]", name)
 		case *mcp.EmbeddedResource:
 			if c.Resource != nil {
 				if c.Resource.Text != "" {
@@ -225,20 +224,41 @@ func (m *Manager) callTool(name string, args map[string]string) ([]byte, error) 
 							ext = "." + parts[1]
 						}
 					}
-					f, err := os.CreateTemp("", "mcp-resource-*"+ext)
+					name, err := writeTempBlob("mcp-resource-*", ext, c.Resource.Blob)
 					if err != nil {
+						m.logger.Warn("failed to write MCP resource to temp file", "error", err, "uri", c.Resource.URI)
 						fmt.Fprintf(&output, "[resource: %s (%d bytes)]", c.Resource.URI, len(c.Resource.Blob))
 						continue
 					}
-					f.Write(c.Resource.Blob)
-					f.Close()
-					fmt.Fprintf(&output, "[resource: %s - %s]", c.Resource.URI, f.Name())
+					fmt.Fprintf(&output, "[resource: %s - %s]", c.Resource.URI, name)
 				}
 			}
 		}
 	}
 
 	return []byte(output.String()), nil
+}
+
+// writeTempBlob writes data to a new temp file and returns its path. A partial
+// write or a failed close would leave a truncated file that later reads
+// (e.g. by the vision pipeline) treat as valid, so the temp file is removed and
+// the error returned instead.
+func writeTempBlob(pattern, ext string, data []byte) (string, error) {
+	f, err := os.CreateTemp("", pattern+ext)
+	if err != nil {
+		return "", err
+	}
+	name := f.Name()
+	if _, err := f.Write(data); err != nil {
+		f.Close()
+		os.Remove(name)
+		return "", err
+	}
+	if err := f.Close(); err != nil {
+		os.Remove(name)
+		return "", err
+	}
+	return name, nil
 }
 
 var imagePathFromTextRe = regexp.MustCompile(`(?:Image(?: saved to)?: )([^\s\[]+)`)

@@ -274,13 +274,17 @@ func createIssueTool(args map[string]string) ([]byte, error) {
 	// Parse acceptance_criteria from JSON array string
 	var acceptanceCriteria []string
 	if acJSON := args["acceptance_criteria"]; acJSON != "" {
-		json.Unmarshal([]byte(acJSON), &acceptanceCriteria)
+		if err := json.Unmarshal([]byte(acJSON), &acceptanceCriteria); err != nil {
+			return nil, models.InvalidArgs("acceptance_criteria must be a JSON array of strings: "+err.Error(), `e.g. ["tests pass", "no regressions"]`)
+		}
 	}
 
 	// Parse context_files from JSON array string
 	var contextFiles []string
 	if cfJSON := args["context_files"]; cfJSON != "" {
-		json.Unmarshal([]byte(cfJSON), &contextFiles)
+		if err := json.Unmarshal([]byte(cfJSON), &contextFiles); err != nil {
+			return nil, models.InvalidArgs("context_files must be a JSON array of strings: "+err.Error(), `e.g. ["src/main.go", "README.md"]`)
+		}
 	}
 
 	// Parse labels from comma-separated string
