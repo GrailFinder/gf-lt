@@ -114,6 +114,14 @@ type Config struct {
 	TTS_LANGUAGE string  `toml:"TTS_LANGUAGE"`
 	TTS_VOICE    string  `toml:"TTS_VOICE"`
 	TTS_MODEL    string  `toml:"TTS_MODEL"`
+	// audio.cpp voice cloning. TTS_VOICE_REF is a path the server reads directly;
+	// TTS_REFERENCE_TEXT is the transcript of that audio and is REQUIRED by
+	// OmniVoice clone (it answers HTTP 500 without it).
+	TTS_VOICE_REF      string `toml:"TTS_VOICE_REF"`
+	TTS_REFERENCE_TEXT string `toml:"TTS_REFERENCE_TEXT"`
+	// TTS_FORMAT selects response_format. Defaults to wav, which is the only
+	// audio/wav-only encoder audio.cpp exposes; set explicitly for other servers.
+	TTS_FORMAT string `toml:"TTS_FORMAT"`
 	// STT
 	STT_TYPE          string `toml:"STT_TYPE"` // WHISPER_SERVER, WHISPER_BINARY, OPENAI_COMPAT, crips_asr
 	STT_URL           string `toml:"STT_URL"`

@@ -27,23 +27,40 @@ type Orator interface {
 	GetLogger() *slog.Logger
 }
 
+// resolveFormat picks the response_format to request. audio.cpp only encodes
+// WAV, so that is the default rather than the historical mp3; an explicit
+// TTS_FORMAT still wins for other OpenAI-compatible servers.
+func resolveFormat(cfg *config.Config) models.AudioFormat {
+	if f := strings.ToLower(strings.TrimSpace(cfg.TTS_FORMAT)); f != "" {
+		return models.AudioFormat(f)
+	}
+	return models.AFWav
+}
+
 func NewOrator(log *slog.Logger, cfg *config.Config) Orator {
 	provider := cfg.TTS_PROVIDER
 	if provider == "" {
 		provider = "google" // does not require local setup
 	}
 	switch strings.ToLower(provider) {
-	case "openai", "kokoro": // OpenAI-compatible TTS
+	case "openai", "kokoro", "audiocpp": // OpenAI-compatible TTS
 		orator := &OpenAICompatOrator{
-			logger: log,
-			URL:    cfg.TTS_URL,
-			Format: models.AFMP3,
-			Speed:  cfg.TTS_SPEED,
-			Voice:  cfg.TTS_VOICE,
-			Model:  cfg.TTS_MODEL,
+			logger:   log,
+			URL:      cfg.TTS_URL,
+			Format:   resolveFormat(cfg),
+			Speed:    cfg.TTS_SPEED,
+			Voice:    cfg.TTS_VOICE,
+			Model:    cfg.TTS_MODEL,
+			VoiceRef: cfg.TTS_VOICE_REF,
+			RefText:  cfg.TTS_REFERENCE_TEXT,
 		}
 		if orator.Model == "" {
 			orator.Model = "tts-1"
+		}
+		// audio.cpp names its models explicitly (e.g. "omnivoice"); the OpenAI
+		// default would 404 on unknown model id.
+		if orator.VoiceRef != "" && orator.RefText == "" {
+			log.Warn("TTS_VOICE_REF is set without TTS_REFERENCE_TEXT; OmniVoice rejects clones with no reference transcript")
 		}
 		orator.tryQuantize()
 		go orator.readroutine()

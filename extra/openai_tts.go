@@ -26,6 +26,12 @@ type OpenAICompatOrator struct {
 	Speed  float32
 	Voice  string
 	Model  string
+	// audio.cpp voice cloning. VoiceRef is a server-side path (never uploaded),
+	// and RefText is the transcript of that audio -- OmniVoice rejects a clone
+	// with no reference_text. When VoiceRef is set, voice/preset lookup is
+	// skipped so a stale TTS_VOICE cannot shadow the clone reference.
+	VoiceRef string
+	RefText  string
 	// fields for playback control
 	cmd    *exec.Cmd
 	cmdMu  sync.Mutex
@@ -188,9 +194,22 @@ func (o *OpenAICompatOrator) requestSound(text string) (io.ReadCloser, error) {
 	payload := map[string]interface{}{
 		"model":           o.Model,
 		"input":           text,
-		"voice":           o.Voice,
 		"response_format": string(o.Format),
-		"speed":           o.Speed,
+	}
+	if o.VoiceRef != "" {
+		// Cloning path: audio.cpp reads the file server-side. Sending "voice" too
+		// would make the server prefer a preset and ignore the reference audio.
+		payload["voice_ref"] = o.VoiceRef
+		if o.RefText != "" {
+			payload["reference_text"] = o.RefText
+		}
+	} else {
+		payload["voice"] = o.Voice
+	}
+	// Only send speed when configured. audio.cpp rejects a non-positive or
+	// unsupported speed with a 400, so an unset value must stay out of the body.
+	if o.Speed > 0 {
+		payload["speed"] = o.Speed
 	}
 	payloadBytes, err := json.Marshal(payload)
 	if err != nil {
