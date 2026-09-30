@@ -11,7 +11,7 @@ require (
 	github.com/glebarez/go-sqlite v1.22.0
 	github.com/jmoiron/sqlx v1.4.0
 	github.com/ledongthuc/pdf v0.0.0-20250511090121-5959a4027728
-	github.com/modelcontextprotocol/go-sdk v1.5.0
+	github.com/modelcontextprotocol/go-sdk v1.8.0
 	github.com/neurosnap/sentences v1.1.2
 	github.com/nfnt/resize v0.0.0-20180221191011-83c6a9932646
 	github.com/playwright-community/playwright-go v0.5700.1
@@ -35,7 +35,7 @@ require (
 	github.com/gdamore/encoding v1.0.1 // indirect
 	github.com/go-jose/go-jose/v3 v3.0.4 // indirect
 	github.com/go-stack/stack v1.8.1 // indirect
-	github.com/google/jsonschema-go v0.4.2 // indirect
+	github.com/google/jsonschema-go v0.4.3 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/hajimehoshi/go-mp3 v0.3.4 // indirect
 	github.com/lucasb-eyer/go-colorful v1.3.0 // indirect
@@ -53,9 +53,11 @@ require (
 	golang.org/x/mod v0.33.0 // indirect
 	golang.org/x/net v0.50.0 // indirect
 	golang.org/x/oauth2 v0.35.0 // indirect
+	golang.org/x/sync v0.20.0 // indirect
 	golang.org/x/sys v0.41.0 // indirect
 	golang.org/x/term v0.40.0 // indirect
 	golang.org/x/text v0.34.0 // indirect
+	golang.org/x/time v0.15.0 // indirect
 	modernc.org/libc v1.67.1 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.11.0 // indirect
