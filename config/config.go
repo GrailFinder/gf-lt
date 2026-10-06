@@ -107,6 +107,12 @@ type Config struct {
 	OpenRouterCompletionAPI string `toml:"OpenRouterCompletionAPI"`
 	OpenRouterToken         string `toml:"OpenRouterToken"`
 	OpenRouterModel         string `toml:"OpenRouterModel"`
+	// opencode go (https://opencode.ai/docs/go)
+	OpenCodeGoChatAPI   string `toml:"OpenCodeGoChatAPI"`
+	OpenCodeGoModelsAPI string `toml:"OpenCodeGoModelsAPI"`
+	OpenCodeGoToken     string `toml:"OpenCodeGoToken"`
+	OpenCodeGoModel     string `toml:"OpenCodeGoModel"`
+	OpenCodeGoSession   string `toml:"OpenCodeGoSession"`
 	// TTS
 	TTS_URL      string  `toml:"TTS_URL"`
 	TTS_ENABLED  bool    `toml:"TTS_ENABLED"`
@@ -201,13 +207,21 @@ func LoadConfig(fn string) (*Config, error) {
 		}
 	}
 	config.CurrentAPI = config.ChatAPI
+	// OpenCode Go defaults (https://opencode.ai/docs/go)
+	if config.OpenCodeGoChatAPI == "" {
+		config.OpenCodeGoChatAPI = "https://opencode.ai/inference/go/openai/v1/chat/completions"
+	}
+	if config.OpenCodeGoModelsAPI == "" {
+		config.OpenCodeGoModelsAPI = "https://opencode.ai/zen/go/v1/models"
+	}
 	config.APIMap = map[string]string{
 		config.ChatAPI:                 config.CompletionAPI,
 		config.CompletionAPI:           config.DeepSeekChatAPI,
 		config.DeepSeekChatAPI:         config.DeepSeekCompletionAPI,
 		config.DeepSeekCompletionAPI:   config.OpenRouterCompletionAPI,
 		config.OpenRouterCompletionAPI: config.OpenRouterChatAPI,
-		config.OpenRouterChatAPI:       config.ChatAPI,
+		config.OpenRouterChatAPI:       config.OpenCodeGoChatAPI,
+		config.OpenCodeGoChatAPI:       config.ChatAPI,
 	}
 	// check env if keys not in config
 	if config.OpenRouterToken == "" {
@@ -215,6 +229,9 @@ func LoadConfig(fn string) (*Config, error) {
 	}
 	if config.DeepSeekToken == "" {
 		config.DeepSeekToken = os.Getenv("DEEPSEEK_API_KEY")
+	}
+	if config.OpenCodeGoToken == "" {
+		config.OpenCodeGoToken = os.Getenv("OPENCODE_API_KEY")
 	}
 	// Build ApiLinks slice with only non-empty API links
 	// Only include DeepSeek APIs if DeepSeekToken is provided
@@ -234,6 +251,10 @@ func LoadConfig(fn string) (*Config, error) {
 		if config.OpenRouterCompletionAPI != "" {
 			config.ApiLinks = append(config.ApiLinks, config.OpenRouterCompletionAPI)
 		}
+	}
+	// Only include OpenCode Go if a token is provided
+	if config.OpenCodeGoToken != "" && config.OpenCodeGoChatAPI != "" {
+		config.ApiLinks = append(config.ApiLinks, config.OpenCodeGoChatAPI)
 	}
 	// Always include basic APIs
 	if config.ChatAPI != "" {

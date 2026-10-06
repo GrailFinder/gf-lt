@@ -396,8 +396,26 @@ func strInSlice(s string, sl []string) bool {
 	return false
 }
 
+// isOpenCodeGoAPI reports whether api points at an OpenCode Go endpoint
+// (https://opencode.ai/docs/go). It matches both the OpenAI-compatible
+// inference path and the zen path, plus any custom endpoint configured via
+// OpenCodeGoChatAPI.
+func isOpenCodeGoAPI(api string) bool {
+	if api == "" {
+		return false
+	}
+	if strings.Contains(api, "opencode.ai/inference/go") ||
+		strings.Contains(api, "opencode.ai/zen/go") {
+		return true
+	}
+	return cfg != nil && cfg.OpenCodeGoChatAPI != "" && api == cfg.OpenCodeGoChatAPI
+}
+
 // isLocalLlamacpp checks if the current API is a local llama.cpp instance.
 func isLocalLlamacpp() bool {
+	if isOpenCodeGoAPI(cfg.CurrentAPI) {
+		return false
+	}
 	if strings.Contains(cfg.CurrentAPI, "openrouter") || strings.Contains(cfg.CurrentAPI, "deepseek") {
 		return false
 	}
@@ -828,12 +846,19 @@ func getContextTokens() int {
 
 const deepseekContext = 128000
 
+// openCodeGoContext is a conservative fallback for OpenCode Go models, whose
+// context window is not exposed by the /models endpoint. Actual windows are
+// usually larger (200K-1M), so this only understates the estimate.
+const openCodeGoContext = 200000
+
 func getMaxContextTokens() int {
 	if chatBody == nil || chatBody.Model == "" {
 		return 0
 	}
 	modelName := chatBody.Model
 	switch {
+	case isOpenCodeGoAPI(cfg.CurrentAPI):
+		return openCodeGoContext
 	case strings.Contains(cfg.CurrentAPI, "openrouter"):
 		if orModelsData != nil {
 			for i := range orModelsData.Data {

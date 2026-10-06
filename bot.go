@@ -199,9 +199,10 @@ var (
 		"google/gemma-3-27b-it:free",
 		"meta-llama/llama-3.3-70b-instruct:free",
 	}
-	LocalModels     = []string{}
-	localModelsData *models.LCPModels
-	orModelsData    *models.ORModels
+	LocalModels      = []string{}
+	OpenCodeGoModels = []string{}
+	localModelsData  *models.LCPModels
+	orModelsData     *models.ORModels
 )
 
 // parseKnownToTag extracts known_to list from content using configured tag.
@@ -670,6 +671,50 @@ func fetchORModels(free bool) ([]string, error) {
 	return freeModels, nil
 }
 
+// fetchOpenCodeGoModels fetches the model list from the OpenCode Go models
+// endpoint, which uses the OpenAI /v1/models shape.
+func fetchOpenCodeGoModels() ([]string, error) {
+	if cfg.OpenCodeGoModelsAPI == "" {
+		return nil, fmt.Errorf("opencode go models API is not configured")
+	}
+	req, err := http.NewRequest("GET", cfg.OpenCodeGoModelsAPI, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("User-Agent", "gf-lt/1.0")
+	if cfg.OpenCodeGoToken != "" {
+		req.Header.Set("Authorization", "Bearer "+cfg.OpenCodeGoToken)
+	}
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		return nil, fmt.Errorf("failed to fetch opencode go models; status: %s", resp.Status)
+	}
+	data := &models.LCPModels{}
+	if err := json.NewDecoder(resp.Body).Decode(data); err != nil {
+		return nil, err
+	}
+	return data.ListModels(), nil
+}
+
+// refreshOpenCodeGoModelsIfEmpty lazily fetches the OpenCode Go model list for
+// callers (CLI /model, popups) that do not go through updateModelLists.
+func refreshOpenCodeGoModelsIfEmpty() {
+	if len(OpenCodeGoModels) > 0 {
+		return
+	}
+	models, err := fetchOpenCodeGoModels()
+	if err != nil {
+		logger.Warn("failed to fetch opencode go models", "error", err)
+		return
+	}
+	OpenCodeGoModels = models
+}
+
 func fetchLCPModels() ([]string, error) {
 	resp, err := http.Get(cfg.FetchModelNameAPI)
 	if err != nil {
@@ -747,6 +792,10 @@ func isModelLoaded(modelID string) (bool, error) {
 
 func ModelHasVision(api, modelID string) bool {
 	switch {
+	case isOpenCodeGoAPI(api):
+		// The models endpoint exposes no modality metadata, so fall back to the
+		// model id (e.g. deepseek-v4-flash-vision-exp).
+		return strings.Contains(strings.ToLower(modelID), "vision")
 	case strings.Contains(api, "deepseek"):
 		return false
 	case strings.Contains(api, "openrouter"):
@@ -918,6 +967,11 @@ func sendMsgToLLM(body io.Reader) {
 	req.Header.Add("Content-Type", "application/json")
 	req.Header.Add("Authorization", "Bearer "+chunkParser.GetToken())
 	req.Header.Set("Accept-Encoding", "gzip")
+	if hp, ok := chunkParser.(headerProvider); ok {
+		for name, value := range hp.GetHeaders() {
+			req.Header.Set(name, value)
+		}
+	}
 	// nolint
 	resp, err := httpClient.Do(req)
 	if err != nil {
@@ -2174,6 +2228,14 @@ func updateModelLists() {
 			logger.Warn("failed to fetch or models", "error", err)
 		}
 	}
+	if cfg.OpenCodeGoToken != "" {
+		ocModels, ocErr := fetchOpenCodeGoModels()
+		if ocErr != nil {
+			logger.Warn("failed to fetch opencode go models", "error", ocErr)
+		} else {
+			OpenCodeGoModels = ocModels
+		}
+	}
 	// if llama.cpp started after gf-lt?
 	ml, err := fetchLCPModelsWithLoadStatus()
 	if err != nil {
@@ -2182,6 +2244,17 @@ func updateModelLists() {
 	localModelsMu.Lock()
 	LocalModels = ml
 	localModelsMu.Unlock()
+	// pick a default OpenCode Go model when -model was not given explicitly
+	if isOpenCodeGoAPI(cfg.CurrentAPI) && len(OpenCodeGoModels) > 0 &&
+		(chatBody.Model == "" || chatBody.Model == "auto") {
+		if cfg.OpenCodeGoModel != "" {
+			chatBody.Model = cfg.OpenCodeGoModel
+		} else {
+			chatBody.Model = OpenCodeGoModels[0]
+		}
+		cfg.CurrentModel = chatBody.Model
+		updateStatusLine()
+	}
 	// set already loaded model in llama.cpp
 	if !isLocalLlamacpp() {
 		return

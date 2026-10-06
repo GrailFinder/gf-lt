@@ -17,6 +17,9 @@ func showModelSelectionPopup() {
 			return []string{"deepseek-chat", "deepseek-reasoner"}
 		} else if strings.Contains(api, "openrouter.ai") {
 			return ORFreeModels
+		} else if isOpenCodeGoAPI(api) {
+			refreshOpenCodeGoModelsIfEmpty()
+			return OpenCodeGoModels
 		}
 		// Assume local llama.cpp - fetch with load status
 		models, err := fetchLCPModelsWithLoadStatus()
@@ -37,6 +40,8 @@ func showModelSelectionPopup() {
 			message = "No OpenRouter models available. Check token and connection."
 		case strings.Contains(cfg.CurrentAPI, "api.deepseek.com"):
 			message = "DeepSeek models should be available. Please report bug."
+		case isOpenCodeGoAPI(cfg.CurrentAPI):
+			message = "No OpenCode Go models available. Check token and connection."
 		default:
 			message = "No llama.cpp models loaded. Ensure llama.cpp server is running with models."
 		}
@@ -148,6 +153,9 @@ func showAPILinkSelectionPopup() {
 				return []string{"deepseek-chat", "deepseek-reasoner"}
 			} else if strings.Contains(api, "openrouter.ai") {
 				return ORFreeModels
+			} else if isOpenCodeGoAPI(api) {
+				refreshOpenCodeGoModelsIfEmpty()
+				return OpenCodeGoModels
 			}
 			// Assume local llama.cpp
 			refreshLocalModelsIfEmpty()

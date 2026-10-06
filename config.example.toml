@@ -10,6 +10,12 @@ DeepSeekModel = "deepseek-reasoner"
 OpenRouterCompletionAPI = "https://openrouter.ai/api/v1/completions"
 OpenRouterChatAPI = "https://openrouter.ai/api/v1/chat/completions"
 # OpenRouterToken = ""
+# OpenCode Go (https://opencode.ai/docs/go) — OpenAI-compatible coding gateway
+OpenCodeGoChatAPI = "https://opencode.ai/inference/go/openai/v1/chat/completions"
+OpenCodeGoModelsAPI = "https://opencode.ai/zen/go/v1/models"
+OpenCodeGoModel = ""   # default model (e.g. "glm-5.3-flash"); overridden by -model
+# OpenCodeGoToken = ""   # or set OPENCODE_API_KEY in the environment
+# OpenCodeGoSession = "" # fixed x-opencode-session value (default: derived per chat)
 # embeddings
 EmbedURL = "http://localhost:8082/v1/embeddings"
 HFToken = ""

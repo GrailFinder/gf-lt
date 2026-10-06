@@ -4,7 +4,7 @@ made with use of [tview](https://github.com/rivo/tview)
 
 #### has/supports
 - character card spec;
-- API (/chat and /completion): llama.cpp, deepseek, openrouter;
+- API (/chat and /completion): llama.cpp, deepseek, openrouter, opencode go;
 - tts/stt (run make commands to get deps);
 - image input;
 - function calls (function calls are implemented natively, to avoid calling outside sources);

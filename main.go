@@ -101,6 +101,17 @@ func main() {
 		}
 	}
 	chatBody.Model = cfg.CurrentModel
+	// OpenCode Go has no "auto" model; resolve it from config or the models API.
+	if (chatBody.Model == "" || chatBody.Model == "auto") && isOpenCodeGoAPI(cfg.CurrentAPI) {
+		if cfg.OpenCodeGoModel != "" {
+			chatBody.Model = cfg.OpenCodeGoModel
+			cfg.CurrentModel = chatBody.Model
+		} else if ocModels, err := fetchOpenCodeGoModels(); err == nil && len(ocModels) > 0 {
+			OpenCodeGoModels = ocModels
+			chatBody.Model = ocModels[0]
+			cfg.CurrentModel = chatBody.Model
+		}
+	}
 	tools.InitTools(cfg, logger, store)
 	if cfg.ToolUse && len(cfg.MCPServers) > 0 {
 		mcpManager = mcp.NewManager(cfg, logger)
@@ -375,6 +386,9 @@ func handleCLICommand(msg string) bool {
 				return []string{"deepseek-chat", "deepseek-reasoner"}
 			} else if strings.Contains(api, "openrouter.ai") {
 				return ORFreeModels
+			} else if isOpenCodeGoAPI(api) {
+				refreshOpenCodeGoModelsIfEmpty()
+				return OpenCodeGoModels
 			}
 			return LocalModels
 		}

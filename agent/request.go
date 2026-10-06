@@ -2,6 +2,8 @@ package agent
 
 import (
 	"bytes"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"gf-lt/config"
@@ -27,6 +29,29 @@ func detectAPI(api string) (isCompletion, isChat, isDeepSeek, isOpenRouter bool)
 	isDeepSeek = strings.Contains(api, "deepseek.com")
 	isOpenRouter = strings.Contains(api, "openrouter.ai")
 	return
+}
+
+// isOpenCodeGo reports whether the configured API is OpenCode Go, which needs a
+// stable x-opencode-session header in addition to the bearer token.
+func (ag *AgentClient) isOpenCodeGo() bool {
+	api := ag.cfg.CurrentAPI
+	if strings.Contains(api, "opencode.ai/inference/go") ||
+		strings.Contains(api, "opencode.ai/zen/go") {
+		return true
+	}
+	return ag.cfg.OpenCodeGoChatAPI != "" && api == ag.cfg.OpenCodeGoChatAPI
+}
+
+// openCodeGoAgentSession is a process-wide fallback session id, used only when
+// OpenCodeGoSession is not configured. The value just has to stay stable.
+var openCodeGoAgentSession = newOpenCodeGoAgentSession()
+
+func newOpenCodeGoAgentSession() string {
+	b := make([]byte, 16)
+	if _, err := rand.Read(b); err != nil {
+		return "gf-lt-agent"
+	}
+	return hex.EncodeToString(b)
 }
 
 type AgentClient struct {
@@ -159,6 +184,14 @@ func (ag *AgentClient) LLMRequest(body io.Reader) ([]byte, error) {
 	req.Header.Add("Content-Type", "application/json")
 	req.Header.Add("Authorization", "Bearer "+ag.getToken())
 	req.Header.Set("Accept-Encoding", "gzip")
+	if ag.isOpenCodeGo() {
+		session := ag.cfg.OpenCodeGoSession
+		if session == "" {
+			session = openCodeGoAgentSession
+		}
+		req.Header.Set("x-opencode-session", session)
+		req.Header.Set("User-Agent", "gf-lt/1.0")
+	}
 	ag.log.Debug("agent LLM request", "url", ag.cfg.CurrentAPI, "body_preview", string(bodyBytes[:min(len(bodyBytes), 500)]))
 	resp, err := httpClient.Do(req)
 	if err != nil {

@@ -33,6 +33,23 @@ This document explains how to set up and configure the application using the `co
 - **OpenRouterCompletionAPI**: The endpoint for OpenRouter completion API. Default: `"https://openrouter.ai/api/v1/completions"`
 - **OpenRouterToken**: Your OpenRouter API token. Uncomment and set this value to enable OpenRouter features.
 
+#### OpenCode Go Settings
+
+[OpenCode Go](https://opencode.ai/docs/go) is a subscription gateway that serves
+coding models through an OpenAI-compatible API. It is enabled when a token is
+available in `OpenCodeGoToken` or the `OPENCODE_API_KEY` environment variable.
+
+- **OpenCodeGoChatAPI**: The endpoint for OpenCode Go chat completions. Default: `"https://opencode.ai/inference/go/openai/v1/chat/completions"`
+- **OpenCodeGoModelsAPI**: The endpoint used to list available models. Default: `"https://opencode.ai/zen/go/v1/models"`
+- **OpenCodeGoToken**: Your OpenCode Go API key. Uncomment and set this value, or set `OPENCODE_API_KEY`.
+- **OpenCodeGoModel**: Default model to use when `-model` is not passed (e.g. `"glm-5.3-flash"`). If empty, the first model returned by `OpenCodeGoModelsAPI` is used.
+- **OpenCodeGoSession**: Optional fixed value for the `x-opencode-session` header. OpenCode Go asks clients to send a stable session id per conversation; by default gf-lt derives one from the current chat name.
+
+The OpenCode Go endpoint requires the `x-opencode-session` header in addition to
+the bearer token; gf-lt sends it automatically. Model ids in the OpenCode Go
+config use the form `opencode-go/<model-id>`, but with gf-lt you pass the bare
+`<model-id>` (e.g. `-model glm-5.3-flash`).
+
 ### Role Settings
 
 #### UserRole (`"user"`)
@@ -188,3 +205,4 @@ The application supports using environment variables for API keys as fallbacks:
 
 - `OPENROUTER_API_KEY`: Used if `OpenRouterToken` is not set in the config
 - `DEEPSEEK_API_KEY`: Used if `DeepSeekToken` is not set in the config
+- `OPENCODE_API_KEY`: Used if `OpenCodeGoToken` is not set in the config

@@ -2,6 +2,8 @@ package main
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"gf-lt/models"
 	"gf-lt/tools"
@@ -112,6 +114,27 @@ type ChunkParser interface {
 	GetAPIType() models.APIType
 }
 
+// headerProvider lets a chunk parser contribute extra HTTP headers (auth
+// schemes, session ids, user agents) to the outgoing request.
+type headerProvider interface {
+	GetHeaders() map[string]string
+}
+
+// openCodeGoSessionID returns a stable session id for the current chat. OpenCode
+// Go routes and caches by the x-opencode-session header, so it must stay the
+// same for every request in a conversation and change when the chat changes.
+func openCodeGoSessionID() string {
+	if cfg != nil && cfg.OpenCodeGoSession != "" {
+		return cfg.OpenCodeGoSession
+	}
+	name := activeChatName
+	if name == "" {
+		name = "default"
+	}
+	sum := sha256.Sum256([]byte("gf-lt/" + name))
+	return hex.EncodeToString(sum[:16])
+}
+
 // fetchMediaMarker queries the llama.cpp /props endpoint to get the media marker
 // for the current model. Results are cached per model to avoid repeated calls.
 // Runs in a goroutine to avoid blocking the TUI.
@@ -163,6 +186,11 @@ func fetchMediaMarker() {
 // choseChunkParser selects the appropriate chunk parser based on the current API
 func choseChunkParser() {
 	chunkParser = LCPCompletion{}
+	if isOpenCodeGoAPI(cfg.CurrentAPI) {
+		chunkParser = OpenCodeGoChat{}
+		logger.Debug("chosen opencode go chat", "link", cfg.CurrentAPI)
+		return
+	}
 	switch cfg.CurrentAPI {
 	case "http://localhost:8080/completion", "http://127.0.0.1:8080/completion":
 		chunkParser = LCPCompletion{}
@@ -880,4 +908,38 @@ func (or OpenRouterChat) FormMsg(msg, role string, resume bool) (io.Reader, erro
 		return nil, err
 	}
 	return bytes.NewReader(data), nil
+}
+
+// opencode go (https://opencode.ai/docs/go)
+//
+// OpenCode Go exposes an OpenAI-compatible /chat/completions endpoint and
+// additionally requires a stable session id in the x-opencode-session header.
+// The request/stream shapes match OpenAI, so the LCP chat implementation is
+// reused and only the token, extra headers and API selection differ.
+type OpenCodeGoChat struct{}
+
+func (oc OpenCodeGoChat) GetAPIType() models.APIType {
+	return models.APITypeChat
+}
+
+func (oc OpenCodeGoChat) GetToken() string {
+	return cfg.OpenCodeGoToken
+}
+
+// GetHeaders adds the OpenCode Go specific headers. The service asks clients to
+// identify themselves and to send a stable session id for routing and caching.
+func (oc OpenCodeGoChat) GetHeaders() map[string]string {
+	return map[string]string{
+		"User-Agent":         "gf-lt/1.0",
+		"x-opencode-session": openCodeGoSessionID(),
+	}
+}
+
+func (oc OpenCodeGoChat) ParseChunk(data []byte) (*models.TextChunk, error) {
+	return LCPChat{}.ParseChunk(data)
+}
+
+func (oc OpenCodeGoChat) FormMsg(msg, role string, resume bool) (io.Reader, error) {
+	logger.Debug("formmsg opencode go chat", "link", cfg.CurrentAPI)
+	return LCPChat{}.FormMsg(msg, role, resume)
 }
